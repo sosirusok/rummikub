@@ -141,7 +141,8 @@ begin
     'score',u.score,'wins',u.wins,'losses',u.losses,'streak',u.streak);
 end; $$;
 
--- 랭킹 (안전 필드만)
+-- 랭킹 (안전 필드만). 반환 타입 변경 가능하도록 먼저 drop.
+drop function if exists public.rk_leaderboard();
 create or replace function public.rk_leaderboard()
 returns table(id uuid, username citext, real_name text, score int, wins int, losses int, streak int)
 language sql security definer set search_path = public, extensions as $$
