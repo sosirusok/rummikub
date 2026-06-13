@@ -1,251 +1,361 @@
 /* =========================================================================
-   race.js — 운빨 대시 (복불복 세로스크롤 레이스, 2~8인)
+   race.js — 운빨 대시 (2D 톱다운 미로 대시, 2~8인)
    window.MiniGames.race 로 등록. 자급자족 단일 파일.
 
-   규칙 요약(mini-core 계약 준수):
-   - 모든 무작위는 M.rng(M.state.seed) 만 사용(기기간 동일). 좌표 정수화.
-   - 카메라는 내 캐릭터를 따라 위로(결승선이 위, y 작을수록 전진).
-   - 본인=M.local, 원격=M.peerAt(seat). 캐릭터=원+좌석색+번호.
+   게임 코어(전면 재설계):
+   (A) 갈림길 + 막다른길 : 분기에서 한 갈래만 위로 통하고 나머지는 막다른 길.
+       어디가 통로인지는 안 보이며(전부 같은 외형), 통로는 seed로 전 클라 동일.
+   (B) 지름길 도박       : 짧은 지름길(50% 확률로 막힘, seed로 결정) vs 긴 우회로.
+   (C) 작은 미로         : 짧은 미로 구간(막다른 골목 포함). seed로 동일 생성.
+
+   표현/물리:
+   - 2D 톱다운 타일 그리드. 통로=바닥, 충돌=벽(통과불가). 카메라가 내 캐릭터 추적.
+   - 시작(아래)→결승(위)까지 seed로 생성. 무작위는 M.rng(state.seed)만 사용.
+   - 좌표/벽 판정은 정수 그리드(전 클라 동일). 캐릭터=원+좌석색+번호.
+
+   mini-core 계약:
+   - 좌하 조이스틱 이동 + 우하 액션(짧은 대시, actionLabel="대시"). 즉사/탈락 없음.
    - 결승 통과 시 M.appendFinish({seat,timeMs}) 1회.
-   - hostTick: finishOrder 첫 골인 후 cutoff(20s) → 전원 완주 or 초과 시 endGame.
-   - finishPatch: {ranks:{seat:rank}} 모든 좌석 빠짐없이.
+   - hostTick: 첫 골인 후 ~20s 마감 또는 전원 완주 시 M.endGame().
+   - finishPatch: {ranks:{seat:rank}} — 완주=timeMs순, 미완주=진행도순, 전 좌석 1..n.
    ========================================================================= */
 (function () {
   window.MiniGames = window.MiniGames || {};
 
-  /* ----------------------------- 코스 상수 ----------------------------- */
-  // 좌표계: CSS px 가상월드. 가로 폭 고정(WORLD_W), 세로로 위(작은 y)가 결승.
-  const WORLD_W   = 360;          // 가상 코스 폭(px) — 화면에 맞춰 스케일
-  const LANE_N    = 3;            // 갈림길 레인 수
-  const LANE_W    = WORLD_W / LANE_N;
-  const SEG_H     = 420;          // 한 구간(갈림길+직선)의 세로 길이
-  const SEG_COUNT = 14;           // 구간 수
-  const START_Y   = 0;            // 출발선 y(가장 큰 y에서 위로 달림 → 부호 반전)
-  const TRACK_LEN = SEG_H * SEG_COUNT;   // 총 코스 길이(전진해야 할 거리)
-  const FINISH_Y  = -TRACK_LEN;   // 결승선 y(가장 작은 y)
-  const WALL_TH   = 26;           // 갈림길 벽 두께
-  const GATE_BAND = 120;          // 갈림길 벽이 차지하는 세로 밴드
-  const PLAYER_R  = 13;           // 캐릭터 반지름
-  const FINAL_BAND_FROM_FINISH = SEG_H; // 결승 직전 마지막 구간 = 3갈래 관문
+  /* ----------------------------- 그리드 상수 -------------------------- */
+  const TILE   = 28;          // 타일 한 변(px) — 통로 폭
+  const COLS   = 17;          // 미로 가로 칸 수(홀수: 벽-통로 격자)
+  const SEC_H  = 9;           // 한 섹션 세로 칸 수(홀수)
+  const SEC_N  = 9;           // 섹션 수(아래→위)
+  const ROWS   = SEC_H * SEC_N + 2;   // 전체 세로 칸(+상하 테두리 여유)
+  const PR     = 9;           // 캐릭터 반지름(px). 통로(TILE)보다 작아야 모서리 통과
+  const GOAL_ROW = 1;         // 결승 통로 행(위쪽)
+  const CUTOFF_MS = 20000;    // 첫 골인 후 마감(ms)
 
-  // 운동 파라미터(고정스텝 dt=ms 기준)
-  const ACCEL      = 0.0016;      // 가속(px/ms^2 유사)
-  const FRICTION   = 0.0085;      // 감속 마찰(정지 입력시)
-  const MAX_SPD    = 0.30;        // 기본 최고 이속(px/ms)
-  const SIDE_SPD   = 0.26;        // 좌우 이속(px/ms)
-  const DASH_BOOST = 0.55;        // 대시 순간 가속도 부스트(전방)
-  const DASH_DUR   = 320;         // 대시 지속(ms) — 이 동안 구덩이 건너뜀
-  const DASH_CD    = 800;         // 대시 쿨다운(ms)
-  const STUN_SPIKE = 1200;        // 스파이크 기절(ms)
-  const SLOW_WALL  = 400;         // 막힌 레인 충돌 감속(ms)
-  const CUTOFF_MS  = 20000;       // 첫 골인 후 마감(ms)
+  // 운동 파라미터(고정스텝 dt=ms)
+  const SPD       = 0.115;    // 기본 이속(px/ms)
+  const DASH_SPD  = 0.230;    // 대시 중 이속
+  const DASH_DUR  = 360;      // 대시 지속(ms)
+  const DASH_CD   = 900;      // 대시 쿨다운(ms)
 
-  // 함정 종류
-  const TRAP_NONE = 0, TRAP_PIT = 1, TRAP_SPIKE = 2;
+  // 셀 종류
+  const WALL = 1, FLOOR = 0;
 
-  /* ----------------------------- 결정론 코스 생성 ---------------------- */
-  // seed 로 모든 구간의 통과 레인/함정/마지막 관문을 동일하게 생성.
-  function buildCourse(M) {
-    const seed = (M.state && M.state.seed) || 1;
-    const rnd = M.rng(seed >>> 0);
-    const ri = (n) => Math.floor(rnd() * n);   // 0..n-1 정수
-    const segs = [];
-    for (let i = 0; i < SEG_COUNT; i++) {
-      // 구간의 위쪽 끝(전진 방향) y
-      const topY = START_Y - (i + 1) * SEG_H;
-      const isFinalGate = (i === SEG_COUNT - 1);
-      // 갈림길: 1개만 통과(open), 나머지는 벽(막힘)
-      const laneN = isFinalGate ? 3 : (2 + ri(2)); // 보통 2~3갈래, 마지막은 3갈래
-      const openLane = ri(laneN);
-      // 함정: 통과 레인 중앙쯤 0~1개(낙하/스파이크). 마지막 관문엔 함정 없음.
-      let trap = TRAP_NONE;
-      if (!isFinalGate) {
-        const roll = rnd();
-        if (roll < 0.20) trap = TRAP_PIT;
-        else if (roll < 0.36) trap = TRAP_SPIKE;
-      }
-      // 갈림길 밴드의 세로 위치(구간 위쪽). gateY = 벽 중심 y
-      const gateY = topY + GATE_BAND * 0.5 + 40;
-      // 함정 y(갈림길 통과 직후 직선부)
-      const trapY = gateY - GATE_BAND * 0.5 - 70 - ri(60);
-      segs.push({ i, topY, laneN, openLane, trap, gateY, trapY, isFinalGate });
+  /* ----------------------------- 결정론 미로 생성 -------------------- */
+  // seed로 전 클라 동일한 그리드를 만든다. 각 섹션은 3종 중 하나:
+  //   'fork'     : 갈림길+막다른길(한 갈래만 위로 통함)
+  //   'shortcut' : 지름길 도박(가운데 짧은 길 50% 막힘 vs 좌우 긴 우회)
+  //   'maze'     : 작은 미로(DFS 백트래킹, 막다른 골목 포함)
+  // grid[r][c] = WALL|FLOOR. 섹션 사이는 항상 한 칸으로 이어붙임(연결 보장).
+  function buildMaze(M) {
+    const seed = ((M.state && M.state.seed) || 1) >>> 0;
+    const rnd = M.rng(seed);
+    const ri = (n) => Math.floor(rnd() * n);     // 0..n-1
+
+    // 전부 벽으로 초기화
+    const grid = [];
+    for (let r = 0; r < ROWS; r++) { const row = new Array(COLS).fill(WALL); grid.push(row); }
+    const carve = (r, c) => { if (r >= 0 && r < ROWS && c >= 0 && c < COLS) grid[r][c] = FLOOR; };
+    const carveCol = (c, r0, r1) => { for (let r = r0; r <= r1; r++) carve(r, c); };
+    const carveRow = (r, c0, c1) => { for (let c = c0; c <= c1; c++) carve(r, c); };
+
+    const types = [];           // 섹션 메타(디버그/미니맵용)
+    // 각 섹션의 "입구 열"(아래쪽 연결점) / "출구 열"(위쪽 연결점)
+    let entryCol = (COLS - 1) >> 1;     // 첫 섹션 입구는 가운데
+    carveCol(entryCol, ROWS - 2, ROWS - 1);   // 출발 통로(맨 아래)
+
+    for (let s = 0; s < SEC_N; s++) {
+      // 섹션의 행 범위(아래가 큰 r). s=0 이 가장 아래.
+      const rBot = ROWS - 2 - s * SEC_H;       // 섹션 바닥 행
+      const rTop = rBot - (SEC_H - 1);         // 섹션 천장 행
+      const kindRoll = rnd();
+      let kind, exitCol;
+      if (kindRoll < 0.40)      { ({ exitCol, kind } = secFork(grid, rTop, rBot, entryCol, ri, rnd, carve, carveCol, carveRow)); }
+      else if (kindRoll < 0.70) { ({ exitCol, kind } = secShortcut(grid, rTop, rBot, entryCol, ri, rnd, carve, carveCol, carveRow)); }
+      else                      { ({ exitCol, kind } = secMaze(grid, rTop, rBot, entryCol, ri, rnd, carve)); }
+      types.push({ kind, rTop, rBot });
+      // 다음 섹션으로 한 칸 잇기(현재 출구열 = 다음 입구열)
+      if (s < SEC_N - 1) carve(rTop - 1, exitCol);
+      entryCol = exitCol;
     }
-    return { seed, segs };
+    // 결승 통로(맨 위)와 마지막 출구를 연결
+    carveRow(GOAL_ROW, Math.min(entryCol, (COLS - 1) >> 1), Math.max(entryCol, (COLS - 1) >> 1));
+    carveCol(entryCol, GOAL_ROW, ROWS - 2 - (SEC_N - 1) * SEC_H);
+
+    const goalCol = (COLS - 1) >> 1;
+    carveCol(goalCol, GOAL_ROW, GOAL_ROW + 1);
+    return { seed, grid, types, startCol: (COLS - 1) >> 1, goalCol, goalRow: GOAL_ROW };
   }
 
-  // 특정 레인의 x중심(정수)
-  function laneCenterX(laneN, lane) {
-    const w = WORLD_W / laneN;
-    return Math.round(w * lane + w * 0.5);
-  }
-  // 레인의 [x0,x1] 경계(정수)
-  function laneBounds(laneN, lane) {
-    const w = WORLD_W / laneN;
-    return [Math.round(w * lane), Math.round(w * (lane + 1))];
+  // (A) 갈림길 + 막다른길: 입구에서 위로 가다 분기. 2~3 갈래 중 한 갈래만 천장까지 통함.
+  function secFork(grid, rTop, rBot, entryCol, ri, rnd, carve, carveCol, carveRow) {
+    // 분기 지점(섹션 아래쪽 1/3)
+    const splitRow = rBot - 2;
+    carveCol(entryCol, splitRow, rBot);         // 입구→분기까지 세로 통로
+    // 분기 가지들의 열(서로 떨어뜨림)
+    const branchCols = pickCols(entryCol, ri, rnd);
+    const openIdx = ri(branchCols.length);      // 진짜 통로 가지(seed 결정)
+    carveRow(splitRow, Math.min(entryCol, ...branchCols), Math.max(entryCol, ...branchCols));
+    let exitCol = entryCol;
+    branchCols.forEach((bc, idx) => {
+      if (idx === openIdx) {
+        carveCol(bc, rTop, splitRow);           // 천장까지 통함(진짜 길)
+        exitCol = bc;
+      } else {
+        // 막다른 길: 조금만 올라가다 막힘(전부 같은 외형)
+        const dead = splitRow - (2 + ri(Math.max(1, (splitRow - rTop) - 2)));
+        carveCol(bc, Math.max(rTop + 1, dead), splitRow);
+      }
+    });
+    return { exitCol, kind: 'fork' };
   }
 
-  /* ----------------------------- 모듈 ---------------------------------- */
+  // (B) 지름길 도박: 가운데 짧은 직통(50% 막힘) vs 좌우 긴 우회로(항상 뚫림).
+  function secShortcut(grid, rTop, rBot, entryCol, ri, rnd, carve, carveCol, carveRow) {
+    const open = rnd() < 0.50;                   // 지름길이 뚫려있나(seed 결정)
+    const exitCol = entryCol;                    // 출구는 입구와 같은 열(가운데 정렬)
+    if (open) {
+      carveCol(entryCol, rTop, rBot);            // 지름길 직통
+    } else {
+      // 지름길은 위쪽이 막힘(들어가면 막다른 길) → 우회 강제
+      const block = rTop + 2 + ri(2);
+      carveCol(entryCol, block, rBot);           // 아래 일부만 뚫림(막힌 지름길 미끼)
+    }
+    // 우회로: 좌/우 중 한 쪽(seed). ㄷ자 형태로 천장 통과.
+    const side = (rnd() < 0.5) ? -1 : 1;
+    const farC = (side < 0) ? 2 : (COLS - 3);
+    carveRow(rBot, Math.min(entryCol, farC), Math.max(entryCol, farC));   // 아래 가로
+    carveCol(farC, rTop, rBot);                                           // 바깥 세로
+    carveRow(rTop, Math.min(exitCol, farC), Math.max(exitCol, farC));     // 위 가로(천장)
+    carveCol(exitCol, rTop, rTop + 1);
+    return { exitCol, kind: 'shortcut' };
+  }
+
+  // (C) 작은 미로: DFS 백트래킹으로 섹션 내부를 격자 미로로(막다른 골목 자연발생).
+  function secMaze(grid, rTop, rBot, entryCol, ri, rnd, carve) {
+    // 격자 셀 좌표(홀수 행/열을 통로 노드로 사용)
+    const cells = [];
+    for (let r = rTop; r <= rBot; r++) cells.push(r);
+    // 입구를 통로로
+    const startR = rBot, startC = entryCol;
+    carve(startR, startC);
+    // 셀 노드(짝수 간격) 방문 DFS
+    const isNode = (r, c) => (r % 2 === rBot % 2) && (c % 2 === entryCol % 2);
+    const inSec = (r, c) => r >= rTop && r <= rBot && c >= 1 && c <= COLS - 2;
+    const visited = {};
+    const key = (r, c) => r + ',' + c;
+    const stack = [[startR, startC]];
+    visited[key(startR, startC)] = true;
+    const dirs = [[-2, 0], [2, 0], [0, -2], [0, 2]];   // 노드 간 2칸 이동
+    let topReached = startC;                            // 천장에 닿은 마지막 열
+    while (stack.length) {
+      const [r, c] = stack[stack.length - 1];
+      // 미방문 이웃 셔플(seed)
+      const order = shuffle(dirs.slice(), rnd);
+      let moved = false;
+      for (const [dr, dc] of order) {
+        const nr = r + dr, nc = c + dc;
+        if (!inSec(nr, nc) || !isNode(nr, nc) || visited[key(nr, nc)]) continue;
+        carve((r + nr) >> 1, (c + nc) >> 1);           // 벽 허물기(중간 칸)
+        carve(nr, nc);
+        visited[key(nr, nc)] = true;
+        stack.push([nr, nc]);
+        if (nr <= rTop + 1 && nr < r) topReached = nc; // 천장 부근 도달 열 기록
+        moved = true;
+        break;
+      }
+      if (!moved) stack.pop();
+    }
+    // 천장으로 확실히 나가는 출구를 보장(미로가 위로 안 뚫렸으면 강제 통로)
+    let exitCol = topReached;
+    if (!isFloor(grid, rTop, exitCol)) {
+      // 가까운 통로 열을 찾아 천장까지 한 칸 세로로 연결
+      exitCol = entryCol;
+      for (let r = rTop; r <= rBot; r++) carve(r, exitCol);
+    } else {
+      carve(rTop, exitCol);
+    }
+    return { exitCol, kind: 'maze' };
+  }
+
+  /* ----------------------------- 생성 유틸 ---------------------------- */
+  function pickCols(entryCol, ri, rnd) {
+    // 분기 가지 2~3개의 열(가운데/좌/우, 서로 충분히 떨어뜨림)
+    const n = 2 + ri(2);
+    const opts = [2, (COLS - 1) >> 1, COLS - 3];
+    let cols = shuffle(opts.slice(), rnd).slice(0, n);
+    // entryCol 이 포함되도록 한 가지는 입구열로(자연스러운 분기)
+    if (!cols.includes(entryCol)) cols[0] = entryCol;
+    return Array.from(new Set(cols)).sort((a, b) => a - b);
+  }
+  function shuffle(arr, rnd) {
+    for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); const t = arr[i]; arr[i] = arr[j]; arr[j] = t; }
+    return arr;
+  }
+  function isFloor(grid, r, c) { return r >= 0 && r < ROWS && c >= 0 && c < COLS && grid[r][c] === FLOOR; }
+
+  /* ----------------------------- 좌표 변환 ---------------------------- */
+  // 월드(px) ↔ 그리드(칸). 셀 중심 = (c+0.5)*TILE, (r+0.5)*TILE.
+  function cellCenterX(c) { return Math.round((c + 0.5) * TILE); }
+  function cellCenterY(r) { return Math.round((r + 0.5) * TILE); }
+  // 진행도: 시작행→결승행(위로 갈수록 큼). y가 작을수록 전진.
+  function progOfY(y) {
+    const startY = cellCenterY(ROWS - 2);
+    const goalY = cellCenterY(GOAL_ROW);
+    return Math.max(0, Math.min(1, (startY - y) / (startY - goalY))) * 1000;
+  }
+  const PROG_MAX = 1000;
+
+  /* ----------------------------- 충돌(원 vs 벽 타일) ------------------ */
+  // 벽 셀이면 통과불가. 원의 AABB 가 겹치는 셀들만 검사(저비용).
+  function isWallAt(grid, px, py) {
+    const c = Math.floor(px / TILE), r = Math.floor(py / TILE);
+    if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return true;
+    return grid[r][c] === WALL;
+  }
+  // 한 축씩 이동시키며 벽이면 되돌림(슬라이딩). 원을 4꼭짓점+중심으로 근사.
+  function collideMove(grid, x, y, nx, ny) {
+    // X 축 먼저
+    if (!circleHitsWall(grid, nx, y)) x = nx;
+    // Y 축
+    if (!circleHitsWall(grid, x, ny)) y = ny;
+    return [x, y];
+  }
+  function circleHitsWall(grid, px, py) {
+    // 원 둘레 8점 + 중심으로 벽 검사(정수 그리드, 결정적)
+    const pts = [
+      [px, py],
+      [px - PR, py], [px + PR, py], [px, py - PR], [px, py + PR],
+      [px - PR * 0.7, py - PR * 0.7], [px + PR * 0.7, py - PR * 0.7],
+      [px - PR * 0.7, py + PR * 0.7], [px + PR * 0.7, py + PR * 0.7],
+    ];
+    for (const [qx, qy] of pts) if (isWallAt(grid, qx, qy)) return true;
+    return false;
+  }
+
+  /* ----------------------------- 모듈 -------------------------------- */
   const race = {
     label: '운빨 대시',
 
-    /* init: 결정론 월드 + 내 엔티티 세팅 */
     init(M) {
-      M.course = buildCourse(M);
-      // 내 출발 x: 좌석순으로 분산(정수). 관전자는 local 없음.
+      M.maze = buildMaze(M);
       const seat = M.mySeat || 1;
-      const idx = Math.max(0, M.seats.indexOf(seat));
-      const slots = Math.max(1, M.n);
-      const startX = Math.round(WORLD_W * (idx + 0.5) / slots);
+      const startX = cellCenterX(M.maze.startCol);
+      const startY = cellCenterY(ROWS - 2);
       M.local = M.amSpectator ? null : {
-        x: startX, y: START_Y - 8,
-        vx: 0, vy: 0,
-        prog: 0,                 // 전진거리(0..TRACK_LEN)
-        fin: false, finT: 0, finished: false,
-        stunUntil: 0,            // 스파이크 기절 종료 simT
-        slowUntil: 0,            // 벽 충돌 감속 종료 simT
+        x: startX, y: startY,
+        prog: 0, bestProg: 0,
+        fin: false, finished: false, finT: 0, _appended: false,
         dashUntil: 0, dashCdUntil: 0,
-        cp: { x: startX, y: START_Y - 8 }, // 마지막 체크포인트(낙하 복귀)
-        _appended: false,
       };
-      // peer 표시용 추정 진행도 캐시(원격은 payload 의 prog 사용)
-      M._peerProg = {};
+      M._peerProg = {};          // 순위 추정용 캐시
     },
 
-    /* step: 입력→가감속/충돌/함정/전진. (관전자는 mini-core 가 호출 안 함) */
+    /* step: 조이스틱 이동 + 대시 + 벽 충돌 + 진행/결승 */
     step(M, dt) {
       const L = M.local; if (!L || L.finished) return;
       const t = M.simT();
-      const stunned = t < L.stunUntil;
-      const slowed  = t < L.slowUntil;
+      const grid = M.maze.grid;
+
+      // 대시 발동(엣지) — 쿨다운 통과 시
+      if (M.input.action && t >= L.dashCdUntil) {
+        L.dashUntil = t + DASH_DUR; L.dashCdUntil = t + DASH_CD;
+        if (!M.lowPower) M.vibrate(18);
+      }
       const dashing = t < L.dashUntil;
+      const spd = dashing ? DASH_SPD : SPD;
 
-      // 대시 입력(엣지) — 쿨다운 통과 시 발동
-      if (M.input.action && !stunned && t >= L.dashCdUntil) {
-        L.dashUntil = t + DASH_DUR;
-        L.dashCdUntil = t + DASH_CD;
-        L.vy -= 0.10;            // 즉발 전방 가속
-        if (!M.lowPower) M.vibrate(20);
-      }
+      // 입력 방향(8방향). 위(dy<0)가 전진.
+      let dx = clamp(M.input.dx, -1, 1), dy = clamp(M.input.dy, -1, 1);
+      const mag = Math.hypot(dx, dy);
+      if (mag > 1) { dx /= mag; dy /= mag; }
+      const nx = L.x + dx * spd * dt;
+      const ny = L.y + dy * spd * dt;
+      const [ax, ay] = collideMove(grid, L.x, L.y, nx, ny);
+      L.x = ax; L.y = ay;
 
-      // 역전보정: 내 prog 가 평균보다 뒤처지면 가속(꼴찌일수록 +)
-      let rubber = 1;
-      const avg = avgProg(M);
-      if (avg > 0 && L.prog < avg) {
-        rubber = 1 + Math.min(0.35, (avg - L.prog) / TRACK_LEN * 1.6);
-      }
+      // 진행도(되돌아가기=손실, 탈락 없음). bestProg 는 순위표시용 최대치.
+      L.prog = progOfY(L.y);
+      if (L.prog > L.bestProg) L.bestProg = L.prog;
 
-      // 전방(위=음의 y) 가속: 기본 전진 + 입력 dy(위로 밀면 가속)
-      const fwdIn = -Math.max(0, -M.input.dy); // dy<0(위)면 가속, 아래는 무시(후진 없음)
-      const baseAcc = ACCEL * rubber * (dashing ? (1 + DASH_BOOST) : 1);
-      if (!stunned) {
-        L.vy -= baseAcc;                       // 항상 전방으로(자동 러닝 느낌)
-        L.vy += fwdIn * ACCEL * 0.6 * rubber;  // 위 입력 추가 가속
-        // 좌우 이동
-        L.vx = clamp(M.input.dx, -1, 1) * SIDE_SPD;
-      } else {
-        L.vx = 0;
-      }
-
-      // 속도 캡
-      const capV = MAX_SPD * rubber * (dashing ? (1 + DASH_BOOST) : 1) * (slowed ? 0.45 : 1);
-      if (L.vy < -capV) L.vy = -capV;
-      if (L.vy > 0) L.vy *= (1 - FRICTION * dt); // 뒤로 밀리지 않게 마찰
-      if (stunned) { L.vy *= (1 - FRICTION * 2 * dt); }
-
-      // 적분(정수화는 그리기 시점에만; 물리는 float, 충돌은 결정적 좌표)
-      L.x += L.vx * dt;
-      L.y += L.vy * dt;
-      L.x = clamp(L.x, PLAYER_R, WORLD_W - PLAYER_R);
-      if (L.y > START_Y) L.y = START_Y;          // 출발선 뒤로 못감
-
-      // 충돌/함정 판정
-      handleHazards(M, L, dt, dashing);
-
-      // 전진거리(체크포인트 갱신)
-      L.prog = clamp(START_Y - L.y, 0, TRACK_LEN);
-
-      // 결승 통과
-      if (!L.fin && L.y <= FINISH_Y) {
-        L.fin = true; L.finished = true; L.finT = M.simT();
-        L.y = FINISH_Y;
-        if (!L._appended) {
-          L._appended = true;
-          M.flash('골인!');
-          try { M.appendFinish({ seat: M.mySeat, timeMs: Math.round(L.finT) }); } catch (e) {}
+      // 결승: 결승 행(위쪽 통로)에 도달
+      if (!L.fin) {
+        const r = Math.floor(L.y / TILE);
+        if (r <= GOAL_ROW) {
+          L.fin = true; L.finished = true; L.finT = M.simT();
+          if (!L._appended) {
+            L._appended = true;
+            M.flash('골인!');
+            try { M.appendFinish({ seat: M.mySeat, timeMs: Math.round(L.finT) }); } catch (e) {}
+          }
         }
       }
     },
 
-    /* draw: 카메라(내 캐릭터 추적, 위가 전방) + 코스 + 캐릭터 */
+    /* draw: 2D 톱다운. 카메라가 내 캐릭터 추적. 화면밖 컬링. */
     draw(M) {
       const ctx = M.ctx, W = M.W, H = M.H;
-      if (!M.course) return;
-      const scale = W / WORLD_W;               // 가로 꽉 채움
-      // 카메라 기준 y: 내 캐릭터(또는 관전 시 결승부근)를 화면 60% 지점에
-      const camTargetY = M.local ? M.local.y : FINISH_Y * 0.5;
-      const camY = camTargetY - (H * 0.6) / scale;  // 월드→화면 변환용 오프셋
+      if (!M.maze) return;
+      const grid = M.maze.grid;
 
-      // 배경(어두운 트랙)
-      ctx.fillStyle = '#0c1320';
-      ctx.fillRect(0, 0, W, H);
+      // 카메라: 내 캐릭터를 화면 중앙에(관전자는 결승 부근)
+      const camTX = M.local ? M.local.x : cellCenterX(M.maze.goalCol);
+      const camTY = M.local ? M.local.y : cellCenterY(GOAL_ROW + 4);
+      const camX = camTX - W * 0.5;
+      const camY = camTY - H * 0.55;
+      const sx = (wx) => Math.round(wx - camX);
+      const sy = (wy) => Math.round(wy - camY);
 
-      // 월드→스크린 변환 헬퍼
-      const sx = (wx) => Math.round(wx * scale);
-      const sy = (wy) => Math.round((wy - camY) * scale);
+      // 배경
+      ctx.fillStyle = '#0b1018'; ctx.fillRect(0, 0, W, H);
 
-      // 트랙 좌우 경계(연한 가드레일)
-      ctx.fillStyle = '#1a2740';
-      ctx.fillRect(0, 0, sx(0), H);
-      ctx.fillRect(sx(WORLD_W), 0, W - sx(WORLD_W), H);
+      // 보이는 셀 범위(컬링)
+      const c0 = Math.max(0, Math.floor(camX / TILE) - 1);
+      const c1 = Math.min(COLS - 1, Math.ceil((camX + W) / TILE) + 1);
+      const r0 = Math.max(0, Math.floor(camY / TILE) - 1);
+      const r1 = Math.min(ROWS - 1, Math.ceil((camY + H) / TILE) + 1);
 
-      // 화면에 보이는 월드 y 범위
-      const wyTop = camY;                 // 화면 위쪽 = 작은 y
-      const wyBot = camY + H / scale;     // 화면 아래쪽 = 큰 y
-
-      // 출발선
-      if (START_Y >= wyTop && START_Y <= wyBot) {
-        ctx.fillStyle = '#2e3d57';
-        ctx.fillRect(0, sy(START_Y) - 2, W, 4);
-      }
-      // 결승선(체크무늬 바)
-      if (FINISH_Y >= wyTop - 30 && FINISH_Y <= wyBot) {
-        drawFinish(ctx, sx, sy, scale);
+      // 바닥(통로)만 그림 — 벽은 어두운 배경 그대로(통로/벽 외형은 균일)
+      for (let r = r0; r <= r1; r++) {
+        for (let c = c0; c <= c1; c++) {
+          if (grid[r][c] !== FLOOR) continue;
+          const isGoal = (r <= GOAL_ROW + 0);
+          ctx.fillStyle = isGoal ? '#1d3350' : '#1b2740';
+          ctx.fillRect(sx(c * TILE) + 1, sy(r * TILE) + 1, TILE - 1, TILE - 1);
+        }
       }
 
-      // 구간(컬링): 보이는 것만
-      for (const s of M.course.segs) {
-        if (s.topY > wyBot || s.topY + SEG_H < wyTop) continue; // 화면 밖
-        drawSegment(ctx, s, sx, sy, scale);
-      }
+      // 결승 체크무늬 바
+      drawFinish(M, ctx, sx, sy);
 
-      // 원격 플레이어
+      // 원격 플레이어(컬링)
       for (const seat of M.seats) {
         if (seat === M.mySeat) continue;
         const p = M.peerAt(seat);
         if (!p || p.x == null || p.y == null) continue;
-        if (p.y < wyTop - 40 || p.y > wyBot + 40) continue;     // 컬링
-        drawRunner(ctx, sx(p.x), sy(p.y), scale, seat, p.fin, M.lowPower);
+        const px = sx(p.x), py = sy(p.y);
+        if (px < -30 || px > W + 30 || py < -30 || py > H + 30) continue;
+        drawRunner(ctx, px, py, seat, !!p.fin, M.lowPower, false, false);
       }
-      // 내 캐릭터(맨 위에)
+      // 내 캐릭터(맨 위)
       if (M.local) {
         const L = M.local;
-        drawRunner(ctx, sx(L.x), sy(L.y), scale, M.mySeat, L.fin, M.lowPower, true,
-                   M.simT() < L.stunUntil, M.simT() < L.dashUntil);
+        drawRunner(ctx, sx(L.x), sy(L.y), M.mySeat, L.fin, M.lowPower, true, M.simT() < L.dashUntil);
       }
 
-      // 진행 게이지(우측 미니 트랙) — 저사양에선 생략
-      if (!M.lowPower) drawProgressRail(M, ctx, W, H);
+      // 미니맵(우상단) — 저사양 생략
+      if (!M.lowPower) drawMiniMap(M, ctx, W, H);
     },
 
-    /* hud: 순위 추정·남은거리·타이머 */
+    /* hud: 순위·진행률·타이머 */
     hud(M) {
       const L = M.local;
-      const myProg = L ? L.prog : 0;
+      const myProg = L ? L.bestProg : 0;
       const rank = estimateRank(M, myProg);
-      const remain = Math.max(0, Math.round((TRACK_LEN - myProg) / 10));
+      const pct = Math.round(myProg / PROG_MAX * 100);
       const t = M.simT();
       const fin = (M.state && M.state.finishOrder) || [];
-      let timerTxt = '';
+      let timerTxt;
       if (fin.length >= 1) {
         const firstT = Math.min.apply(null, fin.map(f => f.timeMs));
         const left = Math.max(0, CUTOFF_MS - (t - firstT));
@@ -253,10 +363,10 @@
       } else {
         timerTxt = `${(t / 1000).toFixed(1)}s`;
       }
-      const finishedTxt = L && L.fin ? '🏁 완주' : `남은 ${remain}m`;
+      const stateTxt = L && L.fin ? '🏁 완주' : `진행 ${pct}%`;
       return `<div class="mini-hud__row">`
         + `<span>순위 <b>${rank}</b>/${M.n}</span>`
-        + `<span>${finishedTxt}</span>`
+        + `<span>${stateTxt}</span>`
         + `<span>${timerTxt}</span>`
         + `</div>`;
     },
@@ -264,132 +374,51 @@
     /* netPayload: 위치/진행/완주 */
     netPayload(M) {
       const L = M.local; if (!L) return null;
-      return {
-        x: Math.round(L.x), y: Math.round(L.y),
-        prog: Math.round(L.prog), fin: !!L.fin,
-      };
+      return { x: Math.round(L.x), y: Math.round(L.y), prog: Math.round(L.bestProg), fin: !!L.fin };
     },
 
-    /* onPeer: 그리기는 peerAt 사용 → prog 캐시만 갱신(순위추정용) */
-    onPeer(M, seat, msg) {
-      if (msg && msg.prog != null) M._peerProg[seat] = msg.prog;
-    },
+    onPeer(M, seat, msg) { if (msg && msg.prog != null) M._peerProg[seat] = msg.prog; },
 
     actionLabel() { return '대시'; },
 
-    /* hostTick: 첫 골인 후 cutoff. 전원 완주 또는 cutoff 초과 시 종료 */
+    /* hostTick: 첫 골인 후 cutoff, 전원 완주 시 종료 */
     hostTick(M, dt) {
       if (M._ended) return;
       const fin = (M.state && M.state.finishOrder) || [];
       if (fin.length === 0) return;
-      // 전원 완주
-      const uniqSeats = new Set(fin.map(f => f.seat));
-      if (uniqSeats.size >= M.n) { M.endGame(); return; }
-      // cutoff
+      const uniq = new Set(fin.map(f => f.seat));
+      if (uniq.size >= M.n) { M.endGame(); return; }
       const firstT = Math.min.apply(null, fin.map(f => f.timeMs));
-      if (M.simT() - firstT >= CUTOFF_MS) { M.endGame(); }
+      if (M.simT() - firstT >= CUTOFF_MS) M.endGame();
     },
 
-    /* finishPatch: {ranks:{seat:rank}} 모든 좌석 1..n 빠짐없이 */
+    /* finishPatch: {ranks:{seat:rank}} 완주=timeMs순, 미완주=진행도순, 1..n */
     finishPatch(M) {
       const ranks = {};
       const fin = ((M.state && M.state.finishOrder) || []).slice();
-      // 1) 완주자: timeMs 오름차순(같으면 seat). 중복 seat 은 첫 기록만.
-      const seenFin = new Set();
-      const finished = [];
+      const seen = new Set(); const finished = [];
       fin.sort((a, b) => (a.timeMs - b.timeMs) || (a.seat - b.seat));
       for (const f of fin) {
-        if (f == null || f.seat == null || seenFin.has(f.seat)) continue;
-        if (M.seats.indexOf(f.seat) < 0) continue;   // 유효 좌석만
-        seenFin.add(f.seat); finished.push(f.seat);
+        if (f == null || f.seat == null || seen.has(f.seat)) continue;
+        if (M.seats.indexOf(f.seat) < 0) continue;
+        seen.add(f.seat); finished.push(f.seat);
       }
-      // 2) 미완주자: 마지막 알려진 prog 내림차순(많이 간 사람 앞). 동률은 seat.
-      const rest = M.seats.filter(s => !seenFin.has(s));
       const progOf = (s) => {
-        if (s === M.mySeat && M.local) return M.local.prog || 0;
-        // peerAt 보간값 우선, 없으면 onPeer 캐시
+        if (s === M.mySeat && M.local) return M.local.bestProg || 0;
         const p = M.peerAt(s);
         if (p && p.prog != null) return p.prog;
         return (M._peerProg && M._peerProg[s]) || 0;
       };
-      rest.sort((a, b) => (progOf(b) - progOf(a)) || (a - b));
-      // 3) 순위 부여(1..n, 빠짐없이)
+      const rest = M.seats.filter(s => !seen.has(s)).sort((a, b) => (progOf(b) - progOf(a)) || (a - b));
       let r = 1;
       for (const s of finished) ranks[s] = r++;
-      for (const s of rest)     ranks[s] = r++;
-      // 안전망: 혹시 누락 좌석 있으면 끝에 채움
-      for (const s of M.seats) if (ranks[s] == null) ranks[s] = r++;
+      for (const s of rest) ranks[s] = r++;
+      for (const s of M.seats) if (ranks[s] == null) ranks[s] = r++;   // 안전망
       return { ranks };
     },
   };
 
-  /* ----------------------------- 충돌/함정 처리 ------------------------ */
-  // 갈림길 막힌 레인 벽 + 함정(낙하/스파이크) 결정적 판정.
-  function handleHazards(M, L, dt, dashing) {
-    const t = M.simT();
-    for (const s of M.course.segs) {
-      // 1) 갈림길 벽: gateY 밴드 내에서, 막힌 레인 위에 있으면 충돌
-      const inGate = L.y <= s.gateY + GATE_BAND * 0.5 && L.y >= s.gateY - GATE_BAND * 0.5;
-      if (inGate) {
-        const lane = laneOf(L.x, s.laneN);
-        if (lane !== s.openLane) {
-          // 벽에 막힘 → 통과 못함: 밴드 아래쪽 경계로 되밀고 감속
-          const wallBottom = s.gateY + GATE_BAND * 0.5;
-          if (L.y < wallBottom) { L.y = wallBottom; if (L.vy < 0) L.vy = 0; }
-          if (t >= L.slowUntil) L.slowUntil = t + SLOW_WALL;
-          // 체크포인트는 벽 직전으로
-        }
-      }
-      // 2) 함정(통과 직후 직선부). 낙하=대시중엔 건너뜀.
-      if (s.trap !== TRAP_NONE) {
-        const near = Math.abs(L.y - s.trapY) <= 22;
-        // 함정은 통과 레인 중앙 부근에만 배치(피할 좌우 여백 있음)
-        const tcx = laneCenterX(s.laneN, s.openLane);
-        const hitX = Math.abs(L.x - tcx) <= 30;
-        if (near && hitX) {
-          if (s.trap === TRAP_PIT) {
-            if (!dashing) {
-              // 낙하 → 직전 체크포인트로 복귀(시간손실, 탈락 없음)
-              L.x = L.cp.x; L.y = L.cp.y;
-              L.vy = 0; L.vx = 0;
-              L.slowUntil = t + 200;
-              if (!M.lowPower) M.vibrate(30);
-            }
-          } else if (s.trap === TRAP_SPIKE) {
-            if (t >= L.stunUntil + 50) {  // 연속 중복기절 방지
-              L.stunUntil = t + STUN_SPIKE;
-              L.vy = 0; L.vx = 0;
-              M.flash('스파이크!');
-              if (!M.lowPower) M.vibrate(60);
-            }
-          }
-        }
-      }
-      // 3) 체크포인트: 갈림길을 통과한 직후 지점으로 전진 갱신(y 가 더 작아질 때만)
-      const cpY = s.gateY - GATE_BAND * 0.5 - 30;
-      if (L.y < cpY && cpY < L.cp.y) {
-        L.cp = { x: clamp(L.x, PLAYER_R, WORLD_W - PLAYER_R), y: cpY };
-      }
-    }
-  }
-
-  function laneOf(x, laneN) {
-    const w = WORLD_W / laneN;
-    return clamp(Math.floor(x / w), 0, laneN - 1);
-  }
-
-  /* ----------------------------- 순위/평균 ----------------------------- */
-  function avgProg(M) {
-    let sum = 0, cnt = 0;
-    if (M.local) { sum += M.local.prog || 0; cnt++; }
-    for (const seat of M.seats) {
-      if (seat === M.mySeat) continue;
-      const p = M.peerAt(seat);
-      const pr = (p && p.prog != null) ? p.prog : ((M._peerProg && M._peerProg[seat]) || 0);
-      sum += pr; cnt++;
-    }
-    return cnt ? sum / cnt : 0;
-  }
+  /* ----------------------------- 순위 추정 --------------------------- */
   function estimateRank(M, myProg) {
     let ahead = 0;
     for (const seat of M.seats) {
@@ -401,126 +430,75 @@
     return ahead + 1;
   }
 
-  /* ----------------------------- 그리기 헬퍼 --------------------------- */
+  /* ----------------------------- 그리기 헬퍼 ------------------------- */
   // 캐릭터 = 원 + 좌석색 + 번호
-  function drawRunner(ctx, cx, cy, scale, seat, fin, lowPower, isMe, stunned, dashing) {
-    const r = Math.max(8, Math.round(PLAYER_R * scale));
-    // 잔상/대시 글로우(저사양 OFF)
+  function drawRunner(ctx, cx, cy, seat, fin, lowPower, isMe, dashing) {
+    const r = PR + 3;
     if (dashing && !lowPower) {
-      ctx.fillStyle = 'rgba(255,255,255,0.18)';
-      ctx.beginPath(); ctx.arc(cx, cy + r, r * 1.3, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.16)';
+      ctx.beginPath(); ctx.arc(cx, cy, r * 1.5, 0, Math.PI * 2); ctx.fill();
     }
-    // 본체
     ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.fillStyle = stunned ? '#888' : seatColor(seat);
-    ctx.fill();
-    // 외곽(내 캐릭터 강조)
+    ctx.fillStyle = seatColor(seat); ctx.fill();
     ctx.lineWidth = isMe ? 3 : 2;
     ctx.strokeStyle = isMe ? '#ffffff' : 'rgba(0,0,0,0.45)';
     ctx.stroke();
-    // 번호
     ctx.fillStyle = '#0b0e14';
     ctx.font = `bold ${Math.round(r * 1.1)}px system-ui,sans-serif`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(String(seat), cx, cy + 1);
-    if (fin) { // 완주 깃발 점
-      ctx.fillStyle = '#ffd54a';
-      ctx.beginPath(); ctx.arc(cx + r, cy - r, Math.max(2, r * 0.3), 0, Math.PI * 2); ctx.fill();
+    if (fin) { ctx.fillStyle = '#ffd54a'; ctx.beginPath(); ctx.arc(cx + r, cy - r, 3, 0, Math.PI * 2); ctx.fill(); }
+  }
+
+  // 결승 체크무늬(결승 행 통로 위)
+  function drawFinish(M, ctx, sx, sy) {
+    const y = sy(GOAL_ROW * TILE);
+    const cell = Math.round(TILE / 2);
+    const x0 = sx(0), x1 = sx(COLS * TILE);
+    for (let x = x0; x < x1; x += cell) {
+      const k = Math.floor((x - x0) / cell) % 2;
+      ctx.fillStyle = k === 0 ? '#eef1f6' : '#11151d';
+      ctx.fillRect(x, y, cell, cell);
+      ctx.fillStyle = k === 0 ? '#11151d' : '#eef1f6';
+      ctx.fillRect(x, y + cell, cell, cell);
     }
   }
 
-  // 한 구간: 막힌 레인 벽(통과레인과 같은 회색벽) + 함정 마커
-  function drawSegment(ctx, s, sx, sy, scale) {
-    const bandTop = sy(s.gateY - GATE_BAND * 0.5);
-    const bandBot = sy(s.gateY + GATE_BAND * 0.5);
-    const h = bandBot - bandTop;
-    // 막힌 레인 = 벽(통과 레인과 동일 외형의 회색 벽처럼)
-    for (let lane = 0; lane < s.laneN; lane++) {
-      const [x0, x1] = laneBounds(s.laneN, lane);
-      const px0 = sx(x0), px1 = sx(x1);
-      if (lane === s.openLane) {
-        // 통과 레인: 약간 밝은 바닥(틈)
-        ctx.fillStyle = '#16233a';
-        ctx.fillRect(px0 + 2, bandTop, (px1 - px0) - 4, h);
-      } else {
-        // 벽: 통과 레인과 "같은 벽처럼" 보이게(동일 톤). 좌표는 seed 동일.
-        ctx.fillStyle = '#33425e';
-        ctx.fillRect(px0 + 2, bandTop, (px1 - px0) - 4, h);
-        // 벽 스트라이프(시각 구분)
-        ctx.fillStyle = '#2a3650';
-        for (let yy = bandTop; yy < bandBot; yy += 10) ctx.fillRect(px0 + 2, yy, (px1 - px0) - 4, 4);
+  // 미니맵: 전체 미로 축소 + 나/원격 진행 점
+  function drawMiniMap(M, ctx, W, H) {
+    const mw = 64, mh = 92, pad = 10;
+    const ox = W - mw - pad, oy = pad;
+    ctx.fillStyle = 'rgba(8,12,20,0.7)';
+    ctx.fillRect(ox - 3, oy - 3, mw + 6, mh + 6);
+    const grid = M.maze.grid;
+    const cw = mw / COLS, ch = mh / ROWS;
+    ctx.fillStyle = '#26344e';
+    for (let r = 0; r < ROWS; r += 1) {
+      for (let c = 0; c < COLS; c += 1) {
+        if (grid[r][c] === FLOOR) ctx.fillRect(ox + c * cw, oy + r * ch, Math.max(1, cw), Math.max(1, ch));
       }
     }
-    // 레인 구분선
-    ctx.strokeStyle = 'rgba(255,255,255,0.06)'; ctx.lineWidth = 1;
-    for (let lane = 1; lane < s.laneN; lane++) {
-      const x = sx(laneBounds(s.laneN, lane)[0]);
-      ctx.beginPath(); ctx.moveTo(x, sy(s.topY)); ctx.lineTo(x, sy(s.topY + SEG_H)); ctx.stroke();
-    }
-    // 함정 마커
-    if (s.trap !== TRAP_NONE) {
-      const tcx = sx(laneCenterX(s.laneN, s.openLane));
-      const tcy = sy(s.trapY);
-      const rr = Math.round(20 * scale);
-      if (s.trap === TRAP_PIT) {
-        ctx.fillStyle = '#05080f';
-        ctx.beginPath(); ctx.ellipse(tcx, tcy, rr, rr * 0.6, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.strokeStyle = '#0a1018'; ctx.lineWidth = 2; ctx.stroke();
-      } else {
-        // 스파이크: 빨간 삼각 톱니
-        ctx.fillStyle = '#c8324a';
-        const n = 4, w = rr * 1.6, step = w / n;
-        ctx.beginPath();
-        ctx.moveTo(tcx - w / 2, tcy + 6);
-        for (let k = 0; k < n; k++) {
-          const x0 = tcx - w / 2 + step * k;
-          ctx.lineTo(x0 + step / 2, tcy - 8);
-          ctx.lineTo(x0 + step, tcy + 6);
-        }
-        ctx.closePath(); ctx.fill();
-      }
-    }
-  }
-
-  // 결승선 체크무늬
-  function drawFinish(ctx, sx, sy, scale) {
-    const y = sy(FINISH_Y);
-    const cell = Math.max(8, Math.round(14 * scale));
-    const W = sx(WORLD_W);
-    for (let x = 0; x < W; x += cell) {
-      ctx.fillStyle = ((Math.floor(x / cell) % 2) === 0) ? '#f2f4f8' : '#11151d';
-      ctx.fillRect(x, y - cell, cell, cell);
-      ctx.fillStyle = ((Math.floor(x / cell) % 2) === 0) ? '#11151d' : '#f2f4f8';
-      ctx.fillRect(x, y - cell * 2, cell, cell);
-    }
+    // 결승선
     ctx.fillStyle = '#ffd54a';
-    ctx.font = `bold ${Math.round(16 * scale)}px system-ui,sans-serif`;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-    ctx.fillText('FINISH', W / 2, y - cell * 2 - 4);
-  }
-
-  // 우측 미니 진행레일(나/원격 점)
-  function drawProgressRail(M, ctx, W, H) {
-    const x = W - 12, top = 16, bot = H - 16;
-    ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, bot); ctx.stroke();
-    const place = (prog, seat, me) => {
-      const k = clamp(prog / TRACK_LEN, 0, 1);
-      const yy = Math.round(bot - (bot - top) * k);  // 위가 결승
-      ctx.beginPath(); ctx.arc(x, yy, me ? 5 : 4, 0, Math.PI * 2);
+    ctx.fillRect(ox, oy + GOAL_ROW * ch, mw, Math.max(1, ch));
+    // 점(나/원격) — 진행도 기반 y
+    const dot = (prog, seat, me) => {
+      const k = clamp(prog / PROG_MAX, 0, 1);
+      const yy = oy + mh - k * mh;
+      ctx.beginPath(); ctx.arc(ox + mw * 0.5, yy, me ? 2.6 : 2, 0, Math.PI * 2);
       ctx.fillStyle = seatColor(seat); ctx.fill();
-      if (me) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke(); }
+      if (me) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.stroke(); }
     };
     for (const seat of M.seats) {
       if (seat === M.mySeat) continue;
       const p = M.peerAt(seat);
       const pr = (p && p.prog != null) ? p.prog : ((M._peerProg && M._peerProg[seat]) || 0);
-      place(pr, seat, false);
+      dot(pr, seat, false);
     }
-    if (M.local) place(M.local.prog, M.mySeat, true);
+    if (M.local) dot(M.local.bestProg, M.mySeat, true);
   }
 
-  /* ----------------------------- 유틸 --------------------------------- */
+  /* ----------------------------- 유틸 -------------------------------- */
   function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
 
   window.MiniGames.race = race;

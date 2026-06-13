@@ -286,6 +286,50 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
   .vctl--act{width:58px; height:58px; bottom:14px;}
 }
 
+/* ===================== 게임 규칙 ===================== */
+.rules{padding:12px; display:flex; flex-direction:column; gap:12px;}
+.rules__pick{flex-wrap:wrap;}
+.rules__title{margin:4px 0;}
+.rules__body{background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:14px;}
+.rules__body ul{margin:0; padding-left:18px; display:flex; flex-direction:column; gap:8px; line-height:1.55;}
+.rules__body b{color:var(--accent);}
+
+/* ===================== 다빈치 코드 ===================== */
+.screen--davinci{display:flex; flex-direction:column; height:100%;}
+.dv-alive{margin-left:auto; font-weight:800; color:var(--ink-dim);}
+.dv-oppos{list-style:none; margin:0; padding:10px; display:grid; gap:8px;}
+.dv-oppo{background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:10px;}
+.dv-oppo.is-turn{outline:2px solid var(--accent);}
+.dv-oppo.is-dead{opacity:.5;}
+.dv-oppo__head{display:flex; align-items:center; gap:8px; margin-bottom:6px;}
+.dv-oppo__name{font-weight:800;}
+.dv-oppo__cnt{margin-left:auto; color:var(--ink-dim); font-size:12px;}
+.dv-dead{margin-left:auto; color:var(--danger); font-weight:800; font-size:12px;}
+.dv-hand{display:flex; flex-wrap:wrap; gap:6px;}
+.dv-slot{display:inline-flex; touch-action:manipulation;}
+.dv-slot.is-pick .dvt{outline:3px solid var(--accent);}
+.dvt{width:34px; height:46px; border-radius:7px; display:grid; place-items:center; font-weight:900; font-size:18px; border:1px solid #000;}
+.dvt--black{background:#1b1f29; color:#fff;}
+.dvt--white{background:#eef2f8; color:#11151d;}
+.dv-mine{padding:10px 12px; border-top:1px solid var(--line); background:var(--panel);}
+.dv-mine.is-dead{opacity:.6;}
+.dv-mine__label{font-size:12px; color:var(--ink-dim); margin-bottom:6px;}
+.dv-hand--mine .dvt{width:38px; height:52px; font-size:20px;}
+.dv-log{list-style:none; margin:0; padding:4px 12px; font-size:12px; color:var(--ink-dim); display:flex; flex-direction:column; gap:2px;}
+.dv-foot{padding:10px 12px max(12px,env(safe-area-inset-bottom)); border-top:1px solid var(--line); background:var(--panel);}
+.dv-note{text-align:center; color:var(--ink-dim); padding:6px;}
+.dv-actbar{display:flex; flex-direction:column; gap:8px;}
+.dv-step{font-weight:700; font-size:14px; display:flex; flex-wrap:wrap; align-items:center; gap:8px;}
+.dv-drawn{display:inline-flex; align-items:center; gap:4px;}
+.dv-pickhint{font-size:13px;}
+.dv-pickhint.is-armed{color:var(--accent); font-weight:800;}
+.dv-guess-grp{margin-bottom:10px;}
+.dv-guess-lab{font-weight:800; margin-bottom:6px;}
+.dv-num-grid{display:grid; grid-template-columns:repeat(6,1fr); gap:6px;}
+.dv-num{min-height:44px; border-radius:8px; border:1px solid var(--line); background:#1b1f29; color:#fff; font-weight:900; font-size:16px; touch-action:manipulation;}
+.dv-num--w{background:#eef2f8; color:#11151d;}
+@media (max-width:360px){ .dvt{width:30px;height:40px;font-size:16px;} .dv-hand--mine .dvt{width:34px;height:46px;} .dv-num{min-height:40px;} }
+
 /* ===== 데스크톱 ===== */
 @media (min-width:720px){
   :root{--tile-w:38px; --gap:6px;}

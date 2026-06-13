@@ -8,7 +8,8 @@
 /* ----------------------------- 상태 ----------------------------------- */
 let TOKEN = localStorage.getItem('rk_token') || null;
 let ME = null;                 // {id,username,real_name,display_game,games,display,token}
-let MODE = 'rummikub';         // 현재 로비 컨텍스트: rummikub | mini
+let MODE = 'board';            // 현재 로비 컨텍스트: board(방1~5) | mini(방6~10)
+let RULES_GAME = 'rummikub';   // 규칙 화면에서 선택된 게임
 
 let ROOM_ID = null, ROOM = null, MEMBERS = [];
 let lobbyCh = null, roomDbCh = null, presenceCh = null, hbIv = null;
@@ -29,7 +30,8 @@ let WAIT_TAB = 'seat';
 let RANK_GAME = 'rummikub';
 let lastRoomSig = '';
 
-function curGame() { return (ROOM && ROOM.game) || (MODE === 'mini' ? null : 'rummikub'); }
+function curGame() { return ROOM ? ROOM.game : null; }
+function capOf(game) { return game === 'rummikub' ? 4 : 8; }   // 루미=4인, 나머지=8인
 function statsOf(uid) { return lbCache[uid] || {}; }
 
 /* ----------------------------- 부팅 ----------------------------------- */
@@ -44,15 +46,18 @@ async function boot() {
 
 /* ----------------------------- 액션 위임 ------------------------------- */
 function handleAct(act, el) {
+  if (act.indexOf('dv_') === 0) { davinciAct(act, el); return; }   // 다빈치 코드 액션 위임
   switch (act) {
     case 'authTab': switchAuthTab(el.dataset.tab); break;
     case 'authSubmit': doAuth(); break;
     case 'logout': doLogout(); break;
-    case 'goRummikub': goLobby('rummikub'); break;
+    case 'goBoard': goLobby('board'); break;
     case 'goMini': goLobby('mini'); break;
     case 'backHome': goHome(); break;
     case 'goRank': showRank(RANK_GAME); break;
     case 'goTiers': showTiers(); break;
+    case 'goRules': showRules(RULES_GAME); break;
+    case 'rulesGame': RULES_GAME = el.dataset.game; if (SCREEN === 'room') renderWaiting(); else showRules(RULES_GAME); break;
     case 'rankGame': RANK_GAME = el.dataset.game; showRank(RANK_GAME); break;
     case 'enterRoom': enterRoomFlow(Number(el.dataset.room)); break;
     case 'waitTab': WAIT_TAB = el.dataset.tab; renderWaiting(); break;
@@ -129,17 +134,18 @@ function goHome() {
     <section class="screen screen--home">
       <header class="lobby__top">
         ${headerHTML()}<span class="spacer"></span>
+        <button class="btn btn--ghost" data-act="goRules">규칙</button>
         <button class="btn btn--ghost" data-act="goTiers">티어</button>
         <button class="btn btn--ghost" data-act="goRank">랭킹</button>
         <button class="btn btn--ghost" data-act="logout">로그아웃</button>
       </header>
       <div class="home-cards grow">
-        <button class="home-card home-card--rk" data-act="goRummikub">
-          <span class="home-card__emoji">🀄</span><span class="home-card__title">루미큐브</span>
-          <span class="home-card__sub">방 1~5 · 2~4인 실시간</span></button>
+        <button class="home-card home-card--rk" data-act="goBoard">
+          <span class="home-card__emoji">🎲</span><span class="home-card__title">보드게임</span>
+          <span class="home-card__sub">방 1~5 · 루미큐브 / 다빈치 코드</span></button>
         <button class="home-card home-card--mini" data-act="goMini">
           <span class="home-card__emoji">🎮</span><span class="home-card__title">미니게임</span>
-          <span class="home-card__sub">방 6~10 · 운빨 대시 / 나도 사람이야 · 2~8인</span></button>
+          <span class="home-card__sub">방 6~10 · 운빨 대시 / 나도 사람이야</span></button>
       </div>
       <p class="muted center" style="padding:10px 14px">로그인 후 게임을 고르세요. 티어·전적·꾸미기는 게임별로 따로 쌓여요.</p>
     </section>`;
@@ -149,7 +155,7 @@ function goHome() {
 /* ============================ 로비 ==================================== */
 function cleanupLobby() { if (lobbyCh) { leaveChannel(lobbyCh); lobbyCh = null; } }
 function cleanupRoom() {
-  stopTimer(); miniStop();
+  stopTimer(); miniStop(); davinciStop();
   if (roomDbCh) { leaveChannel(roomDbCh); roomDbCh = null; }
   if (presenceCh) { leaveChannel(presenceCh); presenceCh = null; }
   if (hbIv) { clearInterval(hbIv); hbIv = null; }
@@ -175,22 +181,22 @@ async function refreshLobby() {
     _reapAt = Date.now();
     rooms.filter(r => r.id >= lo && r.id <= hi).forEach(r => { reapStale(r.id); });
   }
-  const cap = MODE === 'mini' ? 8 : 4;
   app().innerHTML = `
     <section class="screen screen--lobby">
       <header class="lobby__top">
         <button class="btn btn--ghost" data-act="backHome">← 홈</button>
-        <b style="margin-left:6px">${MODE === 'mini' ? '🎮 미니게임' : '🀄 루미큐브'}</b>
+        <b style="margin-left:6px">${MODE === 'mini' ? '🎮 미니게임' : '🎲 보드게임'}</b>
         <span class="spacer"></span>${headerHTML()}
       </header>
       <ul class="room-grid scrollable grow">
         ${rooms.filter(r => r.id >= lo && r.id <= hi).map(r => {
           const c = seatCount[r.id] || 0;
           const playing = r.status !== 'waiting';
+          const cap = r.game ? capOf(r.game) : 8;
           const gname = r.game ? GAME_NAME[r.game] : '게임 선택 전';
           return `<li class="room-card ${playing ? 'is-playing' : ''}" data-act="enterRoom" data-room="${r.id}">
             <span class="room-card__id">방 ${r.id}</span>
-            ${MODE === 'mini' ? `<span class="room-card__game">${esc(gname)}</span>` : ''}
+            <span class="room-card__game">${esc(gname)}</span>
             <span class="room-card__count ${c >= cap ? 'is-full' : ''}">${c}/${cap}</span>
             <span class="room-card__state">${playing ? '게임중' : '대기중'}</span>
           </li>`;
@@ -209,8 +215,8 @@ async function enterRoomFlow(roomId) {
     ROOM_ID = roomId;
     await reapStale(roomId);
     const room0 = await fetchRoom(roomId);
-    await enterRoom(roomId, ME, room0 ? room0.game : (roomId <= 5 ? 'rummikub' : null));
-    mySnapGame = (room0 && room0.game) || (roomId <= 5 ? 'rummikub' : null);
+    await enterRoom(roomId, ME, room0 ? room0.game : null);
+    mySnapGame = (room0 && room0.game) || null;
     await refreshLbCache(true);
     roomDbCh = subscribeRoom(roomId, () => scheduleRoomRefresh());
     presenceCh = joinPresence(roomId, ME, { name: ME.real_name }, onPresence);
@@ -242,14 +248,15 @@ async function refreshRoom() {
   if (g && g !== mySnapGame && MEMBERS.some(m => m.user_id === ME.id)) { mySnapGame = g; updateMemberSnapshot(ROOM_ID, ME, g); }
 
   if (ROOM.status === 'waiting') {
-    stopTimer(); if (SCREEN === 'mini') miniStop();
+    stopTimer(); miniStop(); davinciStop();
     await refreshLbCache();
     renderWaiting();
   } else if (ROOM.status === 'playing') {
     if (ROOM.game === 'rummikub') enterGameView();
+    else if (ROOM.game === 'davinci') enterDavinciView();
     else enterMiniView();
   } else if (ROOM.status === 'finished') {
-    stopTimer(); if (SCREEN === 'mini') miniStop();
+    stopTimer(); miniStop(); davinciStop();
     renderResult();
   }
 }
@@ -281,7 +288,7 @@ function timeoutActorId() {
 function renderWaiting() {
   const amHost = ROOM.host_id === ME.id;
   const g = curGame();
-  const cap = MODE === 'mini' ? 8 : 4;
+  const cap = g ? capOf(g) : 8;
   setScreen('room');
   const tabBtn = (k, label) => `<button class="tab ${WAIT_TAB === k ? 'is-active' : ''}" data-act="waitTab" data-tab="${k}">${label}</button>`;
   app().innerHTML = `
@@ -293,13 +300,14 @@ function renderWaiting() {
         <span class="spacer"></span>
         <span class="muted">${MEMBERS.filter(m => m.seat != null).length}/${cap}</span>
       </header>
-      <nav class="tabbar">${tabBtn('seat', '좌석')}${tabBtn('tier', '티어표')}${tabBtn('deco', '꾸미기')}</nav>
+      <nav class="tabbar">${tabBtn('seat', '좌석')}${tabBtn('tier', '티어표')}${tabBtn('deco', '꾸미기')}${tabBtn('rules', '규칙')}</nav>
       <div class="wait-body grow scrollable">${waitBody(WAIT_TAB, amHost, g, cap)}</div>
     </section>`;
 }
 function waitBody(tab, amHost, g, cap) {
   if (tab === 'tier') return tierLadderHTML(g);
   if (tab === 'deco') return decoBody();
+  if (tab === 'rules') return rulesBody(RULES_GAME);
   // 좌석 탭
   const seatMap = {}; MEMBERS.forEach(m => { if (m.seat != null) seatMap[m.seat] = m; });
   const mine = MEMBERS.find(m => m.user_id === ME.id) || {};
@@ -327,18 +335,21 @@ function waitBody(tab, amHost, g, cap) {
   }
   let host = '';
   if (amHost) {
-    const gamePick = MODE === 'mini' ? `<div class="game-select">
-        <button class="chip ${ROOM.game === 'race' ? 'is-active' : ''}" data-act="setGame" data-game="race">🏁 운빨 대시</button>
-        <button class="chip ${ROOM.game === 'hunt' ? 'is-active' : ''}" data-act="setGame" data-game="hunt">🕵️ 나도 사람이야</button>
-      </div>` : '';
-    const canStart = seated >= 2 && seated <= cap && (MODE !== 'mini' || !!ROOM.game);
+    const picks = MODE === 'mini'
+      ? [['race', '🏁 운빨 대시'], ['hunt', '🕵️ 나도 사람이야']]
+      : [['rummikub', '🀄 루미큐브'], ['davinci', '🔢 다빈치 코드']];
+    const gamePick = `<div class="game-select">${picks.map(([k, lab]) =>
+      `<button class="chip ${ROOM.game === k ? 'is-active' : ''}" data-act="setGame" data-game="${k}">${lab}</button>`).join('')}</div>`;
+    const timeSel = ROOM.game === 'rummikub'   // 타이머 선택은 루미큐브만
+      ? `<div class="time-select">${[15, 30, 60].map(s => `<button class="chip ${ROOM.turn_seconds === s ? 'is-active' : ''}" data-act="setTime" data-sec="${s}">${s}초</button>`).join('')}</div>`
+      : '';
+    const canStart = !!ROOM.game && seated >= 2 && seated <= cap;
     host = `<div class="host-controls">
-        ${gamePick}
-        <div class="time-select">${[15, 30, 60].map(s => `<button class="chip ${ROOM.turn_seconds === s ? 'is-active' : ''}" data-act="setTime" data-sec="${s}">${s}초</button>`).join('')}</div>
-        <button class="btn btn--primary btn--lg" data-act="start" ${canStart ? '' : 'disabled'}>게임 시작 (2~${cap}명)</button>
+        ${gamePick}${timeSel}
+        <button class="btn btn--primary btn--lg" data-act="start" ${canStart ? '' : 'disabled'}>${ROOM.game ? `게임 시작 (2~${cap}명)` : '게임을 먼저 고르세요'}</button>
       </div>`;
   } else {
-    host = `<div class="wait-note">방장이 시작하기를 기다리는 중…${MODE === 'mini' && !ROOM.game ? ' (게임 선택 전)' : ` (제한 ${ROOM.turn_seconds}초)`}</div>`;
+    host = `<div class="wait-note">방장이 ${ROOM.game ? GAME_NAME[ROOM.game] + ' 시작' : '게임 선택'}을 기다리는 중…</div>`;
   }
   return `<ul class="seat-list">${seats.join('')}</ul>${host}
     <div class="room__actions">
@@ -402,23 +413,27 @@ async function doSetDisplay(game) {
 }
 async function doStart() {
   await netCall(async () => {
+    const game = ROOM.game;
+    if (!game) { toast('게임을 먼저 고르세요'); return; }
     const seated = MEMBERS.filter(m => m.seat != null).sort((a, b) => a.seat - b.seat);
-    const cap = MODE === 'mini' ? 8 : 4;
+    const cap = capOf(game);
     if (seated.length < 2 || seated.length > cap) { toast(`2~${cap}명이 앉아야 시작`); return; }
     const seatNums = seated.map(m => m.seat);
+    const scoresMap = {}; seated.forEach(m => { scoresMap[m.seat] = (lbCache[m.user_id] && lbCache[m.user_id].score) ?? m.score ?? 0; });
     let st;
-    if (MODE !== 'mini') {                          // 루미큐브
+    if (game === 'rummikub') {
       st = dealNewGame(seatNums);
       st.game = 'rummikub'; st.players = {}; st.names = {}; st.scores = {};
-      seated.forEach(m => { st.players[m.seat] = m.user_id; st.names[m.seat] = m.name; st.scores[m.seat] = (lbCache[m.user_id] && lbCache[m.user_id].score) ?? m.score ?? 0; });
+      seated.forEach(m => { st.players[m.seat] = m.user_id; st.names[m.seat] = m.name; st.scores[m.seat] = scoresMap[m.seat]; });
       st.n = seated.length; st.passStreak = 0; st.results = null;
-    } else {                                         // 미니게임
-      if (!ROOM.game) { toast('게임을 먼저 고르세요'); return; }
+    } else if (game === 'davinci') {
+      st = davinciInitialState(seated.map(m => ({ seat: m.seat, user_id: m.user_id, name: m.name })), scoresMap);
+    } else {                                         // race / hunt
       const seed = ((serverNow() & 0x7fffffff) ^ (ROOM_ID * 2654435761)) >>> 0;
-      st = { game: ROOM.game, seed, players: {}, names: {}, scores: {}, n: seated.length, results: null };
-      seatNums.forEach(s => { const m = seated.find(x => x.seat === s); st.players[s] = m.user_id; st.names[s] = m.name; st.scores[s] = (lbCache[m.user_id] && lbCache[m.user_id].score) ?? m.score ?? 0; });
-      if (ROOM.game === 'race') { st.phase = 'racing'; st.finishOrder = []; st.ranks = null; }
-      if (ROOM.game === 'hunt') {
+      st = { game, seed, players: {}, names: {}, scores: {}, n: seated.length, results: null };
+      seatNums.forEach(s => { const m = seated.find(x => x.seat === s); st.players[s] = m.user_id; st.names[s] = m.name; st.scores[s] = scoresMap[s]; });
+      if (game === 'race') { st.phase = 'racing'; st.finishOrder = []; st.ranks = null; }
+      if (game === 'hunt') {
         const rng = mulberry32(seed);
         const it = seatNums[Math.floor(rng() * seatNums.length)];
         st.phase = 'playing'; st.it = it; st.roles = {}; st.alive = {}; st.caughtMid = {}; st.limitSec = 120;
@@ -436,6 +451,13 @@ function enterMiniView() {
   amSpectator = (mySeat == null);
   if (SCREEN !== 'mini' || MINI.roomId !== ROOM_ID || !MINI.on) miniStart(ROOM, ME, mySeat, amSpectator);
   else miniOnRoom(ROOM);
+}
+function enterDavinciView() {
+  G = ROOM.state;
+  mySeat = seatOfUser(G, ME.id);
+  amSpectator = (mySeat == null);
+  if (SCREEN !== 'davinci' || !DV.on || DV.roomId !== ROOM_ID) davinciEnter(ROOM, ME, mySeat, amSpectator);
+  else davinciOnRoom(ROOM);
 }
 
 /* ============================ 루미큐브 게임 =========================== */
@@ -652,6 +674,22 @@ async function commit(state) {
 }
 async function autoTimeout(forSeat) {
   if (busy) return; busy = true;
+  // 본인 차례 시간초과 — 준비된 배치가 규칙상 유효하면 자동 제출(버튼만 안 누른 경우 구제)
+  if (Number(forSeat) === Number(mySeat) && work && turnStart) {
+    const cur = work.board.map(reflowSet).filter(b => b.length > 0);
+    const chk = validateTurn(G, mySeat, turnStart.board, cur, turnStart.rack, work.hands[mySeat]);
+    if (chk.ok) {
+      const s2 = deepClone(G);
+      s2.board = cur; s2.hands[mySeat] = work.hands[mySeat].slice();
+      if (!s2.initialMeld[mySeat]) s2.initialMeld[mySeat] = true;
+      s2.passStreak = 0;
+      if (s2.hands[mySeat].length !== 0) s2.turn = nextSeat(s2, mySeat);
+      const r2 = await pushState(ROOM_ID, s2, ROOM.version); busy = false;
+      if (r2.ok) { work = null; if (isOver(s2)) await finishGame(ROOM_ID, TOKEN, 'rummikub'); }
+      await refreshRoom();
+      return;
+    }
+  }
   const s = deepClone(G);
   if (Number(s.turn) !== Number(forSeat)) { busy = false; return; }
   if (s.pool.length > 0) { s.hands[forSeat].push(s.pool.shift()); s.passStreak = 0; }
@@ -756,6 +794,55 @@ function showTiers() {
     <section class="screen">
       <header class="room__top"><button class="btn btn--ghost" data-act="backHome">← 홈</button><b style="margin-left:6px">🏅 티어</b><span class="spacer"></span></header>
       <div class="grow scrollable">${tierLadderHTML(ME.display && ME.display.game ? ME.display.game : null)}</div>
+    </section>`;
+}
+
+/* ============================ 게임 규칙 ============================== */
+const RULES_TEXT = {
+  rummikub: `<ul>
+    <li>타일: 1~13 숫자 × 4색 × 2벌 + 조커 2장. 각자 <b>14장</b>으로 시작.</li>
+    <li>세트 2종 — <b>그룹</b>(같은 숫자, 서로 다른 색 3~4장) / <b>런</b>(같은 색, 연속 숫자 3장 이상). 조커는 빈 자리를 대신해요.</li>
+    <li><b>첫 등록</b>은 새로 내려놓는 세트 합이 <b>30점 이상</b>이어야 해요. 등록 전에는 보드의 기존 세트를 건드릴 수 없어요.</li>
+    <li>내 차례: 손패를 탭해 고르고 보드/＋새 세트에 탭해 놓기. 자유 재배치 후 <b>[내기]</b>. 낼 게 없으면 <b>[뽑기]</b>.</li>
+    <li>제한시간 초과 시 자동 뽑기(준비된 배치가 유효하면 자동 제출돼요).</li>
+    <li>먼저 손패를 모두 비우면 승리. 남은 손패가 적을수록 점수 유리. (2~4인)</li>
+  </ul>`,
+  davinci: `<ul>
+    <li>타일: 검정 0~11 + 흰색 0~11 (총 24장). 내 타일은 <b>작은 수가 왼쪽</b>, 같은 숫자면 <b>검정이 흰색보다 왼쪽</b>으로 정렬돼요. 숫자는 나만 보여요.</li>
+    <li>내 차례: ① 산더미에서 1장 뽑고(숨김) ② 상대의 가려진 타일 하나를 골라 <b>숫자+색</b>을 추리.</li>
+    <li><b>맞으면</b> 그 타일이 공개되고, 계속 추리하거나 멈출 수 있어요(멈추면 뽑은 타일을 가린 채 손에 넣고 턴 종료).</li>
+    <li><b>틀리면</b> 내가 뽑은 타일이 공개되어 손에 들어가고 턴이 끝나요.</li>
+    <li>내 타일이 전부 공개되면 탈락. <b>마지막까지 살아남는 1명이 승리</b>. 타이머 없음. (2~8인)</li>
+  </ul>`,
+  race: `<ul>
+    <li>모두 동시에 출발해 <b>먼저 결승선</b>에 닿으면 1등. (2~8인)</li>
+    <li><b>갈림길</b>은 어디가 진짜 길인지 보이지 않아요. 막다른 길이면 조금 가다 막혀서 <b>되돌아와야</b> 해요(시간 손실).</li>
+    <li><b>지름길 도박</b>: 짧지만 50% 확률로 막힌 길 vs 길지만 100% 뚫린 길 중 선택.</li>
+    <li>중간중간 <b>작은 미로</b> 구간도 있어요.</li>
+    <li>조작: 왼쪽 아래 조이스틱 이동 + 오른쪽 아래 <b>대시</b>(짧게 가속). 죽음·탈락은 없고 늦어질 뿐.</li>
+  </ul>`,
+  hunt: `<ul>
+    <li>한 명이 <b>술래</b>, 나머지는 <b>숨은이</b>. 맵엔 똑같이 생긴 <b>AI 군중</b>이 잔뜩 돌아다녀요. (2~8인)</li>
+    <li><b>숨은이</b>: 군중처럼 자연스럽게 움직여 들키지 않고 <b>제한시간까지 생존</b>하면 승리. (오른쪽 버튼=감정표현)</li>
+    <li><b>술래</b>: 군중 속 진짜 사람을 찾아 <b>제거</b>. 단 <b>AI를 잘못 제거하면 패널티</b>(쿨다운↑). 시간 내 <b>전원 색출</b>하면 승리.</li>
+    <li>조작: 왼쪽 아래 조이스틱 이동 + 오른쪽 아래 액션버튼.</li>
+  </ul>`,
+};
+function rulesBody(game) {
+  game = game || 'rummikub';
+  const chip = k => `<button class="chip ${game === k ? 'is-active' : ''}" data-act="rulesGame" data-game="${k}">${GAME_LOGO[k]} ${GAME_SHORT[k]}</button>`;
+  return `<div class="rules">
+    <div class="game-select rules__pick">${['rummikub', 'davinci', 'race', 'hunt'].map(chip).join('')}</div>
+    <h3 class="rules__title" style="--tc:${tierForScore(0).color}">${GAME_LOGO[game]} ${GAME_NAME[game]}</h3>
+    <div class="rules__body">${RULES_TEXT[game]}</div>
+  </div>`;
+}
+function showRules(game) {
+  RULES_GAME = game || RULES_GAME || 'rummikub'; setScreen('rank');
+  app().innerHTML = `
+    <section class="screen">
+      <header class="room__top"><button class="btn btn--ghost" data-act="backHome">← 홈</button><b style="margin-left:6px">📖 게임 규칙</b><span class="spacer"></span></header>
+      <div class="grow scrollable">${rulesBody(RULES_GAME)}</div>
     </section>`;
 }
 

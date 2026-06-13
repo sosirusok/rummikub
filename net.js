@@ -159,7 +159,7 @@ async function resetRoomToWaiting(roomId) {
   await sb.from('rooms').update({ status: 'waiting', state: null, version: 0 }).eq('id', roomId);
 }
 async function finishGame(roomId, token, game) {
-  const rpc = game === 'race' ? 'rk_finish_race' : game === 'hunt' ? 'rk_finish_hunt' : 'rk_finish_game';
+  const rpc = game === 'race' ? 'rk_finish_race' : game === 'hunt' ? 'rk_finish_hunt' : game === 'davinci' ? 'rk_finish_davinci' : 'rk_finish_game';
   const { data, error } = await sb.rpc(rpc, { p_token: token, p_room: roomId });
   if (error) return { ok: false, error };
   return { ok: true, results: data };

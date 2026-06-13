@@ -33,7 +33,7 @@ alter table public.users enable row level security;   -- 정책 없음 = anon �
 -- ===== 게임별 독립 전적 (RPC 전용) =====
 create table if not exists public.user_game_stats (
   user_id uuid not null references public.users(id) on delete cascade,
-  game    text not null check (game in ('rummikub','race','hunt')),
+  game    text not null check (game in ('rummikub','davinci','race','hunt')),
   score   int  not null default 0 check (score >= 0),
   wins    int  not null default 0,
   losses  int  not null default 0,
@@ -68,13 +68,12 @@ alter table public.rooms add constraint rooms_id_check check (id between 1 and 1
 alter table public.rooms add column if not exists game text;
 alter table public.rooms alter column game drop default;        -- 구 default 'rummikub' 제거(없으면 무시)
 alter table public.rooms alter column game drop not null;        -- 6~10 은 null(미설정) 허용
-update public.rooms set game='rummikub' where game is not null and game not in ('rummikub','race','hunt');
+update public.rooms set game=null where game is not null and game not in ('rummikub','davinci','race','hunt');
 alter table public.rooms drop constraint if exists rooms_game_check;
 alter table public.rooms drop constraint if exists rooms_game_chk;
-alter table public.rooms add constraint rooms_game_chk check (game is null or game in ('rummikub','race','hunt'));
-insert into public.rooms (id, game) select g, 'rummikub' from generate_series(1,5)  g on conflict (id) do nothing;
-insert into public.rooms (id, game) select g, null       from generate_series(6,10) g on conflict (id) do nothing;
-update public.rooms set game='rummikub' where id between 1 and 5 and game is distinct from 'rummikub';
+alter table public.rooms add constraint rooms_game_chk check (game is null or game in ('rummikub','davinci','race','hunt'));
+insert into public.rooms (id, game) select g, null from generate_series(1,10) g on conflict (id) do nothing;
+update public.rooms set game=null where id between 1 and 5 and status='waiting';  -- 보드 로비에서 방장이 루미/다빈치 선택
 
 -- ===== 방 멤버 (좌석 1~8, 표시 스냅샷, 꾸미기 미러) =====
 create table if not exists public.room_members (
@@ -137,10 +136,13 @@ drop trigger if exists trg_rooms_touch on public.rooms;
 create trigger trg_rooms_touch before update on public.rooms
   for each row execute function public.rooms_touch();
 
--- 방1~5는 rummikub 고정, 게임 중에는 종류 변경 금지(클라 우회 차단)
+-- 방1~5=보드게임(rummikub/davinci), 6~10=미니게임(race/hunt). 게임 중 종류 변경 금지.
 create or replace function public.rooms_game_guard() returns trigger as $$
 begin
-  if new.id between 1 and 5 then new.game := 'rummikub'; end if;
+  if new.game is not null then
+    if new.id between 1 and 5  and new.game not in ('rummikub','davinci') then new.game := null; end if;
+    if new.id between 6 and 10 and new.game not in ('race','hunt')      then new.game := null; end if;
+  end if;
   if tg_op='UPDATE' and old.game is distinct from new.game and old.status <> 'waiting' then
     new.game := old.game;
   end if;
@@ -207,6 +209,7 @@ begin
     into g from public.user_game_stats where user_id = u.id;
   g := jsonb_build_object(
     'rummikub', coalesce(g->'rummikub', jsonb_build_object('score',0,'wins',0,'losses',0,'streak',0)),
+    'davinci',  coalesce(g->'davinci',  jsonb_build_object('score',0,'wins',0,'losses',0,'streak',0)),
     'race',     coalesce(g->'race',     jsonb_build_object('score',0,'wins',0,'losses',0,'streak',0)),
     'hunt',     coalesce(g->'hunt',     jsonb_build_object('score',0,'wins',0,'losses',0,'streak',0)));
   if u.display_game is null then
@@ -228,7 +231,7 @@ returns table(id uuid, username citext, real_name text, score int, wins int, los
 language sql security definer set search_path = public, extensions as $$
   select u.id, u.username, u.real_name, s.score, s.wins, s.losses, s.streak
   from public.user_game_stats s join public.users u on u.id = s.user_id
-  where s.game = case when p_game in ('rummikub','race','hunt') then p_game else 'rummikub' end
+  where s.game = case when p_game in ('rummikub','davinci','race','hunt') then p_game else 'rummikub' end
   order by s.score desc, s.wins desc, u.real_name asc limit 100;
 $$;
 
@@ -239,7 +242,7 @@ declare v_user uuid; v_score int;
 begin
   select id into v_user from public.users where token = p_token;
   if v_user is null then raise exception 'BAD_TOKEN'; end if;
-  if p_game is not null and p_game not in ('rummikub','race','hunt') then raise exception 'BAD_GAME'; end if;
+  if p_game is not null and p_game not in ('rummikub','davinci','race','hunt') then raise exception 'BAD_GAME'; end if;
   update public.users set display_game = p_game where id = v_user;
   if p_game is null then return jsonb_build_object('game', null, 'score', 0); end if;
   select coalesce(score,0) into v_score from public.user_game_stats where user_id = v_user and game = p_game;
@@ -294,6 +297,9 @@ begin
   if p_game = 'rummikub' then
     gm := greatest(0.42, 1 - L*0.011); lm := least(2.10, 1 + L*0.020); tx := L*0.85;
     mw := greatest(8, round(28 - L*0.45)::int); br := 0.10;
+  elsif p_game = 'davinci' then
+    gm := greatest(0.42, 1 - L*0.011); lm := least(2.08, 1 + L*0.020); tx := L*0.60;
+    mw := greatest(6, round(20 - L*0.34)::int); br := 0.10;
   elsif p_game = 'race' then
     gm := greatest(0.45, 1 - L*0.011); lm := least(2.05, 1 + L*0.019); tx := L*0.32;
     mw := greatest(4, round(12 - L*0.18)::int); br := 0.08;
@@ -466,6 +472,59 @@ begin
   return v_results;
 end; $$;
 
+-- ===== 다빈치 코드 davinci (탈락순위 기반. 클라 보고 ranks + 새너티 + CAP) =====
+create or replace function public.rk_finish_davinci(p_token uuid, p_room int)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare
+  v_user uuid; v_room public.rooms; v_state jsonb; v_players jsonb; v_ranks jsonb;
+  v_seats text[]; v_n int; v_results jsonb := '{}'::jsonb;
+  i int; v_seat text; v_uid uuid; v_rank int; v_avgrank numeric; v_tied boolean; v_cnt int;
+  v_curscore int; v_curstreak int; v_perf numeric; v_won boolean; v_tr text; v_delta int; v_ns int; r record;
+  CAP constant int := 90;
+begin
+  select id into v_user from public.users where token = p_token;
+  if v_user is null then raise exception 'BAD_TOKEN'; end if;
+  select * into v_room from public.rooms where id = p_room for update;
+  if not found then raise exception 'NO_ROOM'; end if;
+  if coalesce(v_room.game,'') <> 'davinci' then raise exception 'WRONG_GAME'; end if;
+  if v_room.status <> 'playing' then return coalesce(v_room.state->'results','{}'::jsonb); end if;
+  v_state := v_room.state; v_players := v_state->'players'; v_ranks := v_state->'ranks';
+  if not exists (select 1 from jsonb_each_text(v_players) e where e.value=v_user::text) then raise exception 'NOT_A_PLAYER'; end if;
+  if v_ranks is null then raise exception 'NO_RANKS'; end if;
+  select array_agg(key) into v_seats from jsonb_object_keys(v_players) key;
+  v_n := coalesce(array_length(v_seats,1),0);
+  if v_n not between 2 and 8 then raise exception 'BAD_N'; end if;
+  perform 1 from unnest(v_seats) s where (v_ranks->>s) is null;
+  if found then raise exception 'BAD_RANKS'; end if;
+  v_avgrank := (v_n + 1) / 2.0;
+  for i in 1 .. v_n loop
+    v_seat := v_seats[i]; v_rank := (v_ranks->>v_seat)::int;
+    if v_rank < 1 or v_rank > v_n then raise exception 'BAD_RANK_VAL'; end if;
+    select count(*) into v_cnt from unnest(v_seats) s where (v_ranks->>s)::int = v_rank;
+    v_tied := v_cnt > 1;
+    v_uid := (v_players->>v_seat)::uuid;
+    v_curscore := 0; v_curstreak := 0;
+    if v_uid is not null then
+      select coalesce(score,0), coalesce(streak,0) into v_curscore, v_curstreak from public.user_game_stats where user_id=v_uid and game='davinci';
+      v_curscore := coalesce(v_curscore,0); v_curstreak := coalesce(v_curstreak,0);
+    end if;
+    v_perf := (v_avgrank - v_rank) * 9;
+    v_won  := (v_rank = 1);
+    v_tr   := public.rk_streak_treatment_race(v_n, v_rank, v_tied);
+    select * into r from public.rk_apply_score('davinci', v_perf, v_curscore, v_curstreak, v_won, v_tr);
+    v_delta := greatest(-CAP, least(CAP, r.delta));
+    v_ns := greatest(0, v_curscore + v_delta);
+    perform public.rk_bump_stats(v_uid, 'davinci', v_ns, r.new_streak, v_won);
+    v_results := jsonb_set(v_results, array[v_seat], jsonb_build_object(
+      'rank',v_rank,'delta',v_delta,'bonus',r.bonus,'won',v_won,
+      'prevScore',v_curscore,'newScore',v_ns,'streak',r.new_streak,'treatment',v_tr));
+  end loop;
+  v_state := jsonb_set(v_state, '{results}', v_results);
+  v_state := jsonb_set(v_state, '{status}',  '"finished"'::jsonb);
+  update public.rooms set status='finished', state=v_state, version=version+1 where id=p_room;
+  return v_results;
+end; $$;
+
 -- ===== 나도 사람이야 hunt (비대칭: 술래 vs 숨은측. 역할/생존/색출 파생 + CAP) =====
 create or replace function public.rk_finish_hunt(p_token uuid, p_room int)
 returns jsonb language plpgsql security definer set search_path = public, extensions as $$
@@ -589,8 +648,7 @@ begin
      and not exists (select 1 from public.room_members m where m.room_id=p_room and m.user_id=p.user_id);
   select count(*) into v_left from public.room_members where room_id = p_room;
   if v_left = 0 then
-    update public.rooms set host_id=null, status='waiting', state=null, version=0, game = (case when p_room between 1 and 5 then 'rummikub' else null end)
-     where id = p_room;
+    update public.rooms set host_id=null, status='waiting', state=null, version=0, game=null where id = p_room;
   else
     if v_room.host_id is null or not exists (select 1 from public.room_members where room_id=p_room and user_id=v_room.host_id) then
       select user_id into v_earliest from public.room_members where room_id=p_room order by joined_at asc limit 1;
@@ -611,6 +669,7 @@ grant execute on function public.rk_set_display(uuid,text)        to anon, authe
 grant execute on function public.rk_now()                         to anon, authenticated;
 grant execute on function public.rk_finish_game(uuid,int)         to anon, authenticated;
 grant execute on function public.rk_finish_race(uuid,int)         to anon, authenticated;
+grant execute on function public.rk_finish_davinci(uuid,int)      to anon, authenticated;
 grant execute on function public.rk_finish_hunt(uuid,int)         to anon, authenticated;
 grant execute on function public.rk_take_seat(uuid,int,int)       to anon, authenticated;
 grant execute on function public.rk_heartbeat(uuid,int)           to anon, authenticated;
