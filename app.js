@@ -31,7 +31,6 @@ let busy = false;
 let prevTurn = null;
 let timerIv = null, lastAutoKey = null, lastDanger = false;
 let lbCache = {};              // user_id -> {score,wins,losses,streak,real_name} (랭킹 캐시)
-let WB_OPTS = { lives: 3, dueum: false };   // 말잇폭 방장 옵션(로컬)
 
 /* ----------------------------- 부팅 ----------------------------------- */
 async function boot(){
@@ -64,10 +63,6 @@ function handleAct(act, el){
     case 'spectate': doSpectate(); break;
     case 'unseat': netCall(()=>unseat(ROOM_ID, ME)); break;
     case 'setTime': doSetTime(Number(el.dataset.sec)); break;
-    case 'setGame': netCall(()=>setRoomGame(ROOM_ID, el.dataset.game)); break;
-    case 'setLives': WB_OPTS.lives = Number(el.dataset.lives); renderWaiting(); break;
-    case 'setDueum': WB_OPTS.dueum = !WB_OPTS.dueum; renderWaiting(); break;
-    case 'submitWord': onSubmitWord(); break;
     case 'start': doStart(); break;
     case 'leave': doLeave(); break;
     case 'again': netCall(()=>resetRoomToWaiting(ROOM_ID)); break;
@@ -153,9 +148,8 @@ async function refreshLobby(){
         ${rooms.map(r=>{
           const c = seatCount[r.id]||0;
           const playing = r.status!=='waiting';
-          const gname = r.game==='wordbomb'?'💣 말잇폭':'🀄 루미큐브';
           return `<li class="room-card ${playing?'is-playing':''}" data-act="enterRoom" data-room="${r.id}">
-            <span class="room-card__id">방 ${r.id} <small class="muted">${gname}</small></span>
+            <span class="room-card__id">방 ${r.id}</span>
             <span class="room-card__count ${c>=4?'is-full':''}">${c}/4</span>
             <span class="room-card__state">${playing?'게임중':'대기중'}</span>
           </li>`;
@@ -241,7 +235,7 @@ function renderWaiting(){
   setScreen('room');
   app().innerHTML = `
     <section class="screen screen--room">
-      <header class="room__top"><b>방 ${ROOM_ID}</b><span class="muted">${ROOM.game==='wordbomb'?'💣 말잇폭':'🀄 루미큐브'} · ${seatedCount}/4</span><span class="spacer"></span>
+      <header class="room__top"><b>방 ${ROOM_ID}</b><span class="muted">대기중 · ${seatedCount}/4</span><span class="spacer"></span>
         <button class="btn btn--ghost" data-act="leave">나가기</button></header>
       <ul class="seat-list grow scrollable">
         ${[1,2,3,4].map(n=>{
@@ -265,22 +259,12 @@ function renderWaiting(){
       </ul>
       ${amHost ? `
         <div class="host-controls">
-          <div class="opt-label">게임</div>
-          <div class="time-select">
-            <button class="chip ${ROOM.game!=='wordbomb'?'is-active':''}" data-act="setGame" data-game="rummikub">🀄 루미큐브</button>
-            <button class="chip ${ROOM.game==='wordbomb'?'is-active':''}" data-act="setGame" data-game="wordbomb">💣 말잇폭</button>
-          </div>
-          <div class="opt-label">${ROOM.game==='wordbomb'?'폭탄 심지(초)':'턴 제한시간(초)'}</div>
           <div class="time-select">
             ${[15,30,60].map(s=>`<button class="chip ${ROOM.turn_seconds===s?'is-active':''}" data-act="setTime" data-sec="${s}">${s}초</button>`).join('')}
           </div>
-          ${ROOM.game==='wordbomb' ? `
-            <div class="opt-label">시작 목숨</div>
-            <div class="time-select">${[3,5,7].map(l=>`<button class="chip ${WB_OPTS.lives===l?'is-active':''}" data-act="setLives" data-lives="${l}">❤${l}</button>`).join('')}</div>
-            <div class="time-select"><button class="chip ${WB_OPTS.dueum?'is-active':''}" data-act="setDueum">두음법칙 ${WB_OPTS.dueum?'허용':'금지'}</button></div>` : ''}
           <button class="btn btn--primary btn--lg" data-act="start" ${seatedCount>=2&&seatedCount<=4?'':'disabled'}>게임 시작 (2~4명)</button>
         </div>`
-       : `<div class="wait-note">방장이 시작하기를 기다리는 중…<br><b>${ROOM.game==='wordbomb'?'💣 말잇폭':'🀄 루미큐브'}</b> · ${ROOM.turn_seconds}초</div>`}
+       : `<div class="wait-note">방장이 시작하기를 기다리는 중… (제한시간 ${ROOM.turn_seconds}초)</div>`}
       <div class="room__actions">
         ${mySeatNow ? `<button class="btn btn--ghost" data-act="unseat">자리 비우기</button>`:''}
         ${!iAmSpectator ? `<button class="btn btn--ghost" data-act="spectate">관전하기</button>`:`<div class="muted center">👁 관전 중</div>`}
@@ -302,15 +286,10 @@ async function doStart(){
     const seated = MEMBERS.filter(m=>m.seat!=null).sort((a,b)=>a.seat-b.seat);
     if(seated.length<2 || seated.length>4){ toast('2~4명이 앉아야 시작'); return; }
     const seatNums = seated.map(m=>m.seat);
-    const players={}, names={}, scores={};
-    seated.forEach(m=>{ players[m.seat]=m.user_id; names[m.seat]=m.name; scores[m.seat]=(lbCache[m.user_id]&&lbCache[m.user_id].score) ?? m.score ?? 0; });
-    let st;
-    if(ROOM.game==='wordbomb'){
-      st = buildWordState(seatNums, players, names, scores, { fuse: ROOM.turn_seconds, dueum: WB_OPTS.dueum, allowSingle:false, startLives: WB_OPTS.lives });
-    } else {
-      st = dealNewGame(seatNums);
-      st.players=players; st.names=names; st.scores=scores; st.n=seated.length; st.passStreak=0; st.results=null;
-    }
+    const st = dealNewGame(seatNums);
+    st.players = {}; st.names = {}; st.scores = {};
+    seated.forEach(m=>{ st.players[m.seat]=m.user_id; st.names[m.seat]=m.name; st.scores[m.seat]=(lbCache[m.user_id]&&lbCache[m.user_id].score) ?? m.score ?? 0; });
+    st.n = seated.length; st.passStreak = 0; st.results = null;
     await startGame(ROOM_ID, st);
   });
 }
@@ -323,7 +302,6 @@ function isOver(s){ return Object.keys(s.hands).some(k=>s.hands[k].length===0) |
 
 function enterGameView(){
   G = ROOM.state;
-  if(G && G.game==='wordbomb'){ enterWordView(); return; }   // 말잇폭 분기
   mySeat = seatOfUser(G, ME.id);
   amSpectator = (mySeat==null);
   if(ROOM.status==='playing' && isOver(G)){       // 게임 끝 — 조작 막고 집계 대기
@@ -429,92 +407,6 @@ function renderPlay(){
   const b = document.querySelector('.board'); if(b) b.innerHTML = boardHTML(work.board);
   const r = document.querySelector('.dock .rack'); if(r) r.innerHTML = rackTilesHTML(work.hands);
   const h = document.getElementById('hintHost'); if(h) h.innerHTML = meldHintHTML();
-}
-
-/* ============================ 말잇폭(word-bomb) ======================= */
-function wbHearts(n){ return n > 0 ? '❤'.repeat(n) : '💀'; }
-function enterWordView(){
-  mySeat = seatOfUser(G, ME.id);
-  amSpectator = (mySeat == null);
-  if(ROOM.status === 'playing' && wbGameOver(G)){          // 게임 끝 → 집계
-    stopTimer();
-    if(mySeat != null){ if(G.finishScores) finishGeneric(ROOM_ID, TOKEN); else pushWordFinish(); }
-    setScreen('game');
-    app().innerHTML = `<section class="screen center" style="justify-content:center;gap:8px"><h2>🏁 게임 종료</h2><p class="muted">결과 집계 중…</p></section>`;
-    return;
-  }
-  renderWordGame();
-  startTimer();
-}
-function renderWordGame(){
-  const seats = Object.keys(G.players).map(Number).sort((a,b)=>a-b);
-  const req = wbReqChar(G);
-  const myTurn = isMyTurn();
-  const dead = mySeat && (G.lives[mySeat] <= 0);
-  const oppoHtml = seats.filter(s=>s!==mySeat).map(s=>{
-    const t = tierForScore((G.scores||{})[s]||0); const lv = G.lives[s];
-    return `<li class="oppo ${Number(G.turn)===s?'is-turn':''} ${lv<=0?'is-dead':''}"><span class="oppo__name tier-name" style="--tc:${t.color}">${t.logo}${esc(G.names[s])}</span><span class="oppo__count">${wbHearts(lv)}</span></li>`;
-  }).join('');
-  const ev = G.lastEvent || {};
-  const boom = ev.type==='boom' ? `<div class="wb-boom">💥 ${esc(G.names[ev.seat]||'')} 폭발!${ev.elim?' (탈락)':''}</div>` : '';
-  let dock;
-  if(amSpectator || dead){ dock = `<div class="spectate-dock">${dead?'💀 탈락 — 구경 중':'👁 관전 중'}</div>`; }
-  else if(myTurn){
-    dock = `<footer class="dock"><div class="wb-input">
-      <input class="input" id="wbWord" placeholder="'${esc(req)}' (으)로 시작!" autocomplete="off" autocapitalize="off" autocorrect="off" />
-      <button class="btn btn--primary" data-act="submitWord">던지기</button></div></footer>`;
-  } else {
-    dock = `<footer class="dock"><div class="wb-wait">💣 ${esc(G.names[Number(G.turn)])} 님이 폭탄을 들고 있어요…</div></footer>`;
-  }
-  setScreen('game');
-  app().innerHTML = `
-    <section class="screen screen--game">
-      <header class="topbar">
-        <div class="turn-pill ${myTurn?'is-mine':''}">${myTurn?'💣 내 차례!':esc(G.names[Number(G.turn)])+' 차례'}</div>
-        <div class="timer" data-role="timer" data-state="normal">
-          <svg class="timer__ring" viewBox="0 0 36 36"><circle cx="18" cy="18" r="16" fill="none" stroke="#2a3140" stroke-width="3"/><circle class="timer__fill" cx="18" cy="18" r="16" fill="none" stroke="#3b82f6" stroke-width="3" stroke-linecap="round" stroke-dasharray="100.5" stroke-dashoffset="0"/></svg>
-          <span class="timer__num" data-role="timerNum">–</span>
-        </div>
-        <span class="room-tag">방${ROOM_ID}·💣</span>
-        <ul class="oppo-strip">${oppoHtml}</ul>
-      </header>
-      <main class="wb-stage">
-        ${boom}
-        <div class="wb-chain"><span class="wb-last">${esc(G.lastWord)}</span><span class="wb-arrow">→</span><span class="wb-req">${esc(req)}…</span></div>
-        <div class="wb-meta">나온 단어 ${G.usedWords.length}개${mySeat?` · 내 목숨 <b class="wb-life">${wbHearts(G.lives[mySeat]||0)}</b>`:''}</div>
-        <div class="wb-rule muted">${G.rules.dueum?'두음법칙 허용':'두음법칙 금지'} · 사전 없음(우기기 가능, 같은 단어 재사용 금지)</div>
-      </main>
-      ${dock}
-    </section>`;
-  updateTimerUI();
-  const inp = document.getElementById('wbWord');
-  if(inp){ try{ inp.focus(); }catch(e){} inp.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); onSubmitWord(); } }); }
-}
-async function onSubmitWord(){
-  if(busy || !isMyTurn()) return;
-  const inp = document.getElementById('wbWord'); if(!inp) return;
-  const word = (inp.value||'').trim();
-  const err = wbValidate(word, G);
-  if(err){ toast(err); inp.select(); return; }
-  const s = wbApplyPass(G, mySeat, word);
-  busy = true; const v = ROOM.version; const r = await pushState(ROOM_ID, s, v); busy = false;
-  if(!r.ok){ toast('동기화 충돌, 다시 시도하세요'); await refreshRoom(); return; }
-  await refreshRoom();
-}
-async function wbTimeout(forSeat){
-  if(busy) return; busy = true;
-  if(Number(G.turn) !== Number(forSeat)){ busy = false; return; }
-  let s = wbApplyExplode(G, forSeat);
-  const over = wbGameOver(s);
-  if(over) s.finishScores = wbFinishScores(s);
-  const v = ROOM.version; const r = await pushState(ROOM_ID, s, v); busy = false;
-  if(r.ok){ if(over) await finishGeneric(ROOM_ID, TOKEN); await refreshRoom(); }
-}
-async function pushWordFinish(){   // 종료 감지했는데 finishScores 없을 때 보강
-  if(busy) return; busy = true;
-  const s = deepClone(G); s.finishScores = wbFinishScores(s);
-  const v = ROOM.version; const r = await pushState(ROOM_ID, s, v); busy = false;
-  if(r.ok){ await finishGeneric(ROOM_ID, TOKEN); await refreshRoom(); }
 }
 
 /* --- 탭 조작 --- */
@@ -652,14 +544,12 @@ function stopTimer(){ if(timerIv){ clearInterval(timerIv); timerIv=null; } lastA
 function tick(){
   if(!ROOM || ROOM.status!=='playing' || !ROOM.turn_started_at || !G) return;
   const startMs = new Date(ROOM.turn_started_at).getTime();
-  const wb = (G.game==='wordbomb');
-  const lim = wb ? (G.fuse||15) : (ROOM.turn_seconds||30);
+  const lim = ROOM.turn_seconds||30;
   const rem = lim - (serverNow()-startMs)/1000;
   updateTimerUI(rem, lim);
-  const act = wb ? wbTimeout : autoTimeout;
   const key = ROOM.version+'|'+G.turn;
-  if(rem<=0 && isMyTurn() && lastAutoKey!==key){ lastAutoKey=key; act(mySeat); }            // 현재 플레이어 본인
-  else if(rem < -4 && !isMyTurn() && lastAutoKey!==key && timeoutActorId()===ME.id){ lastAutoKey=key; act(Number(G.turn)); }  // 끊긴 현재 플레이어 대리(1명만)
+  if(rem<=0 && isMyTurn() && lastAutoKey!==key){ lastAutoKey=key; autoTimeout(mySeat); }            // 현재 플레이어 본인
+  else if(rem < -4 && !isMyTurn() && lastAutoKey!==key && timeoutActorId()===ME.id){ lastAutoKey=key; autoTimeout(Number(G.turn)); }  // 끊긴 현재 플레이어 대리(1명만)
 }
 function updateTimerUI(rem, lim){
   const numEl = $('[data-role="timerNum"]'), tEl=$('[data-role="timer"]'), fill=$('.timer__fill');

@@ -206,21 +206,6 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .tier-row__name{font-weight:800; color:var(--tc); text-shadow:0 0 5px var(--tc);}
 .tier-row__cut{color:var(--ink-dim); font-variant-numeric:tabular-nums;}
 
-/* ===== 말잇폭 ===== */
-.opt-label{font-size:12px; color:var(--ink-dim); margin-top:2px;}
-.wb-stage{flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:16px; text-align:center;}
-.wb-chain{display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:center;}
-.wb-last{font-size:clamp(28px,11vw,52px); font-weight:900; background:var(--panel2); padding:8px 16px; border-radius:14px;}
-.wb-arrow{font-size:24px; color:var(--ink-dim);}
-.wb-req{font-size:clamp(28px,11vw,52px); font-weight:900; color:var(--accent); text-shadow:0 0 12px rgba(59,130,246,.6);}
-.wb-meta{font-size:14px;} .wb-life{color:var(--danger);} .wb-rule{font-size:12px;}
-.wb-input{display:flex; gap:8px; width:100%;}
-.wb-input .input{flex:1; font-size:18px; text-align:center;}
-.wb-input .btn{flex:0 0 88px;}
-.wb-wait{padding:12px; text-align:center; color:var(--ink-dim); width:100%;}
-.wb-boom{font-size:22px; font-weight:900; color:var(--danger); animation:popIn .4s; text-shadow:0 0 12px rgba(239,68,68,.7);}
-.oppo.is-dead{opacity:.45;}
-
 /* ===== 데스크톱 ===== */
 @media (min-width:720px){
   :root{--tile-w:38px; --gap:6px;}

@@ -114,14 +114,6 @@ async function leaveRoom(roomId, me) {
 async function setTurnSeconds(roomId, sec) {
   await sb.from('rooms').update({ turn_seconds: sec }).eq('id', roomId);
 }
-async function setRoomGame(roomId, game) {
-  await sb.from('rooms').update({ game }).eq('id', roomId);
-}
-async function finishGeneric(roomId, token) {
-  const { data, error } = await sb.rpc('rk_finish_generic', { p_token: token, p_room: roomId });
-  if (error) return { ok: false, error };
-  return { ok: true, results: data };
-}
 async function startGame(roomId, state) {
   const { data } = await sb.from('rooms')
     .update({ status: 'playing', state, version: 1 })
