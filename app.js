@@ -63,12 +63,12 @@ async function refresh() {
 }
 
 async function maybeAutoStart() {
-  if (SEATS.length === 4 && ROOM.status === 'waiting') {
-    const minSeat = Math.min(...SEATS.map(s => s.seat));
-    if (mySeat === minSeat) {            // 가장 낮은 자리 플레이어가 딜 담당
-      const state = dealNewGame([1, 2, 3, 4]);
-      await startGame(state);            // 실시간으로 모두에게 전파됨
-    }
+  // 4자리가 다 차면 좌석을 가진 클라이언트가 딜을 시도.
+  // startGame은 status='waiting'일 때만 성공하는 조건부 업데이트라
+  // 여러 명이 동시에 시도해도 단 1명의 딜만 반영된다(누가 렉이어도 시작 보장).
+  if (mySeat && SEATS.length === 4 && ROOM.status === 'waiting') {
+    const state = dealNewGame([1, 2, 3, 4]);
+    await startGame(state);              // 실시간으로 모두에게 전파됨
   }
 }
 
