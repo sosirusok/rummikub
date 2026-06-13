@@ -187,6 +187,25 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 @keyframes popIn{0%{transform:translate(-50%,-50%) scale(.4);opacity:0}100%{transform:translate(-50%,-50%) scale(1);opacity:1}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important}}
 
+/* ===== 티어/연승 비주얼 ===== */
+.tier-name{color:var(--tc,#eef2f8); font-weight:800; text-shadow:0 0 5px var(--tc), 0 1px 1px rgba(0,0,0,.5);}
+.score-tier{display:inline-flex; align-items:center; gap:4px; color:var(--tc,#fff); font-weight:900;}
+.score-tier b{font-variant-numeric:tabular-nums; font-size:1.05em;}
+.score-tier .tg{font-size:.95em; filter:drop-shadow(0 0 4px var(--tc));}
+.tier-badge{color:var(--tc,#fff); font-weight:700; font-size:.92em; white-space:nowrap;}
+.streak{color:#ff8c2e; font-weight:800; text-shadow:0 0 6px rgba(255,140,46,.6); white-space:nowrap;}
+.tier-up{color:var(--ok); font-weight:800;} .tier-down{color:var(--danger); font-weight:800;}
+.seat{grid-template-columns:auto 1fr;}
+.seat__name small{color:var(--ink-dim); font-weight:500;}
+.seat__scoreline{display:flex; align-items:center; gap:10px; font-size:17px; margin-top:1px;}
+.tier-list{list-style:none; margin:0; padding:10px; display:grid; gap:6px;}
+.tier-row{display:grid; grid-template-columns:auto 1fr auto; gap:10px; align-items:center;
+  padding:10px 12px; border-radius:10px; background:var(--panel2); border-left:6px solid var(--tc);}
+.tier-row.is-cur{outline:2px solid var(--tc); background:#222a38;}
+.tier-row .tg{font-size:22px; filter:drop-shadow(0 0 5px var(--tc));}
+.tier-row__name{font-weight:800; color:var(--tc); text-shadow:0 0 5px var(--tc);}
+.tier-row__cut{color:var(--ink-dim); font-variant-numeric:tabular-nums;}
+
 /* ===== 데스크톱 ===== */
 @media (min-width:720px){
   :root{--tile-w:38px; --gap:6px;}

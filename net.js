@@ -84,7 +84,7 @@ async function fetchAllMembers() {
 async function enterRoom(roomId, me) {
   await sb.from('room_members').upsert({
     room_id: roomId, user_id: me.id, seat: null, role: 'player',
-    name: me.real_name, score: me.score, wins: me.wins, losses: me.losses,
+    name: me.real_name, score: me.score, wins: me.wins, losses: me.losses, streak: me.streak || 0,
     joined_at: new Date().toISOString(),
   }, { onConflict: 'room_id,user_id' });
   // 빈 방이면 내가 방장

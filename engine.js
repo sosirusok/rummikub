@@ -166,26 +166,89 @@ function handScore(ids) {
   return ids.reduce((s, id) => s + (TILES[id].joker ? 30 : TILES[id].num), 0);
 }
 
-// ---- 점수 산정 (표시/미리보기용; 실제 누적은 서버 rk_finish_game 가 권위) ----
-const SCORE_BASE = { 2: [60, -20], 3: [80, 20, -40], 4: [100, 40, 0, -60] };
+/* ===================== 티어 사다리 (LoL식) =========================
+   나무(시작) → 아이언/브론즈/실버/골드/플래티넘/에메랄드/다이아 IV~I → 마스터/그마/챌린저
+   점수 컷·레벨·색·로고. 표시는 클라가 tierForScore 로 산출(서버는 점수만 저장). */
+const TIER_DEFS = [
+  { key: 'wood',        name: '나무',         color: '#8a6a44', logo: '🌳', cuts: [0] },
+  { key: 'iron',        name: '아이언',       color: '#7d7d7d', logo: '🔩', cuts: [100, 175, 250, 325] },
+  { key: 'bronze',      name: '브론즈',       color: '#b06a32', logo: '🥉', cuts: [425, 525, 625, 725] },
+  { key: 'silver',      name: '실버',         color: '#9fb0c3', logo: '🥈', cuts: [850, 975, 1100, 1225] },
+  { key: 'gold',        name: '골드',         color: '#e6b32e', logo: '🥇', cuts: [1375, 1525, 1675, 1825] },
+  { key: 'platinum',    name: '플래티넘',     color: '#33c2ad', logo: '💠', cuts: [2000, 2175, 2350, 2525] },
+  { key: 'emerald',     name: '에메랄드',     color: '#1fb15e', logo: '💚', cuts: [2725, 2925, 3125, 3325] },
+  { key: 'diamond',     name: '다이아몬드',   color: '#49a8ff', logo: '💎', cuts: [3550, 3775, 4000, 4225] },
+  { key: 'master',      name: '마스터',       color: '#b14de0', logo: '👑', cuts: [4600] },
+  { key: 'grandmaster', name: '그랜드마스터', color: '#e0444a', logo: '⚔️', cuts: [5200] },
+  { key: 'challenger',  name: '챌린저',       color: '#f4d35e', logo: '🏆', cuts: [6000] },
+];
+const ROMAN = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV' };
+const TIER_LADDER = (() => {
+  const out = []; let lvl = 0;
+  for (const t of TIER_DEFS) {
+    const multi = t.cuts.length > 1;
+    t.cuts.forEach((min, i) => out.push({ min, level: lvl++, key: t.key, name: t.name, color: t.color, logo: t.logo, division: multi ? (4 - i) : 0 }));
+  }
+  return out;
+})();
+const DIAMOND_MAX_LEVEL = TIER_LADDER.filter(e => e.key === 'diamond').reduce((m, e) => Math.max(m, e.level), 0);
 
-// finalScores: [{seat, handPoints}] (빈 손=0=1위). 반환: { seat: {rank, delta, won} }
-// 동점은 차지한 슬롯 base 들의 평균. rank=표준 경쟁순위(동점은 낮은 번호 공유, 다음은 건너뜀).
-function computeResults(finalScores, n) {
-  const base = SCORE_BASE[n];
-  if (!base) throw new Error('unsupported player count: ' + n);
-  const sorted = finalScores.slice().sort((a, b) => a.handPoints - b.handPoints || a.seat - b.seat);
-  const out = {};
+function tierForScore(score) {
+  score = Math.max(0, score || 0);
+  let e = TIER_LADDER[0];
+  for (const t of TIER_LADDER) { if (score >= t.min) e = t; else break; }
+  const next = TIER_LADDER[e.level + 1] || null;
+  const fullName = e.division ? `${e.name} ${ROMAN[e.division]}` : e.name;
+  return { key: e.key, name: e.name, division: e.division, color: e.color, logo: e.logo, level: e.level, fullName, nextMin: next ? next.min : null };
+}
+function tierLevel(score) { return tierForScore(score).level; }
+
+/* ===================== 점수 산정 v3 (마진 × 티어 × 연승) =================
+   - 마진: 남은 손패가 평균보다 적을수록(=극적으로 이길수록) 더 큰 +, 못할수록 더 큰 −.
+     perf = (평균 남은점수) − (내 남은점수)  → 합이 0(누군가 오르면 누군가 내림 → 전원 동시 상승/하락 방지).
+   - 티어: 고티어일수록 gainMult↓, lossMult↑, tax↑(중위권도 하락 가능). 단 1등은 항상 최소+ 보장.
+   - 연승: 등수별 적용/유지/깨짐(동점 규칙 포함). 2연승부터 +연승수*10%(다이아 이하만). 연승 자체는 전 티어 추적. */
+const SCFG = {
+  gainMult: L => Math.max(0.34, 1 - L * 0.020),
+  lossMult: L => Math.min(1.95, 1 + L * 0.024),
+  tax:      L => L * 0.45,
+  minWin:   L => Math.max(2, Math.round(10 - L * 0.24)),
+};
+// 연승 처리: 'apply'(+1·보너스대상) / 'maintain'(유지) / 'break'(0)
+const STREAK_BASE = { 2: { 1: 'apply', 2: 'break' }, 3: { 1: 'apply', 2: 'maintain', 3: 'break' }, 4: { 1: 'apply', 2: 'apply', 3: 'maintain', 4: 'break' } };
+function streakTreatment(n, rank, tied) { if (rank === 1) return 'apply'; if (tied) return 'maintain'; return STREAK_BASE[n][rank]; }
+
+// players: [{seat, handPoints, score, streak}]  →  {seat:{rank,won,handPoints,delta,bonus,prevScore,newScore,streak,treatment}}
+function computeResults(players, n) {
+  const sorted = players.slice().sort((a, b) => a.handPoints - b.handPoints || a.seat - b.seat);
+  const avg = players.reduce((s, p) => s + p.handPoints, 0) / n;
+  const rankOf = {}, tiedOf = {};
   let i = 0;
-  while (i < sorted.length) {
+  while (i < n) {
     let j = i;
-    while (j + 1 < sorted.length && sorted[j + 1].handPoints === sorted[i].handPoints) j++;
-    const gsize = j - i + 1;
-    let sum = 0; for (let s = i; s <= j; s++) sum += base[s];
-    const delta = Math.round(sum / gsize);
-    const rank = i + 1;
-    for (let s = i; s <= j; s++) out[sorted[s].seat] = { rank, delta, won: rank === 1 };
+    while (j + 1 < n && sorted[j + 1].handPoints === sorted[i].handPoints) j++;
+    const tied = j > i;
+    for (let k = i; k <= j; k++) { rankOf[sorted[k].seat] = i + 1; tiedOf[sorted[k].seat] = tied; }
     i = j + 1;
+  }
+  const out = {};
+  for (const p of players) {
+    const L = tierLevel(p.score || 0);
+    const perf = avg - p.handPoints;
+    const adj = perf - SCFG.tax(L);
+    let delta = Math.round(adj >= 0 ? adj * SCFG.gainMult(L) : adj * SCFG.lossMult(L));
+    const rank = rankOf[p.seat];
+    if (rank === 1) delta = Math.max(delta, SCFG.minWin(L));      // 1등 최소+ 보장(전원 하락 방지·승리 보상)
+    const tr = streakTreatment(n, rank, tiedOf[p.seat]);
+    const prevStreak = p.streak || 0;
+    const newStreak = tr === 'apply' ? prevStreak + 1 : tr === 'maintain' ? prevStreak : 0;
+    let bonus = 0;
+    if (tr === 'apply' && L <= DIAMOND_MAX_LEVEL && newStreak >= 2 && delta > 0) {
+      bonus = Math.round(delta * newStreak * 0.10);
+      delta += bonus;
+    }
+    const newScore = Math.max(0, (p.score || 0) + delta);
+    out[p.seat] = { rank, won: rank === 1, handPoints: p.handPoints, delta, bonus, prevScore: p.score || 0, newScore, streak: newStreak, treatment: tr };
   }
   return out;
 }

@@ -18,9 +18,11 @@ create table if not exists public.users (
   score      int  not null default 0 check (score >= 0),
   wins       int  not null default 0,
   losses     int  not null default 0,
+  streak     int  not null default 0,
   token      uuid,
   created_at timestamptz not null default now()
 );
+alter table public.users add column if not exists streak int not null default 0;  -- 기존 설치 마이그레이션
 alter table public.users enable row level security;   -- 정책 없음 = anon 직접 접근 전면 차단
 
 -- ===== 방 5개 (permissive + realtime: 게임 상태/호스트/상태) =====
@@ -47,9 +49,11 @@ create table if not exists public.room_members (
   score     int  not null default 0,            -- 표시용 스냅샷
   wins      int  not null default 0,
   losses    int  not null default 0,
+  streak    int  not null default 0,
   joined_at timestamptz not null default now(),
   primary key (room_id, user_id)
 );
+alter table public.room_members add column if not exists streak int not null default 0;
 create unique index if not exists room_members_seat_uniq
   on public.room_members(room_id, seat) where seat is not null;
 
@@ -106,7 +110,7 @@ begin
   exception when unique_violation then raise exception 'USERNAME_TAKEN';
   end;
   return jsonb_build_object('id',u.id,'username',u.username,'real_name',u.real_name,
-    'score',u.score,'wins',u.wins,'losses',u.losses,'token',u.token);
+    'score',u.score,'wins',u.wins,'losses',u.losses,'streak',u.streak,'token',u.token);
 end; $$;
 
 -- 로그인: 아이디+비번. 토큰 회전(단일 세션).
@@ -122,7 +126,7 @@ begin
   t := gen_random_uuid();
   update public.users set token = t where id = u.id;
   return jsonb_build_object('id',u.id,'username',u.username,'real_name',u.real_name,
-    'score',u.score,'wins',u.wins,'losses',u.losses,'token',t);
+    'score',u.score,'wins',u.wins,'losses',u.losses,'streak',u.streak,'token',t);
 end; $$;
 
 -- 토큰으로 내 프로필 (token 미노출)
@@ -134,14 +138,14 @@ begin
   select * into u from public.users where token = p_token;
   if not found then return null; end if;
   return jsonb_build_object('id',u.id,'username',u.username,'real_name',u.real_name,
-    'score',u.score,'wins',u.wins,'losses',u.losses);
+    'score',u.score,'wins',u.wins,'losses',u.losses,'streak',u.streak);
 end; $$;
 
 -- 랭킹 (안전 필드만)
 create or replace function public.rk_leaderboard()
-returns table(id uuid, username citext, real_name text, score int, wins int, losses int)
+returns table(id uuid, username citext, real_name text, score int, wins int, losses int, streak int)
 language sql security definer set search_path = public, extensions as $$
-  select id, username, real_name, score, wins, losses
+  select id, username, real_name, score, wins, losses, streak
   from public.users order by score desc, wins desc, real_name asc limit 100;
 $$;
 
@@ -149,19 +153,42 @@ $$;
 create or replace function public.rk_now() returns timestamptz
 language sql security definer set search_path = public, extensions as $$ select now(); $$;
 
+-- 점수 → 티어 레벨(0=나무 ... 28=다이아I, 29 마스터, 30 그마, 31 챌린저). engine.js 와 동일 컷.
+create or replace function public.rk_tier_level(p_score int)
+returns int language sql immutable set search_path = public as $$
+  select greatest(0, (select count(*) from unnest(array[
+    0,100,175,250,325, 425,525,625,725, 850,975,1100,1225, 1375,1525,1675,1825,
+    2000,2175,2350,2525, 2725,2925,3125,3325, 3550,3775,4000,4225, 4600,5200,6000]) m
+    where coalesce(p_score,0) >= m) - 1);
+$$;
+
+-- 연승 처리: apply(+1·보너스대상) / maintain(유지) / break(0). 동점이면 1등 외엔 maintain.
+create or replace function public.rk_streak_treatment(p_n int, p_rank int, p_tied boolean)
+returns text language sql immutable set search_path = public as $$
+  select case
+    when p_rank = 1 then 'apply'
+    when p_tied then 'maintain'
+    when p_n = 2 then (case p_rank when 2 then 'break' end)
+    when p_n = 3 then (case p_rank when 2 then 'maintain' when 3 then 'break' end)
+    when p_n = 4 then (case p_rank when 2 then 'apply' when 3 then 'maintain' when 4 then 'break' end)
+  end;
+$$;
+
 -- 게임 종료 처리: 서버가 보드 state로 점수를 직접 산정/적용(점수 조작 차단).
--- state.players = {seat: user_id}, state.hands = {seat: [tileId..]}, state.passStreak, state.names.
+-- 마진×티어×연승. state.players = {seat: user_id}, state.hands, state.passStreak, state.names.
 create or replace function public.rk_finish_game(p_token uuid, p_room int)
 returns jsonb language plpgsql security definer set search_path = public, extensions as $$
 declare
   v_user uuid; v_room public.rooms; v_state jsonb; v_players jsonb;
-  v_seats text[]; v_n int; v_base int[];
+  v_seats text[]; v_n int;
   v_handpts jsonb := '{}'::jsonb; v_results jsonb := '{}'::jsonb;
   v_over boolean := false; v_passStreak int;
   v_sorted text[]; i int; j int; k int;
-  v_sum int; v_delta int; v_rank int; v_gsize int;
+  v_delta int; v_rank int; v_avg numeric; v_tied boolean;
   v_seat text; v_uid uuid; v_won boolean; v_hp int; v_newscore int; v_prev int;
   v_cnt int; v_distinct int; v_bad int; v_pool int;
+  v_curscore int; v_curstreak int; v_L int; v_perf numeric; v_adj numeric;
+  v_tr text; v_newstreak int; v_bonus int;
 begin
   select id into v_user from public.users where token = p_token;
   if v_user is null then raise exception 'BAD_TOKEN'; end if;
@@ -180,9 +207,7 @@ begin
 
   select array_agg(key) into v_seats from jsonb_object_keys(v_state->'hands') key;
   v_n := coalesce(array_length(v_seats,1),0);
-  v_base := case v_n when 2 then array[60,-20] when 3 then array[80,20,-40]
-                     when 4 then array[100,40,0,-60] else null end;
-  if v_base is null then raise exception 'BAD_N'; end if;
+  if v_n not between 2 and 4 then raise exception 'BAD_N'; end if;
 
   -- 덱 무결성: hands ∪ board ∪ pool 이 정확히 106장(중복·위조·삭제 없음)이어야 점수 인정.
   -- (정상 게임은 항상 통과 — 타일은 시스템을 떠나지 않음. 조작 state 만 거부.)
@@ -213,35 +238,47 @@ begin
   if v_passStreak >= v_n then v_over := true; end if;
   if not v_over then raise exception 'NOT_OVER'; end if;
 
-  -- 남은 점수 오름차순 정렬(적을수록 상위), 동점은 seat로 안정화
+  -- 평균 남은점수 + 오름차순 정렬(적을수록 상위), 동점은 seat 안정화
+  select avg((v_handpts->>s)::int) into v_avg from unnest(v_seats) s;
   select array_agg(s order by (v_handpts->>s)::int, s::int) into v_sorted from unnest(v_seats) s;
 
-  -- 슬롯 평균으로 동점 처리
   i := 1;
   while i <= v_n loop
     j := i;
     while j < v_n and (v_handpts->>v_sorted[j+1])::int = (v_handpts->>v_sorted[i])::int loop j := j + 1; end loop;
-    v_gsize := j - i + 1;
-    v_sum := 0; for k in i .. j loop v_sum := v_sum + v_base[k]; end loop;
-    v_delta := round(v_sum::numeric / v_gsize);
-    v_rank := i;                       -- 1-based 슬롯 시작 = 표준 경쟁 순위
+    v_rank := i; v_tied := (j > i);
     for k in i .. j loop
       v_seat := v_sorted[k];
-      v_won  := (v_rank = 1);
       v_uid  := (v_players->>v_seat)::uuid;
-      v_newscore := null; v_prev := null;
+      v_curscore := 0; v_curstreak := 0;
+      if v_uid is not null then select score, streak into v_curscore, v_curstreak from public.users where id = v_uid; end if;
+      v_L    := public.rk_tier_level(v_curscore);
+      v_perf := v_avg - (v_handpts->>v_seat)::int;          -- 마진(평균 대비)
+      v_adj  := v_perf - (v_L * 0.45);                      -- 고티어 tax
+      if v_adj >= 0 then v_delta := round(v_adj * greatest(0.34, 1 - v_L * 0.020))::int;  -- gainMult↓
+      else               v_delta := round(v_adj * least(1.95, 1 + v_L * 0.024))::int; end if;  -- lossMult↑
+      if v_rank = 1 then v_delta := greatest(v_delta, greatest(2, round(10 - v_L * 0.24)::int)); end if;  -- 1등 최소+
+      v_tr := public.rk_streak_treatment(v_n, v_rank, v_tied);
+      v_newstreak := case v_tr when 'apply' then v_curstreak + 1 when 'maintain' then v_curstreak else 0 end;
+      v_bonus := 0;
+      if v_tr = 'apply' and v_L <= 28 and v_newstreak >= 2 and v_delta > 0 then  -- 다이아 이하·2연승+ 보너스
+        v_bonus := round(v_delta * v_newstreak * 0.10)::int;
+        v_delta := v_delta + v_bonus;
+      end if;
+      v_won := (v_rank = 1);
+      v_prev := v_curscore;
+      v_newscore := greatest(0, v_curscore + v_delta);
       if v_uid is not null then
-        select score into v_prev from public.users where id = v_uid;
         update public.users
-           set score  = greatest(0, score + v_delta),
-               wins   = wins   + (case when v_won then 1 else 0 end),
+           set score = v_newscore, streak = v_newstreak,
+               wins = wins + (case when v_won then 1 else 0 end),
                losses = losses + (case when v_won then 0 else 1 end)
-         where id = v_uid
-        returning score into v_newscore;
+         where id = v_uid;
       end if;
       v_results := jsonb_set(v_results, array[v_seat], jsonb_build_object(
-        'rank', v_rank, 'delta', v_delta, 'won', v_won,
-        'handPoints', (v_handpts->>v_seat)::int, 'prevScore', v_prev, 'newScore', v_newscore));
+        'rank', v_rank, 'delta', v_delta, 'bonus', v_bonus, 'won', v_won,
+        'handPoints', (v_handpts->>v_seat)::int, 'prevScore', v_prev, 'newScore', v_newscore,
+        'streak', v_newstreak, 'treatment', v_tr));
     end loop;
     i := j + 1;
   end loop;

@@ -7,6 +7,12 @@ const app = () => $('#app');
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function setScreen(name){ app().dataset.screen = name; SCREEN = name; }
 
+/* ---- 티어/연승 표시 헬퍼 ---- */
+function nameHTML(name, score){ const t = tierForScore(score || 0); return `<span class="tier-name" style="--tc:${t.color}">${esc(name)}</span>`; }
+function scoreTierHTML(score){ const t = tierForScore(score || 0); return `<span class="score-tier" style="--tc:${t.color}"><span class="tg">${t.logo}</span><b>${score || 0}</b><span class="tg">${t.logo}</span></span>`; }
+function tierBadgeHTML(score){ const t = tierForScore(score || 0); return `<span class="tier-badge" style="--tc:${t.color}">${t.logo} ${t.fullName}</span>`; }
+function streakHTML(streak){ return streak >= 1 ? `<span class="streak">🔥 ${streak}연승</span>` : ''; }
+
 /* ----------------------------- 상태 ----------------------------------- */
 let SCREEN = 'login';
 let TOKEN = localStorage.getItem('rk_token') || null;
@@ -50,6 +56,7 @@ function handleAct(act, el){
     case 'authSubmit': doAuth(); break;
     case 'logout': doLogout(); break;
     case 'goRank': showRank(); break;
+    case 'goTiers': showTiers(); break;
     case 'backLobby': goLobby(); break;
     case 'enterRoom': enterRoomFlow(Number(el.dataset.room)); break;
     case 'sit': doSit(Number(el.dataset.seat)); break;
@@ -119,7 +126,7 @@ function cleanupAll(){ cleanupLobby(); cleanupRoom(); ROOM_ID=null; }
 async function goLobby(){
   cleanupRoom(); ROOM_ID=null;
   setScreen('lobby');
-  if(!lobbyCh) lobbyCh = subscribeLobby(()=>refreshLobby());
+  if(!lobbyCh) lobbyCh = subscribeLobby(()=>scheduleLobbyRefresh());
   await refreshLobby();
   apiMe(TOKEN).then(p=>{ if(p){ ME=p; } });
 }
@@ -131,8 +138,9 @@ async function refreshLobby(){
   app().innerHTML = `
     <section class="screen screen--lobby">
       <header class="lobby__top">
-        <span class="lobby__hello">${esc(ME.real_name)}<small>${ME.score}점 · ${ME.wins}승 ${ME.losses}패</small></span>
+        <span class="lobby__hello">${nameHTML(ME.real_name, ME.score)}<small>${tierBadgeHTML(ME.score)} · ${ME.score}점 · ${ME.wins}승${ME.losses}패${ME.streak >= 1 ? ' · 🔥' + ME.streak : ''}</small></span>
         <span class="spacer"></span>
+        <button class="btn btn--ghost" data-act="goTiers">티어</button>
         <button class="btn btn--ghost" data-act="goRank">랭킹</button>
         <button class="btn btn--ghost" data-act="logout">로그아웃</button>
       </header>
@@ -160,12 +168,23 @@ async function enterRoomFlow(roomId){
     ROOM_ID = roomId;
     await enterRoom(roomId, ME);
     await refreshLbCache();
-    roomDbCh = subscribeRoom(roomId, ()=>refreshRoom());
+    roomDbCh = subscribeRoom(roomId, ()=>scheduleRoomRefresh());
     presenceCh = joinPresence(roomId, ME, { seat:null, role:'player', name:ME.real_name }, onPresence);
     await refreshRoom();
   } finally { busy = false; }
 }
-async function refreshLbCache(){ lbCache = {}; (await apiLeaderboard()).forEach(u=> lbCache[u.id]={score:u.score,wins:u.wins,losses:u.losses,real_name:u.real_name}); }
+let _lbAt = 0;
+async function refreshLbCache(force){
+  if(!force && Date.now() - _lbAt < 2500 && Object.keys(lbCache).length) return;   // TTL: 과도한 호출 방지
+  _lbAt = Date.now();
+  const list = await apiLeaderboard();
+  lbCache = {};
+  list.forEach(u => lbCache[u.id] = { score:u.score, wins:u.wins, losses:u.losses, streak:u.streak, real_name:u.real_name });
+}
+// 실시간 이벤트 버스트 합치기(렉 방지)
+let _roomT = null, _lobbyT = null;
+function scheduleRoomRefresh(){ clearTimeout(_roomT); _roomT = setTimeout(() => refreshRoom(), 120); }
+function scheduleLobbyRefresh(){ clearTimeout(_lobbyT); _lobbyT = setTimeout(() => refreshLobby(), 150); }
 function trackPresence(){ if(presenceCh){ const m = MEMBERS.find(x=>x.user_id===ME.id)||{}; try{ presenceCh.track({ seat:m.seat??null, role:m.role||'player', name:ME.real_name }); }catch(e){} } }
 
 async function refreshRoom(){
@@ -224,11 +243,14 @@ function renderWaiting(){
           if(m){
             const st = stat(m.user_id);
             const isMe = m.user_id===ME.id;
+            const sc = st.score ?? m.score ?? 0, wn = st.wins ?? m.wins ?? 0, ls = st.losses ?? m.losses ?? 0, sk = st.streak ?? m.streak ?? 0;
             return `<li class="seat is-occupied ${isMe?'is-me':''}" data-seat="${n}">
               <span class="seat__no">${n}번</span>
-              <span class="seat__main"><span class="seat__name">${esc(m.name)}${isMe?' (나)':''} ${ROOM.host_id===m.user_id?'<span class="seat__badge">방장</span>':''}</span>
-                <span class="seat__record">${st.wins??m.wins??0}승 ${st.losses??m.losses??0}패</span></span>
-              <span class="seat__score">${st.score??m.score??0}점</span>
+              <span class="seat__main">
+                <span class="seat__name">${nameHTML(m.name, sc)}${isMe?' <small>(나)</small>':''}${ROOM.host_id===m.user_id?' <span class="seat__badge">방장</span>':''}</span>
+                <span class="seat__record">${wn}승 ${ls}패 · ${tierBadgeHTML(sc)}</span>
+                <span class="seat__scoreline">${scoreTierHTML(sc)} ${streakHTML(sk)}</span>
+              </span>
             </li>`;
           }
           const canSit = !mySeatNow && !iAmSpectator;
@@ -265,8 +287,8 @@ async function doStart(){
     if(seated.length<2 || seated.length>4){ toast('2~4명이 앉아야 시작'); return; }
     const seatNums = seated.map(m=>m.seat);
     const st = dealNewGame(seatNums);
-    st.players = {}; st.names = {};
-    seated.forEach(m=>{ st.players[m.seat]=m.user_id; st.names[m.seat]=m.name; });
+    st.players = {}; st.names = {}; st.scores = {};
+    seated.forEach(m=>{ st.players[m.seat]=m.user_id; st.names[m.seat]=m.name; st.scores[m.seat]=(lbCache[m.user_id]&&lbCache[m.user_id].score) ?? m.score ?? 0; });
     st.n = seated.length; st.passStreak = 0; st.results = null;
     await startGame(ROOM_ID, st);
   });
@@ -315,35 +337,39 @@ function setClass(ids){
   if(ids.length<3) return 'is-incomplete';
   return isValidMeld(ids) ? 'is-valid' : 'is-invalid';
 }
+function selSel(kind, idx, id){ return selection.source && selection.source.kind===kind && (kind==='rack' || selection.source.idx===idx) && selection.ids.includes(id); }
+function boardHTML(board){
+  return board.map((set,i)=>`<div class="board-set ${setClass(set)}" data-tap="set" data-set-idx="${i}">${set.map(id=>tileMarkup(id, selSel('set',i,id))).join('')}</div>`).join('')
+    + `<div class="new-set-zone" data-tap="newset">＋ 새 세트</div>`;
+}
+function rackTilesHTML(hands){ return (hands[mySeat]||[]).map(id=>tileMarkup(id, selSel('rack',-1,id))).join(''); }
+function meldHintHTML(){
+  if(!isMyTurn()) return '';
+  if(!(mySeat && G.initialMeld[mySeat])){
+    const pts = previewNewPoints(G, mySeat, turnStart.board, work.board) || 0;
+    return `<div class="meld-hint" data-can="${pts>=30?1:0}"><div class="meld-hint__bar"><i style="--p:${Math.min(1,pts/30)}"></i></div><span class="meld-hint__label">${pts>=30?'낼 수 있어요!':pts+' / 30점'}</span></div>`;
+  }
+  const added = new Set(work.board.flat()); turnStartBoardSet.forEach(id=>added.delete(id));
+  return `<div class="meld-hint" data-can="1"><span class="meld-hint__label">이번 턴 ${added.size}장 냄 · 자유롭게 배치 후 [내기]</span></div>`;
+}
 function renderGame(){
   const view = isMyTurn() ? work : { board: G.board, hands: G.hands };
   const seats = Object.keys(G.players).map(Number).sort((a,b)=>a-b);
   const oppoSeats = seats.filter(s=>s!==mySeat);
   const oppoHtml = oppoSeats.map(s=>{
     const cnt = (G.hands[s]||[]).length;
+    const t = tierForScore((G.scores||{})[s]||0);
     return `<li class="oppo ${Number(G.turn)===s?'is-turn':''} ${cnt===1?'is-1tile':''} ${amSpectator?'is-peekable':''}" ${amSpectator?`data-act="peek" data-seat="${s}"`:''}>
-      <span class="oppo__name">${esc(G.names[s])}</span><span class="oppo__count">${cnt}</span></li>`;
+      <span class="oppo__name tier-name" style="--tc:${t.color}">${t.logo}${esc(G.names[s])}</span><span class="oppo__count">${cnt}</span></li>`;
   }).join('');
-  const myInitial = mySeat && G.initialMeld[mySeat];
-  let hint = '';
-  if(isMyTurn()){
-    if(!myInitial){
-      const pts = previewNewPoints(G, mySeat, turnStart.board, work.board) || 0;
-      hint = `<div class="meld-hint" data-can="${pts>=30?1:0}"><div class="meld-hint__bar"><i style="--p:${Math.min(1,pts/30)}"></i></div><span class="meld-hint__label">${pts>=30?'낼 수 있어요!':pts+' / 30점'}</span></div>`;
-    } else {
-      const added = new Set(work.board.flat()); turnStartBoardSet.forEach(id=>added.delete(id));
-      hint = `<div class="meld-hint" data-can="1"><span class="meld-hint__label">이번 턴 ${added.size}장 냄 · 자유롭게 배치 후 [내기]</span></div>`;
-    }
-  }
   const turnName = G.names[Number(G.turn)] || ('좌석'+G.turn);
-
   let dock;
   if(amSpectator){
     dock = `<div class="spectate-dock">👁 관전 중 — 위의 상대를 눌러 손패를 볼 수 있어요</div>`;
   } else {
     const mine = isMyTurn();
     dock = `<footer class="dock">
-      <div class="rack" data-tap="rack">${(view.hands[mySeat]||[]).map(id=>tileMarkup(id, selection.source && selection.source.kind==='rack' && selection.ids.includes(id))).join('')}</div>
+      <div class="rack" data-tap="rack">${rackTilesHTML(view.hands)}</div>
       <nav class="action-bar">
         <button class="btn btn--ghost" data-act="sort" data-key="num">숫자정렬</button>
         <button class="btn btn--ghost" data-act="sort" data-key="color">색정렬</button>
@@ -356,7 +382,6 @@ function renderGame(){
       </nav>
     </footer>`;
   }
-
   setScreen('game');
   app().innerHTML = `
     <section class="screen screen--game">
@@ -369,17 +394,19 @@ function renderGame(){
         <span class="room-tag">방${ROOM_ID}·🂠${G.pool.length}</span>
         <ul class="oppo-strip">${oppoHtml}</ul>
       </header>
-      ${hint}
-      <main class="board" data-tap="boardroot">
-        ${(view.board).map((set,i)=>`<div class="board-set ${setClass(set)}" data-tap="set" data-set-idx="${i}">${set.map(id=>tileMarkup(id, selection.source&&selection.source.kind==='set'&&selection.source.idx===i&&selection.ids.includes(id))).join('')}</div>`).join('')}
-        <div class="new-set-zone" data-tap="newset">＋ 새 세트</div>
-      </main>
+      <div id="hintHost">${meldHintHTML()}</div>
+      <main class="board" data-tap="boardroot">${boardHTML(view.board)}</main>
       ${dock}
       <div class="sheet" id="peekSheet"></div>
     </section>`;
   updateTimerUI();
-  // 1장 경고
   oppoSeats.concat(mySeat?[mySeat]:[]).forEach(s=>{ if((G.hands[s]||[]).length===1) flashOneTile(); });
+}
+// 내 턴 편집 시 보드/랙/힌트만 갱신(상단바·타이머·상대 재렌더 안 함 → 가벼움)
+function renderPlay(){
+  const b = document.querySelector('.board'); if(b) b.innerHTML = boardHTML(work.board);
+  const r = document.querySelector('.dock .rack'); if(r) r.innerHTML = rackTilesHTML(work.hands);
+  const h = document.getElementById('hintHost'); if(h) h.innerHTML = meldHintHTML();
 }
 
 /* --- 탭 조작 --- */
@@ -421,7 +448,7 @@ function handleTap(el){
       selection = { source:{kind:srcKind, idx:srcIdx}, ids:[] };
     const i = selection.ids.indexOf(id);
     if(i>=0) selection.ids.splice(i,1); else selection.ids.push(id);
-    renderGame();
+    renderPlay();
     return;
   }
   if(['set','newset','rack'].includes(kind)){
@@ -444,17 +471,17 @@ function moveSelectionTo(kind, el){
   }
   work.board = work.board.map(reflowSet).filter(s=>s.length>0);
   selection = { source:null, ids:[] };
-  renderGame();
+  renderPlay();
 }
-function doUndo(){ if(undoStack.length){ work = undoStack.pop(); selection={source:null,ids:[]}; renderGame(); } }
-function doReset(){ work.board = deepClone(turnStart.board); work.hands = deepClone(G.hands); work.hands[mySeat]=turnStart.rack.slice(); selection={source:null,ids:[]}; undoStack=[]; renderGame(); }
+function doUndo(){ if(undoStack.length){ work = undoStack.pop(); selection={source:null,ids:[]}; renderPlay(); } }
+function doReset(){ work.board = deepClone(turnStart.board); work.hands = deepClone(G.hands); work.hands[mySeat]=turnStart.rack.slice(); selection={source:null,ids:[]}; undoStack=[]; renderPlay(); }
 function doSort(key){
   localStorage.setItem('rk_sort', key);
   const arr = work.hands[mySeat].slice();
   arr.sort((a,b)=>{ const ta=TILES[a],tb=TILES[b]; if(ta.joker)return 1; if(tb.joker)return -1;
     return key==='num' ? (ta.num-tb.num)||(COLORS.indexOf(ta.color)-COLORS.indexOf(tb.color))
                        : (COLORS.indexOf(ta.color)-COLORS.indexOf(tb.color))||(ta.num-tb.num); });
-  work.hands[mySeat]=arr; renderGame();
+  work.hands[mySeat]=arr; renderPlay();
 }
 function toggleHint(){ /* 간이: 선택 타일 합류 가능한 세트 하이라이트 */
   if(!selection.ids.length){ toast('먼저 손패를 선택하세요'); return; }
@@ -577,12 +604,15 @@ function renderResult(){
     <section class="screen screen--result scrollable">
       <h2 class="result__title">🏁 게임 종료</h2>
       <ol class="rank-list">
-        ${rows.map(r=>`<li class="rank-row ${r.rank===1?'is-winner':''}">
+        ${rows.map(r=>{
+          const tprev=tierForScore(r.prevScore||0), tnew=tierForScore(r.newScore||0);
+          const chg = tnew.level>tprev.level?' <span class="tier-up">▲승급</span>':tnew.level<tprev.level?' <span class="tier-down">▼강등</span>':'';
+          return `<li class="rank-row ${r.rank===1?'is-winner':''}">
           <span class="rank-row__place">${r.rank}위</span>
-          <span class="rank-row__name">${esc(G.names[r.seat])}${r.won?' 🏆':''}</span>
-          <span class="rank-row__delta ${r.delta>=0?'delta--up':'delta--down'}">${r.delta>=0?'+':''}${r.delta}</span>
-          <span class="rank-row__new">${r.prevScore!=null?r.prevScore:'?'} → ${r.newScore!=null?r.newScore:'?'}점</span>
-        </li>`).join('')}
+          <span class="rank-row__name">${nameHTML(G.names[r.seat], r.newScore)}${r.won?' 🏆':''}${r.streak>=1?' <span class="streak">🔥'+r.streak+'</span>':''}</span>
+          <span class="rank-row__delta ${r.delta>=0?'delta--up':'delta--down'}">${r.delta>=0?'+':''}${r.delta}${r.bonus>0?'<small> 🔥+'+r.bonus+'</small>':''}</span>
+          <span class="rank-row__new">${scoreTierHTML(r.newScore)}${chg}</span>
+        </li>`;}).join('')}
       </ol>
       <div class="room__actions">
         ${amHost?`<button class="btn btn--primary btn--lg" data-act="again">다시 하기</button>`:`<div class="muted center">방장이 '다시 하기'를 누르면 새 게임이 시작돼요</div>`}
@@ -602,9 +632,34 @@ async function showRank(){
       <header class="room__top"><b>🏆 랭킹</b><span class="spacer"></span><button class="btn btn--ghost" data-act="backLobby">뒤로</button></header>
       <ol class="board-rank grow scrollable">
         ${list.map((u,i)=>`<li class="board-rank__row ${u.id===ME.id?'is-me':''}">
-          <span class="pos">${i+1}</span><span>${esc(u.real_name)}<small class="muted"> @${esc(u.username)}</small></span>
-          <span>${u.wins}승${u.losses}패</span><span class="seat__score">${u.score}점</span></li>`).join('')}
+          <span class="pos">${i+1}</span>
+          <span>${nameHTML(u.real_name,u.score)}<small class="muted"> ${tierForScore(u.score).fullName}${u.streak>=1?' · 🔥'+u.streak:''}</small></span>
+          <span>${u.wins}승${u.losses}패</span>
+          <span>${scoreTierHTML(u.score)}</span></li>`).join('')}
       </ol>
+    </section>`;
+}
+
+/* ============================ 티어 안내 =============================== */
+function showTiers(){
+  setScreen('rank');
+  const cur = tierForScore(ME.score);
+  app().innerHTML = `
+    <section class="screen">
+      <header class="room__top"><b>🏅 티어</b><span class="spacer"></span><button class="btn btn--ghost" data-act="backLobby">뒤로</button></header>
+      <div class="center" style="padding:8px">내 티어: ${tierBadgeHTML(ME.score)} <span class="muted">(${ME.score}점)</span></div>
+      <ul class="tier-list scrollable grow">
+        ${TIER_LADDER.slice().reverse().map(t=>{
+          const full = t.division ? `${t.name} ${ROMAN[t.division]}` : t.name;
+          return `<li class="tier-row ${t.level===cur.level?'is-cur':''}" style="--tc:${t.color}">
+            <span class="tg">${t.logo}</span><span class="tier-row__name">${full}</span><span class="tier-row__cut">${t.min}점 +</span></li>`;
+        }).join('')}
+      </ul>
+      <div class="muted center" style="padding:10px;font-size:12px;line-height:1.6">
+        점수는 <b>얼마나 크게 이겼/졌는지</b>로 변동(극적인 승리=많이↑, 큰 패배=많이↓).<br>
+        고티어일수록 적게 오르고 많이 내려가며, 중위권도 떨어질 수 있어요(1등은 항상 +).<br>
+        연승 보너스: <b>다이아몬드 이하</b>에서 2연승부터 <b>연승수×10%</b> 추가. 연승 자체는 전 티어 표시.
+      </div>
     </section>`;
 }
 
