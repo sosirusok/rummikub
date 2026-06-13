@@ -30,12 +30,14 @@ create table if not exists public.rooms (
   id              int primary key check (id between 1 and 5),
   host_id         uuid,
   status          text not null default 'waiting',   -- waiting | playing | finished
+  game            text not null default 'rummikub',  -- rummikub | wordbomb
   state           jsonb,
   turn_seconds    int  not null default 30,
   turn_started_at timestamptz,
   version         bigint not null default 0,
   updated_at      timestamptz not null default now()
 );
+alter table public.rooms add column if not exists game text not null default 'rummikub';
 insert into public.rooms (id) select g from generate_series(1,5) g
   on conflict (id) do nothing;
 
@@ -290,7 +292,76 @@ begin
   return v_results;
 end; $$;
 
+-- 게임 무관 채점: state.finishScores({seat:점수, 낮을수록 1등})로 티어·연승·마진 적용 (말잇폭 등 2번째 게임).
+create or replace function public.rk_finish_generic(p_token uuid, p_room int)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare
+  v_user uuid; v_room public.rooms; v_state jsonb; v_players jsonb; v_fs jsonb;
+  v_seats text[]; v_n int; v_avg numeric; v_sorted text[]; i int; j int; k int;
+  v_delta int; v_rank int; v_tied boolean; v_seat text; v_uid uuid; v_won boolean;
+  v_newscore int; v_prev int; v_results jsonb := '{}'::jsonb;
+  v_curscore int; v_curstreak int; v_L int; v_perf numeric; v_adj numeric;
+  v_tr text; v_newstreak int; v_bonus int;
+begin
+  select id into v_user from public.users where token = p_token;
+  if v_user is null then raise exception 'BAD_TOKEN'; end if;
+  select * into v_room from public.rooms where id = p_room for update;
+  if not found then raise exception 'NO_ROOM'; end if;
+  if v_room.status <> 'playing' then return coalesce(v_room.state->'results','{}'::jsonb); end if;
+  v_state := v_room.state;
+  v_players := v_state->'players';
+  v_fs := v_state->'finishScores';
+  if v_fs is null then raise exception 'NO_SCORES'; end if;
+  if not exists (select 1 from jsonb_each_text(v_players) e where e.value = v_user::text) then
+    raise exception 'NOT_A_PLAYER';
+  end if;
+  select array_agg(key) into v_seats from jsonb_object_keys(v_fs) key;
+  v_n := coalesce(array_length(v_seats,1),0);
+  if v_n not between 2 and 4 then raise exception 'BAD_N'; end if;
+  select avg((v_fs->>s)::numeric) into v_avg from unnest(v_seats) s;
+  select array_agg(s order by (v_fs->>s)::numeric, s::int) into v_sorted from unnest(v_seats) s;
+  i := 1;
+  while i <= v_n loop
+    j := i;
+    while j < v_n and (v_fs->>v_sorted[j+1])::numeric = (v_fs->>v_sorted[i])::numeric loop j := j+1; end loop;
+    v_rank := i; v_tied := (j > i);
+    for k in i .. j loop
+      v_seat := v_sorted[k];
+      v_uid := (v_players->>v_seat)::uuid;
+      v_curscore := 0; v_curstreak := 0;
+      if v_uid is not null then select score, streak into v_curscore, v_curstreak from public.users where id = v_uid; end if;
+      v_L := public.rk_tier_level(v_curscore);
+      v_perf := v_avg - (v_fs->>v_seat)::numeric;
+      v_adj := v_perf - (v_L * 0.45);
+      if v_adj >= 0 then v_delta := round(v_adj * greatest(0.34, 1 - v_L*0.020))::int;
+      else v_delta := round(v_adj * least(1.95, 1 + v_L*0.024))::int; end if;
+      if v_rank = 1 then v_delta := greatest(v_delta, greatest(2, round(10 - v_L*0.24)::int)); end if;
+      v_tr := public.rk_streak_treatment(v_n, v_rank, v_tied);
+      v_newstreak := case v_tr when 'apply' then v_curstreak+1 when 'maintain' then v_curstreak else 0 end;
+      v_bonus := 0;
+      if v_tr='apply' and v_L<=28 and v_newstreak>=2 and v_delta>0 then
+        v_bonus := round(v_delta * v_newstreak * 0.10)::int; v_delta := v_delta + v_bonus;
+      end if;
+      v_won := (v_rank = 1); v_prev := v_curscore; v_newscore := greatest(0, v_curscore + v_delta);
+      if v_uid is not null then
+        update public.users set score=v_newscore, streak=v_newstreak,
+          wins=wins+(case when v_won then 1 else 0 end), losses=losses+(case when v_won then 0 else 1 end)
+        where id=v_uid;
+      end if;
+      v_results := jsonb_set(v_results, array[v_seat], jsonb_build_object(
+        'rank',v_rank,'delta',v_delta,'bonus',v_bonus,'won',v_won,
+        'prevScore',v_prev,'newScore',v_newscore,'streak',v_newstreak,'treatment',v_tr));
+    end loop;
+    i := j+1;
+  end loop;
+  v_state := jsonb_set(v_state, '{results}', v_results);
+  v_state := jsonb_set(v_state, '{status}', '"finished"'::jsonb);
+  update public.rooms set status='finished', state=v_state, version=version+1 where id=p_room;
+  return v_results;
+end; $$;
+
 -- 필요한 RPC 에만 실행 권한 부여 (트리거 함수 등은 제외)
+grant execute on function public.rk_finish_generic(uuid,int)      to anon, authenticated;
 grant execute on function public.rk_signup(text,text,text)        to anon, authenticated;
 grant execute on function public.rk_login(text,text)              to anon, authenticated;
 grant execute on function public.rk_me(uuid)                      to anon, authenticated;
