@@ -61,11 +61,17 @@ create table if not exists public.rooms (
   version         bigint not null default 0,
   updated_at      timestamptz not null default now()
 );
--- 기존 설치 마이그레이션: id 체크 1~5 → 1~10, game 컬럼 추가
+-- 기존 설치 마이그레이션: id 1~10, game 컬럼을 nullable 로 정리
+-- (구 wordbomb 잔재로 game 이 NOT NULL/기본값/구 도메인체크를 가질 수 있음 → 전부 제거)
 alter table public.rooms drop constraint if exists rooms_id_check;
 alter table public.rooms add constraint rooms_id_check check (id between 1 and 10);
-alter table public.rooms add column if not exists game text
-  check (game is null or game in ('rummikub','race','hunt'));
+alter table public.rooms add column if not exists game text;
+alter table public.rooms alter column game drop default;        -- 구 default 'rummikub' 제거(없으면 무시)
+alter table public.rooms alter column game drop not null;        -- 6~10 은 null(미설정) 허용
+update public.rooms set game='rummikub' where game is not null and game not in ('rummikub','race','hunt');
+alter table public.rooms drop constraint if exists rooms_game_check;
+alter table public.rooms drop constraint if exists rooms_game_chk;
+alter table public.rooms add constraint rooms_game_chk check (game is null or game in ('rummikub','race','hunt'));
 insert into public.rooms (id, game) select g, 'rummikub' from generate_series(1,5)  g on conflict (id) do nothing;
 insert into public.rooms (id, game) select g, null       from generate_series(6,10) g on conflict (id) do nothing;
 update public.rooms set game='rummikub' where id between 1 and 5 and game is distinct from 'rummikub';
