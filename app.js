@@ -75,6 +75,7 @@ async function maybeAutoStart() {
 /* ----------------------------- 로비 ------------------------------------ */
 async function pickSeat(n) {
   if (busy) return;
+  if (mySeat) { alert(`이미 ${mySeat}번 자리를 선택했어요. 바꾸려면 "자리 비우기"를 먼저 누르세요.`); return; }
   if (SEATS.some(s => s.seat === n)) { alert('이미 선택된 자리예요. 다른 번호를 골라주세요.'); return; }
   if (!NAME) {
     const v = prompt('닉네임을 입력하세요', '플레이어' + n);
@@ -101,13 +102,14 @@ function renderLobby() {
         ${[1, 2, 3, 4].map(n => {
           const t = taken[n];
           const mine = t && t.player_id === CID;
-          return `<button class="seat-card ${t ? 'taken' : ''} ${mine ? 'mine' : ''}" ${t ? 'disabled' : ''} data-seat="${n}">
+          const locked = t || (mySeat && mySeat !== n);   // 이미 내 자리가 있으면 다른 자리 잠금
+          return `<button class="seat-card ${t ? 'taken' : ''} ${mine ? 'mine' : ''} ${(!t && locked) ? 'locked' : ''}" ${locked ? 'disabled' : ''} data-seat="${n}">
             <div class="seat-num">${n}</div>
             <div class="seat-name">${t ? esc(t.name || ('플레이어' + n)) + (mine ? ' (나)' : '') : '비어 있음'}</div>
           </button>`;
         }).join('')}
       </div>
-      <div class="status-line">${count}/4 명 입장 ${count === 4 ? '— 시작하는 중…' : '— 나머지를 기다리는 중'}</div>
+      <div class="status-line">${mySeat ? `${mySeat}번으로 입장 — ` : ''}${count}/4 명 ${count === 4 ? '— 시작하는 중…' : '— 나머지를 기다리는 중'}</div>
       ${mySeat ? `<button class="btn ghost small" id="leaveBtn">자리 비우기</button>` : ''}
       <button class="btn ghost small" id="resetBtn">방 초기화</button>
       <p class="share">친구들에게 이 페이지 주소를 공유하세요. (각자 다른 번호 선택)</p>
