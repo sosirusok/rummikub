@@ -92,7 +92,7 @@ end $$;
 
 -- 회원가입: 아이디+비번+본명. 점수 0 시작.
 create or replace function public.rk_signup(p_username text, p_password text, p_real_name text)
-returns jsonb language plpgsql security definer set search_path = public as $$
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
 declare u public.users; t uuid;
 begin
   if char_length(btrim(coalesce(p_username,''))) not between 2 and 20 then raise exception 'USERNAME_LEN'; end if;
@@ -111,7 +111,7 @@ end; $$;
 
 -- 로그인: 아이디+비번. 토큰 회전(단일 세션).
 create or replace function public.rk_login(p_username text, p_password text)
-returns jsonb language plpgsql security definer set search_path = public as $$
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
 declare u public.users; t uuid;
 begin
   select * into u from public.users where username = btrim(p_username);
@@ -127,7 +127,7 @@ end; $$;
 
 -- 토큰으로 내 프로필 (token 미노출)
 create or replace function public.rk_me(p_token uuid)
-returns jsonb language plpgsql security definer set search_path = public as $$
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
 declare u public.users;
 begin
   if p_token is null then return null; end if;
@@ -140,19 +140,19 @@ end; $$;
 -- 랭킹 (안전 필드만)
 create or replace function public.rk_leaderboard()
 returns table(id uuid, username citext, real_name text, score int, wins int, losses int)
-language sql security definer set search_path = public as $$
+language sql security definer set search_path = public, extensions as $$
   select id, username, real_name, score, wins, losses
   from public.users order by score desc, wins desc, real_name asc limit 100;
 $$;
 
 -- 서버 시각 (클라 시계 오차 보정용)
 create or replace function public.rk_now() returns timestamptz
-language sql security definer set search_path = public as $$ select now(); $$;
+language sql security definer set search_path = public, extensions as $$ select now(); $$;
 
 -- 게임 종료 처리: 서버가 보드 state로 점수를 직접 산정/적용(점수 조작 차단).
 -- state.players = {seat: user_id}, state.hands = {seat: [tileId..]}, state.passStreak, state.names.
 create or replace function public.rk_finish_game(p_token uuid, p_room int)
-returns jsonb language plpgsql security definer set search_path = public as $$
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
 declare
   v_user uuid; v_room public.rooms; v_state jsonb; v_players jsonb;
   v_seats text[]; v_n int; v_base int[];
