@@ -348,7 +348,7 @@ declare
   v_over boolean := false; v_passStreak int; v_sorted text[]; i int; j int; k int;
   v_rank int; v_avg numeric; v_tied boolean; v_seat text; v_uid uuid; v_won boolean; v_hp int;
   v_cnt int; v_distinct int; v_bad int; v_pool int; v_curscore int; v_curstreak int;
-  v_perf numeric; v_tr text; r record;
+  v_perf numeric; v_tr text; r record; v_w int; v_l int;
 begin
   select id into v_user from public.users where token = p_token;
   if v_user is null then raise exception 'BAD_TOKEN'; end if;
@@ -404,9 +404,10 @@ begin
       v_tr := public.rk_streak_treatment(v_n, v_rank, v_tied);
       select * into r from public.rk_apply_score('rummikub', v_perf, v_curscore, v_curstreak, v_won, v_tr);
       perform public.rk_bump_stats(v_uid, 'rummikub', r.new_score, r.new_streak, v_won);
+      v_w:=0; v_l:=0; if v_uid is not null then select wins,losses into v_w,v_l from public.user_game_stats where user_id=v_uid and game='rummikub'; v_w:=coalesce(v_w,0); v_l:=coalesce(v_l,0); end if;
       v_results := jsonb_set(v_results, array[v_seat], jsonb_build_object(
         'rank',v_rank,'delta',r.delta,'bonus',r.bonus,'won',v_won,'handPoints',(v_handpts->>v_seat)::int,
-        'prevScore',v_curscore,'newScore',r.new_score,'streak',r.new_streak,'treatment',v_tr));
+        'prevScore',v_curscore,'newScore',r.new_score,'streak',r.new_streak,'treatment',v_tr,'prevStreak',v_curstreak,'wins',v_w,'losses',v_l));
     end loop;
     i := j + 1;
   end loop;
@@ -423,7 +424,7 @@ declare
   v_user uuid; v_room public.rooms; v_state jsonb; v_players jsonb; v_ranks jsonb;
   v_seats text[]; v_n int; v_results jsonb := '{}'::jsonb;
   i int; v_seat text; v_uid uuid; v_rank int; v_avgrank numeric; v_tied boolean; v_cnt int;
-  v_curscore int; v_curstreak int; v_perf numeric; v_won boolean; v_tr text; v_delta int; v_ns int; r record;
+  v_curscore int; v_curstreak int; v_perf numeric; v_won boolean; v_tr text; v_delta int; v_ns int; r record; v_w int; v_l int;
   CAP constant int := 80;
 begin
   select id into v_user from public.users where token = p_token;
@@ -462,9 +463,10 @@ begin
     v_delta := greatest(-CAP, least(CAP, r.delta));
     v_ns := greatest(0, v_curscore + v_delta);
     perform public.rk_bump_stats(v_uid, 'race', v_ns, r.new_streak, v_won);
+    v_w:=0; v_l:=0; if v_uid is not null then select wins,losses into v_w,v_l from public.user_game_stats where user_id=v_uid and game='race'; v_w:=coalesce(v_w,0); v_l:=coalesce(v_l,0); end if;
     v_results := jsonb_set(v_results, array[v_seat], jsonb_build_object(
       'rank',v_rank,'delta',v_delta,'bonus',r.bonus,'won',v_won,
-      'prevScore',v_curscore,'newScore',v_ns,'streak',r.new_streak,'treatment',v_tr));
+      'prevScore',v_curscore,'newScore',v_ns,'streak',r.new_streak,'treatment',v_tr,'prevStreak',v_curstreak,'wins',v_w,'losses',v_l));
   end loop;
   v_state := jsonb_set(v_state, '{results}', v_results);
   v_state := jsonb_set(v_state, '{status}',  '"finished"'::jsonb);
@@ -479,7 +481,7 @@ declare
   v_user uuid; v_room public.rooms; v_state jsonb; v_players jsonb; v_ranks jsonb;
   v_seats text[]; v_n int; v_results jsonb := '{}'::jsonb;
   i int; v_seat text; v_uid uuid; v_rank int; v_avgrank numeric; v_tied boolean; v_cnt int;
-  v_curscore int; v_curstreak int; v_perf numeric; v_won boolean; v_tr text; v_delta int; v_ns int; r record;
+  v_curscore int; v_curstreak int; v_perf numeric; v_won boolean; v_tr text; v_delta int; v_ns int; r record; v_w int; v_l int;
   CAP constant int := 90;
 begin
   select id into v_user from public.users where token = p_token;
@@ -515,9 +517,10 @@ begin
     v_delta := greatest(-CAP, least(CAP, r.delta));
     v_ns := greatest(0, v_curscore + v_delta);
     perform public.rk_bump_stats(v_uid, 'davinci', v_ns, r.new_streak, v_won);
+    v_w:=0; v_l:=0; if v_uid is not null then select wins,losses into v_w,v_l from public.user_game_stats where user_id=v_uid and game='davinci'; v_w:=coalesce(v_w,0); v_l:=coalesce(v_l,0); end if;
     v_results := jsonb_set(v_results, array[v_seat], jsonb_build_object(
       'rank',v_rank,'delta',v_delta,'bonus',r.bonus,'won',v_won,
-      'prevScore',v_curscore,'newScore',v_ns,'streak',r.new_streak,'treatment',v_tr));
+      'prevScore',v_curscore,'newScore',v_ns,'streak',r.new_streak,'treatment',v_tr,'prevStreak',v_curstreak,'wins',v_w,'losses',v_l));
   end loop;
   v_state := jsonb_set(v_state, '{results}', v_results);
   v_state := jsonb_set(v_state, '{status}',  '"finished"'::jsonb);
@@ -532,7 +535,7 @@ declare
   v_user uuid; v_room public.rooms; v_state jsonb; v_players jsonb; v_roles jsonb; v_alive jsonb; v_caught jsonb;
   v_seats text[]; v_n int; v_h int; v_found int; v_results jsonb := '{}'::jsonb;
   i int; v_seat text; v_uid uuid; v_role text; v_alivev boolean; v_caughtv boolean;
-  v_curscore int; v_curstreak int; v_perf numeric; v_won boolean; v_tr text; v_delta int; v_ns int; r record;
+  v_curscore int; v_curstreak int; v_perf numeric; v_won boolean; v_tr text; v_delta int; v_ns int; r record; v_w int; v_l int;
   CAP constant int := 80;
 begin
   select id into v_user from public.users where token = p_token;
@@ -580,11 +583,12 @@ begin
     v_delta := greatest(-CAP, least(CAP, r.delta));
     v_ns := greatest(0, v_curscore + v_delta);
     perform public.rk_bump_stats(v_uid, 'hunt', v_ns, r.new_streak, v_won);
+    v_w:=0; v_l:=0; if v_uid is not null then select wins,losses into v_w,v_l from public.user_game_stats where user_id=v_uid and game='hunt'; v_w:=coalesce(v_w,0); v_l:=coalesce(v_l,0); end if;
     v_results := jsonb_set(v_results, array[v_seat], jsonb_build_object(
       'role',v_role,'won',v_won,
       'found', (case when v_role='seeker' then v_found else null end),
       'survived', (case when v_role='hider' then coalesce((v_alive->>v_seat)::boolean,true) else null end),
-      'delta',v_delta,'bonus',r.bonus,'prevScore',v_curscore,'newScore',v_ns,'streak',r.new_streak,'treatment',v_tr));
+      'delta',v_delta,'bonus',r.bonus,'prevScore',v_curscore,'newScore',v_ns,'streak',r.new_streak,'treatment',v_tr,'prevStreak',v_curstreak,'wins',v_w,'losses',v_l));
   end loop;
   v_state := jsonb_set(v_state, '{results}', v_results);
   v_state := jsonb_set(v_state, '{status}',  '"finished"'::jsonb);

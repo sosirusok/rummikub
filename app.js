@@ -19,8 +19,11 @@ let mySnapGame = null;         // 내 room_members 스냅샷이 반영한 게임
 let G = null;                  // 게임 상태(루미)
 let mySeat = null, amSpectator = false;
 let work = null, turnStart = null, turnStartBoardSet = new Set();
-let selection = { source: null, ids: [] };
+let rackOrder = [];            // 내 패 개인 정렬(영구·자동 변경 안 함)
 let undoStack = [];
+let dragging = null;           // 드래그 상태
+let liveBoard = null;          // 다른 플레이어가 편집 중인 보드(실시간)
+let rkBc = null, _rkBcT = 0;   // 루미 실시간 broadcast 채널
 let busy = false;
 let prevTurn = null;
 let timerIv = null, lastAutoKey = null, lastDanger = false;
@@ -39,7 +42,8 @@ async function boot() {
   if (!configReady()) { app().innerHTML = `<div class="screen center" style="justify-content:center"><h2>설정 필요</h2><p class="muted">config.js / supabase_setup.sql 을 확인하세요.</p></div>`; return; }
   initSupabase();
   syncServerTime();
-  bindAppInput(handleAct, handleTap, () => SCREEN === 'game' && !amSpectator);
+  bindAppInput(handleAct, () => {}, () => false);
+  app().addEventListener('pointerdown', rkPointerDown);   // 루미큐브 타일 드래그
   if (TOKEN) { ME = await apiMe(TOKEN); if (ME) TOKEN = ME.token; }
   if (ME) goHome(); else showLogin();
 }
@@ -75,8 +79,6 @@ function handleAct(act, el) {
     case 'undo': doUndo(); break;
     case 'reset': doReset(); break;
     case 'sort': doSort(el.dataset.key); break;
-    case 'tidy': doSort(localStorage.getItem('rk_sort') || 'num'); break;
-    case 'hint': toggleHint(); break;
     case 'peek': openPeek(Number(el.dataset.seat)); break;
     case 'closeSheet': closeSheet(); break;
   }
@@ -159,7 +161,8 @@ function cleanupRoom() {
   if (roomDbCh) { leaveChannel(roomDbCh); roomDbCh = null; }
   if (presenceCh) { leaveChannel(presenceCh); presenceCh = null; }
   if (hbIv) { clearInterval(hbIv); hbIv = null; }
-  presentIds = []; ROOM = null; G = null; work = null; lastRoomSig = '';
+  if (rkBc) { leaveChannel(rkBc.ch); rkBc = null; }
+  presentIds = []; ROOM = null; G = null; work = null; liveBoard = null; lastRoomSig = '';
 }
 function cleanupAll() { cleanupLobby(); cleanupRoom(); ROOM_ID = null; }
 
@@ -220,7 +223,7 @@ async function enterRoomFlow(roomId) {
     await refreshLbCache(true);
     roomDbCh = subscribeRoom(roomId, () => scheduleRoomRefresh());
     presenceCh = joinPresence(roomId, ME, { name: ME.real_name }, onPresence);
-    hbIv = setInterval(() => heartbeat(ME.token, roomId), 9000);
+    hbIv = setInterval(() => heartbeat(ME.token, roomId), 4000);
     WAIT_TAB = 'seat';
     await refreshRoom();
   } finally { busy = false; }
@@ -470,6 +473,7 @@ function enterGameView() {
   G = ROOM.state;
   mySeat = seatOfUser(G, ME.id);
   amSpectator = (mySeat == null);
+  if (prevTurn !== Number(G.turn)) liveBoard = null;        // 턴 바뀌면 라이브보드 초기화
   if (ROOM.status === 'playing' && isOver(G)) {
     stopTimer();
     if (mySeat != null) finishGame(ROOM_ID, TOKEN, 'rummikub');
@@ -477,8 +481,9 @@ function enterGameView() {
     app().innerHTML = `<section class="screen center" style="justify-content:center;gap:8px"><h2>🏁 게임 종료</h2><p class="muted">결과 집계 중…</p></section>`;
     return;
   }
+  if (!rkBc) rkBc = joinBroadcast(ROOM_ID, rkOnBroadcast);  // 실시간 중계 채널
   if (isMyTurn()) { if (!work || prevTurn !== Number(G.turn)) initWork(); }
-  else work = cloneWork(G);
+  else { work = cloneWork(G); syncRackOrder(work.hands[mySeat]); }
   prevTurn = Number(G.turn);
   renderGame();
   startTimer();
@@ -487,21 +492,29 @@ function initWork() {
   work = cloneWork(G);
   turnStart = { board: deepClone(G.board), rack: G.hands[mySeat].slice() };
   turnStartBoardSet = new Set(G.board.flat());
-  selection = { source: null, ids: [] }; undoStack = [];
+  undoStack = [];
+  syncRackOrder(work.hands[mySeat]);
 }
-function tileMarkup(id, sel) {
+function tileMarkup(id) {
   const t = TILES[id];
   const cls = t.joker ? 'tile--joker' : 'tile--' + t.color;
   const face = t.joker ? '★' : t.num;
-  return `<span class="tile-hit ${sel ? 'is-selected' : ''}" data-tap="tile" data-tile="${id}"><span class="tile ${cls}">${face}</span></span>`;
+  return `<span class="tile-hit" data-tile="${id}"><span class="tile ${cls}">${face}</span></span>`;
 }
 function setClass(ids) { if (ids.length === 0) return ''; if (ids.length < 3) return 'is-incomplete'; return isValidMeld(ids) ? 'is-valid' : 'is-invalid'; }
-function selSel(kind, idx, id) { return selection.source && selection.source.kind === kind && (kind === 'rack' || selection.source.idx === idx) && selection.ids.includes(id); }
 function boardHTML(board) {
-  return board.map((set, i) => `<div class="board-set ${setClass(set)}" data-tap="set" data-set-idx="${i}">${set.map(id => tileMarkup(id, selSel('set', i, id))).join('')}</div>`).join('')
-    + `<div class="new-set-zone" data-tap="newset">＋ 새 세트</div>`;
+  return board.map((set, i) => `<div class="board-set ${setClass(set)}" data-set-idx="${i}">${set.map(id => tileMarkup(id)).join('')}</div>`).join('')
+    + `<div class="new-set-zone" data-newset>＋ 여기에 끌어다 새 세트</div>`;
 }
-function rackTilesHTML(hands) { return (hands[mySeat] || []).map(id => tileMarkup(id, selSel('rack', -1, id))).join(''); }
+// 내 패는 rackOrder(개인 정렬)대로. 자동으로 안 바뀜. 새 타일은 끝에 추가.
+function syncRackOrder(hand) {
+  hand = hand || (work ? work.hands[mySeat] : (G && G.hands[mySeat]) || []) || [];
+  const inHand = new Set(hand);
+  rackOrder = rackOrder.filter(id => inHand.has(id));
+  hand.forEach(id => { if (!rackOrder.includes(id)) rackOrder.push(id); });
+  return rackOrder;
+}
+function rackTilesHTML(hands) { return syncRackOrder(hands[mySeat] || []).map(id => tileMarkup(id)).join(''); }
 function meldHintHTML() {
   if (!isMyTurn()) return '';
   if (!(mySeat && G.initialMeld[mySeat])) {
@@ -512,7 +525,10 @@ function meldHintHTML() {
   return `<div class="meld-hint" data-can="1"><span class="meld-hint__label">이번 턴 ${added.size}장 냄 · 자유롭게 배치 후 [내기]</span></div>`;
 }
 function renderGame() {
-  const view = isMyTurn() ? work : { board: G.board, hands: G.hands };
+  const mine = isMyTurn();
+  const editingLive = !mine && liveBoard && Number(G.turn) !== Number(mySeat);
+  const viewBoard = mine ? work.board : (editingLive ? liveBoard : G.board);
+  const viewHands = mine ? work.hands : G.hands;
   const seats = Object.keys(G.players).map(Number).sort((a, b) => a - b);
   const oppoSeats = seats.filter(s => s !== mySeat);
   const oppoHtml = oppoSeats.map(s => {
@@ -524,14 +540,13 @@ function renderGame() {
   const turnName = G.names[Number(G.turn)] || ('좌석' + G.turn);
   let dock;
   if (amSpectator) {
-    dock = `<div class="spectate-dock">👁 관전 중 — 위의 상대를 눌러 손패를 볼 수 있어요</div>`;
+    dock = `<div class="spectate-dock">👁 관전 중${editingLive ? ` — ${esc(turnName)} 정리 중…` : ''} · 상대를 눌러 손패 보기</div>`;
   } else {
-    const mine = isMyTurn();
     dock = `<footer class="dock">
-      <div class="rack" data-tap="rack">${rackTilesHTML(view.hands)}</div>
+      <div class="rack" data-rack>${rackTilesHTML(viewHands)}</div>
       <nav class="action-bar">
-        <button class="btn btn--ghost" data-act="sort" data-key="num">숫자정렬</button>
-        <button class="btn btn--ghost" data-act="sort" data-key="color">색정렬</button>
+        <button class="btn btn--ghost" data-act="sort" data-key="num">숫자↕</button>
+        <button class="btn btn--ghost" data-act="sort" data-key="color">색↕</button>
         <button class="btn btn--ghost btn--icon" data-act="undo" ${mine ? '' : 'disabled'}>↶</button>
         <button class="btn btn--ghost btn--icon" data-act="reset" ${mine ? '' : 'disabled'}>⟲</button>
       </nav>
@@ -545,7 +560,7 @@ function renderGame() {
   app().innerHTML = `
     <section class="screen screen--game">
       <header class="topbar">
-        <div class="turn-pill ${isMyTurn() ? 'is-mine' : ''}">${isMyTurn() ? '내 차례' : esc(turnName) + ' 차례'}</div>
+        <div class="turn-pill ${mine ? 'is-mine' : ''}">${mine ? '내 차례' : esc(turnName) + ' 차례'}${editingLive ? ' ✏️' : ''}</div>
         <div class="timer" data-role="timer" data-state="normal">
           <svg class="timer__ring" viewBox="0 0 36 36"><circle cx="18" cy="18" r="16" fill="none" stroke="#2a3140" stroke-width="3"/><circle class="timer__fill" cx="18" cy="18" r="16" fill="none" stroke="#3b82f6" stroke-width="3" stroke-linecap="round" stroke-dasharray="100.5" stroke-dashoffset="0"/></svg>
           <span class="timer__num" data-role="timerNum">–</span>
@@ -554,16 +569,23 @@ function renderGame() {
         <ul class="oppo-strip">${oppoHtml}</ul>
       </header>
       <div id="hintHost">${meldHintHTML()}</div>
-      <main class="board" data-tap="boardroot">${boardHTML(view.board)}</main>
+      <main class="board">${boardHTML(viewBoard)}</main>
       ${dock}
     </section>`;
   updateTimerUI();
   oppoSeats.concat(mySeat ? [mySeat] : []).forEach(s => { if ((G.hands[s] || []).length === 1) flashBanner('1장!'); });
 }
+// 내 턴 편집 시 보드/랙/힌트만 갱신 + 실시간 중계
 function renderPlay() {
   const b = document.querySelector('.board'); if (b) b.innerHTML = boardHTML(work.board);
   const r = document.querySelector('.dock .rack'); if (r) r.innerHTML = rackTilesHTML(work.hands);
   const h = document.getElementById('hintHost'); if (h) h.innerHTML = meldHintHTML();
+  rkBroadcastWork();
+}
+// 다른 사람이 보는 라이브 보드만 갱신(내 턴 아닐 때 수신)
+function rkRenderLive() {
+  if (isMyTurn()) return;
+  const b = document.querySelector('.board'); if (b) b.innerHTML = boardHTML(liveBoard || G.board);
 }
 function reflowSet(ids) {
   if (ids.length < 2) return ids.slice();
@@ -589,57 +611,136 @@ function removeFromWork(id) {
   for (const m of work.board) { const i = m.indexOf(id); if (i >= 0) { m.splice(i, 1); return; } }
   const r = work.hands[mySeat]; const i = r.indexOf(id); if (i >= 0) r.splice(i, 1);
 }
-function handleTap(el) {
+/* --- 드래그 조작 (실제 모바일 루미큐브식: 끌어 놓으면 자동 정렬·스냅, 탭=자동배치) --- */
+function pushUndo() { undoStack.push({ board: deepClone(work.board), hands: deepClone(work.hands), order: rackOrder.slice() }); if (undoStack.length > 50) undoStack.shift(); }
+function cleanupBoard() { work.board = work.board.map(reflowSet).filter(s => s.length > 0); }
+// 자동배치용: 이 타일이 세트에 '이어붙을' 수 있나(2장짜리 미완성도 허용 → 탭으로 런/그룹 쌓기 가능)
+function rkFits(set, id) {
+  const t = TILES[id]; if (t.joker) return set.length < 4;
+  const reals = set.map(x => TILES[x]).filter(x => !x.joker);
+  if (reals.length === 0) return true;
+  if (reals.every(r => r.num === reals[0].num)) {           // 그룹: 같은 숫자, 색 안 겹침
+    if (t.num === reals[0].num && !reals.some(r => r.color === t.color) && set.length < 4) return true;
+  }
+  if (reals.every(r => r.color === reals[0].color) && t.color === reals[0].color) {  // 런: 같은 색, 끝에 이어짐
+    const nums = reals.map(r => r.num), mn = Math.min(...nums), mx = Math.max(...nums);
+    if ((t.num === mn - 1 || t.num === mx + 1) && t.num >= 1 && t.num <= 13) return true;
+  }
+  return false;
+}
+
+function rkPointerDown(e) {
+  if (SCREEN !== 'game' || amSpectator) return;
+  if (e.button != null && e.button !== 0) return;
+  const tileEl = e.target.closest('.tile-hit'); if (!tileEl) return;
+  const cont = tileEl.closest('.rack, .board-set'); if (!cont) return;
+  const fromRack = cont.classList.contains('rack');
+  if (!isMyTurn() && !fromRack) return;       // 내 턴 아니면 손패 재정렬만 허용
+  dragging = { id: tileEl.dataset.tile, fromRack, x: e.clientX, y: e.clientY, moved: false, ghost: null, el: tileEl };
+  window.addEventListener('pointermove', rkPointerMove, { passive: false });
+  window.addEventListener('pointerup', rkPointerUp);
+  window.addEventListener('pointercancel', rkPointerUp);
+}
+function rkPointerMove(e) {
+  if (!dragging) return;
+  if (!dragging.moved) {
+    if (Math.hypot(e.clientX - dragging.x, e.clientY - dragging.y) < 7) return;
+    dragging.moved = true;
+    const g = document.createElement('div'); g.className = 'drag-ghost'; g.innerHTML = tileMarkup(dragging.id);
+    document.body.appendChild(g); dragging.ghost = g;
+    if (dragging.el) dragging.el.classList.add('is-dragging');
+  }
+  e.preventDefault();
+  dragging.ghost.style.transform = `translate(${e.clientX}px, ${e.clientY}px)`;
+  rkHighlight(e.clientX, e.clientY);
+}
+function rkPointerUp(e) {
+  window.removeEventListener('pointermove', rkPointerMove);
+  window.removeEventListener('pointerup', rkPointerUp);
+  window.removeEventListener('pointercancel', rkPointerUp);
+  const d = dragging; dragging = null;
+  if (!d) return;
+  if (d.ghost) d.ghost.remove();
+  if (d.el) d.el.classList.remove('is-dragging');
+  rkClearHi();
+  if (!d.moved) { rkTapPlace(d); return; }    // 이동 없으면 탭으로 처리
+  rkApplyMove(d, rkDropTarget(e.clientX, e.clientY), e.clientX);
+}
+let _rkHi = null;
+function rkHighlight(x, y) {
+  const el = document.elementFromPoint(x, y);
+  const t = el ? el.closest('.board-set, .new-set-zone, .rack') : null;
+  if (t !== _rkHi) { if (_rkHi) _rkHi.classList.remove('drop-hi'); _rkHi = t; if (_rkHi) _rkHi.classList.add('drop-hi'); }
+}
+function rkClearHi() { if (_rkHi) { _rkHi.classList.remove('drop-hi'); _rkHi = null; } }
+function rkDropTarget(x, y) {
+  const el = document.elementFromPoint(x, y); if (!el) return { kind: 'none' };
+  const set = el.closest('.board-set'); if (set) return { kind: 'set', idx: Number(set.dataset.setIdx) };
+  if (el.closest('.new-set-zone')) return { kind: 'newset' };
+  if (el.closest('.rack')) return { kind: 'rack', el: el.closest('.rack') };
+  if (el.closest('.board')) return { kind: 'newset' };   // 보드 빈 영역 = 새 세트
+  return { kind: 'none' };
+}
+function reorderRack(id, dropX, rackEl) {
+  syncRackOrder();
+  const order = rackOrder.filter(x => x !== id);
+  let idx = order.length;
+  if (rackEl) {
+    for (const tile of rackEl.querySelectorAll('.tile-hit')) {
+      if (tile.dataset.tile === id) continue;
+      const r = tile.getBoundingClientRect();
+      if (dropX < r.left + r.width / 2) { const oi = order.indexOf(tile.dataset.tile); if (oi >= 0) { idx = oi; break; } }
+    }
+  }
+  order.splice(idx, 0, id); rackOrder = order;
+}
+function rkApplyMove(d, tgt, dropX) {
+  if (tgt.kind === 'none') { renderPlay(); return; }
+  if (tgt.kind === 'rack') {
+    if (d.fromRack) { reorderRack(d.id, dropX, tgt.el); renderPlay(); return; }   // 손패 내부 재정렬
+    if (!isMyTurn()) return;
+    if (turnStartBoardSet.has(d.id)) { toast('보드에 원래 있던 타일은 가져올 수 없어요'); return; }
+    pushUndo(); removeFromWork(d.id); work.hands[mySeat].push(d.id); cleanupBoard(); reorderRack(d.id, dropX, tgt.el); renderPlay(); return;
+  }
   if (!isMyTurn()) return;
-  const kind = el.dataset.tap;
-  if (kind === 'tile') {
-    const id = el.dataset.tile;
-    const cont = el.closest('[data-tap="set"],[data-tap="rack"]');
-    const srcKind = cont.dataset.tap;
-    const srcIdx = srcKind === 'set' ? Number(cont.dataset.setIdx) : -1;
-    if (!selection.source || selection.source.kind !== srcKind || selection.source.idx !== srcIdx)
-      selection = { source: { kind: srcKind, idx: srcIdx }, ids: [] };
-    const i = selection.ids.indexOf(id);
-    if (i >= 0) selection.ids.splice(i, 1); else selection.ids.push(id);
-    renderPlay();
-    return;
-  }
-  if (['set', 'newset', 'rack'].includes(kind)) {
-    if (selection.ids.length === 0) return;
-    moveSelectionTo(kind, el);
+  pushUndo(); removeFromWork(d.id);
+  if (tgt.kind === 'newset') work.board.push([d.id]);
+  else { const idx = tgt.idx; if (idx == null || !work.board[idx]) work.board.push([d.id]); else work.board[idx].push(d.id); }
+  cleanupBoard(); renderPlay();
+}
+function rkTapPlace(d) {                       // 탭(이동 없이) = 자동 배치/회수
+  if (!isMyTurn()) return;
+  if (d.fromRack) {
+    pushUndo(); removeFromWork(d.id);
+    let placed = false;
+    for (const set of work.board) { if (rkFits(set, d.id)) { set.push(d.id); placed = true; break; } }
+    if (!placed) work.board.push([d.id]);
+    cleanupBoard(); renderPlay();
+  } else {
+    if (turnStartBoardSet.has(d.id)) { toast('보드에 원래 있던 타일은 가져올 수 없어요'); return; }
+    pushUndo(); removeFromWork(d.id); work.hands[mySeat].push(d.id); cleanupBoard(); renderPlay();
   }
 }
-function moveSelectionTo(kind, el) {
-  const ids = selection.ids.slice();
-  if (kind === 'rack' && ids.some(id => turnStartBoardSet.has(id))) { toast('보드에 원래 있던 타일은 가져올 수 없어요'); return; }
-  undoStack.push(deepClone(work));
-  ids.forEach(removeFromWork);
-  if (kind === 'rack') { work.hands[mySeat].push(...ids); }
-  else {
-    let idx;
-    if (kind === 'newset') { work.board.push([]); idx = work.board.length - 1; }
-    else idx = Number(el.dataset.setIdx);
-    if (!work.board[idx]) { work.board.push([]); idx = work.board.length - 1; }
-    work.board[idx].push(...ids);
-  }
-  work.board = work.board.map(reflowSet).filter(s => s.length > 0);
-  selection = { source: null, ids: [] };
-  renderPlay();
-}
-function doUndo() { if (undoStack.length) { work = undoStack.pop(); selection = { source: null, ids: [] }; renderPlay(); } }
-function doReset() { work.board = deepClone(turnStart.board); work.hands = deepClone(G.hands); work.hands[mySeat] = turnStart.rack.slice(); selection = { source: null, ids: [] }; undoStack = []; renderPlay(); }
-function doSort(key) {
+function doUndo() { const u = undoStack.pop(); if (u) { work.board = u.board; work.hands = u.hands; rackOrder = u.order; renderPlay(); } }
+function doReset() { work.board = deepClone(turnStart.board); work.hands = deepClone(G.hands); work.hands[mySeat] = turnStart.rack.slice(); undoStack = []; renderPlay(); }
+function doSort(key) {   // 수동 정렬(버튼 누를 때만). 평소엔 내 순서 그대로 유지.
   localStorage.setItem('rk_sort', key);
-  const arr = work.hands[mySeat].slice();
+  const hand = (work ? work.hands[mySeat] : (G.hands[mySeat] || [])) || [];
+  const arr = hand.slice();
   arr.sort((a, b) => { const ta = TILES[a], tb = TILES[b]; if (ta.joker) return 1; if (tb.joker) return -1;
     return key === 'num' ? (ta.num - tb.num) || (COLORS.indexOf(ta.color) - COLORS.indexOf(tb.color)) : (COLORS.indexOf(ta.color) - COLORS.indexOf(tb.color)) || (ta.num - tb.num); });
-  work.hands[mySeat] = arr; renderPlay();
+  rackOrder = arr; renderPlay();
 }
-function toggleHint() {
-  if (!selection.ids.length) { toast('먼저 손패를 선택하세요'); return; }
-  const legal = []; work.board.forEach((set, i) => { if (isValidMeld(reflowSet([...set, ...selection.ids]))) legal.push((i + 1) + '번 세트'); });
-  if (isValidMeld(reflowSet(selection.ids))) legal.push('새 세트');
-  toast(legal.length ? ('가능: ' + legal.join(', ')) : '합류 가능한 곳이 없어요', true);
+/* --- 실시간 중계: 내 편집을 남에게 broadcast / 남의 편집을 라이브 표시 --- */
+function rkBroadcastWork() {
+  if (!rkBc || !isMyTurn()) return;
+  const now = performance.now(); if (now - _rkBcT < 130) return; _rkBcT = now;
+  rkBc.send({ t: 'rkwork', seat: mySeat, board: work.board });
+}
+function rkOnBroadcast(msg) {
+  if (!msg || msg.t !== 'rkwork' || SCREEN !== 'game' || isMyTurn()) return;
+  if (Number(msg.seat) !== Number(G.turn)) return;
+  liveBoard = msg.board; rkRenderLive();
 }
 async function onSubmit() {
   if (busy) return;
@@ -647,7 +748,7 @@ async function onSubmit() {
   const res = validateTurn(G, mySeat, turnStart.board, cur, turnStart.rack, work.hands[mySeat]);
   if (!res.ok) { toast(res.msg); return; }
   const s = deepClone(G);
-  s.board = cur; s.hands[mySeat] = work.hands[mySeat].slice();
+  s.board = cur; s.hands[mySeat] = syncRackOrder(work.hands[mySeat]).slice();
   if (!s.initialMeld[mySeat]) s.initialMeld[mySeat] = true;
   s.passStreak = 0;
   const emptied = s.hands[mySeat].length === 0;
@@ -659,6 +760,7 @@ async function onDraw() {
   const s = deepClone(G);
   if (s.pool.length > 0) { s.hands[mySeat].push(s.pool.shift()); s.passStreak = 0; }
   else { s.passStreak = (s.passStreak || 0) + 1; }
+  s.hands[mySeat] = syncRackOrder(s.hands[mySeat]).slice();
   s.turn = nextSeat(s, mySeat);
   await commit(s);
 }
@@ -680,7 +782,7 @@ async function autoTimeout(forSeat) {
     const chk = validateTurn(G, mySeat, turnStart.board, cur, turnStart.rack, work.hands[mySeat]);
     if (chk.ok) {
       const s2 = deepClone(G);
-      s2.board = cur; s2.hands[mySeat] = work.hands[mySeat].slice();
+      s2.board = cur; s2.hands[mySeat] = syncRackOrder(work.hands[mySeat]).slice();
       if (!s2.initialMeld[mySeat]) s2.initialMeld[mySeat] = true;
       s2.passStreak = 0;
       if (s2.hands[mySeat].length !== 0) s2.turn = nextSeat(s2, mySeat);
@@ -732,7 +834,13 @@ function openPeek(seat) {
     <button class="btn btn--ghost btn--lg" data-act="closeSheet">닫기</button>`);
 }
 
-/* ============================ 결과 (3게임 공용) ====================== */
+/* ============================ 결과 (4게임 공용) ====================== */
+function streakChangeHTML(prev, now) {
+  prev = prev || 0; now = now || 0;
+  if (now > prev) return `🔥${prev}→${now}`;
+  if (now < prev) return now === 0 ? `🔥${prev}→꺼짐` : `🔥${prev}→${now}`;
+  return now > 0 ? `🔥${now} 유지` : '—';
+}
 function renderResult() {
   G = ROOM.state;
   const results = (G && G.results) || {};
@@ -748,15 +856,19 @@ function renderResult() {
       <ol class="rank-list">
         ${rows.map(r => {
           const tprev = tierForScore(r.prevScore || 0), tnew = tierForScore(r.newScore || 0);
-          const chg = tnew.level > tprev.level ? ' <span class="tier-up">▲승급</span>' : tnew.level < tprev.level ? ' <span class="tier-down">▼강등</span>' : '';
+          const chg = tnew.level > tprev.level ? '<span class="tier-up">▲승급</span>' : tnew.level < tprev.level ? '<span class="tier-down">▼강등</span>' : '';
           const place = r.rank != null ? `${r.rank}위` : (r.won ? '승' : '패');
           let tag = '';
           if (game === 'hunt') tag = r.role === 'seeker' ? ` <span class="role-tag">🕵️술래 ${r.found != null ? r.found + '색출' : ''}</span>` : ` <span class="role-tag">🙂${r.survived ? '생존' : '색출됨'}</span>`;
+          const rec = (r.wins != null) ? `${r.wins}승 ${r.losses}패` : '';
           return `<li class="rank-row ${r.won ? 'is-winner' : ''}">
             <span class="rank-row__place">${place}</span>
-            <span class="rank-row__name">${nameHTML(G.names[r.seat], r.newScore)}${r.won ? ' 🏆' : ''}${tag}${r.streak >= 1 ? ' <span class="streak">🔥' + r.streak + '</span>' : ''}</span>
-            <span class="rank-row__delta ${r.delta >= 0 ? 'delta--up' : 'delta--down'}">${r.delta >= 0 ? '+' : ''}${r.delta}${r.bonus > 0 ? '<small> 🔥+' + r.bonus + '</small>' : ''}</span>
-            <span class="rank-row__new">${scoreTierHTML(r.newScore)}${chg}</span>
+            <div class="rr">
+              <div class="rr__l1"><span class="rr__name">${nameHTML(G.names[r.seat], r.newScore)}${r.won ? ' 🏆' : ''}${tag}</span>
+                <span class="rank-row__delta ${r.delta >= 0 ? 'delta--up' : 'delta--down'}">${r.delta >= 0 ? '+' : ''}${r.delta}${r.bonus > 0 ? ` <small>🔥+${r.bonus}</small>` : ''}</span></div>
+              <div class="rr__l2"><span class="rr__sc">${r.prevScore || 0} → <b>${r.newScore || 0}</b></span> ${tierBadgeHTML(r.newScore)} ${chg}</div>
+              <div class="rr__l3 muted">${GAME_SHORT[game] || ''} ${rec} · 연승 ${streakChangeHTML(r.prevStreak, r.streak)}</div>
+            </div>
           </li>`;
         }).join('')}
       </ol>

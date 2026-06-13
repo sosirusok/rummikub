@@ -330,6 +330,26 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .dv-num--w{background:#eef2f8; color:#11151d;}
 @media (max-width:360px){ .dvt{width:30px;height:40px;font-size:16px;} .dv-hand--mine .dvt{width:34px;height:46px;} .dv-num{min-height:40px;} }
 
+/* ===================== 루미큐브 드래그 ===================== */
+.tile-hit{touch-action:none;}                 /* 타일 위에서 시작한 제스처는 드래그(스크롤 X) */
+.tile-hit.is-dragging{opacity:.25;}
+.board{touch-action:pan-y;}                    /* 빈 영역은 세로 스크롤 허용 */
+.rack{touch-action:none;}
+.drag-ghost{position:fixed; left:0; top:0; z-index:95; pointer-events:none;
+  transform:translate(-300px,-300px); margin-left:-18px; margin-top:-26px; opacity:.92;
+  filter:drop-shadow(0 4px 10px rgba(0,0,0,.55));}
+.board-set.drop-hi, .new-set-zone.drop-hi, .rack.drop-hi{
+  outline:2px dashed var(--accent); outline-offset:2px; background:rgba(59,130,246,.14);}
+
+/* ===================== 결과 카드(상세) ===================== */
+.screen--result .rank-row{grid-template-columns:auto 1fr; align-items:start; gap:10px;}
+.rr{display:flex; flex-direction:column; gap:3px; min-width:0;}
+.rr__l1{display:flex; align-items:center; gap:8px;}
+.rr__name{font-weight:800; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.rr__l2{display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:13px;}
+.rr__sc{font-variant-numeric:tabular-nums; font-weight:700;}
+.rr__l3{font-size:12px;}
+
 /* ===== 데스크톱 ===== */
 @media (min-width:720px){
   :root{--tile-w:38px; --gap:6px;}

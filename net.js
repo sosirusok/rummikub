@@ -176,7 +176,7 @@ async function heartbeat(token, roomId) {
   try { await sb.rpc('rk_heartbeat', { p_token: token, p_room: roomId }); } catch (e) {}
 }
 async function reapStale(roomId, ttl) {
-  try { const { data } = await sb.rpc('rk_reap_stale', { p_room: roomId, p_ttl_seconds: ttl || 25 }); return data || 0; }
+  try { const { data } = await sb.rpc('rk_reap_stale', { p_room: roomId, p_ttl_seconds: ttl || 10 }); return data || 0; }
   catch (e) { return 0; }
 }
 
