@@ -142,8 +142,8 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 
 .dock{position:sticky; bottom:0; z-index:20; background:var(--panel); border-top:1px solid var(--line);
   padding:6px 8px; padding-bottom:max(6px,env(safe-area-inset-bottom)); display:flex; flex-direction:column; gap:6px;}
-.rack{display:flex; gap:var(--gap); overflow-x:auto; overscroll-behavior-x:contain; padding:6px 2px;
-  min-height:calc(var(--tile-h) + 16px); background:var(--panel2); border-radius:var(--radius);}
+.rack{display:flex; flex-wrap:wrap; align-content:flex-start; gap:var(--gap); overflow-y:auto; overscroll-behavior:contain;
+  padding:6px 4px; min-height:calc(var(--tile-h) + 16px); max-height:34vh; background:var(--panel2); border-radius:var(--radius);}
 .action-bar{display:flex; gap:6px; flex-wrap:wrap;}
 .action-bar--primary{margin-top:2px; flex-wrap:nowrap;}
 .spectate-dock{padding:10px; text-align:center; color:var(--accent); font-weight:800; background:var(--panel); border-top:1px solid var(--line);}
@@ -334,7 +334,7 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .tile-hit{touch-action:none;}                 /* 타일 위에서 시작한 제스처는 드래그(스크롤 X) */
 .tile-hit.is-dragging{opacity:.25;}
 .board{touch-action:pan-y;}                    /* 빈 영역은 세로 스크롤 허용 */
-.rack{touch-action:none;}
+.rack{touch-action:pan-y;}   /* 줄바꿈된 손패가 길면 세로 스크롤(타일 자체는 드래그) */
 .drag-ghost{position:fixed; left:0; top:0; z-index:95; pointer-events:none;
   transform:translate(-300px,-300px); margin-left:-18px; margin-top:-26px; opacity:.92;
   filter:drop-shadow(0 4px 10px rgba(0,0,0,.55));}

@@ -280,8 +280,7 @@
 
       // 결승: 결승 행(위쪽 통로)에 도달
       if (!L.fin) {
-        const r = Math.floor(L.y / TILE);
-        if (r <= GOAL_ROW) {
+        if (L.prog >= PROG_MAX - 20 || Math.floor(L.y / TILE) <= GOAL_ROW) {   // 진행도 임계로 안정 판정
           L.fin = true; L.finished = true; L.finT = M.simT();
           if (!L._appended) {
             L._appended = true;
@@ -377,7 +376,7 @@
       return { x: Math.round(L.x), y: Math.round(L.y), prog: Math.round(L.bestProg), fin: !!L.fin };
     },
 
-    onPeer(M, seat, msg) { if (msg && msg.prog != null) M._peerProg[seat] = msg.prog; },
+    onPeer(M, seat, msg) { if (msg && msg.prog != null) M._peerProg[seat] = Math.max(M._peerProg[seat] || 0, msg.prog); },   // 패킷손실에도 최대 진행도 보존
 
     actionLabel() { return '대시'; },
 

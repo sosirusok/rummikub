@@ -56,8 +56,8 @@ function davinciInitialState(seated, scoresMap) {
   const seed = ((serverNow() & 0x7fffffff) ^ (n * 2654435761) ^ 0x0d) >>> 0;
 
   // 24장 덱 생성 후 시드 셔플(Fisher–Yates)
-  const deck = [];
-  for (let v = 0; v <= 11; v++) { deck.push({ v, c: 'b' }); deck.push({ v, c: 'w' }); }
+  const deck = []; let idc = 0;
+  for (let v = 0; v <= 11; v++) { deck.push({ v, c: 'b', id: 't' + (idc++) }); deck.push({ v, c: 'w', id: 't' + (idc++) }); }
   const rng = dvRng(seed);
   for (let i = deck.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1));
@@ -75,7 +75,7 @@ function davinciInitialState(seated, scoresMap) {
     for (let k = 0; k < nStart; k++) hand.push({ ...deck.shift(), up: false });
     hands[m.seat] = dvSortHand(hand);   // 정렬 보유
   });
-  const pool = deck.map(t => ({ v: t.v, c: t.c }));   // 나머지 산더미(up 없음)
+  const pool = deck.map(t => ({ v: t.v, c: t.c, id: t.id }));   // 나머지 산더미(up 없음)
 
   return {
     game: 'davinci', seed, players, names, scores, n,
@@ -161,8 +161,8 @@ function dvRender() {
       // 화면 비공개: 남의 가린 타일은 숫자 숨김. 공개된 것만 숫자.
       const shown = { v: tile.v, c: tile.c, up: tile.up, mine: false };
       const tappable = myTurn && !dead && !tile.up;   // 내 차례에 가린 타일만 지목
-      const selCls = (DV.pick && DV.pick.seat === seat && DV.pick.idx === idx) ? 'is-pick' : '';
-      return `<span class="dv-slot ${selCls}" ${tappable ? `data-act="dv_pick" data-seat="${seat}" data-idx="${idx}"` : ''}>${dvTileFace(shown)}</span>`;
+      const selCls = (DV.pick && DV.pick.seat === seat && DV.pick.id === tile.id) ? 'is-pick' : '';
+      return `<span class="dv-slot ${selCls}" ${tappable ? `data-act="dv_pick" data-seat="${seat}" data-id="${tile.id}"` : ''}>${dvTileFace(shown)}</span>`;
     }).join('');
     return `<li class="dv-oppo ${Number(s.turn) === seat ? 'is-turn' : ''} ${dead ? 'is-dead' : ''}">
       <div class="dv-oppo__head">
@@ -251,7 +251,7 @@ async function davinciAct(act, el) {
   switch (act) {
     case 'dv_draw': return dvDraw();
     case 'dv_pick': {
-      DV.pick = { seat: Number(el.dataset.seat), idx: Number(el.dataset.idx) };
+      DV.pick = { seat: Number(el.dataset.seat), id: el.dataset.id };
       dvRender();
       dvOpenGuessSheet();
       return;
@@ -309,7 +309,7 @@ async function dvGuess(v, c) {
 
   const ok = await dvCommit(s => {
     if (Number(s.turn) !== Number(DV.mySeat)) return null;
-    const target = (s.hands[pick.seat] || [])[pick.idx];
+    const target = (s.hands[pick.seat] || []).find(t => t.id === pick.id);   // 안정적 id 로 지목(정렬·CAS 변동에도 동일 타일)
     if (!target || target.up) return null;            // 이미 공개됐거나 사라짐 → 무효
     if (!dvAlive(s, pick.seat)) return null;
 
@@ -328,16 +328,18 @@ async function dvGuess(v, c) {
       }
       // 적중해도 더 추리할 수 있으므로 turn 유지(멈추기/추가지목은 다음 액션)
     } else {
-      // 빗나감 → 내가 뽑은 타일 공개되어 손에 편입, 턴 종료
+      // 빗나감 → 내가 뽑은 타일 공개되어 손에 편입(턴 종료). 산더미 비면 내 가린 타일 1장을 대신 공개.
       s.lastHit = false;
       if (s.drawn != null) {
-        const got = { v: s.drawn.v, c: s.drawn.c, up: true };
+        const got = { v: s.drawn.v, c: s.drawn.c, id: s.drawn.id, up: true };
         s.hands[DV.mySeat].push(got);
         s.hands[DV.mySeat] = dvSortHand(s.hands[DV.mySeat]);
         s.drawn = null;
-        // 공개로 인해 내 패가 전부 공개되면 나도 탈락
-        if (s.hands[DV.mySeat].every(t => t.up)) { s.eliminated[DV.mySeat] = true; (s.elimOrder = s.elimOrder || []).push(DV.mySeat); dvLog(s, `💥 ${myName} 탈락!`); }
+      } else {
+        const hid = s.hands[DV.mySeat].filter(t => !t.up);   // 산더미 소진: 가장 왼쪽 가린 타일 공개(결정론)
+        if (hid.length) hid[0].up = true;
       }
+      if (s.hands[DV.mySeat].every(t => t.up)) { s.eliminated[DV.mySeat] = true; (s.elimOrder = s.elimOrder || []).push(DV.mySeat); dvLog(s, `💥 ${myName} 탈락!`); }
       dvLog(s, `❌ ${myName} → ${opName}의 ${colLab} ${v} 빗나감`);
       dvEndTurn(s);
     }
@@ -353,7 +355,7 @@ async function dvStop() {
     if (Number(s.turn) !== Number(DV.mySeat)) return null;
     if (!s.lastHit) return null;                       // 적중 직후에만 멈춤 가능
     if (s.drawn != null) {
-      const got = { v: s.drawn.v, c: s.drawn.c, up: false };   // 가린 채 보유
+      const got = { v: s.drawn.v, c: s.drawn.c, id: s.drawn.id, up: false };   // 가린 채 보유
       s.hands[DV.mySeat].push(got);
       s.hands[DV.mySeat] = dvSortHand(s.hands[DV.mySeat]);
       s.drawn = null;
@@ -393,8 +395,7 @@ async function dvMaybeFinish() {
     if (base.ranks) return null;                       // 경합: 이미 누가 채웠으면 패스
     const aliveNow = dvAliveSeats(base);
     if (aliveNow.length > 1) return null;              // 상태 변동
-    // 탈락 순서를 로그 기준으로 추정하기 어려우므로:
-    //   생존자=1위, 탈락자들은 동률 2위(서버가 동률 정산). 간단·공정.
+    // 생존자=1위, 탈락자들은 '나중에 탈락할수록 상위'(elimOrder 역순)로 서로 다른 순위 부여.
     const ranks = {};
     const allSeats = dvSeats(base);
     aliveNow.forEach(seat => { ranks[seat] = 1; });                 // 생존자=1위

@@ -25,10 +25,9 @@
 
   // ---- 군중(NPC) 규모: hider 수*8, [16..60] ----
   function npcCount(M, hiderN) {
-    let c = Math.max(16, hiderN * 8);
-    c = Math.min(60, c);
-    if (M.lowPower) c = Math.min(c, 28);   // 폴더폰 하향
-    return c | 0;
+    // 기기 독립(결정론): lowPower 와 무관하게 전 클라 동일 군중수여야 색출 판정이 일치.
+    // 저사양 최적화는 '생성 수'가 아니라 draw 의 화면밖 컬링에서만.
+    return Math.min(60, Math.max(16, hiderN * 8)) | 0;
   }
 
   // ---- 역할/제한시간 도출(state 우선, 없으면 seed 로 결정론 산출) ----

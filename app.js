@@ -371,7 +371,7 @@ function decoBody() {
   return `<div class="deco">
     <p class="muted">점수 아래·이름 옆에 보일 티어를 고르세요. 이름 색도 이 티어색이 돼요.</p>
     <div class="deco-preview">미리보기: ${preview}</div>
-    ${opt('', '숨김')}${opt('rummikub', '루미큐브')}${opt('race', '운빨 대시')}${opt('hunt', '나도 사람이야')}
+    ${opt('', '숨김')}${opt('rummikub', '루미큐브')}${opt('davinci', '다빈치 코드')}${opt('race', '운빨 대시')}${opt('hunt', '나도 사람이야')}
   </div>`;
 }
 function tierLadderHTML(g) {
@@ -476,9 +476,9 @@ function enterGameView() {
   if (prevTurn !== Number(G.turn)) liveBoard = null;        // 턴 바뀌면 라이브보드 초기화
   if (ROOM.status === 'playing' && isOver(G)) {
     stopTimer();
-    if (mySeat != null) finishGame(ROOM_ID, TOKEN, 'rummikub');
     setScreen('game');
     app().innerHTML = `<section class="screen center" style="justify-content:center;gap:8px"><h2>🏁 게임 종료</h2><p class="muted">결과 집계 중…</p></section>`;
+    if (mySeat != null) settleRummikub();
     return;
   }
   if (!rkBc) rkBc = joinBroadcast(ROOM_ID, rkOnBroadcast);  // 실시간 중계 채널
@@ -587,6 +587,7 @@ function rkRenderLive() {
   if (isMyTurn()) return;
   const b = document.querySelector('.board'); if (b) b.innerHTML = boardHTML(liveBoard || G.board);
 }
+function renderRackOnly() { const r = document.querySelector('.dock .rack'); if (r) r.innerHTML = rackTilesHTML(work.hands); }
 function reflowSet(ids) {
   if (ids.length < 2) return ids.slice();
   const tiles = ids.map(id => TILES[id]);
@@ -630,19 +631,20 @@ function rkFits(set, id) {
 }
 
 function rkPointerDown(e) {
-  if (SCREEN !== 'game' || amSpectator) return;
+  if (SCREEN !== 'game' || amSpectator || dragging) return;   // 진행 중 드래그 있으면 멀티터치 무시
   if (e.button != null && e.button !== 0) return;
   const tileEl = e.target.closest('.tile-hit'); if (!tileEl) return;
   const cont = tileEl.closest('.rack, .board-set'); if (!cont) return;
   const fromRack = cont.classList.contains('rack');
   if (!isMyTurn() && !fromRack) return;       // 내 턴 아니면 손패 재정렬만 허용
-  dragging = { id: tileEl.dataset.tile, fromRack, x: e.clientX, y: e.clientY, moved: false, ghost: null, el: tileEl };
+  document.querySelectorAll('.drag-ghost').forEach(g => g.remove());   // 잔재 고스트 정리
+  dragging = { id: tileEl.dataset.tile, fromRack, x: e.clientX, y: e.clientY, moved: false, ghost: null, el: tileEl, pid: e.pointerId };
   window.addEventListener('pointermove', rkPointerMove, { passive: false });
   window.addEventListener('pointerup', rkPointerUp);
   window.addEventListener('pointercancel', rkPointerUp);
 }
 function rkPointerMove(e) {
-  if (!dragging) return;
+  if (!dragging || (e.pointerId != null && e.pointerId !== dragging.pid)) return;
   if (!dragging.moved) {
     if (Math.hypot(e.clientX - dragging.x, e.clientY - dragging.y) < 7) return;
     dragging.moved = true;
@@ -655,6 +657,7 @@ function rkPointerMove(e) {
   rkHighlight(e.clientX, e.clientY);
 }
 function rkPointerUp(e) {
+  if (!dragging || (e.pointerId != null && e.pointerId !== dragging.pid)) return;
   window.removeEventListener('pointermove', rkPointerMove);
   window.removeEventListener('pointerup', rkPointerUp);
   window.removeEventListener('pointercancel', rkPointerUp);
@@ -697,7 +700,7 @@ function reorderRack(id, dropX, rackEl) {
 function rkApplyMove(d, tgt, dropX) {
   if (tgt.kind === 'none') { renderPlay(); return; }
   if (tgt.kind === 'rack') {
-    if (d.fromRack) { reorderRack(d.id, dropX, tgt.el); renderPlay(); return; }   // 손패 내부 재정렬
+    if (d.fromRack) { reorderRack(d.id, dropX, tgt.el); if (isMyTurn()) renderPlay(); else renderRackOnly(); return; }   // 손패 재정렬(내 턴 아니면 보드 안 건드림)
     if (!isMyTurn()) return;
     if (turnStartBoardSet.has(d.id)) { toast('보드에 원래 있던 타일은 가져올 수 없어요'); return; }
     pushUndo(); removeFromWork(d.id); work.hands[mySeat].push(d.id); cleanupBoard(); reorderRack(d.id, dropX, tgt.el); renderPlay(); return;
@@ -774,6 +777,17 @@ async function commit(state) {
   if (isOver(state)) await finishGame(ROOM_ID, TOKEN, 'rummikub');
   await refreshRoom();
 }
+// 종료 정산 재시도(결과화면 '집계 중' 영구정지 방지)
+async function settleRummikub() {
+  for (let i = 0; i < 5; i++) {
+    const r = await finishGame(ROOM_ID, TOKEN, 'rummikub');
+    if (r && r.ok) { await refreshRoom(); return; }
+    const room = await fetchRoom(ROOM_ID);
+    if (room && room.status === 'finished') { await refreshRoom(); return; }
+    await new Promise(res => setTimeout(res, 700));
+  }
+  await refreshRoom();
+}
 async function autoTimeout(forSeat) {
   if (busy) return; busy = true;
   // 본인 차례 시간초과 — 준비된 배치가 규칙상 유효하면 자동 제출(버튼만 안 누른 경우 구제)
@@ -788,6 +802,24 @@ async function autoTimeout(forSeat) {
       if (s2.hands[mySeat].length !== 0) s2.turn = nextSeat(s2, mySeat);
       const r2 = await pushState(ROOM_ID, s2, ROOM.version); busy = false;
       if (r2.ok) { work = null; if (isOver(s2)) await finishGame(ROOM_ID, TOKEN, 'rummikub'); }
+      await refreshRoom();
+      return;
+    }
+  } else if (liveBoard && Number(G.turn) === Number(forSeat)) {
+    // 끊긴 현재 플레이어의 준비배치(중계 수신본)가 규칙상 유효하면 대리 자동제출
+    const cur = liveBoard.map(reflowSet).filter(b => b.length > 0);
+    const startSet = new Set((G.board || []).flat());
+    const added = [...new Set(cur.flat())].filter(id => !startSet.has(id));
+    const startRack = (G.hands[forSeat] || []).slice();
+    const remaining = startRack.filter(id => !added.includes(id));
+    if (validateTurn(G, forSeat, G.board, cur, startRack, remaining).ok) {
+      const s = deepClone(G);
+      s.board = cur; s.hands[forSeat] = remaining;
+      if (!s.initialMeld[forSeat]) s.initialMeld[forSeat] = true;
+      s.passStreak = 0;
+      if (remaining.length !== 0) s.turn = nextSeat(s, forSeat);
+      const r2 = await pushState(ROOM_ID, s, ROOM.version); busy = false;
+      if (r2.ok) { if (isOver(s)) await finishGame(ROOM_ID, TOKEN, 'rummikub'); }
       await refreshRoom();
       return;
     }
@@ -889,7 +921,7 @@ async function showRank(game) {
   app().innerHTML = `
     <section class="screen screen--rank">
       <header class="room__top"><button class="btn btn--ghost" data-act="backHome">← 홈</button><b style="margin-left:6px">🏆 랭킹</b><span class="spacer"></span></header>
-      <nav class="game-select">${tab('rummikub', '루미큐브')}${tab('race', '운빨 대시')}${tab('hunt', '나도 사람이야')}</nav>
+      <nav class="game-select">${tab('rummikub', '루미큐브')}${tab('davinci', '다빈치 코드')}${tab('race', '운빨 대시')}${tab('hunt', '나도 사람이야')}</nav>
       <ol class="board-rank grow scrollable">
         ${list.map((u, i) => `<li class="board-rank__row ${u.id === ME.id ? 'is-me' : ''}">
           <span class="pos">${i + 1}</span>

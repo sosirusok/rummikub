@@ -26,8 +26,11 @@ create table if not exists public.users (
 );
 alter table public.users add column if not exists streak int not null default 0;
 -- 꾸미기: 이름색·대표 티어로 보여줄 게임 (null = 숨김)
-alter table public.users add column if not exists display_game text
-  check (display_game is null or display_game in ('rummikub','race','hunt'));
+alter table public.users add column if not exists display_game text;
+alter table public.users drop constraint if exists users_display_game_check;
+alter table public.users drop constraint if exists users_display_game_chk;
+alter table public.users add constraint users_display_game_chk
+  check (display_game is null or display_game in ('rummikub','davinci','race','hunt'));
 alter table public.users enable row level security;   -- 정책 없음 = anon 직접 접근 차단
 
 -- ===== 게임별 독립 전적 (RPC 전용) =====
@@ -348,7 +351,7 @@ declare
   v_over boolean := false; v_passStreak int; v_sorted text[]; i int; j int; k int;
   v_rank int; v_avg numeric; v_tied boolean; v_seat text; v_uid uuid; v_won boolean; v_hp int;
   v_cnt int; v_distinct int; v_bad int; v_pool int; v_curscore int; v_curstreak int;
-  v_perf numeric; v_tr text; r record; v_w int; v_l int;
+  v_perf numeric; v_tr text; r record; v_w int; v_l int; v_delta int; v_ns int;
 begin
   select id into v_user from public.users where token = p_token;
   if v_user is null then raise exception 'BAD_TOKEN'; end if;
@@ -403,11 +406,13 @@ begin
       v_won := (v_rank = 1);
       v_tr := public.rk_streak_treatment(v_n, v_rank, v_tied);
       select * into r from public.rk_apply_score('rummikub', v_perf, v_curscore, v_curstreak, v_won, v_tr);
-      perform public.rk_bump_stats(v_uid, 'rummikub', r.new_score, r.new_streak, v_won);
+      v_delta := greatest(-150, least(150, r.delta));      -- 루미 안전 상한(긴 게임이라 크게, 극단치만 제한)
+      v_ns := greatest(0, v_curscore + v_delta);
+      perform public.rk_bump_stats(v_uid, 'rummikub', v_ns, r.new_streak, v_won);
       v_w:=0; v_l:=0; if v_uid is not null then select wins,losses into v_w,v_l from public.user_game_stats where user_id=v_uid and game='rummikub'; v_w:=coalesce(v_w,0); v_l:=coalesce(v_l,0); end if;
       v_results := jsonb_set(v_results, array[v_seat], jsonb_build_object(
-        'rank',v_rank,'delta',r.delta,'bonus',r.bonus,'won',v_won,'handPoints',(v_handpts->>v_seat)::int,
-        'prevScore',v_curscore,'newScore',r.new_score,'streak',r.new_streak,'treatment',v_tr,'prevStreak',v_curstreak,'wins',v_w,'losses',v_l));
+        'rank',v_rank,'delta',v_delta,'bonus',r.bonus,'won',v_won,'handPoints',(v_handpts->>v_seat)::int,
+        'prevScore',v_curscore,'newScore',v_ns,'streak',r.new_streak,'treatment',v_tr,'prevStreak',v_curstreak,'wins',v_w,'losses',v_l));
     end loop;
     i := j + 1;
   end loop;

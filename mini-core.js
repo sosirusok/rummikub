@@ -135,7 +135,8 @@ function miniLoop(ts) {
   while (MINI.acc >= MINI_STEP && guard-- > 0) {
     try {
       if (!MINI.amSpectator && MINI.mod.step) MINI.mod.step(MINI, MINI_STEP);
-      if (MINI.isHost && MINI.mod.hostTick && !MINI._ended) MINI.mod.hostTick(MINI, MINI_STEP);
+      // 종료조건은 모든 클라가 검사(호스트 이탈해도 게임 안 끝나는 문제 방지; finish RPC·CAS 멱등)
+      if (MINI.mod.hostTick && !MINI._ended && MINI.simT() >= (MINI._endRetryAt || 0)) MINI.mod.hostTick(MINI, MINI_STEP);
     } catch (e) { console.error('mini step', e); }
     MINI.input.action = false;                // 엣지 소비
     MINI.acc -= MINI_STEP;
@@ -153,7 +154,7 @@ function miniLoop(ts) {
   const ctx = MINI.ctx;
   ctx.setTransform(MINI.dpr, 0, 0, MINI.dpr, 0, 0);
   ctx.clearRect(0, 0, MINI.W, MINI.H);
-  try { MINI.mod.draw(MINI); } catch (e) { console.error('mini draw', e); }
+  try { if (MINI.mod.draw) MINI.mod.draw(MINI); } catch (e) { console.error('mini draw', e); }
   // HUD(throttle)
   MINI._hudT += dt;
   if (MINI._hudT >= 150 && MINI.mod.hud) {
@@ -261,7 +262,7 @@ MINI.endGame = async function () {
     const patch = MINI.mod.finishPatch ? MINI.mod.finishPatch(MINI) : {};
     await _pushStateRetry(patch, null);                 // 권위필드(ranks/alive 등) 먼저 기록
     await finishGame(MINI.roomId, MINI.me.token, MINI.game);  // RPC 가 검증·정산·status=finished
-  } catch (e) { console.error('endGame', e); MINI._ended = false; }
+  } catch (e) { console.error('endGame', e); MINI._ended = false; MINI._endRetryAt = MINI.simT() + 2000; }
 };
 
 /* ----------------------------- 그리기 헬퍼 --------------------------- */
