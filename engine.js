@@ -165,3 +165,27 @@ function nextSeat(state, seat) {
 function handScore(ids) {
   return ids.reduce((s, id) => s + (TILES[id].joker ? 30 : TILES[id].num), 0);
 }
+
+// ---- 점수 산정 (표시/미리보기용; 실제 누적은 서버 rk_finish_game 가 권위) ----
+const SCORE_BASE = { 2: [60, -20], 3: [80, 20, -40], 4: [100, 40, 0, -60] };
+
+// finalScores: [{seat, handPoints}] (빈 손=0=1위). 반환: { seat: {rank, delta, won} }
+// 동점은 차지한 슬롯 base 들의 평균. rank=표준 경쟁순위(동점은 낮은 번호 공유, 다음은 건너뜀).
+function computeResults(finalScores, n) {
+  const base = SCORE_BASE[n];
+  if (!base) throw new Error('unsupported player count: ' + n);
+  const sorted = finalScores.slice().sort((a, b) => a.handPoints - b.handPoints || a.seat - b.seat);
+  const out = {};
+  let i = 0;
+  while (i < sorted.length) {
+    let j = i;
+    while (j + 1 < sorted.length && sorted[j + 1].handPoints === sorted[i].handPoints) j++;
+    const gsize = j - i + 1;
+    let sum = 0; for (let s = i; s <= j; s++) sum += base[s];
+    const delta = Math.round(sum / gsize);
+    const rank = i + 1;
+    for (let s = i; s <= j; s++) out[sorted[s].seat] = { rank, delta, won: rank === 1 };
+    i = j + 1;
+  }
+  return out;
+}
