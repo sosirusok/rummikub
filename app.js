@@ -164,7 +164,7 @@ function goHome() {
       <div class="home-cards grow">
         <button class="home-card home-card--rk" data-act="goBoard">
           <span class="home-card__emoji">🎲</span><span class="home-card__title">보드게임</span>
-          <span class="home-card__sub">방 1~5 · 루미큐브 / 다빈치 코드 / 마피아</span></button>
+          <span class="home-card__sub">방 1~5 · 루미큐브 / 다빈치 코드 / 스플랜더 / 마피아</span></button>
         <button class="home-card home-card--mini" data-act="goMini">
           <span class="home-card__emoji">🎮</span><span class="home-card__title">미니게임</span>
           <span class="home-card__sub">방 6~10 · 운빨 대시 / 나도 사람이야</span></button>
@@ -1151,6 +1151,15 @@ const RULES_TEXT = {
     <li><b>술래</b>: 군중 속 진짜 사람을 찾아 <b>제거</b>. 단 <b>AI를 잘못 제거하면 패널티</b>(쿨다운↑). 시간 내 <b>전원 색출</b>하면 승리.</li>
     <li>조작: 왼쪽 아래 조이스틱 이동 + 오른쪽 아래 액션버튼.</li>
   </ul>`,
+  splendor: `<ul>
+    <li>보석 토큰 5색(다이아·사파이어·에메랄드·루비·오닉스) + <b>골드(만능)</b>. 색당 토큰은 인원수별로 <b>2인 4개 · 3인 5개 · 4인 7개</b>, 골드는 항상 5개. (2~4인)</li>
+    <li>개발카드 <b>3단계(아래=1단계 저렴 ~ 위=3단계 고득점)</b>가 각 4장씩 공개돼요. 귀족 타일은 <b>인원+1</b>장 깔리고 각 <b>3점</b>.</li>
+    <li>내 차례엔 <b>딱 한 가지</b>만: ① <b>서로 다른 색 3개</b> 가져오기 ② <b>같은 색 2개</b> 가져오기(그 색이 은행에 <b>4개 이상</b>일 때만) ③ 카드 <b>예약</b>(골드 1개 받음, 최대 3장) ④ 카드 <b>구매</b>.</li>
+    <li>구매한 카드는 <b>영구 보너스</b>가 돼요 — 그 색 비용을 매번 1씩 깎아줘요. <b>골드</b>는 모자란 색을 대신 낼 수 있어요.</li>
+    <li>턴이 끝날 때 토큰이 <b>10개를 넘으면</b> 초과분을 은행에 반납해요.</li>
+    <li>내 카드 보너스가 어떤 귀족의 요구 색 개수를 채우면 그 <b>귀족이 자동으로 방문</b>(+3점).</li>
+    <li><b>15점</b>에 먼저 도달하면 그 <b>라운드를 끝까지</b> 진행한 뒤 <b>최다 점수</b>가 승리. 동점이면 <b>구매한 카드가 적은</b> 쪽이 이겨요.</li>
+  </ul>`,
   mafia: `<ul>
     <li>역할: <b>마피아 1</b> · <b>경찰 1</b> · <b>의사 1</b> · 나머지 <b>시민</b>. 내 역할은 나만 봐요(서버가 비밀 보관). (4~12인, 4명↑ 시작)</li>
     <li><b>밤</b>: 마피아는 한 명을 제거, 의사는 한 명을 살리고(자신 가능), 경찰은 한 명을 조사해 마피아 여부를 알아내요. 시민은 잠들어 기다려요.</li>
@@ -1164,7 +1173,7 @@ function rulesBody(game) {
   game = game || 'rummikub';
   const chip = k => `<button class="chip ${game === k ? 'is-active' : ''}" data-act="rulesGame" data-game="${k}">${GAME_LOGO[k]} ${GAME_SHORT[k]}</button>`;
   return `<div class="rules">
-    <div class="game-select rules__pick">${['rummikub', 'davinci', 'mafia', 'race', 'hunt'].map(chip).join('')}</div>
+    <div class="game-select rules__pick">${['rummikub', 'davinci', 'splendor', 'mafia', 'race', 'hunt'].map(chip).join('')}</div>
     <h3 class="rules__title" style="--tc:${tierForScore(0).color}">${GAME_LOGO[game]} ${GAME_NAME[game]}</h3>
     <div class="rules__body">${RULES_TEXT[game]}</div>
   </div>`;
