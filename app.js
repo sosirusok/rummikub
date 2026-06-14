@@ -329,7 +329,9 @@ async function onPresence(state) {
   const earliest = MEMBERS.slice().sort((a, b) => new Date(a.joined_at) - new Date(b.joined_at));
   const janitor = earliest.find(m => presentIds.includes(m.user_id));
   if (!janitor || janitor.user_id !== ME.id) return;
-  const absent = MEMBERS.filter(m => !presentIds.includes(m.user_id));
+  const nowMs = Date.now();
+  // 갓 입장한 멤버는 presence track 도착 전이라 즉시 정리 보류(8초 유예). 진짜 유령은 서버 rk_reap_stale 가 정리.
+  const absent = MEMBERS.filter(m => !presentIds.includes(m.user_id) && nowMs - new Date(m.joined_at).getTime() > 8000);
   for (const m of absent) await deleteMember(ROOM_ID, m.user_id);
   if (ROOM.host_id && !presentIds.includes(ROOM.host_id)) {
     const next = earliest.find(m => presentIds.includes(m.user_id));
