@@ -100,8 +100,7 @@ function davinciOnRoom(room) {
   const advanced = room.version != null && room.version > DV.version;   // 실제 새 수가 들어왔을 때만(멤버행 변동·동일버전 제외)
   DV.room = room; DV.state = room.state || {};
   DV.version = room.version;
-  if (advanced) { DV.jokerMove = null; if (DV.pick) { DV.pick = null; closeSheet(); } }   // 멤버행 변동만으론 시트/이동 유지
-  dvRender();
+  if (advanced) { DV.jokerMove = null; if (DV.pick) { DV.pick = null; closeSheet(); } dvRender(); }   // 버전 실제 증가 시만 렌더(멤버행·하트비트 churn 방지)
   dvMaybeStartPlay();
   dvSkipDeparted();
   dvMaybeFinish();

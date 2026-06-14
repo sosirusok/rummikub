@@ -96,8 +96,8 @@ function splendorOnRoom(room){
   if(room.version!=null && room.version<SP.version) return;
   const adv = room.version==null || room.version>SP.version;
   SP.room=room; SP.state=room.state||{}; SP.version=room.version;
-  if(adv){ SP.pick=[]; SP.discard=[]; }
-  spRender(); spSkipDeparted(); spMaybeFinish();
+  if(adv){ SP.pick=[]; SP.discard=[]; spRender(); }   // 버전이 실제로 오른 경우만 렌더(멤버행·하트비트 churn 으로 전체 재렌더 방지)
+  spSkipDeparted(); spMaybeFinish();
 }
 function splendorStop(){ SP.on=false; SP.pick=[]; SP.discard=[]; SP.room=SP.state=null; SP.roomId=null; }
 
@@ -280,7 +280,7 @@ async function spTake(){
   else { toast('서로 다른 3색 1개씩, 또는 같은색 2개(은행4↑)'); return; }
   const picks=SP.pick.slice();
   const ok=await spCommit(s=>{
-    if(Number(s.turn)!==Number(SP.mySeat)) return null;
+    if(s.ranks || Number(s.turn)!==Number(SP.mySeat)) return null;
     for(const i of new Set(picks)) if(s.bank[i] < picks.filter(x=>x===i).length) return null;
     picks.forEach(i=>{ s.bank[i]--; s.P[SP.mySeat].tok[i]++; });
     spLog(s, `🪙 ${s.names[SP.mySeat]} 토큰 ${picks.length}개`);
@@ -304,7 +304,7 @@ function spOpenCard(id){
 async function spBuy(id){
   closeSheet(); if(!spIsMyTurn()) return;
   const ok=await spCommit(s=>{
-    if(Number(s.turn)!==Number(SP.mySeat)) return null;
+    if(s.ranks || Number(s.turn)!==Number(SP.mySeat)) return null;
     const c=spCardById(id); const p=s.P[SP.mySeat];
     const pay=spPay(s, SP.mySeat, c); if(!pay) return null;
     // 위치: 보이는 카드 or 예약카드
@@ -325,7 +325,7 @@ async function spBuy(id){
 async function spReserve(id, t){
   closeSheet(); if(!spIsMyTurn()) return;
   const ok=await spCommit(s=>{
-    if(Number(s.turn)!==Number(SP.mySeat)) return null;
+    if(s.ranks || Number(s.turn)!==Number(SP.mySeat)) return null;
     const p=s.P[SP.mySeat]; if(p.resv.length>=3) return null;
     let cid=id;
     if(cid==null){ if(!s.deck[t] || !s.deck[t].length) return null; cid=s.deck[t].shift(); }
@@ -343,6 +343,7 @@ async function spDiscardGo(){
   if(spMyTok(SP.state)-SP.discard.length>10) return;
   const disc=SP.discard.slice();
   const ok=await spCommit(s=>{
+    if(s.ranks || Number(s.turn)!==Number(SP.mySeat)) return null;   // 종료/내 턴 아님이면 반납 미적용
     const p=s.P[SP.mySeat];
     const cnt={}; disc.forEach(i=>cnt[i]=(cnt[i]||0)+1);
     for(const i in cnt){ if(p.tok[i]<cnt[i]) return null; p.tok[i]-=cnt[i]; s.bank[i]+=cnt[i]; }
@@ -402,9 +403,17 @@ async function spSkipDeparted(){
   if(spIsLive(s, Number(s.turn))) return;
   const seats=spSeats(s); const live=seats.filter(x=>spIsLive(s,x));
   if(!live.length || Number(live[0])!==Number(SP.mySeat)) return;
-  const ok=await spCommit(base=>{ if(base.ranks) return null; if(spIsLive(base, Number(base.turn))) return null;
-    spLog(base, `🚪 ${base.names[base.turn]} 자리비움 — 턴 넘김`); base.turn=spNextSeat(base, base.turn);
-    if(base.lastRound && Number(base.turn)===Number(base.firstSeat)) return spDoFinish(base); return base; });
+  const ok=await spCommit(base=>{
+    if(base.ranks) return null; if(spIsLive(base, Number(base.turn))) return null;
+    // firstSeat(라운드 경계) 플레이어가 나갔으면 살아있는 다음 좌석으로 옮김 — 경계 도달 불가로 마지막 라운드가 안 끝나는 것 방지
+    if(!spIsLive(base, Number(base.firstSeat))){ const ls=spSeats(base).filter(x=>spIsLive(base,x)); if(ls.length) base.firstSeat=ls[0]; }
+    // 연속으로 비어있는 좌석을 한 번에 건너뜀(턴 멈춤 방지). 안전 가드로 무한루프 차단.
+    let guard=Number(base.n||spSeats(base).length)+1;
+    while(guard-- > 0 && !spIsLive(base, Number(base.turn))){
+      spLog(base, `🚪 ${base.names[base.turn]} 자리비움 — 턴 넘김`); base.turn=spNextSeat(base, base.turn);
+      if(base.lastRound && Number(base.turn)===Number(base.firstSeat)) return spDoFinish(base);
+    }
+    return base; });
   if(ok){ spRender(); spMaybeFinish(); }
 }
 async function spMaybeFinish(){
