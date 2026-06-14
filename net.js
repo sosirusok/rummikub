@@ -88,7 +88,7 @@ async function fetchAllMembers() {
 
 // 현재 게임 기준 표시 스냅샷 + 꾸미기 미러
 function memberSnapshot(me, game) {
-  const g = (me.games && me.games[game]) || { score: 0, wins: 0, losses: 0, streak: 0 };
+  const g = (game && me.games && me.games[game]) || { score: 0, wins: 0, losses: 0, streak: 0 };
   const disp = me.display || { game: null, score: 0 };
   return {
     score: g.score || 0, wins: g.wins || 0, losses: g.losses || 0, streak: g.streak || 0,
@@ -97,7 +97,7 @@ function memberSnapshot(me, game) {
 }
 
 async function enterRoom(roomId, me, game) {
-  const snap = memberSnapshot(me, game || 'rummikub');
+  const snap = memberSnapshot(me, game);
   await sb.from('room_members').upsert({
     room_id: roomId, user_id: me.id, seat: null, role: 'player',
     name: me.real_name, ...snap, joined_at: new Date().toISOString(),
@@ -107,7 +107,7 @@ async function enterRoom(roomId, me, game) {
 }
 // 방의 게임이 바뀌었을 때(미니게임 방장 선택) 내 표시 스냅샷 갱신
 async function updateMemberSnapshot(roomId, me, game) {
-  const snap = memberSnapshot(me, game || 'rummikub');
+  const snap = memberSnapshot(me, game);
   await sb.from('room_members').update(snap).eq('room_id', roomId).eq('user_id', me.id);
 }
 // 원자적 착석 — 유령좌석/동시경합 차단
@@ -154,9 +154,6 @@ async function pushState(roomId, state, expectedVersion) {
     .eq('id', roomId).eq('version', expectedVersion).select();
   if (data && data.length) return { ok: true, version: data[0].version, room: data[0] };
   return { ok: false };
-}
-async function resetRoomToWaiting(roomId) {
-  await sb.from('rooms').update({ status: 'waiting', state: null, version: 0 }).eq('id', roomId);
 }
 // 원자적 퇴장(서버 RPC). 마지막 1명이 나가면 방을 빈 대기방으로 리셋. RPC 미적용 시 옛 leaveRoom 폴백.
 async function leaveRoomRpc(roomId, me) {

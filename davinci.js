@@ -221,6 +221,7 @@ function dvRender() {
         <div class="turn-pill ${myTurn ? 'is-mine' : ''}">${myTurn ? '내 차례' : esc(curName) + ' 차례'}</div>
         <span class="room-tag">방${DV.roomId}·🂠${s.pool.length}</span>
         <span class="dv-alive">생존 ${dvAliveSeats(s).length}/${s.n}</span>
+        <button class="btn btn--ghost" data-act="leave" style="margin-left:6px">나가기</button>
       </header>
       <ul class="dv-oppos grow scrollable">${oppoHTML}</ul>
       ${logHTML ? `<ul class="dv-log">${logHTML}</ul>` : ''}

@@ -41,9 +41,41 @@ function mafiaEnter(room, me, mySeat, amSpectator) {
 function mafiaOnRoom(room) {
   if (!MF.on || room.id !== MF.roomId) return;
   if (room.version != null && room.version < MF.version) return;
+  const prev = MF.state || {};
   MF.room = room; MF.state = room.state || {}; MF.version = room.version;
   mfSelfHealStart();
+  // 낮 투표만 바뀐 경우(같은 day·생존자 동일) 부분 렌더 — 매 표마다 전체 재구축(O(N^2)) 회피
+  const cur = MF.state;
+  if (SCREEN === 'mafia' && cur.phase === 'day' && prev.phase === 'day' && cur.day === prev.day
+      && mfAliveSig(cur) === mfAliveSig(prev)) { mfUpdateVotes(); return; }
   mfRefreshView();
+}
+function mfAliveSig(s) { return mfAliveSeats(s || {}).join(','); }
+// 낮 투표 부분 갱신: 각 카드 표 배지/내표 강조만, 투표자 푸터만 갱신(전체 innerHTML 재구축 X)
+function mfUpdateVotes() {
+  const s = MF.state; if (!s) return;
+  const myVote = (s.votes && MF.mySeat != null) ? s.votes[MF.mySeat] : undefined;
+  document.querySelectorAll('.mf-player').forEach(el => {
+    const seat = Number(el.dataset.seat); if (!seat) return;
+    const vc = (s.voteCount && s.voteCount[seat]) || 0;
+    let badge = el.querySelector('.mf-player__votes');
+    if (mfAlive(s, seat) && vc) {
+      if (!badge) { badge = document.createElement('span'); badge.className = 'mf-player__votes'; el.appendChild(badge); }
+      badge.textContent = '🗳 ' + vc;
+    } else if (badge) { badge.remove(); }
+    el.classList.toggle('is-myvote', Number(myVote) === seat);
+  });
+  const iAmAlive = MF.mySeat != null && mfAlive(s, MF.mySeat);
+  if (!MF.amSpectator && iAmAlive && MF.view && MF.view.role) {
+    const foot = document.querySelector('.dv-foot'); if (foot) foot.innerHTML = mfDayAction(s, myVote);
+  }
+}
+function mfDayAction(s, myVote) {
+  if (typeof myVote !== 'undefined') {
+    const who = Number(myVote) === 0 ? '기권' : esc(mafiaName(s, Number(myVote)));
+    return `<div class="mf-note">🗳 투표함: <b>${who}</b> · 다른 사람을 눌러 변경 가능<div class="mf-abstain-row"><button class="btn btn--ghost" data-act="mf_abstain">기권</button></div></div>`;
+  }
+  return `<div class="mf-note mf-note--act">☀️ 토론 후, 처형할 사람을 위에서 고르세요.<div class="mf-abstain-row"><button class="btn btn--ghost" data-act="mf_abstain">기권</button></div></div>`;
 }
 function mafiaStop() {
   MF.on = false;
@@ -109,10 +141,14 @@ function mfTick() {
 function mfUpdateCountdown() {
   const el = document.querySelector('[data-role="mfTimer"]'); if (!el) return;
   const s = MF.state;
-  if (!s || (s.phase !== 'night' && s.phase !== 'day') || !MF.room || !MF.room.turn_started_at) { el.textContent = ''; return; }
+  if (!s || (s.phase !== 'night' && s.phase !== 'day') || !MF.room || !MF.room.turn_started_at) { el.textContent = ''; el.dataset.state = 'normal'; MF.lastDanger = false; return; }
   const lim = s.phase === 'night' ? MF_NIGHT_SEC : MF_DAY_SEC;
   const rem = Math.max(0, Math.ceil(lim - (serverNow() - new Date(MF.room.turn_started_at).getTime()) / 1000));
   el.textContent = '⏱ ' + rem + 's';
+  const st = rem <= 10 ? 'danger' : rem <= 20 ? 'warn' : 'normal';   // 루미와 동일한 위험 경고
+  el.dataset.state = st;
+  if (st === 'danger' && !MF.lastDanger) { MF.lastDanger = true; if (navigator.vibrate) navigator.vibrate(60); }
+  if (st !== 'danger') MF.lastDanger = false;
 }
 
 /* ----------------------------- 종료 정산 ---------------------------------- */
@@ -188,15 +224,15 @@ function mfRender() {
     const alive = mfAlive(s, seat);
     const isMe = seat === MF.mySeat;
     const vc = (s.voteCount && s.voteCount[seat]) || 0;
-    let actAttr = '', target = false;
+    let act = '', target = false;
     if (alive) {
       if (isNight && iAmAlive && myRole && myRole !== 'citizen' && !acted) {
         const canTarget = (myRole === 'doctor') || !isMe;       // 마피아/경찰은 자신 불가, 의사는 가능
-        if (canTarget) { actAttr = `data-act="mf_night" data-seat="${seat}"`; target = true; }
-      } else if (isDay && iAmAlive) { actAttr = `data-act="mf_vote" data-seat="${seat}"`; target = true; }
+        if (canTarget) { act = 'data-act="mf_night"'; target = true; }
+      } else if (isDay && iAmAlive) { act = 'data-act="mf_vote"'; target = true; }
     }
     const sel = (isDay && Number(myVote) === seat) ? 'is-myvote' : '';
-    return `<button class="mf-player ${alive ? '' : 'is-dead'} ${isMe ? 'is-me' : ''} ${target ? 'is-target' : ''} ${sel}" ${actAttr}>
+    return `<button class="mf-player ${alive ? '' : 'is-dead'} ${isMe ? 'is-me' : ''} ${target ? 'is-target' : ''} ${sel}" data-seat="${seat}" ${act}>
       <span class="mf-player__seat">${seat}</span>
       <span class="mf-player__name">${esc(mafiaName(s, seat))}${isMe ? ' (나)' : ''}</span>
       ${alive ? (isDay && vc ? `<span class="mf-player__votes">🗳 ${vc}</span>` : '') : '<span class="mf-player__dead">💀</span>'}
@@ -234,12 +270,7 @@ function mfRender() {
       action = `<div class="mf-note mf-note--act">${R.emoji} ${R.verb} 대상을 위에서 고르세요${myRole === 'doctor' ? ' (자신 포함)' : ''}.</div>`;
     }
   } else if (isDay) {
-    if (typeof myVote !== 'undefined') {
-      const who = Number(myVote) === 0 ? '기권' : esc(mafiaName(s, Number(myVote)));
-      action = `<div class="mf-note">🗳 투표함: <b>${who}</b> · 다른 사람을 눌러 변경 가능 <button class="btn btn--ghost" data-act="mf_abstain">기권</button></div>`;
-    } else {
-      action = `<div class="mf-note mf-note--act">☀️ 토론 후, 처형할 사람을 위에서 고르세요. <button class="btn btn--ghost" data-act="mf_abstain">기권</button></div>`;
-    }
+    action = mfDayAction(s, myVote);
   }
 
   const logHTML = (s.log || []).slice(-6).reverse().map(l => `<li>${esc(l)}</li>`).join('');
@@ -251,6 +282,7 @@ function mfRender() {
         <span class="mf-timer" data-role="mfTimer"></span>
         <span class="room-tag">방${MF.roomId}</span>
         <span class="dv-alive">생존 ${mfAliveSeats(s).length}/${s.n}</span>
+        <button class="btn btn--ghost" data-act="leave" style="margin-left:6px">나가기</button>
       </header>
       ${roleCard}
       <div class="mf-grid grow scrollable">${grid}</div>

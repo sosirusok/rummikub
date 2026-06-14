@@ -72,6 +72,7 @@ function miniStart(room, me, mySeat, amSpectator) {
   setScreen('mini');
   app().innerHTML = `
     <section class="screen screen--mini">
+      <button class="btn btn--ghost mini-leave" data-act="leave" style="position:absolute;top:max(8px,env(safe-area-inset-top));left:8px;z-index:9">← 나가기</button>
       <div class="mini-hud" id="miniHud"></div>
       <canvas id="miniCanvas"></canvas>
       <div class="mini-overlay" id="miniOverlay"></div>

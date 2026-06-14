@@ -280,10 +280,35 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
   .home-card{min-height:104px; padding:16px 12px;}
   .home-card__emoji{font-size:36px;} .home-card__title{font-size:19px;}
   .tab{font-size:13px; min-height:38px;} .mini-hud{font-size:11px;}
+  /* 헤더 버튼 줄바꿈(랭킹/로그아웃 잘림 방지) */
+  .lobby__top,.room__top{flex-wrap:wrap; row-gap:6px; padding:10px;}
+  .lobby__top .btn,.room__top .btn{padding:0 9px; font-size:13px;}
+  .lobby__top .spacer,.room__top .spacer{flex-basis:100%; height:0;}
+  .lobby__hello{flex:1 1 100%; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  /* 로비 방 카드 2줄(게임명 풀폭) */
+  .room-card{grid-template-columns:auto 1fr auto; row-gap:3px; padding:12px;}
+  .room-card__id{order:1;} .room-card__count{order:2; justify-self:end;}
+  .room-card__state{order:3; justify-self:end;} .room-card__game{order:4; grid-column:1 / -1; font-size:11px;}
+  /* 루미 상대 스트립을 자기 줄로 */
+  .oppo-strip{max-width:100%; margin-left:0; flex-basis:100%; order:5; margin-top:2px;}
+  .oppo__name{max-width:64px;}
+  /* 결과/랭킹 줄바꿈·말줄임 */
+  .screen--result .rank-row{padding:10px;}
+  .rr__l1{flex-wrap:wrap; row-gap:2px;} .rank-row__delta{flex:0 0 auto;} .rank-row__place{min-width:28px;}
+  .board-rank__row{gap:6px; padding:10px 8px; font-size:13px;}
+  .board-rank__row span:nth-child(2){min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  /* 다빈치 내 패가 길어도 푸터(액션) 안 밀리게 */
+  .dv-mine{max-height:28vh;}
 }
 @media (max-height:430px){
   .vctl--pad{width:84px; height:84px; bottom:10px;}
   .vctl--act{width:58px; height:58px; bottom:14px;}
+  /* 가로/낮은 화면: 루미 보드가 안 깔리게 손패·도크·상단바 축소 */
+  :root{--tile-w:clamp(18px,7vw,26px);}
+  .rack{max-height:24vh; min-height:0;}
+  .dock{padding:4px 8px;} .action-bar .btn{min-height:36px;}
+  .topbar{padding:3px 8px; padding-top:max(3px,env(safe-area-inset-top));}
+  .meld-hint{padding:3px 10px;}
 }
 
 /* ===================== 게임 규칙 ===================== */
@@ -404,3 +429,20 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
   .board{padding:14px;} .dock{padding:10px 14px;}
   .board-set:hover,.new-set-zone:hover{border-color:var(--accent);}
 }
+
+/* ===================== R3: 편의/폴더폰/마피아 보강 ===================== */
+.mini-leave{pointer-events:auto;}                 /* 미니게임 좌상단 나가기 보장 */
+.dv-mine{max-height:34vh; overflow-y:auto;}        /* 내 패 길어도 푸터 보존 */
+.dv-hand{max-height:122px; overflow-y:auto;}       /* 상대 패가 행 부풀리지 않게 */
+/* 앉을 수 있는 좌석만 강조 + 못 앉는 좌석 거짓 클릭감 제거 */
+.seat.is-empty.is-joinable{border-color:var(--accent); color:var(--accent); font-weight:800; cursor:pointer;}
+.seat.is-empty:not(.is-joinable){opacity:.5; cursor:default;}
+/* 마피아 타이머: 루미와 동일한 위험 경고(색·깜빡임) */
+.mf-timer{font-size:15px; font-weight:800; color:var(--ink-dim); white-space:nowrap;}
+.mf-timer[data-state="warn"]{color:var(--warn);}
+.mf-timer[data-state="danger"]{color:var(--danger); animation:blink 1s steps(2,start) infinite;}
+/* 마피아 기권 버튼을 문장 밖 자기 줄로 */
+.mf-abstain-row{display:flex; justify-content:center; margin-top:8px;}
+.mf-abstain-row .btn{min-width:120px;}
+/* 홈 직전방 이어가기 칩 */
+.resume-chip{margin:0 14px 8px;}

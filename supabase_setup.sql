@@ -701,6 +701,30 @@ alter table public.user_game_stats drop constraint if exists user_game_stats_gam
 alter table public.user_game_stats add  constraint user_game_stats_game_check
   check (game in ('rummikub','davinci','race','hunt','mafia'));
 
+-- ---- rk_leaderboard: 'mafia' 포함 (없으면 마피아 요청이 rummikub 로 폴백돼 티어가 "공유"처럼 보임) ----
+create or replace function public.rk_leaderboard(p_game text default 'rummikub')
+returns table(id uuid, username citext, real_name text, score int, wins int, losses int, streak int)
+language sql security definer set search_path = public, extensions as $$
+  select u.id, u.username, u.real_name, s.score, s.wins, s.losses, s.streak
+  from public.user_game_stats s join public.users u on u.id = s.user_id
+  where s.game = case when p_game in ('rummikub','davinci','race','hunt','mafia') then p_game else 'rummikub' end
+  order by s.score desc, s.wins desc, u.real_name asc limit 100;
+$$;
+
+-- ---- rk_set_display: 'mafia' 꾸미기 표시 허용 ----
+create or replace function public.rk_set_display(p_token uuid, p_game text)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare v_user uuid; v_score int;
+begin
+  select id into v_user from public.users where token = p_token;
+  if v_user is null then raise exception 'BAD_TOKEN'; end if;
+  if p_game is not null and p_game not in ('rummikub','davinci','race','hunt','mafia') then raise exception 'BAD_GAME'; end if;
+  update public.users set display_game = p_game where id = v_user;
+  if p_game is null then return jsonb_build_object('game', null, 'score', 0); end if;
+  select coalesce(score,0) into v_score from public.user_game_stats where user_id = v_user and game = p_game;
+  return jsonb_build_object('game', p_game, 'score', coalesce(v_score,0));
+end; $$;
+
 -- ---- 비밀 역할 저장소 (realtime 미발행 — RPC 로만 접근, 누구도 남의 역할을 못 봄) ----
 create table if not exists public.mafia_secrets (
   room_id      int  not null,
@@ -894,9 +918,9 @@ begin
   elsif p_game = 'davinci' then
     gm := greatest(0.42, 1 - L*0.011); lm := least(2.08, 1 + L*0.020); tx := L*0.60;
     mw := greatest(6, round(20 - L*0.34)::int); br := 0.10;
-  elsif p_game = 'mafia' then
-    gm := greatest(0.45, 1 - L*0.011); lm := least(2.08, 1 + L*0.020); tx := L*0.45;
-    mw := greatest(6, round(16 - L*0.28)::int); br := 0.10;
+  elsif p_game = 'mafia' then     -- 루미와 다른 결: 마진無 진영 승패, 낮은 tax·둥근 큰 minWin·연승보너스 큼
+    gm := greatest(0.50, 1 - L*0.010); lm := least(2.00, 1 + L*0.018); tx := L*0.30;
+    mw := greatest(10, round(24 - L*0.40)::int); br := 0.12;
   elsif p_game = 'race' then
     gm := greatest(0.45, 1 - L*0.011); lm := least(2.05, 1 + L*0.019); tx := L*0.32;
     mw := greatest(4, round(12 - L*0.18)::int); br := 0.08;
@@ -1173,7 +1197,7 @@ declare
   v_seats text[]; v_n int; v_results jsonb := '{}'::jsonb;
   i int; v_seat text; v_uid uuid; v_role text; v_camp text; v_won boolean;
   v_curscore int; v_curstreak int; v_perf numeric; v_tr text; v_delta int; v_ns int; r record; v_w int; v_l int;
-  CAP constant int := 90;
+  CAP constant int := 80;
 begin
   select id into v_user from public.users where token = p_token;
   if v_user is null then raise exception 'BAD_TOKEN'; end if;
@@ -1201,10 +1225,10 @@ begin
       v_curscore := coalesce(v_curscore,0); v_curstreak := coalesce(v_curstreak,0);
     end if;
     if v_camp = 'mafia' then
-      v_perf := case when v_won then 14 else -10 end;
-      v_tr   := case when v_won then 'apply' else 'maintain' end;   -- 1인 역할: 패배 시 연착륙
+      v_perf := case when v_won then 22 else -13 end;   -- 1 vs 다수: 이기면 크게, 져도 연착륙(maintain)
+      v_tr   := case when v_won then 'apply' else 'maintain' end;
     else
-      v_perf := case when v_won then 8 else -8 end;
+      v_perf := case when v_won then 13 else -9 end;     -- 시민 진영: 작고 꾸준한 변동
       v_tr   := case when v_won then 'apply' else 'break' end;
     end if;
     select * into r from public.rk_apply_score('mafia', v_perf, v_curscore, v_curstreak, v_won, v_tr);
@@ -1234,3 +1258,13 @@ grant execute on function public.mf_night_action(uuid,int,int)   to anon, authen
 grant execute on function public.mf_day_vote(uuid,int,int)       to anon, authenticated;
 grant execute on function public.mf_resolve_phase(uuid,int,text) to anon, authenticated;
 grant execute on function public.rk_finish_mafia(uuid,int)       to anon, authenticated;
+
+-- ---- 마피아 점수 1회 초기화(새 점수체계 적용 · 재실행해도 단 한 번만) ----
+create table if not exists public.app_migrations (key text primary key, applied_at timestamptz not null default now());
+do $$ begin
+  if not exists (select 1 from public.app_migrations where key = 'mafia_reset_20260614') then
+    delete from public.user_game_stats where game = 'mafia';          -- 모두의 마피아 점수/연승/전적 0으로
+    update public.users set display_game = null where display_game = 'mafia';  -- 마피아 꾸미기 표시 해제
+    insert into public.app_migrations(key) values ('mafia_reset_20260614');
+  end if;
+end $$;

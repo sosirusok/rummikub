@@ -74,6 +74,7 @@ function handleAct(act, el) {
     case 'backHome': goHome(); break;
     case 'goRank': showRank(RANK_GAME); break;
     case 'goTiers': showTiers(); break;
+    case 'goDeco': showDeco(); break;
     case 'goRules': showRules(RULES_GAME); break;
     case 'rulesGame': RULES_GAME = el.dataset.game; if (SCREEN === 'room') renderWaiting(); else showRules(RULES_GAME); break;
     case 'rankGame': RANK_GAME = el.dataset.game; showRank(RANK_GAME); break;
@@ -87,7 +88,6 @@ function handleAct(act, el) {
     case 'setGame': doSetGame(el.dataset.game); break;
     case 'start': doStart(); break;
     case 'leave': doLeave(); break;
-    case 'again': netCall(() => resetRoomToWaiting(ROOM_ID)); break;
     case 'submit': onSubmit(); break;
     case 'draw': onDraw(); break;
     case 'undo': doUndo(); break;
@@ -152,9 +152,11 @@ function goHome() {
         ${headerHTML()}<span class="spacer"></span>
         <button class="btn btn--ghost" data-act="goRules">규칙</button>
         <button class="btn btn--ghost" data-act="goTiers">티어</button>
+        <button class="btn btn--ghost" data-act="goDeco">꾸미기</button>
         <button class="btn btn--ghost" data-act="goRank">랭킹</button>
         <button class="btn btn--ghost" data-act="logout">로그아웃</button>
       </header>
+      <div id="resumeChip"></div>
       <div class="home-cards grow">
         <button class="home-card home-card--rk" data-act="goBoard">
           <span class="home-card__emoji">🎲</span><span class="home-card__title">보드게임</span>
@@ -169,10 +171,19 @@ function goHome() {
       <p class="muted center" style="padding:10px 14px">로그인 후 게임을 고르세요. 티어·전적·꾸미기는 게임별로 따로 쌓여요.</p>
     </section>`;
   apiMe(TOKEN).then(p => { if (p) { ME = p; TOKEN = p.token; if (SCREEN === 'home') { const h = document.querySelector('.screen--home .lobby__hello'); if (h) h.outerHTML = headerHTML(); } } });
+  // 직전 방이 아직 진행/대기 중이고 내가 멤버면 '이어서 입장' 칩 표시
+  const lr = Number(localStorage.getItem('rk_last_room'));
+  if (lr) fetchRoom(lr).then(async r => {
+    if (SCREEN !== 'home' || !r || (r.status !== 'waiting' && r.status !== 'playing')) { localStorage.removeItem('rk_last_room'); return; }
+    const ms = await fetchMembers(lr);
+    if (!ms.some(m => m.user_id === ME.id)) { localStorage.removeItem('rk_last_room'); return; }
+    const c = document.querySelector('#resumeChip');
+    if (c) c.innerHTML = `<button class="btn btn--primary resume-chip" data-act="enterRoom" data-room="${lr}">🔄 방 ${lr} 이어서 입장</button>`;
+  }).catch(() => {});
 }
 
 /* ============================ 로비 ==================================== */
-function cleanupLobby() { if (lobbyCh) { leaveChannel(lobbyCh); lobbyCh = null; } }
+function cleanupLobby() { if (lobbyCh) { leaveChannel(lobbyCh); lobbyCh = null; } _lobbySig = null; }
 function cleanupRoom() {
   stopTimer(); miniStop(); davinciStop(); mafiaStop(); disarmResultLeave();
   if (roomDbCh) { leaveChannel(roomDbCh); roomDbCh = null; }
@@ -184,23 +195,28 @@ function cleanupRoom() {
 function cleanupAll() { cleanupLobby(); cleanupRoom(); ROOM_ID = null; }
 
 async function goLobby(mode) {
-  MODE = mode; cleanupRoom(); ROOM_ID = null; setScreen('lobby');
+  MODE = mode; _lobbySig = null; cleanupRoom(); ROOM_ID = null; setScreen('lobby');
   if (!lobbyCh) lobbyCh = subscribeLobby(() => scheduleLobbyRefresh());
   await refreshLobby();
   apiMe(TOKEN).then(p => { if (p) { ME = p; TOKEN = p.token; } });
 }
-let _reapAt = 0;
+let _reapAt = 0, _lobbySig = null;
 async function refreshLobby() {
   if (SCREEN !== 'lobby') return;
   const lo = MODE === 'mini' ? 6 : 1, hi = MODE === 'mini' ? 10 : 5;
   const [rooms, members] = await Promise.all([fetchRooms(), fetchAllMembers()]);
   const seatCount = {};
   members.forEach(m => { if (m.seat != null && m.role === 'player') seatCount[m.room_id] = (seatCount[m.room_id] || 0) + 1; });
+  const vis = rooms.filter(r => r.id >= lo && r.id <= hi);
   // 보이는 방들 유령정리(throttle)
   if (Date.now() - _reapAt > 4000) {
     _reapAt = Date.now();
-    rooms.filter(r => r.id >= lo && r.id <= hi).forEach(r => { reapStale(r.id); });
+    vis.forEach(r => { reapStale(r.id); });
   }
+  // 보이는 칸 내용 동일하면 재렌더 생략(마피아 표/밤 version 증가로 인한 무의미 재구축 차단)
+  const sig = vis.map(r => r.id + ':' + r.status + ':' + (r.game || '') + ':' + (seatCount[r.id] || 0)).join('|');
+  if (sig === _lobbySig && SCREEN === 'lobby') return;
+  _lobbySig = sig;
   app().innerHTML = `
     <section class="screen screen--lobby">
       <header class="lobby__top">
@@ -212,7 +228,7 @@ async function refreshLobby() {
         ${rooms.filter(r => r.id >= lo && r.id <= hi).map(r => {
           const c = seatCount[r.id] || 0;
           const playing = r.status !== 'waiting';
-          const cap = r.game ? capOf(r.game) : 8;
+          const cap = r.game ? capOf(r.game) : (r.id <= 5 ? 4 : 8);   // 게임 미선택 보드룸=4(서버 일치)
           const gname = r.game ? GAME_NAME[r.game] : '게임 선택 전';
           return `<li class="room-card ${playing ? 'is-playing' : ''}" data-act="enterRoom" data-room="${r.id}">
             <span class="room-card__id">방 ${r.id}</span>
@@ -235,6 +251,7 @@ async function enterRoomFlow(roomId) {
     ROOM_ID = roomId;
     await reapStale(roomId);
     const room0 = await fetchRoom(roomId);
+    ROOM = room0;                       // 선반영: curGame()/refreshLbCache 가 'rummikub' 폴백 대신 실제 게임 사용
     await enterRoom(roomId, ME, room0 ? room0.game : null);
     mySnapGame = (room0 && room0.game) || null;
     await refreshLbCache(true);
@@ -242,6 +259,7 @@ async function enterRoomFlow(roomId) {
     presenceCh = joinPresence(roomId, ME, { name: ME.real_name }, onPresence);
     hbIv = setInterval(() => heartbeat(ME.token, roomId), 4000);
     WAIT_TAB = 'seat';
+    try { localStorage.setItem('rk_last_room', String(roomId)); } catch (e) {}   // 홈 '이어서 입장'용
     await refreshRoom();
   } finally { busy = false; }
 }
@@ -260,12 +278,13 @@ function scheduleLobbyRefresh() { clearTimeout(_lobbyT); _lobbyT = setTimeout(()
 
 async function refreshRoom() {
   if (ROOM_ID == null) return;
-  ROOM = await fetchRoom(ROOM_ID);
-  MEMBERS = await fetchMembers(ROOM_ID);
+  const [room, members] = await Promise.all([fetchRoom(ROOM_ID), fetchMembers(ROOM_ID)]);   // 직렬 2회 → 병렬 1회(지연↓)
+  ROOM = room; MEMBERS = members;
   if (!ROOM) { goLobby(MODE); return; }
   // 내 멤버 행이 사라짐 = 방장 강퇴 / 개발자 강제초기화 / 유령정리 → 홈으로.
   // (playing 중 일시적 fetch 실패로 빈 배열이 와도 게임이 안 끊기도록 playing 은 제외)
   if (!MEMBERS.some(m => m.user_id === ME.id) && (MEMBERS.length > 0 || ROOM.status !== 'playing')) {
+    try { localStorage.removeItem('rk_last_room'); } catch (e) {}
     toast('방에서 나왔어요'); cleanupRoom(); ROOM_ID = null; goHome(); return;
   }
   // 버전 역행 가드: 늦게 도착한 옛 스냅샷이 최신 화면을 덮지 않게(결과→게임 되돌림 방지). 대기는 버전이 안 올라가므로 동일 버전은 통과.
@@ -276,6 +295,10 @@ async function refreshRoom() {
 
   if (ROOM.status === 'waiting') {
     stopTimer(); miniStop(); davinciStop(); mafiaStop(); disarmResultLeave();
+    const sig = JSON.stringify({ g: ROOM.game, h: ROOM.host_id, ts: ROOM.turn_seconds, tab: WAIT_TAB,
+      m: MEMBERS.map(m => [m.user_id, m.seat, m.role, m.score, m.streak, m.wins, m.losses, m.display_game, m.display_score]).sort() });
+    if (sig === lastRoomSig && SCREEN === 'room') return;   // 대기실 내용 동일 → 재렌더 생략(렉↓)
+    lastRoomSig = sig;
     await refreshLbCache();
     renderWaiting();
   } else if (ROOM.status === 'playing') {
@@ -316,7 +339,7 @@ function timeoutActorId() {
 function renderWaiting() {
   const amHost = ROOM.host_id === ME.id;
   const g = curGame();
-  const cap = g ? capOf(g) : 8;
+  const cap = g ? capOf(g) : (ROOM_ID <= 5 ? 4 : 8);   // 게임 미선택 보드룸=4(서버 일치)
   setScreen('room');
   const tabBtn = (k, label) => `<button class="tab ${WAIT_TAB === k ? 'is-active' : ''}" data-act="waitTab" data-tab="${k}">${label}</button>`;
   app().innerHTML = `
@@ -347,7 +370,7 @@ function waitBody(tab, amHost, g, cap) {
     const m = seatMap[n];
     if (m) {
       const st = statsOf(m.user_id);
-      const sc = st.score ?? m.score ?? 0, wn = st.wins ?? m.wins ?? 0, ls = st.losses ?? m.losses ?? 0, sk = st.streak ?? m.streak ?? 0;
+      const sc = st.score ?? 0, wn = st.wins ?? 0, ls = st.losses ?? 0, sk = st.streak ?? 0;   // 교차게임 스냅샷 폴백 제거
       const isMe = m.user_id === ME.id;
       const nameColor = m.display_game ? m.display_score : null;   // 이름색 = 꾸미기 표시게임
       seats.push(`<li class="seat is-occupied ${isMe ? 'is-me' : ''}" data-seat="${n}">
@@ -358,7 +381,7 @@ function waitBody(tab, amHost, g, cap) {
         </span>${amHost && !isMe ? `<button class="seat__kick" data-act="kick" data-uid="${m.user_id}" aria-label="내보내기">✕</button>` : ''}</li>`);
     } else {
       const canSit = !mySeatNow && !iAmSpectator;
-      seats.push(`<li class="seat is-empty" ${canSit ? `data-act="sit" data-seat="${n}"` : ''}>＋ ${n}번 ${canSit ? '앉기' : ''}</li>`);
+      seats.push(`<li class="seat is-empty${canSit ? ' is-joinable' : ''}" ${canSit ? `data-act="sit" data-seat="${n}"` : ''}>＋ ${n}번${canSit ? ' 앉기' : ''}</li>`);
     }
   }
   let host = '';
@@ -441,14 +464,14 @@ async function doSetGame(game) {
 async function doKick(uid) {
   await netCall(async () => { const r = await kickMember(ROOM_ID, ME, uid); if (r && r.ok === false) toast('내보내기 실패'); await refreshRoom(); });
 }
-async function doLeave() { await netCall(() => leaveRoomRpc(ROOM_ID, ME)); goLobby(MODE); }
+async function doLeave() { try { localStorage.removeItem('rk_last_room'); } catch (e) {} await netCall(() => leaveRoomRpc(ROOM_ID, ME)); goLobby(MODE); }
 async function doSetDisplay(game) {
   await netCall(async () => {
     const r = await apiSetDisplay(TOKEN, game || null);
     if (r.error) { toast(r.error); return; }
     ME.display = r.display; ME.display_game = r.display.game;
-    if (ROOM_ID != null) await updateMemberSnapshot(ROOM_ID, ME, curGame() || 'rummikub');
-    if (SCREEN === 'room') renderWaiting(); else if (SCREEN === 'home') goHome();
+    if (ROOM_ID != null) await updateMemberSnapshot(ROOM_ID, ME, curGame());
+    if (SCREEN === 'room') renderWaiting(); else if (SCREEN === 'deco') showDeco(); else if (SCREEN === 'home') goHome();
   });
 }
 async function doStart() {
@@ -459,7 +482,7 @@ async function doStart() {
     const cap = capOf(game), mn = minOf(game);
     if (seated.length < mn || seated.length > cap) { toast(`${mn}~${cap}명이 앉아야 시작`); return; }
     const seatNums = seated.map(m => m.seat);
-    const scoresMap = {}; seated.forEach(m => { scoresMap[m.seat] = (lbCache[m.user_id] && lbCache[m.user_id].score) ?? m.score ?? 0; });
+    const scoresMap = {}; seated.forEach(m => { scoresMap[m.seat] = (lbCache[m.user_id] && lbCache[m.user_id].score) ?? 0; });
     let st;
     if (game === 'rummikub') {
       st = dealNewGame(seatNums);
@@ -956,7 +979,7 @@ function renderResult() {
         }).join('')}
       </ol>
       <div class="room__actions">
-        <div class="muted center"><b data-role="resultCountdown">10</b>초 후 자동으로 홈으로 나갑니다</div>
+        <div class="muted center"><b data-role="resultCountdown">14</b>초 후 자동으로 홈으로 나갑니다</div>
         <button class="btn btn--primary btn--lg" data-act="leaveNow">지금 홈으로</button>
       </div>
     </section>`;
@@ -967,8 +990,8 @@ function renderResult() {
 
 /* 게임 종료 → 결과 잠깐 보여준 뒤 전원 자동으로 방에서 나가 홈으로(잔상/폐쇄 방지) */
 function armResultLeave() {
-  if (resultLeaveIv) return;   // 이미 카운트다운 중이면 리셋하지 않음(멤버 이탈마다 10초 되돌림 방지)
-  resultLeaveAt = Date.now() + 10000;
+  if (resultLeaveIv) return;   // 이미 카운트다운 중이면 리셋하지 않음(멤버 이탈마다 되돌림 방지)
+  resultLeaveAt = Date.now() + 14000;
   resultLeaveIv = setInterval(() => {
     const el = document.querySelector('[data-role="resultCountdown"]');
     const rem = Math.max(0, Math.ceil((resultLeaveAt - Date.now()) / 1000));
@@ -979,6 +1002,7 @@ function armResultLeave() {
 function disarmResultLeave() { if (resultLeaveIv) { clearInterval(resultLeaveIv); resultLeaveIv = null; } }
 async function doResultAutoLeave() {
   disarmResultLeave();
+  try { localStorage.removeItem('rk_last_room'); } catch (e) {}
   if (ROOM_ID == null) { goHome(); return; }
   const rid = ROOM_ID;
   try { await leaveRoomRpc(rid, ME); } catch (e) {}
@@ -1010,6 +1034,14 @@ function showTiers() {
     <section class="screen">
       <header class="room__top"><button class="btn btn--ghost" data-act="backHome">← 홈</button><b style="margin-left:6px">🏅 티어</b><span class="spacer"></span></header>
       <div class="grow scrollable">${tierLadderHTML(ME.display && ME.display.game ? ME.display.game : null)}</div>
+    </section>`;
+}
+function showDeco() {
+  setScreen('deco');
+  app().innerHTML = `
+    <section class="screen">
+      <header class="room__top"><button class="btn btn--ghost" data-act="backHome">← 홈</button><b style="margin-left:6px">🎀 꾸미기</b><span class="spacer"></span></header>
+      <div class="grow scrollable">${decoBody()}</div>
     </section>`;
 }
 

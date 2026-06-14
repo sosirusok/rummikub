@@ -306,7 +306,7 @@
       let allFound = true, any = false;
       const roles = M.state.roles || {};
       M.seats.forEach(s => {
-        if ((roles[s] || 'hider') === 'hider') { any = true; if (M.h_alive[s] !== false) allFound = false; }
+        if ((roles[s] || 'hider') === 'hider') { any = true; if (isAlive(M, s)) allFound = false; }   // 공유 state 기반(비호스트도 안전)
       });
       if (over || (any && allFound)) {
         M.h_msg = allFound && !over ? '전원 색출! 술래 승' : '시간 종료';
