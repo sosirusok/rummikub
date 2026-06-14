@@ -461,3 +461,74 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .dv-num--joker{width:100%; min-height:46px; margin-bottom:8px; border-radius:8px; border:1px solid #5b21b6;
   background:linear-gradient(135deg,#7c3aed,#a855f7); color:#fff; font-weight:900; font-size:16px; touch-action:manipulation;}
 .dv-drawn .dvt{vertical-align:middle;}
+
+/* ===== 티어 엠블럼(보드게임 컨셉 + 티어별 화려도 escalation) ===== */
+.emb{position:relative; display:inline-grid; place-items:center; width:var(--sz,38px); height:var(--sz,38px);
+  flex:none; border-radius:50%; background:radial-gradient(circle at 50% 36%,#2b3445,#141a26);
+  box-shadow:inset 0 1px 3px rgba(0,0,0,.55);}
+.emb--sm{--sz:38px;} .emb--md{--sz:60px;} .emb--lg{--sz:108px;}
+.emb__core{position:relative; z-index:3; font-size:calc(var(--sz) * .5); line-height:1;
+  filter:drop-shadow(0 1px 1px rgba(0,0,0,.55));}
+.emb__halo,.emb__rays,.emb__shine{position:absolute; border-radius:50%; pointer-events:none;}
+/* 테두리 링(코어 가상요소로) */
+.emb::before{content:""; position:absolute; inset:7%; border-radius:50%; border:2px solid var(--tc);
+  box-sizing:border-box; z-index:2;}
+.emb__halo{inset:-8%; z-index:0; opacity:0; background:radial-gradient(circle,var(--tc) 0%,transparent 62%);}
+.emb__rays{inset:-14%; z-index:1; opacity:0;
+  background:conic-gradient(from 0deg,transparent 0 10%,var(--tc) 12% 15%,transparent 17% 35%,var(--tc) 37% 40%,transparent 42% 60%,var(--tc) 62% 65%,transparent 67% 85%,var(--tc) 87% 90%,transparent 92% 100%);
+  -webkit-mask:radial-gradient(circle,transparent 50%,#000 53%); mask:radial-gradient(circle,transparent 50%,#000 53%);}
+.emb__shine{inset:7%; z-index:4; overflow:hidden; display:none;}
+.emb__shine::after{content:""; position:absolute; inset:-25%;
+  background:linear-gradient(100deg,transparent 40%,rgba(255,255,255,.85) 50%,transparent 60%);
+  transform:translateX(-140%) skewX(-18deg);}
+/* 저티어: 칙칙 */
+.emb--wood .emb__core,.emb--iron .emb__core{filter:grayscale(.55) brightness(.9) drop-shadow(0 1px 1px rgba(0,0,0,.5));}
+.emb--wood::before{border-style:dotted; border-color:#6b6b6b;}
+.emb--iron::before{border-color:#8c8c8c;}
+/* 금속/유색 단계 */
+.emb--bronze .emb__halo,.emb--silver .emb__halo{opacity:.2;}
+.emb--silver::before{border-color:#c3cedd;}
+.emb--gold .emb__halo,.emb--platinum .emb__halo{opacity:.3;}
+.emb--gold::before,.emb--platinum::before{border-width:2.5px; box-shadow:0 0 7px var(--tc);}
+.emb--platinum .emb__rays{opacity:.22; animation:embspin 16s linear infinite;}
+/* 보석 단계: 광채 + 회전 + 광택 */
+.emb--emerald .emb__halo,.emb--diamond .emb__halo{opacity:.42;}
+.emb--emerald::before,.emb--diamond::before{border-width:3px; box-shadow:0 0 11px var(--tc),inset 0 0 5px var(--tc);}
+.emb--emerald .emb__rays{opacity:.38; animation:embspin 11s linear infinite;}
+.emb--diamond .emb__rays{opacity:.45; animation:embspin 9s linear infinite;}
+.emb--emerald .emb__shine,.emb--diamond .emb__shine{display:block;}
+.emb--emerald .emb__shine::after{animation:embshine 3.6s ease-in-out infinite;}
+.emb--diamond .emb__shine::after{animation:embshine 3.1s ease-in-out infinite;}
+/* 최상위: 겁나 화려 — 맥동 광채 + 빠른 회전 광선 + 광택 + 코어 강조 */
+.emb--master .emb__halo{opacity:.55; animation:embpulse 2.2s ease-in-out infinite;}
+.emb--grandmaster .emb__halo{opacity:.62; animation:embpulse 1.7s ease-in-out infinite;}
+.emb--challenger .emb__halo{opacity:.72; animation:embpulse 1.3s ease-in-out infinite;}
+.emb--master::before,.emb--grandmaster::before,.emb--challenger::before{border-width:3px;
+  box-shadow:0 0 15px var(--tc),inset 0 0 7px var(--tc);}
+.emb--master .emb__rays{opacity:.6; animation:embspin 7s linear infinite;}
+.emb--grandmaster .emb__rays{opacity:.72; animation:embspin 5s linear infinite;}
+.emb--challenger .emb__rays{opacity:.85; animation:embspin 3.6s linear infinite;}
+.emb--master .emb__shine,.emb--grandmaster .emb__shine,.emb--challenger .emb__shine{display:block;}
+.emb--master .emb__shine::after,.emb--grandmaster .emb__shine::after,.emb--challenger .emb__shine::after{animation:embshine 2.6s ease-in-out infinite;}
+.emb--grandmaster .emb__core,.emb--challenger .emb__core{transform:scale(1.06); filter:drop-shadow(0 0 7px var(--tc));}
+@keyframes embspin{to{transform:rotate(360deg);}}
+@keyframes embpulse{0%,100%{opacity:.32; transform:scale(.95);} 50%{opacity:.8; transform:scale(1.12);}}
+@keyframes embshine{0%{transform:translateX(-140%) skewX(-18deg);} 55%,100%{transform:translateX(170%) skewX(-18deg);}}
+@media (prefers-reduced-motion: reduce){ .emb__rays,.emb__halo,.emb__shine::after{animation:none !important;} }
+/* 티어 화면 hero */
+.tier-hero{display:flex; align-items:center; gap:14px; padding:14px 12px 6px;}
+.tier-hero__name{font-size:20px; font-weight:900; color:var(--tc); text-shadow:0 0 8px var(--tc);}
+.tier-row .emb--sm{--sz:34px;}
+
+/* ===== 점수 증감 테이블 ===== */
+.sc-wrap{padding:6px 10px 14px;}
+.sc-title{font-weight:800; color:var(--ink); margin:8px 2px 4px;}
+.sc-sub{margin:8px 0; overflow-x:auto;}
+.sc-cap{font-size:12px; color:var(--ink-dim); margin:2px;}
+.sc-table{width:100%; border-collapse:collapse; font-size:12px; font-variant-numeric:tabular-nums;}
+.sc-table th,.sc-table td{padding:4px 6px; text-align:center; border-bottom:1px solid #222a38; white-space:nowrap;}
+.sc-table thead th{color:var(--ink-dim); font-weight:700;}
+.sc-tier{text-align:left !important; color:var(--tc); font-weight:800; text-shadow:0 0 5px var(--tc);}
+.sc-c{font-weight:800;}
+.sc-pos{color:#46d17f;} .sc-neg{color:#ef6b6b;} .sc-zero{color:#8a96a8;}
+.sc-note{font-size:11.5px; color:var(--ink-dim); line-height:1.6; padding:4px 2px;}

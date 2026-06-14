@@ -202,3 +202,58 @@ function decoChipHTML(game, score) {
   const t = tierForScore(score || 0);
   return `<span class="deco-chip" style="--tc:${t.color}">${GAME_SHORT[game]} ${t.fullName}(${score || 0})</span>`;
 }
+
+/* ----------------------------- 티어 엠블럼(보드게임 전용 컨셉 + 티어별 화려도) ----------------------------- */
+// 보드게임마다 전용 컨셉 아이콘. 티어가 오를수록 CSS 가 점점 화려한 테두리/광채/회전 광선을 입힘.
+const GAME_EMBLEM = { rummikub: '🃏', davinci: '🗝️', splendor: '💎', mafia: '🔪', race: '🏁', hunt: '🕵️' };
+const EMBLEM_GAMES = ['rummikub', 'davinci', 'splendor', 'mafia'];   // 보드게임만 전용 컨셉 엠블럼(그 외는 티어 이모지)
+const TIER_INFO = {}; TIER_DEFS.forEach(d => TIER_INFO[d.key] = { name: d.name, color: d.color, logo: d.logo });
+
+function emblemHTML(game, score, size) {
+  const t = tierForScore(score || 0);
+  const icon = (game && EMBLEM_GAMES.includes(game)) ? GAME_EMBLEM[game] : t.logo;
+  return `<span class="emb emb--${size || 'sm'} emb--${t.key}" style="--tc:${t.color}" title="${t.fullName}">`
+    + `<i class="emb__halo"></i><i class="emb__rays"></i><span class="emb__core">${icon}</span><i class="emb__shine"></i></span>`;
+}
+
+/* ----------------------------- 점수 증감 테이블(티어 화면) ----------------------------- */
+function _scCell(v) { const c = v > 0 ? 'pos' : v < 0 ? 'neg' : 'zero'; return `<td class="sc-c sc-${c}">${v > 0 ? '+' + v : v}</td>`; }
+function _scBoardTable(game, n) {
+  const tbl = SCORE_TABLE[game];
+  let head = '<th>티어</th>'; for (let r = 1; r <= n; r++) head += `<th>${r}위</th>`;
+  const body = TIER_KEY_CUTS.map(([key]) => {
+    const info = TIER_INFO[key];
+    return `<tr><th class="sc-tier" style="--tc:${info.color}">${info.logo} ${info.name}</th>${(tbl[key][n] || []).map(_scCell).join('')}</tr>`;
+  }).join('');
+  return `<div class="sc-sub"><div class="sc-cap">${n}인전</div><table class="sc-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+}
+function scoreTableHTML(game) {
+  if (!game) return '';
+  if (SCORE_TABLE[game]) {   // 루미큐브 / 다빈치 / 스플랜더 — 사용자 확정 고정 점수표
+    return `<div class="sc-wrap"><div class="sc-title">📊 등수·인원·티어별 점수 증감</div>`
+      + [2, 3, 4].map(n => _scBoardTable(game, n)).join('')
+      + `<p class="sc-note">동률이면 공동 등수로 같은 점수를 받아요. 1등/승리는 항상 +.</p></div>`;
+  }
+  if (game === 'mafia') {
+    const head = `<th>티어</th><th>🔪마피아 승</th><th>🙂시민 승</th><th>패배</th>`;
+    const body = TIER_KEY_CUTS.map(([key]) => {
+      const info = TIER_INFO[key]; const b = MAFIA_BASE[key];
+      return `<tr><th class="sc-tier" style="--tc:${info.color}">${info.logo} ${info.name}</th>${_scCell(b.mwin)}${_scCell(b.cwin)}${_scCell(b.loss)}</tr>`;
+    }).join('');
+    return `<div class="sc-wrap"><div class="sc-title">📊 티어별 진영 승패 점수(기본)</div>`
+      + `<div class="sc-sub"><table class="sc-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`
+      + `<p class="sc-note">여기에 <b>역할 기여도</b>가 더해져요 — 살인 +${MAFIA_CONTRIB.kill} · 조사 정답 +${MAFIA_CONTRIB.invest} · 세이브 +${MAFIA_CONTRIB.save} · 시민 생존 +${MAFIA_CONTRIB.survive}.<br>승리 진영은 최소 +1, 패배는 기여도로 손실만 줄여 최대 0이에요.</p></div>`;
+  }
+  // race / hunt — 공식 기반(대략치)
+  const isRace = game === 'race';
+  const head = isRace ? `<th>티어</th><th>1위(4인)</th><th>꼴찌(4인)</th>` : `<th>티어</th><th>생존 승</th><th>색출당함</th>`;
+  const body = TIER_KEY_CUTS.map(([key, min]) => {
+    const info = TIER_INFO[key]; let a, b;
+    if (isRace) { a = applyScore('race', (2.5 - 1) * 6, min, 0, true, 'apply').delta; b = applyScore('race', (2.5 - 4) * 6, min, 0, false, 'break').delta; }
+    else { a = applyScore('hunt', 7, min, 0, true, 'apply').delta; b = applyScore('hunt', -7, min, 0, false, 'break').delta; }
+    return `<tr><th class="sc-tier" style="--tc:${info.color}">${info.logo} ${info.name}</th>${_scCell(a)}${_scCell(b)}</tr>`;
+  }).join('');
+  return `<div class="sc-wrap"><div class="sc-title">📊 티어별 점수 증감(대략)</div>`
+    + `<div class="sc-sub"><table class="sc-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`
+    + `<p class="sc-note">${isRace ? '운빨로 등수가 갈려 실제값은 달라질 수 있어요.' : '역할·생존·색출 수에 따라 변동해요.'} 연승 보너스는 별도(다이아 이하 2연승+).</p></div>`;
+}
