@@ -16,6 +16,7 @@ function chatInjectStyles() {
   .chat-fab.is-open{background:#3a4660}
   .chat-fab__b{position:absolute;top:-3px;right:-3px;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:#e0444a;color:#fff;font-size:11px;line-height:18px;font-weight:800;box-sizing:border-box}
   .chat-box{position:absolute;right:0;bottom:64px;width:min(92vw,360px);height:min(56vh,440px);display:flex;flex-direction:column;background:#10131a;border:1px solid #2a3550;border-radius:14px;overflow:hidden;box-shadow:0 10px 34px rgba(0,0,0,.55)}
+  .chat-box[hidden]{display:none}
   .chat-box__hd{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:#161b26;border-bottom:1px solid #2a3550;color:#e8edf6;font-size:14px;cursor:grab;touch-action:none;user-select:none}
   .chat-box__hd .chat-grip{color:#5e6b85;font-size:12px;margin-left:6px}
   .chat-cl{background:#22304a;border:none;color:#cdd9ec;font-size:15px;cursor:pointer;width:30px;height:30px;border-radius:8px;line-height:30px;text-align:center;flex:none}
