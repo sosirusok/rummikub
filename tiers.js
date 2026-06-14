@@ -54,7 +54,8 @@ const SCORE_CFG = {
   race:     { gainMult: L => Math.max(0.45, 1 - L * 0.011), lossMult: L => Math.min(2.05, 1 + L * 0.019), tax: L => L * 0.32, minWin: L => Math.max(4, Math.round(12 - L * 0.18)), bonusRate: 0.08 },
   hunt:     { gainMult: L => Math.max(0.45, 1 - L * 0.011), lossMult: L => Math.min(2.05, 1 + L * 0.019), tax: L => L * 0.30, minWin: L => Math.max(4, Math.round(11 - L * 0.16)), bonusRate: 0.08 },
 };
-function gainBand(L) { return L <= 4 ? 2.0 : L <= 12 ? 1.5 : L <= 20 ? 1.2 : 1.0; }   // 나무~아이언/브론즈~실버/골드~플래/에메+
+function gainBand(L) { return L <= 4 ? 3.0 : L <= 8 ? 2.4 : L <= 12 ? 1.8 : L <= 20 ? 1.5 : 1.3; }   // 획득 대폭 가산
+function lossBand(L) { return L <= 4 ? 0.15 : L <= 8 ? 0.4 : L <= 12 ? 0.7 : 1.0; }                  // 저티어 손실 축소
 const STREAK_BASE_RK = { 2: { 1: 'apply', 2: 'break' }, 3: { 1: 'apply', 2: 'maintain', 3: 'break' }, 4: { 1: 'apply', 2: 'apply', 3: 'maintain', 4: 'break' } };
 function streakRummikub(n, rank, tied) { if (rank === 1) return 'apply'; if (tied) return 'maintain'; return STREAK_BASE_RK[n][rank]; }
 function streakRace(n, rank, tied) {
@@ -68,9 +69,9 @@ function streakRace(n, rank, tied) {
 function applyScore(game, perf, score, prevStreak, isWin, treatment) {
   const C = SCORE_CFG[game];
   const L = tierLevel(score || 0);
-  const gb = gainBand(L);
+  const gb = gainBand(L), lb = lossBand(L);
   const adj = perf - C.tax(L);
-  let delta = Math.round(adj >= 0 ? adj * C.gainMult(L) * gb : adj * C.lossMult(L));   // 획득만 가산, 감소 불변
+  let delta = Math.round(adj >= 0 ? adj * C.gainMult(L) * gb : adj * C.lossMult(L) * lb);   // 획득 가산 + 손실 축소
   if (isWin) delta = Math.max(delta, Math.round(C.minWin(L) * gb));
   const newStreak = treatment === 'apply' ? (prevStreak || 0) + 1 : treatment === 'maintain' ? (prevStreak || 0) : 0;
   let bonus = 0;

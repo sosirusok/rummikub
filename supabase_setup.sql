@@ -407,7 +407,7 @@ begin
       v_won := (v_rank = 1);
       v_tr := public.rk_streak_treatment(v_n, v_rank, v_tied);
       select * into r from public.rk_apply_score('rummikub', v_perf, v_curscore, v_curstreak, v_won, v_tr);
-      v_delta := greatest(-150, least(150, r.delta));      -- 루미 안전 상한(긴 게임이라 크게, 극단치만 제한)
+      v_delta := greatest(-300, least(300, r.delta));      -- 루미 상한(대폭 상향)
       v_ns := greatest(0, v_curscore + v_delta);
       perform public.rk_bump_stats(v_uid, 'rummikub', v_ns, r.new_streak, v_won);
       v_w:=0; v_l:=0; if v_uid is not null then select wins,losses into v_w,v_l from public.user_game_stats where user_id=v_uid and game='rummikub'; v_w:=coalesce(v_w,0); v_l:=coalesce(v_l,0); end if;
@@ -431,7 +431,7 @@ declare
   v_seats text[]; v_n int; v_results jsonb := '{}'::jsonb;
   i int; v_seat text; v_uid uuid; v_rank int; v_avgrank numeric; v_tied boolean; v_cnt int;
   v_curscore int; v_curstreak int; v_perf numeric; v_won boolean; v_tr text; v_delta int; v_ns int; r record; v_w int; v_l int;
-  CAP constant int := 80;
+  CAP constant int := 200;
 begin
   select id into v_user from public.users where token = p_token;
   if v_user is null then raise exception 'BAD_TOKEN'; end if;
@@ -488,7 +488,7 @@ declare
   v_seats text[]; v_n int; v_results jsonb := '{}'::jsonb;
   i int; v_seat text; v_uid uuid; v_rank int; v_avgrank numeric; v_tied boolean; v_cnt int;
   v_curscore int; v_curstreak int; v_perf numeric; v_won boolean; v_tr text; v_delta int; v_ns int; r record; v_w int; v_l int;
-  CAP constant int := 120;
+  CAP constant int := 250;
 begin
   select id into v_user from public.users where token = p_token;
   if v_user is null then raise exception 'BAD_TOKEN'; end if;
@@ -542,7 +542,7 @@ declare
   v_seats text[]; v_n int; v_h int; v_found int; v_results jsonb := '{}'::jsonb; v_present uuid[]; v_quit boolean;
   i int; v_seat text; v_uid uuid; v_role text; v_alivev boolean; v_caughtv boolean;
   v_curscore int; v_curstreak int; v_perf numeric; v_won boolean; v_tr text; v_delta int; v_ns int; r record; v_w int; v_l int;
-  CAP constant int := 80;
+  CAP constant int := 200;
 begin
   select id into v_user from public.users where token = p_token;
   if v_user is null then raise exception 'BAD_TOKEN'; end if;
@@ -913,7 +913,7 @@ create or replace function public.rk_apply_score(
   p_game text, p_perf numeric, p_score int, p_prev_streak int, p_is_win boolean, p_treatment text)
 returns table(delta int, bonus int, new_streak int, new_score int, lvl int)
 language plpgsql immutable set search_path = public as $$
-declare L int; gm numeric; lm numeric; tx numeric; mw int; br numeric; adj numeric; d int; b int; ns int; gb numeric;
+declare L int; gm numeric; lm numeric; tx numeric; mw int; br numeric; adj numeric; d int; b int; ns int; gb numeric; lb numeric;
 begin
   L := public.rk_tier_level(coalesce(p_score,0));
   -- 베이스(원래값): 감소는 이 값 그대로 유지. 획득만 아래 gb 밴드로 가산.
@@ -933,10 +933,12 @@ begin
     gm := greatest(0.45, 1 - L*0.011); lm := least(2.05, 1 + L*0.019); tx := L*0.30;
     mw := greatest(4, round(11 - L*0.16)::int); br := 0.08;
   end if;
-  -- 저티어 획득 가산(감소는 불변): 나무~아이언 ×2.0, 브론즈~실버 ×1.5, 골드~플래 ×1.2, 에메+ ×1.0
-  gb := case when L <= 4 then 2.0 when L <= 12 then 1.5 when L <= 20 then 1.2 else 1.0 end;
+  -- 획득 대폭 가산(gb): 나무~아이언 ×3.0 / 브론즈 ×2.4 / 실버 ×1.8 / 골드~플래 ×1.5 / 에메+ ×1.3
+  -- 손실 축소(lb): 나무~아이언 ×0.15 / 브론즈 ×0.4 / 실버 ×0.7 / 골드+ ×1.0  → 브론즈까진 누구나 쉽게, 이후는 적당히
+  gb := case when L <= 4 then 3.0 when L <= 8 then 2.4 when L <= 12 then 1.8 when L <= 20 then 1.5 else 1.3 end;
+  lb := case when L <= 4 then 0.15 when L <= 8 then 0.4 when L <= 12 then 0.7 else 1.0 end;
   adj := p_perf - tx;
-  if adj >= 0 then d := round(adj * gm * gb)::int; else d := round(adj * lm)::int; end if;   -- 획득만 가산, 감소 불변
+  if adj >= 0 then d := round(adj * gm * gb)::int; else d := round(adj * lm * lb)::int; end if;
   if p_is_win then d := greatest(d, round(mw * gb)::int); end if;
   ns := case p_treatment when 'apply' then coalesce(p_prev_streak,0)+1
                          when 'maintain' then coalesce(p_prev_streak,0)
@@ -1204,7 +1206,7 @@ declare
   v_seats text[]; v_n int; v_results jsonb := '{}'::jsonb; v_present uuid[]; v_quit boolean;
   i int; v_seat text; v_uid uuid; v_role text; v_camp text; v_won boolean;
   v_curscore int; v_curstreak int; v_perf numeric; v_tr text; v_delta int; v_ns int; r record; v_w int; v_l int;
-  CAP constant int := 130;
+  CAP constant int := 300;
 begin
   select id into v_user from public.users where token = p_token;
   if v_user is null then raise exception 'BAD_TOKEN'; end if;
@@ -1233,7 +1235,7 @@ begin
       v_curscore := coalesce(v_curscore,0); v_curstreak := coalesce(v_curstreak,0);
     end if;
     if v_camp = 'mafia' then
-      v_perf := case when v_won then 22 else -13 end;   -- 1 vs 다수: 이기면 크게, 져도 연착륙(maintain)
+      v_perf := case when v_won then 45 else -10 end;   -- 마피아 승은 시민 승보다 훨씬 큼(1 vs 다수), 패배는 연착륙
       v_tr   := case when v_won then 'apply' else 'maintain' end;
     else
       v_perf := case when v_won then 13 else -9 end;     -- 시민 진영: 작고 꾸준한 변동
