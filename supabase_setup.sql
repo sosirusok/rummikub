@@ -1287,6 +1287,10 @@ end $$;
 -- =====================================================================
 
 -- ---- 게임 화이트리스트에 'splendor' 추가(없으면 스플랜더가 rummikub 으로 폴백) ----
+-- ⚠ rooms.game CHECK 도 함께 갱신해야 함(빠지면 방 게임을 splendor 로 못 바꿈 = 선택 불가)
+alter table public.rooms drop constraint if exists rooms_game_chk;
+alter table public.rooms add  constraint rooms_game_chk
+  check (game is null or game in ('rummikub','davinci','splendor','race','hunt','mafia'));
 alter table public.users drop constraint if exists users_display_game_chk;
 alter table public.users drop constraint if exists users_display_game_check;
 alter table public.users add  constraint users_display_game_chk
