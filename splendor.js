@@ -88,7 +88,7 @@ function splendorInitialState(seated, scoresMap){
 /* ----------------------------- 진입/렌더 ----------------------------- */
 function splendorEnter(room, me, mySeat, amSpectator){
   SP.on=true; SP.room=room; SP.roomId=room.id; SP.state=room.state||{}; SP.version=room.version;
-  SP.me=me; SP.mySeat=mySeat; SP.amSpectator=amSpectator; SP.pick=[]; SP.discard=[];
+  SP.me=me; SP.mySeat=mySeat; SP.amSpectator=amSpectator; SP.pick=[]; SP.discard=[]; SP._finishSent=false;
   spInjectStyles(); setScreen('splendor'); spRender(); spSkipDeparted(); spMaybeFinish();
 }
 function splendorOnRoom(room){
@@ -187,7 +187,7 @@ function spRender(){
   else if(myTurn){
     const canTake = SP.pick.length>0;
     action=`<div class="sp-actbar">
-      <div class="sp-step">내 차례 · 토큰 선택(${SP.pick.length}) 또는 카드 탭(구매/예약)</div>
+      <div class="sp-step">내 차례 · 토큰: 다른 색 최대 3개 (같은 색 2번 탭=2개, 은행 4개↑) · 또는 카드 탭(구매/예약)</div>
       ${canTake?`<button class="btn btn--primary" data-act="sp_take">가져가기</button><button class="btn btn--ghost" data-act="sp_clear">취소</button>`:''}
     </div>`;
   } else action=`<div class="sp-note">${esc(curName)} 님의 차례…</div>`;
@@ -254,12 +254,20 @@ async function splendorAct(act, el){
   }
 }
 function spPickTok(i){
-  if(!spIsMyTurn() || SP.state.bank[i]<=0) return;
+  if(!spIsMyTurn() || SP.discard.length>0) return;
+  if(SP.state.bank[i]<=0) return;
   const cnt=SP.pick.filter(x=>x===i).length;
-  // 규칙: 서로다른 3색 1개씩 OR 같은색 2개(은행 4개↑). 토글식.
-  if(cnt>0){ SP.pick=SP.pick.filter(x=>x!==i); spRender(); return; }
-  if(SP.pick.length>=3) { toast('최대 3개'); return; }
-  // 같은색 2개를 원하면 더블탭 → 여기선 한 색을 2번 누르면 2개(은행4↑)
+  const distinct=new Set(SP.pick).size;
+  const isDouble=SP.pick.length===2 && distinct===1;   // 이미 '같은 색 2개' 선택 상태
+  // 규칙: 서로 다른 색 최대 3개  OR  같은 색 2개(그 색 은행 4개↑). 같은 색 탭 사이클 0→1→2→0.
+  if(cnt===2){ SP.pick=SP.pick.filter(x=>x!==i); spRender(); return; }     // 2→0
+  if(cnt===1){
+    if(SP.pick.length===1 && SP.state.bank[i]>=4) SP.pick.push(i);         // 1→2 (단독·은행4↑일 때만 더블)
+    else SP.pick=SP.pick.filter(x=>x!==i);                                 // 1→0 (해제)
+    spRender(); return;
+  }
+  if(isDouble){ toast('같은 색 2개를 고른 상태예요'); return; }            // 더블 상태에선 다른 색 못 섞음
+  if(distinct>=3){ toast('최대 3색'); return; }
   SP.pick.push(i); spRender();
 }
 async function spTake(){
@@ -312,7 +320,7 @@ async function spBuy(id){
     spVisitNoble(s, SP.mySeat);
     return spEndTurn(s, false);
   });
-  if(ok){ spRender(); spMaybeFinish(); }
+  if(ok){ SP.pick=[]; spRender(); spMaybeFinish(); }
 }
 async function spReserve(id, t){
   closeSheet(); if(!spIsMyTurn()) return;
@@ -327,7 +335,7 @@ async function spReserve(id, t){
     spLog(s, `📌 ${s.names[SP.mySeat]} 카드 예약`);
     return spEndTurn(s, false);
   });
-  if(ok){ spRender(); spMaybeFinish(); }
+  if(ok){ SP.pick=[]; spRender(); spMaybeFinish(); }
 }
 // 토큰 10 초과 반납
 function spDisc(i){ const p=SP.state.P[SP.mySeat]; const d=SP.discard.filter(x=>x===i).length; if(p.tok[i]-d<=0) return; SP.discard.push(i); spRender(); }
@@ -400,8 +408,9 @@ async function spSkipDeparted(){
   if(ok){ spRender(); spMaybeFinish(); }
 }
 async function spMaybeFinish(){
-  const s=SP.state; if(!s || SP.amSpectator) return;
-  if(s.ranks){ try{ await finishGame(SP.roomId, SP.me.token, 'splendor'); }catch(e){} }
+  const s=SP.state; if(!s || SP.amSpectator || !s.ranks) return;
+  if(SP._finishSent) return; SP._finishSent=true;          // 정산 RPC 중복 호출 방지(렉↓)
+  try{ await finishGame(SP.roomId, SP.me.token, 'splendor'); }catch(e){}
 }
 
 window.splendorInitialState=splendorInitialState;
