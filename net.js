@@ -201,7 +201,8 @@ async function mfResolvePhase(roomId, me, phase) {
 }
 async function finishGame(roomId, token, game) {
   const rpc = game === 'race' ? 'rk_finish_race' : game === 'hunt' ? 'rk_finish_hunt'
-    : game === 'davinci' ? 'rk_finish_davinci' : game === 'mafia' ? 'rk_finish_mafia' : 'rk_finish_game';
+    : game === 'davinci' ? 'rk_finish_davinci' : game === 'mafia' ? 'rk_finish_mafia'
+    : game === 'splendor' ? 'rk_finish_splendor' : 'rk_finish_game';
   const { data, error } = await sb.rpc(rpc, { p_token: token, p_room: roomId });
   if (error) return { ok: false, error };
   return { ok: true, results: data };
