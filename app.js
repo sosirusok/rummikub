@@ -88,7 +88,8 @@ function handleAct(act, el) {
     case 'setTime': doSetTime(Number(el.dataset.sec)); break;
     case 'setGame': doSetGame(el.dataset.game); break;
     case 'start': doStart(); break;
-    case 'leave': doLeave(); break;
+    case 'leave': if (ROOM && ROOM.status === 'playing') confirmLeave(); else doLeave(); break;   // 게임 중엔 확인창
+    case 'leaveConfirm': closeSheet(); doLeave(); break;
     case 'submit': onSubmit(); break;
     case 'draw': onDraw(); break;
     case 'undo': doUndo(); break;
@@ -466,6 +467,12 @@ async function doSetGame(game) {
 }
 async function doKick(uid) {
   await netCall(async () => { const r = await kickMember(ROOM_ID, ME, uid); if (r && r.ok === false) toast('내보내기 실패'); await refreshRoom(); });
+}
+function confirmLeave() {
+  openSheet(`<h3 class="sheet__title">⚠ 지금 나가면?</h3>
+    <p class="muted" style="padding:0 6px 12px;line-height:1.55">진행 중인 게임에서 나가면 <b style="color:var(--danger)">꼴찌(패배)로 처리</b>되어 점수가 차감돼요. 정말 나가시겠어요?</p>
+    <button class="btn btn--primary btn--lg" data-act="leaveConfirm">나가기 (패배 처리)</button>
+    <button class="btn btn--ghost btn--lg" data-act="closeSheet">취소</button>`);
 }
 async function doLeave() { try { localStorage.removeItem('rk_last_room'); } catch (e) {} await netCall(() => leaveRoomRpc(ROOM_ID, ME)); goLobby(MODE); }
 async function doSetDisplay(game) {

@@ -24,7 +24,8 @@ const DV = {
   on: false, room: null, roomId: null, state: null,
   me: null, mySeat: null, amSpectator: false, version: 0,
   busy: false,
-  pick: null,   // 추리 대상 선택중: {seat, id}
+  pick: null,       // 추리 대상 선택중: {seat, id}
+  jokerMove: null,  // 내 조커 위치 이동중: 조커 id
 };
 
 /* ----------------------------- 결정론 PRNG ---------------------------- */
@@ -96,13 +97,13 @@ function davinciOnRoom(room) {
   const advanced = room.version == null || room.version > DV.version;   // 실제 새 수가 들어왔을 때만
   DV.room = room; DV.state = room.state || {};
   DV.version = room.version;
-  if (advanced && DV.pick) { DV.pick = null; closeSheet(); }   // 멤버행 변동만으론 추리 시트 유지
+  if (advanced) { DV.jokerMove = null; if (DV.pick) { DV.pick = null; closeSheet(); } }   // 멤버행 변동만으론 시트/이동 유지
   dvRender();
   dvSkipDeparted();
   dvMaybeFinish();
 }
 function davinciStop() {
-  DV.on = false; DV.pick = null;
+  DV.on = false; DV.pick = null; DV.jokerMove = null;
   DV.room = DV.state = null; DV.roomId = null;
 }
 
@@ -121,14 +122,14 @@ function dvNextSeat(s, from) {
   return from;
 }
 // 타일 T 를 hand 에 끼울 수 있는 유효 위치 index 목록(0..hand.length)
+// 숫자 타일: 조커를 "건너뛴" 가장 가까운 좌/우 숫자 사이여야 함(9 뒤에 2 같은 역순 금지). 조커는 와일드로 어디든.
 function dvValidGaps(hand, tile) {
   const gaps = [];
   for (let i = 0; i <= hand.length; i++) {
-    if (tile.j) { gaps.push(i); continue; }                 // 조커는 어디든
-    const left = hand[i - 1], right = hand[i];
-    const okL = !left || left.j || left.v <= tile.v;
-    const okR = !right || right.j || right.v >= tile.v;
-    if (okL && okR) gaps.push(i);
+    if (tile.j) { gaps.push(i); continue; }
+    let L = -Infinity; for (let k = i - 1; k >= 0; k--) { if (!hand[k].j) { L = hand[k].v; break; } }
+    let R = Infinity;  for (let k = i; k < hand.length; k++) { if (!hand[k].j) { R = hand[k].v; break; } }
+    if (L <= tile.v && tile.v <= R) gaps.push(i);
   }
   return gaps;
 }
@@ -138,6 +139,12 @@ function dvTileFace(t, reveal) {
   const shown = reveal || t.up;
   const face = !shown ? '?' : (t.j ? '–' : t.v);
   return `<span class="dvt ${cls}${(shown && t.j) ? ' dvt--joker' : ''}${t.up ? ' is-up' : ''}">${face}</span>`;   // 가린 조커는 색 표시 안 함(비밀)
+}
+// 내 패 한 칸: 공개된(상대에게 노출) 타일은 👁 표시. 내 가린 조커는 탭해 위치 이동(canMove).
+function dvMySlot(tile, s, canMove) {
+  const cls = `dv-slot${tile.id === s.fresh ? ' is-fresh' : ''}${tile.up ? ' dv-slot--exposed' : ''}`;
+  const tap = (canMove && tile.j && !tile.up) ? `data-act="dv_jokerpick" data-id="${tile.id}"` : '';
+  return `<span class="${cls}" ${tap}>${dvTileFace(tile, true)}${tile.up ? '<i class="dv-exp">👁</i>' : ''}</span>`;
 }
 
 /* ----------------------------- 렌더 ---------------------------------- */
@@ -151,6 +158,7 @@ function dvRender() {
   const drawStep  = myTurn && s.drawn == null && s.fresh == null && !poolEmpty;
   const placeStep = myTurn && s.drawn != null;
   const guessStep = myTurn && s.drawn == null && (s.fresh != null || poolEmpty);
+  if (DV.jokerMove && (!myTurn || placeStep)) DV.jokerMove = null;   // 조커 이동은 내 차례·배치단계 아닐 때만
 
   // 상대 패널 — 가린 타일은 (지목 단계일 때만) 탭해서 지목
   const oppoSeats = seats.filter(seat => seat !== DV.mySeat);
@@ -177,23 +185,34 @@ function dvRender() {
   if (!DV.amSpectator && DV.mySeat != null) {
     const myHand = s.hands[DV.mySeat] || [];
     const myDead = !dvAlive(s, DV.mySeat);
-    let handInner;
+    const canMoveJoker = myTurn && !placeStep && !myDead;
+    let handInner, hint = '';
     if (placeStep) {
       const gaps = dvValidGaps(myHand, s.drawn);
       let h = '';
       for (let i = 0; i <= myHand.length; i++) {
-        h += gaps.includes(i)
-          ? `<button class="dv-gap" data-act="dv_place" data-gap="${i}">＋</button>`
-          : `<span class="dv-gap dv-gap--no"></span>`;
-        if (i < myHand.length) h += `<span class="dv-slot ${myHand[i].id === s.fresh ? 'is-fresh' : ''}">${dvTileFace(myHand[i], true)}</span>`;
+        h += gaps.includes(i) ? `<button class="dv-gap" data-act="dv_place" data-gap="${i}">＋</button>` : `<span class="dv-gap dv-gap--no"></span>`;
+        if (i < myHand.length) h += dvMySlot(myHand[i], s, false);
       }
       handInner = h;
+    } else if (DV.jokerMove) {
+      // 조커 이동 모드: 조커 뺀 손패의 모든 자리(＋) 표시
+      const rest = myHand.filter(t => t.id !== DV.jokerMove);
+      let h = '';
+      for (let i = 0; i <= rest.length; i++) {
+        h += `<button class="dv-gap" data-act="dv_jokermove" data-gap="${i}">＋</button>`;
+        if (i < rest.length) h += dvMySlot(rest[i], s, false);
+      }
+      handInner = h;
+      hint = `<div class="dv-pickhint is-armed">🃏 조커를 놓을 자리(＋)를 고르세요 <button class="btn btn--ghost" data-act="dv_jokercancel">취소</button></div>`;
     } else {
-      handInner = myHand.map(tile => `<span class="dv-slot ${tile.id === s.fresh ? 'is-fresh' : ''}">${dvTileFace(tile, true)}</span>`).join('');
+      handInner = myHand.map(tile => dvMySlot(tile, s, canMoveJoker)).join('');
+      if (canMoveJoker && myHand.some(t => t.j && !t.up)) hint = `<div class="dv-pickhint muted">🃏 조커 칩을 탭하면 위치를 바꿀 수 있어요(어디든)</div>`;
     }
     mineHTML = `<div class="dv-mine ${myDead ? 'is-dead' : ''}">
-      <div class="dv-mine__label">${myDead ? '내 패 (탈락)' : '내 패 (나만 값 보임 · 가린 건 상대에겐 ?)'}</div>
+      <div class="dv-mine__label">${myDead ? '내 패 (탈락)' : '내 패 (나만 값 보임 · 👁=상대에게 공개된 타일)'}</div>
       <div class="dv-hand dv-hand--mine">${handInner}</div>
+      ${hint}
     </div>`;
   }
 
@@ -266,6 +285,9 @@ async function davinciAct(act, el) {
     case 'dv_cancel': DV.pick = null; closeSheet(); dvRender(); return;
     case 'dv_guess': return dvGuess(el.dataset.j === '1' ? null : Number(el.dataset.v), el.dataset.j === '1');
     case 'dv_stop': return dvStop();
+    case 'dv_jokerpick': DV.jokerMove = el.dataset.id; dvRender(); return;       // 내 조커 이동 시작
+    case 'dv_jokercancel': DV.jokerMove = null; dvRender(); return;
+    case 'dv_jokermove': return dvMoveJoker(Number(el.dataset.gap));
   }
 }
 
@@ -319,6 +341,22 @@ async function dvPlace(gap) {
     return s;
   });
   if (ok) dvRender();
+}
+
+// 내 가린 조커를 원하는 자리로 이동(와일드 — 어디든). 턴 소비 없음.
+async function dvMoveJoker(gap) {
+  if (!dvIsMyTurn() || !DV.jokerMove) return;
+  const jid = DV.jokerMove; DV.jokerMove = null;
+  const ok = await dvCommit(s => {
+    if (Number(s.turn) !== Number(DV.mySeat)) return null;
+    const hand = s.hands[DV.mySeat];
+    const idx = hand.findIndex(t => t.id === jid);
+    if (idx < 0 || !hand[idx].j || hand[idx].up) return null;
+    const [jk] = hand.splice(idx, 1);
+    hand.splice(Math.max(0, Math.min(hand.length, gap)), 0, jk);
+    return s;
+  });
+  dvRender();
 }
 
 // ③ 지목
