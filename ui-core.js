@@ -13,21 +13,50 @@ function setScreen(name) { app().dataset.screen = name; SCREEN = name; }
 /* ----------------------------- 통합 입력 ------------------------------- */
 // pointerdown 우선 처리(즉시 반응) + 합성 click 더블파이어 가드(키보드 접근성은 유지).
 let _ptrAt = -1e9;
+let _act = null;                 // 보류 중 탭 후보 {el, kind, x, y, pid}
+const TAP_MOVE = 12;             // 이 거리(px) 넘게 움직이면 스크롤/드래그로 간주 → 탭 취소
+// 두 요소가 같은 논리 액션인가(재렌더로 노드가 바뀌어도 dataset 이 같으면 동일 버튼으로 취급)
+function sameAction(a, b) {
+  const da = a.dataset, db = b.dataset, ka = Object.keys(da);
+  if (ka.length !== Object.keys(db).length) return false;
+  for (const k of ka) if (da[k] !== db[k]) return false;
+  return true;
+}
+// 탭은 "누른 버튼에서 손을 떼야" 발동(누르는 순간 X). 스크롤 중 오클릭/연타 오작동 방지.
 function bindAppInput(onAct, onTap, tapActive) {
   const root = app();
   root.addEventListener('pointerdown', (e) => {
-    if (e.button != null && e.button !== 0) return;   // 좌클릭/터치만
-    _ptrAt = e.timeStamp;
+    if (e.button != null && e.button !== 0) return;          // 좌클릭/터치만
     const actEl = e.target.closest('[data-act]');
-    if (actEl) { onAct(actEl.dataset.act, actEl, e); return; }
-    const tapEl = e.target.closest('[data-tap]');
-    if (tapEl && tapActive && tapActive()) onTap(tapEl, e);
+    const tapEl = actEl ? null : e.target.closest('[data-tap]');
+    if (!actEl && !tapEl) { _act = null; return; }
+    _act = { el: actEl || tapEl, kind: actEl ? 'act' : 'tap', x: e.clientX, y: e.clientY, pid: e.pointerId };
   }, { passive: true });
-  // 마우스/키보드 click 은 pointer 직후가 아닐 때만(데스크톱 폴백·접근성)
+  root.addEventListener('pointermove', (e) => {
+    if (!_act || e.pointerId !== _act.pid) return;
+    if (Math.hypot(e.clientX - _act.x, e.clientY - _act.y) > TAP_MOVE) _act = null;   // 스크롤 시작 → 탭 취소
+  }, { passive: true });
+  root.addEventListener('pointercancel', () => { _act = null; }, { passive: true });
+  root.addEventListener('pointerup', (e) => {
+    const rec = _act; _act = null;
+    if (!rec || e.pointerId !== rec.pid) return;
+    _ptrAt = e.timeStamp;                                    // 펜딩 탭의 포인터업 → 합성 click 폴백 억제(드롭돼도 오작동 X)
+    if (Math.hypot(e.clientX - rec.x, e.clientY - rec.y) > TAP_MOVE) return;           // 스크롤 → 무시
+    const upEl = document.elementFromPoint(e.clientX, e.clientY);
+    if (!upEl) return;
+    // 떼는 순간의 실제 요소를 다시 찾는다(중간 재렌더로 rec.el 이 detach 됐을 수 있음)
+    const live = upEl.closest(rec.kind === 'act' ? '[data-act]' : '[data-tap]');
+    if (!live) return;
+    if (live !== rec.el && !sameAction(live, rec.el)) return;   // 같은 버튼(또는 같은 논리 액션)에서 떼야 발동
+    if (live.disabled || live.getAttribute('aria-disabled') === 'true') return;
+    if (rec.kind === 'act') onAct(live.dataset.act, live, e);
+    else if (tapActive && tapActive()) onTap(live, e);
+  });
+  // 마우스 클릭 + 키보드(Enter/Space) 폴백 — pointerup 직후가 아닐 때만(접근성)
   root.addEventListener('click', (e) => {
-    if (e.timeStamp - _ptrAt < 700) return;            // pointerdown 이 이미 처리함
+    if (e.timeStamp - _ptrAt < 700) return;
     const actEl = e.target.closest('[data-act]');
-    if (actEl) onAct(actEl.dataset.act, actEl, e);
+    if (actEl && !actEl.disabled) onAct(actEl.dataset.act, actEl, e);
   });
 }
 

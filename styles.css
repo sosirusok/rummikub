@@ -350,6 +350,52 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .rr__sc{font-variant-numeric:tabular-nums; font-weight:700;}
 .rr__l3{font-size:12px;}
 
+/* ===================== 개발자 모드 / 강퇴 / 게임전환 잠금 ===================== */
+.home-card--dev{background:linear-gradient(150deg,#3a2a1f,#171a21);}
+.dev-pane{display:flex; flex-direction:column; gap:12px; padding:14px;}
+.dev-rooms{display:grid; grid-template-columns:repeat(2,1fr); gap:8px;}
+.dev-rooms .chip{flex:none;}
+.chip.is-locked{opacity:.4;}
+.game-select--wrap{flex-wrap:wrap;}
+.seat.is-occupied{grid-template-columns:auto 1fr auto;}
+.seat__kick{flex:0 0 auto; min-width:34px; min-height:34px; border-radius:8px; border:1px solid var(--line);
+  background:transparent; color:var(--danger); font-weight:900; font-size:15px; cursor:pointer; touch-action:manipulation; align-self:center;}
+.seat__kick:active{transform:scale(.92);}
+
+/* ===================== 마피아 ===================== */
+.screen--mafia{display:flex; flex-direction:column; height:100%;}
+.mf-pill-night{background:#1a2342; color:#cdd9ff;}
+.mf-pill-day{background:#4a3a12; color:#ffe9a8;}
+.mf-timer{font-size:12px; font-weight:800; color:var(--warn); white-space:nowrap;}
+.mf-rolecard{margin:8px 10px 0; padding:10px 12px; border-radius:12px; border:1px solid var(--line); background:var(--panel2);}
+.mf-rolecard__role{font-weight:900; font-size:16px;}
+.mf-rolecard__desc{font-size:12px; color:var(--ink-dim); margin-top:3px;}
+.mf-dead-tag{color:var(--danger); font-size:.8em;}
+.mf-role--mafia{border-color:#d4282a; box-shadow:inset 0 0 0 1px rgba(212,40,42,.5);}
+.mf-role--police{border-color:#1456b8;}
+.mf-role--doctor{border-color:#1fb15e;}
+.mf-role--citizen{border-color:var(--line);}
+.mf-grid{list-style:none; margin:0; padding:10px; display:grid; grid-template-columns:repeat(2,1fr); gap:8px; align-content:start;}
+.mf-player{display:flex; align-items:center; gap:8px; padding:12px 10px; min-height:54px; border-radius:12px;
+  border:1px solid var(--line); background:var(--panel2); color:var(--ink); font-weight:700; text-align:left;
+  touch-action:manipulation; cursor:default;}
+.mf-player.is-target{cursor:pointer; border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset;}
+.mf-player.is-target:active{transform:scale(.98);}
+.mf-player.is-me{outline:2px solid var(--accent);}
+.mf-player.is-myvote{background:#26324a;}
+.mf-player.is-dead{opacity:.42;}
+.mf-player__seat{font-size:11px; color:var(--ink-dim); font-weight:800; min-width:16px;}
+.mf-player__name{flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.mf-player__votes{font-size:12px; color:var(--warn); font-weight:900;}
+.mf-player__dead{font-size:16px;}
+.mf-log{max-height:22vh;}
+.mf-note{text-align:center; color:var(--ink-dim); padding:6px; line-height:1.5;}
+.mf-note--act{color:var(--ink); font-weight:800;}
+.mf-result{margin:8px 12px 0; padding:10px; border-radius:10px; text-align:center; font-weight:900;}
+.mf-result.is-mafia{background:rgba(212,40,42,.18); color:#ff8a8a; border:1px solid #d4282a;}
+.mf-result.is-clean{background:rgba(31,177,94,.16); color:#7ee0a4; border:1px solid #1fb15e;}
+@media (max-width:360px){ .mf-grid{grid-template-columns:1fr;} .dev-rooms{grid-template-columns:1fr;} }
+
 /* ===== 데스크톱 ===== */
 @media (min-width:720px){
   :root{--tile-w:38px; --gap:6px;}

@@ -6,9 +6,9 @@
    - 의존: ui-core.js(esc) 가 먼저 로드돼야 함.
    ========================================================================= */
 
-const GAME_NAME  = { rummikub: '루미큐브', davinci: '다빈치 코드', race: '운빨 대시',  hunt: '나도 사람이야' };
-const GAME_SHORT = { rummikub: '루미',     davinci: '다빈치',      race: '운빨',       hunt: '나도사람' };
-const GAME_LOGO  = { rummikub: '🀄',       davinci: '🔢',          race: '🏁',         hunt: '🕵️' };
+const GAME_NAME  = { rummikub: '루미큐브', davinci: '다빈치 코드', race: '운빨 대시',  hunt: '나도 사람이야', mafia: '마피아' };
+const GAME_SHORT = { rummikub: '루미',     davinci: '다빈치',      race: '운빨',       hunt: '나도사람',     mafia: '마피아' };
+const GAME_LOGO  = { rummikub: '🀄',       davinci: '🔢',          race: '🏁',         hunt: '🕵️',          mafia: '🔪' };
 
 /* ----------------------------- 티어 사다리 ----------------------------- */
 const TIER_DEFS = [
@@ -49,6 +49,7 @@ function tierLevel(score) { return tierForScore(score).level; }
 const SCORE_CFG = {
   rummikub: { gainMult: L => Math.max(0.42, 1 - L * 0.011), lossMult: L => Math.min(2.10, 1 + L * 0.020), tax: L => L * 0.85, minWin: L => Math.max(8, Math.round(28 - L * 0.45)), bonusRate: 0.10 },
   davinci:  { gainMult: L => Math.max(0.42, 1 - L * 0.011), lossMult: L => Math.min(2.08, 1 + L * 0.020), tax: L => L * 0.60, minWin: L => Math.max(6, Math.round(20 - L * 0.34)), bonusRate: 0.10 },
+  mafia:    { gainMult: L => Math.max(0.45, 1 - L * 0.011), lossMult: L => Math.min(2.08, 1 + L * 0.020), tax: L => L * 0.45, minWin: L => Math.max(6, Math.round(16 - L * 0.28)), bonusRate: 0.10 },
   race:     { gainMult: L => Math.max(0.45, 1 - L * 0.011), lossMult: L => Math.min(2.05, 1 + L * 0.019), tax: L => L * 0.32, minWin: L => Math.max(4, Math.round(12 - L * 0.18)), bonusRate: 0.08 },
   hunt:     { gainMult: L => Math.max(0.45, 1 - L * 0.011), lossMult: L => Math.min(2.05, 1 + L * 0.019), tax: L => L * 0.30, minWin: L => Math.max(4, Math.round(11 - L * 0.16)), bonusRate: 0.08 },
 };

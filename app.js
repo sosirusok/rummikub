@@ -32,9 +32,16 @@ let lbCacheGame = null;
 let WAIT_TAB = 'seat';
 let RANK_GAME = 'rummikub';
 let lastRoomSig = '';
+let lastRoomVersion = -1;        // 방 상태 단조 버전(늦게 도착한 옛 스냅샷 무시용)
+let DEV_UNLOCKED = false;        // 개발자 모드 비번 통과(세션 한정)
+let DEV_SEL = new Set();         // 강제 초기화로 선택된 방들
+const DEV_PW = 'Lemon14436';
+let resultLeaveIv = null, resultLeaveAt = 0;   // 결과창 자동 홈이동 카운트다운
 
+const GAME_CAP = { rummikub: 4, davinci: 4, mafia: 12, race: 8, hunt: 8 };
 function curGame() { return ROOM ? ROOM.game : null; }
-function capOf(game) { return game === 'rummikub' ? 4 : 8; }   // 루미=4인, 나머지=8인
+function capOf(game) { return GAME_CAP[game] || 8; }            // 게임별 최대 인원
+function minOf(game) { return game === 'mafia' ? 4 : 2; }       // 게임별 최소 시작 인원
 function statsOf(uid) { return lbCache[uid] || {}; }
 
 /* ----------------------------- 부팅 ----------------------------------- */
@@ -51,12 +58,19 @@ async function boot() {
 /* ----------------------------- 액션 위임 ------------------------------- */
 function handleAct(act, el) {
   if (act.indexOf('dv_') === 0) { davinciAct(act, el); return; }   // 다빈치 코드 액션 위임
+  if (act.indexOf('mf_') === 0) { mafiaAct(act, el); return; }     // 마피아 액션 위임
   switch (act) {
     case 'authTab': switchAuthTab(el.dataset.tab); break;
     case 'authSubmit': doAuth(); break;
     case 'logout': doLogout(); break;
     case 'goBoard': goLobby('board'); break;
     case 'goMini': goLobby('mini'); break;
+    case 'goDev': showDev(); break;
+    case 'devUnlock': doDevUnlock(); break;
+    case 'devToggle': { const n = Number(el.dataset.room); DEV_SEL.has(n) ? DEV_SEL.delete(n) : DEV_SEL.add(n); showDev(); break; }
+    case 'devReset': doDevReset(); break;
+    case 'kick': doKick(el.dataset.uid); break;
+    case 'leaveNow': doResultAutoLeave(); break;
     case 'backHome': goHome(); break;
     case 'goRank': showRank(RANK_GAME); break;
     case 'goTiers': showTiers(); break;
@@ -121,7 +135,7 @@ async function doAuth() {
   ME = res.profile; TOKEN = ME.token; localStorage.setItem('rk_token', TOKEN);
   goHome();
 }
-function doLogout() { localStorage.removeItem('rk_token'); TOKEN = null; ME = null; cleanupAll(); showLogin(); }
+function doLogout() { localStorage.removeItem('rk_token'); TOKEN = null; ME = null; DEV_UNLOCKED = false; DEV_SEL.clear(); cleanupAll(); showLogin(); }
 
 /* ============================ 홈 ====================================== */
 function headerHTML() {
@@ -144,10 +158,13 @@ function goHome() {
       <div class="home-cards grow">
         <button class="home-card home-card--rk" data-act="goBoard">
           <span class="home-card__emoji">🎲</span><span class="home-card__title">보드게임</span>
-          <span class="home-card__sub">방 1~5 · 루미큐브 / 다빈치 코드</span></button>
+          <span class="home-card__sub">방 1~5 · 루미큐브 / 다빈치 코드 / 마피아</span></button>
         <button class="home-card home-card--mini" data-act="goMini">
           <span class="home-card__emoji">🎮</span><span class="home-card__title">미니게임</span>
           <span class="home-card__sub">방 6~10 · 운빨 대시 / 나도 사람이야</span></button>
+        <button class="home-card home-card--dev" data-act="goDev">
+          <span class="home-card__emoji">🛠</span><span class="home-card__title">개발자 모드</span>
+          <span class="home-card__sub">방 강제 초기화 (관리자)</span></button>
       </div>
       <p class="muted center" style="padding:10px 14px">로그인 후 게임을 고르세요. 티어·전적·꾸미기는 게임별로 따로 쌓여요.</p>
     </section>`;
@@ -157,12 +174,12 @@ function goHome() {
 /* ============================ 로비 ==================================== */
 function cleanupLobby() { if (lobbyCh) { leaveChannel(lobbyCh); lobbyCh = null; } }
 function cleanupRoom() {
-  stopTimer(); miniStop(); davinciStop();
+  stopTimer(); miniStop(); davinciStop(); mafiaStop(); disarmResultLeave();
   if (roomDbCh) { leaveChannel(roomDbCh); roomDbCh = null; }
   if (presenceCh) { leaveChannel(presenceCh); presenceCh = null; }
   if (hbIv) { clearInterval(hbIv); hbIv = null; }
   if (rkBc) { leaveChannel(rkBc.ch); rkBc = null; }
-  presentIds = []; ROOM = null; G = null; work = null; liveBoard = null; lastRoomSig = '';
+  presentIds = []; ROOM = null; G = null; work = null; liveBoard = null; lastRoomSig = ''; lastRoomVersion = -1;
 }
 function cleanupAll() { cleanupLobby(); cleanupRoom(); ROOM_ID = null; }
 
@@ -246,21 +263,29 @@ async function refreshRoom() {
   ROOM = await fetchRoom(ROOM_ID);
   MEMBERS = await fetchMembers(ROOM_ID);
   if (!ROOM) { goLobby(MODE); return; }
-  // 내 표시 스냅샷이 방 게임과 어긋나면 갱신(미니 방장이 게임 고른 경우)
+  // 내 멤버 행이 사라짐 = 방장 강퇴 / 개발자 강제초기화 / 유령정리 → 홈으로.
+  // (playing 중 일시적 fetch 실패로 빈 배열이 와도 게임이 안 끊기도록 playing 은 제외)
+  if (!MEMBERS.some(m => m.user_id === ME.id) && (MEMBERS.length > 0 || ROOM.status !== 'playing')) {
+    toast('방에서 나왔어요'); cleanupRoom(); ROOM_ID = null; goHome(); return;
+  }
+  // 버전 역행 가드: 늦게 도착한 옛 스냅샷이 최신 화면을 덮지 않게(결과→게임 되돌림 방지). 대기는 버전이 안 올라가므로 동일 버전은 통과.
+  if (ROOM.version != null) { if (ROOM.version < lastRoomVersion) return; lastRoomVersion = ROOM.version; }
+  // 내 표시 스냅샷이 방 게임과 어긋나면 갱신(방장이 게임 고른 경우)
   const g = curGame();
   if (g && g !== mySnapGame && MEMBERS.some(m => m.user_id === ME.id)) { mySnapGame = g; updateMemberSnapshot(ROOM_ID, ME, g); }
 
   if (ROOM.status === 'waiting') {
-    stopTimer(); miniStop(); davinciStop();
+    stopTimer(); miniStop(); davinciStop(); mafiaStop(); disarmResultLeave();
     await refreshLbCache();
     renderWaiting();
   } else if (ROOM.status === 'playing') {
     if (ROOM.game === 'rummikub') enterGameView();
     else if (ROOM.game === 'davinci') enterDavinciView();
+    else if (ROOM.game === 'mafia') enterMafiaView();
     else enterMiniView();
   } else if (ROOM.status === 'finished') {
-    stopTimer(); miniStop(); davinciStop();
-    renderResult();
+    stopTimer(); miniStop(); davinciStop(); mafiaStop();
+    if (SCREEN !== 'result') renderResult();   // 멤버 이탈 이벤트마다 재렌더/카운트다운 리셋 방지
   }
 }
 
@@ -330,7 +355,7 @@ function waitBody(tab, amHost, g, cap) {
         <span class="seat__main">
           <span class="seat__name">${nameHTML(m.name, nameColor)}${isMe ? ' <small>(나)</small>' : ''}${ROOM.host_id === m.user_id ? ' <span class="seat__badge">방장</span>' : ''}${m.display_game ? ' ' + decoChipHTML(m.display_game, m.display_score) : ''}</span>
           <span class="seat__record">${wn}승 ${ls}패 · ${tierBadgeHTML(sc)} ${streakHTML(sk)}</span>
-        </span></li>`);
+        </span>${amHost && !isMe ? `<button class="seat__kick" data-act="kick" data-uid="${m.user_id}" aria-label="내보내기">✕</button>` : ''}</li>`);
     } else {
       const canSit = !mySeatNow && !iAmSpectator;
       seats.push(`<li class="seat is-empty" ${canSit ? `data-act="sit" data-seat="${n}"` : ''}>＋ ${n}번 ${canSit ? '앉기' : ''}</li>`);
@@ -338,18 +363,23 @@ function waitBody(tab, amHost, g, cap) {
   }
   let host = '';
   if (amHost) {
+    const headcount = MEMBERS.length;                 // 방 인원(좌석+관전 포함)
+    const lock5 = headcount >= 5;                      // 5명 이상이면 cap<=4 게임 전환 금지(마피아만)
     const picks = MODE === 'mini'
       ? [['race', '🏁 운빨 대시'], ['hunt', '🕵️ 나도 사람이야']]
-      : [['rummikub', '🀄 루미큐브'], ['davinci', '🔢 다빈치 코드']];
-    const gamePick = `<div class="game-select">${picks.map(([k, lab]) =>
-      `<button class="chip ${ROOM.game === k ? 'is-active' : ''}" data-act="setGame" data-game="${k}">${lab}</button>`).join('')}</div>`;
+      : [['rummikub', '🀄 루미큐브'], ['davinci', '🔢 다빈치 코드'], ['mafia', '🔪 마피아']];
+    const gamePick = `<div class="game-select">${picks.map(([k, lab]) => {
+      const locked = lock5 && capOf(k) <= 4;
+      return `<button class="chip ${ROOM.game === k ? 'is-active' : ''} ${locked ? 'is-locked' : ''}" data-act="setGame" data-game="${k}" ${locked ? 'disabled' : ''}>${lab}</button>`;
+    }).join('')}</div>${lock5 ? `<div class="muted center" style="font-size:12px">5명 이상이라 <b>마피아</b>만 선택할 수 있어요</div>` : ''}`;
     const timeSel = ROOM.game === 'rummikub'   // 타이머 선택은 루미큐브만
       ? `<div class="time-select">${[15, 30, 60].map(s => `<button class="chip ${ROOM.turn_seconds === s ? 'is-active' : ''}" data-act="setTime" data-sec="${s}">${s}초</button>`).join('')}</div>`
       : '';
-    const canStart = !!ROOM.game && seated >= 2 && seated <= cap;
+    const mn = ROOM.game ? minOf(ROOM.game) : 2;
+    const canStart = !!ROOM.game && seated >= mn && seated <= cap;
     host = `<div class="host-controls">
         ${gamePick}${timeSel}
-        <button class="btn btn--primary btn--lg" data-act="start" ${canStart ? '' : 'disabled'}>${ROOM.game ? `게임 시작 (2~${cap}명)` : '게임을 먼저 고르세요'}</button>
+        <button class="btn btn--primary btn--lg" data-act="start" ${canStart ? '' : 'disabled'}>${ROOM.game ? `게임 시작 (${mn}~${cap}명)` : '게임을 먼저 고르세요'}</button>
       </div>`;
   } else {
     host = `<div class="wait-note">방장이 ${ROOM.game ? GAME_NAME[ROOM.game] + ' 시작' : '게임 선택'}을 기다리는 중…</div>`;
@@ -371,7 +401,7 @@ function decoBody() {
   return `<div class="deco">
     <p class="muted">점수 아래·이름 옆에 보일 티어를 고르세요. 이름 색도 이 티어색이 돼요.</p>
     <div class="deco-preview">미리보기: ${preview}</div>
-    ${opt('', '숨김')}${opt('rummikub', '루미큐브')}${opt('davinci', '다빈치 코드')}${opt('race', '운빨 대시')}${opt('hunt', '나도 사람이야')}
+    ${opt('', '숨김')}${opt('rummikub', '루미큐브')}${opt('davinci', '다빈치 코드')}${opt('mafia', '마피아')}${opt('race', '운빨 대시')}${opt('hunt', '나도 사람이야')}
   </div>`;
 }
 function tierLadderHTML(g) {
@@ -396,6 +426,7 @@ async function doSit(seat) {
     if (!r.ok) {
       if (r.reason === 'taken') { toast('이미 찬 자리예요'); await reapStale(ROOM_ID); }
       else if (r.reason === 'not_waiting') toast('이미 게임이 시작됐어요');
+      else if (r.reason === 'full') toast('방이 가득 찼어요');
       else toast('자리 선택 실패, 다시 시도하세요');
     }
     await refreshRoom();
@@ -403,8 +434,14 @@ async function doSit(seat) {
 }
 async function doSpectate() { await netCall(async () => { await spectate(ROOM_ID, ME); await refreshRoom(); }); }
 async function doSetTime(sec) { await netCall(() => setTurnSeconds(ROOM_ID, sec)); }
-async function doSetGame(game) { await netCall(async () => { await setRoomGame(ROOM_ID, game); await refreshRoom(); }); }
-async function doLeave() { await netCall(() => leaveRoom(ROOM_ID, ME)); goLobby(MODE); }
+async function doSetGame(game) {
+  if (MEMBERS.length >= 5 && capOf(game) <= 4) { toast('5명 이상은 마피아만 선택할 수 있어요'); return; }
+  await netCall(async () => { await setRoomGame(ROOM_ID, game); await refreshRoom(); });
+}
+async function doKick(uid) {
+  await netCall(async () => { const r = await kickMember(ROOM_ID, ME, uid); if (r && r.ok === false) toast('내보내기 실패'); await refreshRoom(); });
+}
+async function doLeave() { await netCall(() => leaveRoomRpc(ROOM_ID, ME)); goLobby(MODE); }
 async function doSetDisplay(game) {
   await netCall(async () => {
     const r = await apiSetDisplay(TOKEN, game || null);
@@ -419,8 +456,8 @@ async function doStart() {
     const game = ROOM.game;
     if (!game) { toast('게임을 먼저 고르세요'); return; }
     const seated = MEMBERS.filter(m => m.seat != null).sort((a, b) => a.seat - b.seat);
-    const cap = capOf(game);
-    if (seated.length < 2 || seated.length > cap) { toast(`2~${cap}명이 앉아야 시작`); return; }
+    const cap = capOf(game), mn = minOf(game);
+    if (seated.length < mn || seated.length > cap) { toast(`${mn}~${cap}명이 앉아야 시작`); return; }
     const seatNums = seated.map(m => m.seat);
     const scoresMap = {}; seated.forEach(m => { scoresMap[m.seat] = (lbCache[m.user_id] && lbCache[m.user_id].score) ?? m.score ?? 0; });
     let st;
@@ -431,6 +468,11 @@ async function doStart() {
       st.n = seated.length; st.passStreak = 0; st.results = null;
     } else if (game === 'davinci') {
       st = davinciInitialState(seated.map(m => ({ seat: m.seat, user_id: m.user_id, name: m.name })), scoresMap);
+    } else if (game === 'mafia') {
+      const seed = ((serverNow() & 0x7fffffff) ^ (ROOM_ID * 2654435761)) >>> 0;
+      st = { game: 'mafia', seed, players: {}, names: {}, scores: {}, n: seated.length,
+             alive: {}, phase: 'lobby_assign', day: 0, votes: {}, voteCount: {}, log: [], winner: null, results: null };
+      seated.forEach(m => { st.players[m.seat] = m.user_id; st.names[m.seat] = m.name; st.scores[m.seat] = scoresMap[m.seat]; st.alive[m.seat] = true; });
     } else {                                         // race / hunt
       const seed = ((serverNow() & 0x7fffffff) ^ (ROOM_ID * 2654435761)) >>> 0;
       st = { game, seed, players: {}, names: {}, scores: {}, n: seated.length, results: null };
@@ -443,7 +485,8 @@ async function doStart() {
         seatNums.forEach(s => { st.roles[s] = (s === it ? 'seeker' : 'hider'); st.alive[s] = true; });
       }
     }
-    await startGame(ROOM_ID, st);
+    const r = await startGame(ROOM_ID, st);
+    if (game === 'mafia' && r.ok) await mafiaStartRoles(ROOM_ID, ME);   // 서버가 역할 비밀 배정 → 밤 시작
   });
 }
 
@@ -461,6 +504,13 @@ function enterDavinciView() {
   amSpectator = (mySeat == null);
   if (SCREEN !== 'davinci' || !DV.on || DV.roomId !== ROOM_ID) davinciEnter(ROOM, ME, mySeat, amSpectator);
   else davinciOnRoom(ROOM);
+}
+function enterMafiaView() {
+  G = ROOM.state;
+  mySeat = seatOfUser(G, ME.id);
+  amSpectator = (mySeat == null);
+  if (SCREEN !== 'mafia' || !MF.on || MF.roomId !== ROOM_ID) mafiaEnter(ROOM, ME, mySeat, amSpectator);
+  else mafiaOnRoom(ROOM);
 }
 
 /* ============================ 루미큐브 게임 =========================== */
@@ -892,6 +942,7 @@ function renderResult() {
           const place = r.rank != null ? `${r.rank}위` : (r.won ? '승' : '패');
           let tag = '';
           if (game === 'hunt') tag = r.role === 'seeker' ? ` <span class="role-tag">🕵️술래 ${r.found != null ? r.found + '색출' : ''}</span>` : ` <span class="role-tag">🙂${r.survived ? '생존' : '색출됨'}</span>`;
+          else if (game === 'mafia') { const rn = { mafia: '🔪 마피아', police: '🚓 경찰', doctor: '🚑 의사', citizen: '🙂 시민' }[r.role] || ''; tag = ` <span class="role-tag">${rn} · ${r.won ? '승리' : '패배'}</span>`; }
           const rec = (r.wins != null) ? `${r.wins}승 ${r.losses}패` : '';
           return `<li class="rank-row ${r.won ? 'is-winner' : ''}">
             <span class="rank-row__place">${place}</span>
@@ -905,12 +956,33 @@ function renderResult() {
         }).join('')}
       </ol>
       <div class="room__actions">
-        ${amHost ? `<button class="btn btn--primary btn--lg" data-act="again">다시 하기</button>` : `<div class="muted center">방장이 '다시 하기'를 누르면 새 게임이 시작돼요</div>`}
-        <button class="btn btn--ghost btn--lg" data-act="leave">로비로 나가기</button>
+        <div class="muted center"><b data-role="resultCountdown">10</b>초 후 자동으로 홈으로 나갑니다</div>
+        <button class="btn btn--primary btn--lg" data-act="leaveNow">지금 홈으로</button>
       </div>
     </section>`;
   if (anyWin) { const w = document.createElement('div'); w.className = 'win-burst'; w.textContent = '🎉'; document.body.appendChild(w); setTimeout(() => w.remove(), 1500); }
+  armResultLeave();
   apiMe(TOKEN).then(p => { if (p) { ME = p; TOKEN = p.token; } });
+}
+
+/* 게임 종료 → 결과 잠깐 보여준 뒤 전원 자동으로 방에서 나가 홈으로(잔상/폐쇄 방지) */
+function armResultLeave() {
+  if (resultLeaveIv) return;   // 이미 카운트다운 중이면 리셋하지 않음(멤버 이탈마다 10초 되돌림 방지)
+  resultLeaveAt = Date.now() + 10000;
+  resultLeaveIv = setInterval(() => {
+    const el = document.querySelector('[data-role="resultCountdown"]');
+    const rem = Math.max(0, Math.ceil((resultLeaveAt - Date.now()) / 1000));
+    if (el) el.textContent = rem;
+    if (rem <= 0) doResultAutoLeave();
+  }, 300);
+}
+function disarmResultLeave() { if (resultLeaveIv) { clearInterval(resultLeaveIv); resultLeaveIv = null; } }
+async function doResultAutoLeave() {
+  disarmResultLeave();
+  if (ROOM_ID == null) { goHome(); return; }
+  const rid = ROOM_ID;
+  try { await leaveRoomRpc(rid, ME); } catch (e) {}
+  goHome();
 }
 
 /* ============================ 랭킹 (게임별) ========================== */
@@ -921,7 +993,7 @@ async function showRank(game) {
   app().innerHTML = `
     <section class="screen screen--rank">
       <header class="room__top"><button class="btn btn--ghost" data-act="backHome">← 홈</button><b style="margin-left:6px">🏆 랭킹</b><span class="spacer"></span></header>
-      <nav class="game-select">${tab('rummikub', '루미큐브')}${tab('davinci', '다빈치 코드')}${tab('race', '운빨 대시')}${tab('hunt', '나도 사람이야')}</nav>
+      <nav class="game-select game-select--wrap">${tab('rummikub', '루미큐브')}${tab('davinci', '다빈치 코드')}${tab('mafia', '마피아')}${tab('race', '운빨 대시')}${tab('hunt', '나도 사람이야')}</nav>
       <ol class="board-rank grow scrollable">
         ${list.map((u, i) => `<li class="board-rank__row ${u.id === ME.id ? 'is-me' : ''}">
           <span class="pos">${i + 1}</span>
@@ -939,6 +1011,51 @@ function showTiers() {
       <header class="room__top"><button class="btn btn--ghost" data-act="backHome">← 홈</button><b style="margin-left:6px">🏅 티어</b><span class="spacer"></span></header>
       <div class="grow scrollable">${tierLadderHTML(ME.display && ME.display.game ? ME.display.game : null)}</div>
     </section>`;
+}
+
+/* ============================ 개발자 모드 ============================ */
+function showDev() {
+  setScreen('rank');
+  let body;
+  if (!DEV_UNLOCKED) {
+    body = `<div class="dev-pane">
+      <p class="muted">관리자 비밀번호를 입력하세요.</p>
+      <input class="input" id="dev_pw" type="password" placeholder="비밀번호" autocomplete="off" />
+      <div class="auth__err" id="dev_err"></div>
+      <button class="btn btn--primary btn--lg" data-act="devUnlock">확인</button>
+    </div>`;
+  } else {
+    const chips = [];
+    for (let n = 1; n <= 10; n++) chips.push(`<button class="chip ${DEV_SEL.has(n) ? 'is-active' : ''}" data-act="devToggle" data-room="${n}">방 ${n}${n <= 5 ? ' · 보드' : ' · 미니'}</button>`);
+    body = `<div class="dev-pane">
+      <p class="muted">초기화할 방을 고르세요(여러 개 가능). 선택한 방의 <b>모든 인원을 홈으로</b> 보내고 게임을 강제 종료해 <b>빈 대기방</b>으로 만듭니다.</p>
+      <p class="muted" style="font-size:12px">점수·연승·전적·티어는 <b>변하지 않습니다</b>.</p>
+      <div class="dev-rooms">${chips.join('')}</div>
+      <button class="btn btn--primary btn--lg" data-act="devReset" ${DEV_SEL.size ? '' : 'disabled'}>초기화 (${DEV_SEL.size}개)</button>
+    </div>`;
+  }
+  app().innerHTML = `
+    <section class="screen">
+      <header class="room__top"><button class="btn btn--ghost" data-act="backHome">← 홈</button><b style="margin-left:6px">🛠 개발자 모드</b><span class="spacer"></span></header>
+      <div class="grow scrollable">${body}</div>
+    </section>`;
+}
+function doDevUnlock() {
+  const v = ($('#dev_pw') && $('#dev_pw').value) || '';
+  const err = $('#dev_err');
+  if (v === DEV_PW) { DEV_UNLOCKED = true; showDev(); }
+  else if (err) { err.textContent = '비밀번호가 틀렸어요.'; }
+}
+async function doDevReset() {
+  await netCall(async () => {
+    if (!DEV_SEL.size) return;
+    const rooms = [...DEV_SEL].sort((a, b) => a - b);
+    const n = await adminResetRooms(rooms);
+    if (n == null) { toast('초기화 실패'); return; }
+    toast(rooms.length + '개 방 초기화 완료', true);
+    DEV_SEL.clear();
+    showDev();
+  });
 }
 
 /* ============================ 게임 규칙 ============================== */
@@ -971,12 +1088,20 @@ const RULES_TEXT = {
     <li><b>술래</b>: 군중 속 진짜 사람을 찾아 <b>제거</b>. 단 <b>AI를 잘못 제거하면 패널티</b>(쿨다운↑). 시간 내 <b>전원 색출</b>하면 승리.</li>
     <li>조작: 왼쪽 아래 조이스틱 이동 + 오른쪽 아래 액션버튼.</li>
   </ul>`,
+  mafia: `<ul>
+    <li>역할: <b>마피아 1</b> · <b>경찰 1</b> · <b>의사 1</b> · 나머지 <b>시민</b>. 내 역할은 나만 봐요(서버가 비밀 보관). (4~12인, 4명↑ 시작)</li>
+    <li><b>밤</b>: 마피아는 한 명을 제거, 의사는 한 명을 살리고(자신 가능), 경찰은 한 명을 조사해 마피아 여부를 알아내요. 시민은 잠들어 기다려요.</li>
+    <li>마피아와 의사가 <b>같은 사람</b>을 고르면 그 사람은 살아나요(사망자 없음).</li>
+    <li><b>낮</b>: 누가 죽었는지 공개돼요. 다 함께 토론한 뒤 <b>투표</b>로 한 명을 처형해요(동률이면 처형 없음). 처형된 사람의 정체가 공개돼요.</li>
+    <li><b>승리</b>: 마피아를 모두 처형하면 <b>시민 승</b>. 마피아 수가 시민 수 이상이 되면 <b>마피아 승</b>.</li>
+    <li>시스템이 사회자 역할을 해요. 제한시간이 지나면 자동으로 다음 단계로 넘어가요.</li>
+  </ul>`,
 };
 function rulesBody(game) {
   game = game || 'rummikub';
   const chip = k => `<button class="chip ${game === k ? 'is-active' : ''}" data-act="rulesGame" data-game="${k}">${GAME_LOGO[k]} ${GAME_SHORT[k]}</button>`;
   return `<div class="rules">
-    <div class="game-select rules__pick">${['rummikub', 'davinci', 'race', 'hunt'].map(chip).join('')}</div>
+    <div class="game-select rules__pick">${['rummikub', 'davinci', 'mafia', 'race', 'hunt'].map(chip).join('')}</div>
     <h3 class="rules__title" style="--tc:${tierForScore(0).color}">${GAME_LOGO[game]} ${GAME_NAME[game]}</h3>
     <div class="rules__body">${RULES_TEXT[game]}</div>
   </div>`;

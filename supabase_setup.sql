@@ -683,3 +683,554 @@ grant execute on function public.rk_finish_hunt(uuid,int)         to anon, authe
 grant execute on function public.rk_take_seat(uuid,int,int)       to anon, authenticated;
 grant execute on function public.rk_heartbeat(uuid,int)           to anon, authenticated;
 grant execute on function public.rk_reap_stale(int,int)           to anon, authenticated;
+
+-- =====================================================================
+-- v3.2 — 마피아 추가 + 라이프사이클/캡/강퇴/개발자초기화 (아래 정의가 위를 override)
+-- 멱등. 전체 파일을 다시 RUN 해도 안전.
+-- =====================================================================
+
+-- ---- 게임 도메인에 'mafia' 추가 ----
+alter table public.rooms drop constraint if exists rooms_game_chk;
+alter table public.rooms add  constraint rooms_game_chk
+  check (game is null or game in ('rummikub','davinci','race','hunt','mafia'));
+alter table public.users drop constraint if exists users_display_game_chk;
+alter table public.users drop constraint if exists users_display_game_check;
+alter table public.users add  constraint users_display_game_chk
+  check (display_game is null or display_game in ('rummikub','davinci','race','hunt','mafia'));
+alter table public.user_game_stats drop constraint if exists user_game_stats_game_check;
+alter table public.user_game_stats add  constraint user_game_stats_game_check
+  check (game in ('rummikub','davinci','race','hunt','mafia'));
+
+-- ---- 비밀 역할 저장소 (realtime 미발행 — RPC 로만 접근, 누구도 남의 역할을 못 봄) ----
+create table if not exists public.mafia_secrets (
+  room_id      int  not null,
+  seat         int  not null,
+  user_id      uuid not null,
+  role         text not null check (role in ('mafia','police','doctor','citizen')),
+  epoch        bigint not null default 0,    -- 배정 시점의 rooms.version
+  night_kind   text,                         -- 이번 밤 제출한 행동(kill|save|investigate)
+  night_target int,                          -- 이번 밤 지목(해소 시 초기화)
+  police_target int,                         -- 마지막 조사 대상(비공개 표시용 유지)
+  police_result boolean,                     -- 그 대상이 마피아였나
+  primary key (room_id, seat)
+);
+alter table public.mafia_secrets enable row level security;   -- 정책 없음 = RPC(SECURITY DEFINER) 로만
+
+-- ---- rk_me: mafia 기본 stats 포함 ----
+create or replace function public.rk_me(p_token uuid)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare u public.users; g jsonb; disp jsonb; ds int;
+begin
+  if p_token is null then return null; end if;
+  select * into u from public.users where token = p_token;
+  if not found then return null; end if;
+  select coalesce(jsonb_object_agg(game, jsonb_build_object('score',score,'wins',wins,'losses',losses,'streak',streak)), '{}'::jsonb)
+    into g from public.user_game_stats where user_id = u.id;
+  g := jsonb_build_object(
+    'rummikub', coalesce(g->'rummikub', jsonb_build_object('score',0,'wins',0,'losses',0,'streak',0)),
+    'davinci',  coalesce(g->'davinci',  jsonb_build_object('score',0,'wins',0,'losses',0,'streak',0)),
+    'mafia',    coalesce(g->'mafia',    jsonb_build_object('score',0,'wins',0,'losses',0,'streak',0)),
+    'race',     coalesce(g->'race',     jsonb_build_object('score',0,'wins',0,'losses',0,'streak',0)),
+    'hunt',     coalesce(g->'hunt',     jsonb_build_object('score',0,'wins',0,'losses',0,'streak',0)));
+  if u.display_game is null then
+    disp := jsonb_build_object('game', null, 'score', 0);
+  else
+    ds := coalesce((g->u.display_game->>'score')::int, 0);
+    disp := jsonb_build_object('game', u.display_game, 'score', ds);
+  end if;
+  return jsonb_build_object('id',u.id,'username',u.username,'real_name',u.real_name,
+                            'display_game',u.display_game,'games',g,'display',disp,'token',u.token);
+end; $$;
+
+-- ---- rooms_game_guard: 보드룸(1~5) mafia 허용 + 5명↑이면 cap<=4 게임 전환 금지 ----
+create or replace function public.rooms_game_guard() returns trigger as $$
+declare v_newcap int;
+begin
+  if new.game is not null then
+    if new.id between 1 and 5  and new.game not in ('rummikub','davinci','mafia') then new.game := null; end if;
+    if new.id between 6 and 10 and new.game not in ('race','hunt')               then new.game := null; end if;
+  end if;
+  -- 게임 중 종류 변경 금지
+  if tg_op='UPDATE' and old.game is distinct from new.game and old.status <> 'waiting' then
+    new.game := old.game;
+  end if;
+  -- 5명 이상이면 cap<=4 게임으로 전환 금지(마피아만 허용)
+  if tg_op='UPDATE' and new.game is distinct from old.game and new.game is not null then
+    v_newcap := case new.game when 'mafia' then 12 when 'rummikub' then 4 when 'davinci' then 4 else 8 end;
+    if v_newcap <= 4 and (select count(*) from public.room_members where room_id = new.id) >= 5 then
+      new.game := old.game;
+    end if;
+  end if;
+  return new;
+end; $$ language plpgsql;
+drop trigger if exists trg_rooms_game_guard on public.rooms;
+create trigger trg_rooms_game_guard before insert or update on public.rooms
+  for each row execute function public.rooms_game_guard();
+
+-- ---- rk_take_seat: 게임별 cap(좌석번호 + 인원수) 서버 강제 ----
+create or replace function public.rk_take_seat(p_token uuid, p_room int, p_seat int)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare v_user uuid; v_status text; v_game text; v_cap int;
+begin
+  select id into v_user from public.users where token = p_token;
+  if v_user is null then raise exception 'BAD_TOKEN'; end if;
+  select status, game into v_status, v_game from public.rooms where id = p_room;
+  if v_status is null then raise exception 'NO_ROOM'; end if;
+  if v_status <> 'waiting' then return jsonb_build_object('ok',false,'reason','not_waiting'); end if;
+  v_cap := case v_game when 'mafia' then 12 when 'rummikub' then 4 when 'davinci' then 4 when 'race' then 8 when 'hunt' then 8
+                       else (case when p_room between 1 and 5 then 4 else 8 end) end;   -- 게임 미선택 보드룸=4
+  if p_seat < 1 or p_seat > v_cap then raise exception 'BAD_SEAT'; end if;
+  if exists (select 1 from public.room_members where room_id=p_room and seat=p_seat and user_id<>v_user) then
+    return jsonb_build_object('ok',false,'reason','taken');
+  end if;
+  if (select count(*) from public.room_members where room_id=p_room and seat is not null and user_id<>v_user) >= v_cap then
+    return jsonb_build_object('ok',false,'reason','full');
+  end if;
+  begin
+    update public.room_members set seat = p_seat, role = 'player' where room_id = p_room and user_id = v_user;
+    if not found then return jsonb_build_object('ok',false,'reason','not_member'); end if;
+  exception when unique_violation then return jsonb_build_object('ok',false,'reason','taken');
+  end;
+  return jsonb_build_object('ok',true,'seat',p_seat);
+end; $$;
+
+-- ---- rk_kick_member: 방장이 다른 멤버 강퇴(대기 중에만) ----
+create or replace function public.rk_kick_member(p_token uuid, p_room int, p_target uuid)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare v_user uuid; v_room public.rooms;
+begin
+  select id into v_user from public.users where token = p_token;
+  if v_user is null then raise exception 'BAD_TOKEN'; end if;
+  select * into v_room from public.rooms where id = p_room for update;
+  if not found then raise exception 'NO_ROOM'; end if;
+  if v_room.host_id is distinct from v_user then raise exception 'NOT_HOST'; end if;
+  if v_room.status <> 'waiting' then raise exception 'NOT_WAITING'; end if;
+  if p_target = v_user then raise exception 'CANT_KICK_SELF'; end if;
+  delete from public.room_members  where room_id = p_room and user_id = p_target;
+  delete from public.room_presence where room_id = p_room and user_id = p_target;
+  return jsonb_build_object('ok', true);
+end; $$;
+
+-- ---- rk_leave_room: 원자적 퇴장(마지막 1명이면 빈 대기방으로 리셋) ----
+create or replace function public.rk_leave_room(p_token uuid, p_room int)
+returns int language plpgsql security definer set search_path = public, extensions as $$
+declare v_user uuid; v_left int; v_earliest uuid; v_room public.rooms;
+begin
+  select id into v_user from public.users where token = p_token;
+  if v_user is null then raise exception 'BAD_TOKEN'; end if;
+  delete from public.room_members  where room_id = p_room and user_id = v_user;
+  delete from public.room_presence where room_id = p_room and user_id = v_user;
+  select count(*) into v_left from public.room_members where room_id = p_room;
+  if v_left = 0 then
+    delete from public.mafia_secrets where room_id = p_room;
+    update public.rooms set host_id=null, status='waiting', state=null, version=0, game=null, turn_started_at=null where id = p_room;
+  else
+    select * into v_room from public.rooms where id = p_room;
+    if v_room.host_id is null or not exists (select 1 from public.room_members where room_id=p_room and user_id=v_room.host_id) then
+      select user_id into v_earliest from public.room_members where room_id=p_room order by joined_at asc limit 1;
+      update public.rooms set host_id = v_earliest where id = p_room;
+    end if;
+  end if;
+  return v_left;
+end; $$;
+
+-- ---- rk_reap_stale: finished 방의 좌석 유령도 정리(자동 빈방 복구) ----
+create or replace function public.rk_reap_stale(p_room int, p_ttl_seconds int default 25)
+returns int language plpgsql security definer set search_path = public, extensions as $$
+declare v_deleted int; v_left int; v_earliest uuid; v_room public.rooms;
+begin
+  select * into v_room from public.rooms where id = p_room;
+  if not found then return 0; end if;
+  delete from public.room_members m
+   where m.room_id = p_room
+     and m.joined_at < now() - make_interval(secs => p_ttl_seconds)
+     and not exists (select 1 from public.room_presence p
+                     where p.room_id=p_room and p.user_id=m.user_id and p.last_seen >= now() - make_interval(secs => p_ttl_seconds))
+     and (v_room.status in ('waiting','finished') or m.seat is null);
+  get diagnostics v_deleted = row_count;
+  delete from public.room_presence p
+   where p.room_id = p_room
+     and not exists (select 1 from public.room_members m where m.room_id=p_room and m.user_id=p.user_id);
+  select count(*) into v_left from public.room_members where room_id = p_room;
+  if v_left = 0 then
+    delete from public.mafia_secrets where room_id = p_room;
+    update public.rooms set host_id=null, status='waiting', state=null, version=0, game=null where id = p_room;
+  else
+    if v_room.host_id is null or not exists (select 1 from public.room_members where room_id=p_room and user_id=v_room.host_id) then
+      select user_id into v_earliest from public.room_members where room_id=p_room order by joined_at asc limit 1;
+      update public.rooms set host_id = v_earliest where id = p_room;
+    end if;
+  end if;
+  return v_deleted;
+end; $$;
+
+-- ---- rk_admin_reset_rooms: 개발자 강제초기화(점수/연승/전적/티어 불변) ----
+create or replace function public.rk_admin_reset_rooms(p_rooms int[])
+returns int language plpgsql security definer set search_path = public, extensions as $$
+declare v_cnt int;
+begin
+  if p_rooms is null or array_length(p_rooms,1) is null then return 0; end if;
+  delete from public.mafia_secrets where room_id = any(p_rooms);
+  delete from public.room_members  where room_id = any(p_rooms) and room_id between 1 and 10;
+  delete from public.room_presence where room_id = any(p_rooms) and room_id between 1 and 10;
+  update public.rooms
+     set host_id=null, status='waiting', state=null, version=0, game=null, turn_started_at=null
+   where id = any(p_rooms) and id between 1 and 10;
+  get diagnostics v_cnt = row_count;
+  return v_cnt;
+end; $$;
+
+-- ---- rk_apply_score: 'mafia' 분기 추가(다빈치와 헌트 사이 마진) ----
+create or replace function public.rk_apply_score(
+  p_game text, p_perf numeric, p_score int, p_prev_streak int, p_is_win boolean, p_treatment text)
+returns table(delta int, bonus int, new_streak int, new_score int, lvl int)
+language plpgsql immutable set search_path = public as $$
+declare L int; gm numeric; lm numeric; tx numeric; mw int; br numeric; adj numeric; d int; b int; ns int;
+begin
+  L := public.rk_tier_level(coalesce(p_score,0));
+  if p_game = 'rummikub' then
+    gm := greatest(0.42, 1 - L*0.011); lm := least(2.10, 1 + L*0.020); tx := L*0.85;
+    mw := greatest(8, round(28 - L*0.45)::int); br := 0.10;
+  elsif p_game = 'davinci' then
+    gm := greatest(0.42, 1 - L*0.011); lm := least(2.08, 1 + L*0.020); tx := L*0.60;
+    mw := greatest(6, round(20 - L*0.34)::int); br := 0.10;
+  elsif p_game = 'mafia' then
+    gm := greatest(0.45, 1 - L*0.011); lm := least(2.08, 1 + L*0.020); tx := L*0.45;
+    mw := greatest(6, round(16 - L*0.28)::int); br := 0.10;
+  elsif p_game = 'race' then
+    gm := greatest(0.45, 1 - L*0.011); lm := least(2.05, 1 + L*0.019); tx := L*0.32;
+    mw := greatest(4, round(12 - L*0.18)::int); br := 0.08;
+  else  -- hunt
+    gm := greatest(0.45, 1 - L*0.011); lm := least(2.05, 1 + L*0.019); tx := L*0.30;
+    mw := greatest(4, round(11 - L*0.16)::int); br := 0.08;
+  end if;
+  adj := p_perf - tx;
+  if adj >= 0 then d := round(adj * gm)::int; else d := round(adj * lm)::int; end if;
+  if p_is_win then d := greatest(d, mw); end if;
+  ns := case p_treatment when 'apply' then coalesce(p_prev_streak,0)+1
+                         when 'maintain' then coalesce(p_prev_streak,0)
+                         else 0 end;
+  b := 0;
+  if p_treatment = 'apply' and L <= 28 and ns >= 2 and d > 0 then
+    b := round(d * ns * br)::int; d := d + b;
+  end if;
+  delta := d; bonus := b; new_streak := ns; new_score := greatest(0, coalesce(p_score,0) + d); lvl := L;
+  return next;
+end; $$;
+
+-- =====================================================================
+-- 마피아 RPC (서버 권위 · 비밀 역할)
+-- =====================================================================
+
+-- 역할 비밀 배정 + 밤 시작(멱등: 이미 배정됐으면 already)
+create or replace function public.mf_start(p_token uuid, p_room int)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare v_user uuid; v_room public.rooms; v_state jsonb; v_players jsonb;
+  v_seats int[]; v_n int; v_epoch bigint; i int; v_perm int[]; v_seed bigint; v_log jsonb;
+begin
+  select id into v_user from public.users where token=p_token;
+  if v_user is null then raise exception 'BAD_TOKEN'; end if;
+  select * into v_room from public.rooms where id=p_room for update;
+  if not found then raise exception 'NO_ROOM'; end if;
+  if v_room.status <> 'playing' or coalesce(v_room.game,'') <> 'mafia' then raise exception 'WRONG_STATE'; end if;
+  v_state := v_room.state;
+  if (v_state->>'phase') <> 'lobby_assign' then return jsonb_build_object('ok',true,'already',true); end if;
+  v_players := v_state->'players';
+  select array_agg(key::int order by key::int) into v_seats from jsonb_object_keys(v_players) key;
+  v_n := coalesce(array_length(v_seats,1),0);
+  if v_n < 4 or v_n > 12 then raise exception 'BAD_N'; end if;
+  if exists (select 1 from public.mafia_secrets where room_id=p_room and epoch=v_room.version) then
+    return jsonb_build_object('ok',true,'already',true);
+  end if;
+  v_epoch := v_room.version;
+  v_seed := coalesce((v_state->>'seed')::bigint, v_epoch);
+  perform setseed( ((v_seed % 1000000)::numeric / 1000000.0) );
+  select array_agg(s order by random()) into v_perm from unnest(v_seats) s;
+  delete from public.mafia_secrets where room_id=p_room;
+  for i in 1 .. v_n loop
+    insert into public.mafia_secrets(room_id, seat, user_id, role, epoch)
+    values (p_room, v_seats[i], (v_players->>(v_seats[i]::text))::uuid,
+      case when v_seats[i]=v_perm[1] then 'mafia'
+           when v_seats[i]=v_perm[2] then 'police'
+           when v_seats[i]=v_perm[3] then 'doctor'
+           else 'citizen' end, v_epoch);
+  end loop;
+  v_log := coalesce(v_state->'log','[]'::jsonb) || to_jsonb(array['🌙 1일차 밤 — 마피아·경찰·의사는 행동하세요. 시민은 기다립니다.']);
+  v_state := jsonb_set(v_state, '{phase}', '"night"'::jsonb);
+  v_state := jsonb_set(v_state, '{day}',   '1'::jsonb);
+  v_state := jsonb_set(v_state, '{log}',   v_log);
+  update public.rooms set state=v_state, version=version+1 where id=p_room;
+  return jsonb_build_object('ok',true);
+end; $$;
+
+-- 내 비공개 정보만 반환(내 역할 + 내 조사결과 + 이번밤 행동여부)
+create or replace function public.mf_my_view(p_token uuid, p_room int)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare v_user uuid; rec public.mafia_secrets; v_pname text;
+begin
+  select id into v_user from public.users where token=p_token;
+  if v_user is null then raise exception 'BAD_TOKEN'; end if;
+  select * into rec from public.mafia_secrets where room_id=p_room and user_id=v_user;
+  if not found then return jsonb_build_object('role', null); end if;
+  if rec.role='police' and rec.police_target is not null then
+    select coalesce(state->'names'->>(rec.police_target::text),'') into v_pname from public.rooms where id=p_room;
+    return jsonb_build_object('role',rec.role,'acted',(rec.night_kind is not null),
+      'police',jsonb_build_object('target',rec.police_target,'name',v_pname,'isMafia',rec.police_result));
+  end if;
+  return jsonb_build_object('role',rec.role,'acted',(rec.night_kind is not null));
+end; $$;
+
+-- 밤 행동 제출(경찰은 즉시 결과 반환). 모든 생존 특수역할이 제출하면 자동 해소.
+create or replace function public.mf_night_action(p_token uuid, p_room int, p_target int)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare v_user uuid; v_room public.rooms; v_state jsonb; me public.mafia_secrets;
+  v_kind text; v_isMafia boolean; v_tname text; v_pending int; v_res jsonb;
+begin
+  select id into v_user from public.users where token=p_token;
+  if v_user is null then raise exception 'BAD_TOKEN'; end if;
+  select * into v_room from public.rooms where id=p_room for update;
+  if not found or v_room.status<>'playing' or coalesce(v_room.game,'')<>'mafia' then raise exception 'WRONG_STATE'; end if;
+  v_state := v_room.state;
+  if (v_state->>'phase') <> 'night' then raise exception 'NOT_NIGHT'; end if;
+  select * into me from public.mafia_secrets where room_id=p_room and user_id=v_user;
+  if not found then raise exception 'NOT_A_PLAYER'; end if;
+  if me.role = 'citizen' then raise exception 'NO_NIGHT_ROLE'; end if;
+  if not coalesce((v_state->'alive'->>(me.seat::text))::boolean,false) then raise exception 'DEAD'; end if;
+  if not coalesce((v_state->'alive'->>(p_target::text))::boolean,false) then raise exception 'TARGET_DEAD'; end if;
+  if me.role in ('mafia','police') and p_target = me.seat then raise exception 'NO_SELF'; end if;  -- 의사는 자가보호 허용
+  v_kind := case me.role when 'mafia' then 'kill' when 'doctor' then 'save' else 'investigate' end;
+  update public.mafia_secrets set night_kind=v_kind, night_target=p_target where room_id=p_room and seat=me.seat;
+  v_res := jsonb_build_object('ok',true);
+  if me.role='police' then
+    select (role='mafia') into v_isMafia from public.mafia_secrets where room_id=p_room and seat=p_target;
+    select coalesce(v_state->'names'->>(p_target::text),'') into v_tname;
+    update public.mafia_secrets set police_target=p_target, police_result=v_isMafia where room_id=p_room and seat=me.seat;
+    v_res := jsonb_build_object('ok',true,'police',jsonb_build_object('target',p_target,'name',v_tname,'isMafia',v_isMafia));
+  end if;
+  -- 생존 특수역할(마피아/경찰/의사)이 전부 제출했으면 자동으로 밤 해소
+  select count(*) into v_pending from public.mafia_secrets s
+    where s.room_id=p_room and s.role in ('mafia','police','doctor')
+      and coalesce((v_state->'alive'->>(s.seat::text))::boolean,false)
+      and s.night_kind is null;
+  if v_pending = 0 then perform public.mf_resolve_phase(p_token, p_room, 'night'); end if;
+  return v_res;
+end; $$;
+
+-- 낮 투표(공개). target=0 = 기권. 생존자 전원 투표 시 자동 처형 해소.
+create or replace function public.mf_day_vote(p_token uuid, p_room int, p_target int)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare v_user uuid; v_room public.rooms; v_state jsonb; me public.mafia_secrets;
+  v_votes jsonb; v_count jsonb; r record; v_alive int; v_cast int;
+begin
+  select id into v_user from public.users where token=p_token;
+  if v_user is null then raise exception 'BAD_TOKEN'; end if;
+  select * into v_room from public.rooms where id=p_room for update;
+  if not found or v_room.status<>'playing' or coalesce(v_room.game,'')<>'mafia' then raise exception 'WRONG_STATE'; end if;
+  v_state := v_room.state;
+  if (v_state->>'phase') <> 'day' then raise exception 'NOT_DAY'; end if;
+  select * into me from public.mafia_secrets where room_id=p_room and user_id=v_user;
+  if not found then raise exception 'NOT_A_PLAYER'; end if;
+  if not coalesce((v_state->'alive'->>(me.seat::text))::boolean,false) then raise exception 'DEAD'; end if;
+  if p_target <> 0 and not coalesce((v_state->'alive'->>(p_target::text))::boolean,false) then raise exception 'TARGET_DEAD'; end if;
+  v_votes := jsonb_set(coalesce(v_state->'votes','{}'::jsonb), array[me.seat::text], to_jsonb(p_target));
+  v_count := '{}'::jsonb;
+  for r in select value::text as tgt, count(*)::int as c from jsonb_each_text(v_votes) where value<>'0' group by value loop
+    v_count := jsonb_set(v_count, array[r.tgt], to_jsonb(r.c));
+  end loop;
+  v_state := jsonb_set(v_state, '{votes}', v_votes);
+  v_state := jsonb_set(v_state, '{voteCount}', v_count);
+  update public.rooms set state=v_state, version=version+1 where id=p_room;
+  select count(*) into v_alive from jsonb_each(v_state->'alive') where value = 'true'::jsonb;
+  select count(*) into v_cast  from jsonb_object_keys(v_votes);
+  if v_cast >= v_alive then perform public.mf_resolve_phase(p_token, p_room, 'day'); end if;
+  return jsonb_build_object('ok',true);
+end; $$;
+
+-- 페이즈 해소(서버 권위, 멱등 CAS). 밤 행동 완료 시 또는 시간초과 리더 호출.
+create or replace function public.mf_resolve_phase(p_token uuid, p_room int, p_expected text)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare
+  v_user uuid; v_room public.rooms; v_state jsonb; v_phase text; v_day int;
+  v_kill int; v_save int; v_killed int; v_saved boolean;
+  v_votes jsonb; v_exec int; v_top int; v_second int; v_execRole text; v_name text; r record;
+  v_aliveMafia int; v_aliveOther int; v_winner text; v_log jsonb;
+  me public.mafia_secrets; v_pending int; v_alive int; v_cast int; v_lim int; v_elapsed numeric; v_complete boolean;
+begin
+  select id into v_user from public.users where token=p_token;
+  if v_user is null then raise exception 'BAD_TOKEN'; end if;
+  select * into v_room from public.rooms where id=p_room for update;
+  if not found or v_room.status<>'playing' or coalesce(v_room.game,'')<>'mafia' then
+    return jsonb_build_object('ok',false,'reason','wrong_state'); end if;
+  select * into me from public.mafia_secrets where room_id=p_room and user_id=v_user;   -- 이 방 플레이어만 해소 가능
+  if not found then raise exception 'NOT_A_PLAYER'; end if;
+  v_state := v_room.state; v_phase := v_state->>'phase'; v_day := coalesce((v_state->>'day')::int,1);
+  if v_phase <> p_expected then return jsonb_build_object('ok',false,'reason','phase_moved'); end if;
+
+  -- 조기 강제해소 차단: 전원 행동 완료(complete) 또는 제한시간 경과일 때만 진행
+  v_complete := false;
+  if v_phase = 'night' then
+    select count(*) into v_pending from public.mafia_secrets s
+      where s.room_id=p_room and s.role in ('mafia','police','doctor')
+        and coalesce((v_state->'alive'->>(s.seat::text))::boolean,false) and s.night_kind is null;
+    v_complete := (v_pending = 0); v_lim := 60;
+  elsif v_phase = 'day' then
+    select count(*) into v_alive from jsonb_each(v_state->'alive') where value = 'true'::jsonb;
+    select count(*) into v_cast  from jsonb_object_keys(coalesce(v_state->'votes','{}'::jsonb));
+    v_complete := (v_cast >= v_alive); v_lim := 90;
+  else
+    return jsonb_build_object('ok',false,'reason','noop');
+  end if;
+  if not v_complete then
+    v_elapsed := case when v_room.turn_started_at is null then 1e9
+                      else extract(epoch from (now() - v_room.turn_started_at)) end;
+    if v_elapsed < v_lim then return jsonb_build_object('ok',false,'reason','too_early'); end if;
+  end if;
+
+  v_log := coalesce(v_state->'log','[]'::jsonb);
+
+  if v_phase = 'night' then
+    select night_target into v_kill from public.mafia_secrets where room_id=p_room and role='mafia' and night_kind='kill' limit 1;
+    select night_target into v_save from public.mafia_secrets where room_id=p_room and role='doctor' and night_kind='save' limit 1;
+    v_killed := null; v_saved := false;
+    if v_kill is not null then
+      if v_save is not null and v_save = v_kill then v_saved := true; else v_killed := v_kill; end if;
+    end if;
+    if v_killed is not null then
+      v_state := jsonb_set(v_state, array['alive', v_killed::text], 'false'::jsonb);
+      select coalesce(v_state->'names'->>(v_killed::text),'') into v_name;
+      v_log := v_log || to_jsonb(array['☀️ '||v_day||'일차 아침 — '||v_name||' 님이 밤사이 살해당했습니다.']);
+    elsif v_saved then
+      v_log := v_log || to_jsonb(array['☀️ '||v_day||'일차 아침 — 의사가 살렸습니다! 사망자가 없습니다.']);
+    else
+      v_log := v_log || to_jsonb(array['☀️ '||v_day||'일차 아침 — 아무도 죽지 않았습니다.']);
+    end if;
+    v_state := jsonb_set(v_state, '{lastNight}', jsonb_build_object('killed', coalesce(to_jsonb(v_killed),'null'::jsonb), 'saved', v_saved));
+    update public.mafia_secrets set night_kind=null, night_target=null where room_id=p_room;
+  else  -- day
+    v_votes := coalesce(v_state->'votes','{}'::jsonb);
+    v_top := 0; v_exec := null; v_second := -1;
+    for r in select value::int as tgt, count(*)::int as c from jsonb_each_text(v_votes)
+             where value <> '0' group by value order by count(*) desc, value::int asc loop
+      if v_exec is null then v_top := r.c; v_exec := r.tgt;
+      elsif v_second = -1 then v_second := r.c;
+      end if;
+    end loop;
+    if v_top <= 0 or v_second = v_top then v_exec := null; end if;   -- 동률/무효 → 처형 없음
+    v_execRole := null;
+    if v_exec is not null then
+      select role into v_execRole from public.mafia_secrets where room_id=p_room and seat=v_exec;
+      v_state := jsonb_set(v_state, array['alive', v_exec::text], 'false'::jsonb);
+      select coalesce(v_state->'names'->>(v_exec::text),'') into v_name;
+      v_log := v_log || to_jsonb(array['⚖️ '||v_name||' 님이 투표로 처형 — 정체는 '||
+        (case v_execRole when 'mafia' then '🔪 마피아' when 'police' then '🚓 경찰' when 'doctor' then '🚑 의사' else '🙂 시민' end)||'!']);
+    else
+      v_log := v_log || to_jsonb(array['⚖️ 투표가 동률/무효여서 아무도 처형되지 않았습니다.']);
+    end if;
+    v_state := jsonb_set(v_state, '{lastVote}', jsonb_build_object('executed',coalesce(to_jsonb(v_exec),'null'::jsonb),'role',coalesce(to_jsonb(v_execRole),'null'::jsonb)));
+  end if;
+
+  -- 승리 판정(전환 로그보다 먼저 — "밤이 되었습니다" 뒤에 "승리"가 찍히는 순서 버그 방지)
+  select count(*) into v_aliveMafia from public.mafia_secrets s
+    where s.room_id=p_room and s.role='mafia' and coalesce((v_state->'alive'->>(s.seat::text))::boolean,false);
+  select count(*) into v_aliveOther from public.mafia_secrets s
+    where s.room_id=p_room and s.role<>'mafia' and coalesce((v_state->'alive'->>(s.seat::text))::boolean,false);
+  v_winner := null;
+  if v_aliveMafia = 0 then v_winner := 'citizens';
+  elsif v_aliveMafia >= v_aliveOther then v_winner := 'mafia';
+  end if;
+
+  if v_winner is not null then
+    v_state := jsonb_set(v_state, '{phase}', '"end"'::jsonb);
+    v_state := jsonb_set(v_state, '{winner}', to_jsonb(v_winner));
+    v_log := v_log || to_jsonb(array[(case when v_winner='citizens' then '🎉 시민 승리! 마피아를 처단했습니다.' else '🔪 마피아 승리! 마을이 무너졌습니다.' end)]);
+  elsif v_phase = 'night' then               -- 밤 해소 → 낮
+    v_state := jsonb_set(v_state, '{votes}', '{}'::jsonb);
+    v_state := jsonb_set(v_state, '{voteCount}', '{}'::jsonb);
+    v_state := jsonb_set(v_state, '{phase}', '"day"'::jsonb);
+    v_log := v_log || to_jsonb(array['🗳️ '||v_day||'일차 낮 — 토론 후 처형할 사람을 투표하세요.']);
+  else                                        -- 낮 해소 → 다음 밤
+    v_state := jsonb_set(v_state, '{day}', to_jsonb(v_day+1));
+    v_state := jsonb_set(v_state, '{votes}', '{}'::jsonb);
+    v_state := jsonb_set(v_state, '{voteCount}', '{}'::jsonb);
+    v_state := jsonb_set(v_state, '{phase}', '"night"'::jsonb);
+    v_log := v_log || to_jsonb(array['🌙 '||(v_day+1)||'일차 밤이 되었습니다.']);
+  end if;
+
+  if jsonb_array_length(v_log) > 30 then
+    select jsonb_agg(e order by o) into v_log
+    from (select e, o from jsonb_array_elements(v_log) with ordinality t(e, o) order by o desc limit 30) z;
+  end if;
+  v_state := jsonb_set(v_state, '{log}', v_log);
+  update public.rooms set state=v_state, version=version+1 where id=p_room;
+  return jsonb_build_object('ok',true,'phase',v_state->>'phase','winner',v_winner);
+end; $$;
+
+-- 마피아 정산(진영 비대칭 점수). 멱등.
+create or replace function public.rk_finish_mafia(p_token uuid, p_room int)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare
+  v_user uuid; v_room public.rooms; v_state jsonb; v_players jsonb; v_winner text;
+  v_seats text[]; v_n int; v_results jsonb := '{}'::jsonb;
+  i int; v_seat text; v_uid uuid; v_role text; v_camp text; v_won boolean;
+  v_curscore int; v_curstreak int; v_perf numeric; v_tr text; v_delta int; v_ns int; r record; v_w int; v_l int;
+  CAP constant int := 90;
+begin
+  select id into v_user from public.users where token = p_token;
+  if v_user is null then raise exception 'BAD_TOKEN'; end if;
+  select * into v_room from public.rooms where id = p_room for update;
+  if not found then raise exception 'NO_ROOM'; end if;
+  if coalesce(v_room.game,'') <> 'mafia' then raise exception 'WRONG_GAME'; end if;
+  if v_room.status <> 'playing' then return coalesce(v_room.state->'results','{}'::jsonb); end if;
+  v_state := v_room.state; v_players := v_state->'players'; v_winner := v_state->>'winner';
+  if not exists (select 1 from jsonb_each_text(v_players) e where e.value=v_user::text) then raise exception 'NOT_A_PLAYER'; end if;
+  if v_winner is null or (v_state->>'phase') <> 'end' then raise exception 'NOT_OVER'; end if;
+  select array_agg(key) into v_seats from jsonb_object_keys(v_players) key;
+  v_n := coalesce(array_length(v_seats,1),0);
+  if v_n < 4 or v_n > 12 then raise exception 'BAD_N'; end if;
+
+  for i in 1 .. v_n loop
+    v_seat := v_seats[i]; v_uid := (v_players->>v_seat)::uuid;
+    select role into v_role from public.mafia_secrets where room_id=p_room and seat=v_seat::int;
+    v_role := coalesce(v_role,'citizen');
+    v_camp := case when v_role='mafia' then 'mafia' else 'citizens' end;
+    v_won  := (v_camp = v_winner);
+    v_curscore := 0; v_curstreak := 0;
+    if v_uid is not null then
+      select coalesce(score,0), coalesce(streak,0) into v_curscore, v_curstreak
+        from public.user_game_stats where user_id=v_uid and game='mafia';
+      v_curscore := coalesce(v_curscore,0); v_curstreak := coalesce(v_curstreak,0);
+    end if;
+    if v_camp = 'mafia' then
+      v_perf := case when v_won then 14 else -10 end;
+      v_tr   := case when v_won then 'apply' else 'maintain' end;   -- 1인 역할: 패배 시 연착륙
+    else
+      v_perf := case when v_won then 8 else -8 end;
+      v_tr   := case when v_won then 'apply' else 'break' end;
+    end if;
+    select * into r from public.rk_apply_score('mafia', v_perf, v_curscore, v_curstreak, v_won, v_tr);
+    v_delta := greatest(-CAP, least(CAP, r.delta));
+    v_ns := greatest(0, v_curscore + v_delta);
+    perform public.rk_bump_stats(v_uid, 'mafia', v_ns, r.new_streak, v_won);
+    v_w:=0; v_l:=0; if v_uid is not null then select wins,losses into v_w,v_l from public.user_game_stats where user_id=v_uid and game='mafia'; v_w:=coalesce(v_w,0); v_l:=coalesce(v_l,0); end if;
+    v_results := jsonb_set(v_results, array[v_seat], jsonb_build_object(
+      'role',v_role,'camp',v_camp,'won',v_won,
+      'delta',v_delta,'bonus',r.bonus,'prevScore',v_curscore,'newScore',v_ns,
+      'streak',r.new_streak,'treatment',v_tr,'prevStreak',v_curstreak,'wins',v_w,'losses',v_l));
+  end loop;
+  v_state := jsonb_set(v_state, '{results}', v_results);
+  v_state := jsonb_set(v_state, '{status}',  '"finished"'::jsonb);
+  update public.rooms set status='finished', state=v_state, version=version+1 where id=p_room;
+  delete from public.mafia_secrets where room_id = p_room;
+  return v_results;
+end; $$;
+
+-- ---- 권한 ----
+grant execute on function public.rk_kick_member(uuid,int,uuid)    to anon, authenticated;
+grant execute on function public.rk_leave_room(uuid,int)          to anon, authenticated;
+grant execute on function public.rk_admin_reset_rooms(int[])      to anon, authenticated;
+grant execute on function public.mf_start(uuid,int)              to anon, authenticated;
+grant execute on function public.mf_my_view(uuid,int)            to anon, authenticated;
+grant execute on function public.mf_night_action(uuid,int,int)   to anon, authenticated;
+grant execute on function public.mf_day_vote(uuid,int,int)       to anon, authenticated;
+grant execute on function public.mf_resolve_phase(uuid,int,text) to anon, authenticated;
+grant execute on function public.rk_finish_mafia(uuid,int)       to anon, authenticated;

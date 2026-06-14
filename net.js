@@ -158,8 +158,53 @@ async function pushState(roomId, state, expectedVersion) {
 async function resetRoomToWaiting(roomId) {
   await sb.from('rooms').update({ status: 'waiting', state: null, version: 0 }).eq('id', roomId);
 }
+// 원자적 퇴장(서버 RPC). 마지막 1명이 나가면 방을 빈 대기방으로 리셋. RPC 미적용 시 옛 leaveRoom 폴백.
+async function leaveRoomRpc(roomId, me) {
+  try { await sb.rpc('rk_leave_room', { p_token: me.token, p_room: roomId }); }
+  catch (e) { try { await leaveRoom(roomId, me); } catch (_) {} }
+}
+// 개발자 모드: 선택한 방들 강제 초기화(점수/전적 불변). 반환 처리 방 개수 또는 null.
+async function adminResetRooms(rooms) {
+  const { data, error } = await sb.rpc('rk_admin_reset_rooms', { p_rooms: rooms });
+  if (error) { console.warn('admin reset', error); return null; }
+  return data;
+}
+// 방장 강퇴(대기 중에만). 반환 {ok}.
+async function kickMember(roomId, me, targetId) {
+  const { data, error } = await sb.rpc('rk_kick_member', { p_token: me.token, p_room: roomId, p_target: targetId });
+  if (error) return { ok: false, error: String((error && error.message) || error) };
+  return data || { ok: false };
+}
+
+/* ----------------------------- 마피아 RPC ---------------------------- */
+async function mafiaStartRoles(roomId, me) {
+  const { data, error } = await sb.rpc('mf_start', { p_token: me.token, p_room: roomId });
+  if (error) return { ok: false, error: String((error && error.message) || error) };
+  return data;
+}
+async function mfMyView(roomId, me) {
+  const { data, error } = await sb.rpc('mf_my_view', { p_token: me.token, p_room: roomId });
+  if (error) throw error;
+  return data;
+}
+async function mfNightAction(roomId, me, target) {
+  const { data, error } = await sb.rpc('mf_night_action', { p_token: me.token, p_room: roomId, p_target: target });
+  if (error) return { ok: false, error: String((error && error.message) || error) };
+  return data;
+}
+async function mfDayVote(roomId, me, target) {
+  const { data, error } = await sb.rpc('mf_day_vote', { p_token: me.token, p_room: roomId, p_target: target });
+  if (error) return { ok: false, error: String((error && error.message) || error) };
+  return data;
+}
+async function mfResolvePhase(roomId, me, phase) {
+  const { data, error } = await sb.rpc('mf_resolve_phase', { p_token: me.token, p_room: roomId, p_expected: phase });
+  if (error) return { ok: false, error: String((error && error.message) || error) };
+  return data;
+}
 async function finishGame(roomId, token, game) {
-  const rpc = game === 'race' ? 'rk_finish_race' : game === 'hunt' ? 'rk_finish_hunt' : game === 'davinci' ? 'rk_finish_davinci' : 'rk_finish_game';
+  const rpc = game === 'race' ? 'rk_finish_race' : game === 'hunt' ? 'rk_finish_hunt'
+    : game === 'davinci' ? 'rk_finish_davinci' : game === 'mafia' ? 'rk_finish_mafia' : 'rk_finish_game';
   const { data, error } = await sb.rpc(rpc, { p_token: token, p_room: roomId });
   if (error) return { ok: false, error };
   return { ok: true, results: data };
