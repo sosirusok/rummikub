@@ -93,9 +93,10 @@ function davinciEnter(room, me, mySeat, amSpectator) {
 function davinciOnRoom(room) {
   if (!DV.on || room.id !== DV.roomId) return;
   if (room.version != null && room.version < DV.version) return;
+  const advanced = room.version == null || room.version > DV.version;   // 실제 새 수가 들어왔을 때만
   DV.room = room; DV.state = room.state || {};
   DV.version = room.version;
-  if (DV.pick) { DV.pick = null; closeSheet(); }
+  if (advanced && DV.pick) { DV.pick = null; closeSheet(); }   // 멤버행 변동만으론 추리 시트 유지
   dvRender();
   dvSkipDeparted();
   dvMaybeFinish();
@@ -136,7 +137,7 @@ function dvTileFace(t, reveal) {
   const cls = t.c === 'b' ? 'dvt--black' : 'dvt--white';
   const shown = reveal || t.up;
   const face = !shown ? '?' : (t.j ? '–' : t.v);
-  return `<span class="dvt ${cls}${t.j ? ' dvt--joker' : ''}${t.up ? ' is-up' : ''}">${face}</span>`;
+  return `<span class="dvt ${cls}${(shown && t.j) ? ' dvt--joker' : ''}${t.up ? ' is-up' : ''}">${face}</span>`;   // 가린 조커는 색 표시 안 함(비밀)
 }
 
 /* ----------------------------- 렌더 ---------------------------------- */
@@ -382,11 +383,13 @@ function dvEndTurn(s) {
 async function dvSkipDeparted() {
   const s = DV.state; if (!s || s.ranks || DV.amSpectator) return;
   const members = (typeof MEMBERS !== 'undefined') ? MEMBERS : [];
-  const isMember = uid => members.some(m => m.user_id === uid);
-  const departed = dvAliveSeats(s).filter(seat => { const uid = (s.players || {})[seat]; return uid && !isMember(uid); });
+  const pres = (typeof presentIds !== 'undefined') ? presentIds : null;
+  // 살아있음 = 멤버행 존재 AND (접속정보 모르면 통과 / 알면 접속중). 탭 닫힌 턴홀더(행 남아도 presence 빠짐)도 중퇴 처리.
+  const isLive = uid => members.some(m => m.user_id === uid) && (!pres || pres.length === 0 || pres.includes(uid));
+  const departed = dvAliveSeats(s).filter(seat => { const uid = (s.players || {})[seat]; return uid && !isLive(uid); });
   if (!departed.length) return;
-  const present = dvAliveSeats(s).filter(seat => { const uid = (s.players || {})[seat]; return uid && isMember(uid); });
-  if (!present.length || Number(present[0]) !== Number(DV.mySeat)) return;
+  const live = dvAliveSeats(s).filter(seat => { const uid = (s.players || {})[seat]; return uid && isLive(uid); });
+  if (!live.length || Number(live[0]) !== Number(DV.mySeat)) return;
   const ok = await dvCommit(base => {
     if (base.ranks) return null;
     let changed = false;

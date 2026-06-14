@@ -290,6 +290,7 @@ returns text language sql immutable set search_path = public as $$
 $$;
 
 -- 공용 델타 계산 (게임별 마진×티어×연승). 클라 tiers.js applyScore 와 동일 식.
+-- ⚠ 이 정의는 파일 끝 v3.2 블록의 rk_apply_score 로 override 됨(gband 저티어가산 + mafia 분기 포함). 이 섹션만 단독 RUN 금지.
 create or replace function public.rk_apply_score(
   p_game text, p_perf numeric, p_score int, p_prev_streak int, p_is_win boolean, p_treatment text)
 returns table(delta int, bonus int, new_streak int, new_score int, lvl int)
@@ -487,7 +488,7 @@ declare
   v_seats text[]; v_n int; v_results jsonb := '{}'::jsonb;
   i int; v_seat text; v_uid uuid; v_rank int; v_avgrank numeric; v_tied boolean; v_cnt int;
   v_curscore int; v_curstreak int; v_perf numeric; v_won boolean; v_tr text; v_delta int; v_ns int; r record; v_w int; v_l int;
-  CAP constant int := 90;
+  CAP constant int := 120;
 begin
   select id into v_user from public.users where token = p_token;
   if v_user is null then raise exception 'BAD_TOKEN'; end if;
@@ -1203,7 +1204,7 @@ declare
   v_seats text[]; v_n int; v_results jsonb := '{}'::jsonb; v_present uuid[]; v_quit boolean;
   i int; v_seat text; v_uid uuid; v_role text; v_camp text; v_won boolean;
   v_curscore int; v_curstreak int; v_perf numeric; v_tr text; v_delta int; v_ns int; r record; v_w int; v_l int;
-  CAP constant int := 80;
+  CAP constant int := 130;
 begin
   select id into v_user from public.users where token = p_token;
   if v_user is null then raise exception 'BAD_TOKEN'; end if;

@@ -343,11 +343,13 @@
 
       // 시야 제한 비네팅(복불복 핵심): 캐릭터 주변만 밝게, 가장자리는 어둡게
       if (!M.lowPower) {
-        const inner = Math.min(W, H) * 0.30, outer = Math.max(W, H) * 0.66;
-        const g = ctx.createRadialGradient(cx0, cy0, inner, cx0, cy0, outer);
-        g.addColorStop(0, 'rgba(6,9,15,0)');
-        g.addColorStop(1, 'rgba(6,9,15,0.94)');
-        ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+        if (!M._vig || M._vigW !== W || M._vigH !== H) {   // W/H 바뀔 때만 재생성(프레임마다 할당 방지)
+          const inner = Math.min(W, H) * 0.30, outer = Math.max(W, H) * 0.66;
+          const g = ctx.createRadialGradient(cx0, cy0, inner, cx0, cy0, outer);
+          g.addColorStop(0, 'rgba(6,9,15,0)'); g.addColorStop(1, 'rgba(6,9,15,0.94)');
+          M._vig = g; M._vigW = W; M._vigH = H;
+        }
+        ctx.fillStyle = M._vig; ctx.fillRect(0, 0, W, H);
       }
     },
 
@@ -469,40 +471,6 @@
       ctx.fillStyle = k === 0 ? '#11151d' : '#eef1f6';
       ctx.fillRect(x, y + cell, cell, cell);
     }
-  }
-
-  // 미니맵: 전체 미로 축소 + 나/원격 진행 점
-  function drawMiniMap(M, ctx, W, H) {
-    const mw = 64, mh = 92, pad = 10;
-    const ox = W - mw - pad, oy = pad;
-    ctx.fillStyle = 'rgba(8,12,20,0.7)';
-    ctx.fillRect(ox - 3, oy - 3, mw + 6, mh + 6);
-    const grid = M.maze.grid;
-    const cw = mw / COLS, ch = mh / ROWS;
-    ctx.fillStyle = '#26344e';
-    for (let r = 0; r < ROWS; r += 1) {
-      for (let c = 0; c < COLS; c += 1) {
-        if (grid[r][c] === FLOOR) ctx.fillRect(ox + c * cw, oy + r * ch, Math.max(1, cw), Math.max(1, ch));
-      }
-    }
-    // 결승선
-    ctx.fillStyle = '#ffd54a';
-    ctx.fillRect(ox, oy + GOAL_ROW * ch, mw, Math.max(1, ch));
-    // 점(나/원격) — 진행도 기반 y
-    const dot = (prog, seat, me) => {
-      const k = clamp(prog / PROG_MAX, 0, 1);
-      const yy = oy + mh - k * mh;
-      ctx.beginPath(); ctx.arc(ox + mw * 0.5, yy, me ? 2.6 : 2, 0, Math.PI * 2);
-      ctx.fillStyle = seatColor(seat); ctx.fill();
-      if (me) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.stroke(); }
-    };
-    for (const seat of M.seats) {
-      if (seat === M.mySeat) continue;
-      const p = M.peerAt(seat);
-      const pr = (p && p.prog != null) ? p.prog : ((M._peerProg && M._peerProg[seat]) || 0);
-      dot(pr, seat, false);
-    }
-    if (M.local) dot(M.local.bestProg, M.mySeat, true);
   }
 
   /* ----------------------------- 유틸 -------------------------------- */

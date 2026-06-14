@@ -33,6 +33,7 @@ let WAIT_TAB = 'seat';
 let RANK_GAME = 'rummikub';
 let lastRoomSig = '';
 let lastRoomVersion = -1;        // 방 상태 단조 버전(늦게 도착한 옛 스냅샷 무시용)
+let oneTileSeen = new Set();     // '1장!' 배너 1회 발화용(좌석별 엣지)
 let DEV_UNLOCKED = false;        // 개발자 모드 비번 통과(세션 한정)
 let DEV_SEL = new Set();         // 강제 초기화로 선택된 방들
 const DEV_PW = 'Lemon14436';
@@ -190,7 +191,7 @@ function cleanupRoom() {
   if (presenceCh) { leaveChannel(presenceCh); presenceCh = null; }
   if (hbIv) { clearInterval(hbIv); hbIv = null; }
   if (rkBc) { leaveChannel(rkBc.ch); rkBc = null; }
-  presentIds = []; ROOM = null; G = null; work = null; liveBoard = null; lastRoomSig = ''; lastRoomVersion = -1;
+  presentIds = []; ROOM = null; G = null; work = null; liveBoard = null; lastRoomSig = ''; lastRoomVersion = -1; oneTileSeen.clear();
 }
 function cleanupAll() { cleanupLobby(); cleanupRoom(); ROOM_ID = null; }
 
@@ -315,6 +316,8 @@ async function refreshRoom() {
 /* presence: 떠난 멤버 즉시정리 보조 + 방장 승격 (대기 중에만) */
 async function onPresence(state) {
   presentIds = Object.keys(state || {});
+  // 다빈치는 타이머가 없어 턴홀더가 탭을 닫으면 멈춤 → presence 이탈을 즉시 중퇴 처리 트리거
+  if (ROOM && ROOM.status === 'playing' && ROOM.game === 'davinci') { davinciOnRoom(ROOM); return; }
   if (!ROOM || ROOM.status !== 'waiting' || !MEMBERS.length) return;
   const earliest = MEMBERS.slice().sort((a, b) => new Date(a.joined_at) - new Date(b.joined_at));
   const janitor = earliest.find(m => presentIds.includes(m.user_id));
@@ -646,7 +649,11 @@ function renderGame() {
       ${dock}
     </section>`;
   updateTimerUI();
-  oppoSeats.concat(mySeat ? [mySeat] : []).forEach(s => { if ((G.hands[s] || []).length === 1) flashBanner('1장!'); });
+  oppoSeats.concat(mySeat ? [mySeat] : []).forEach(s => {   // 1장 진입 순간 1회만(매 갱신 반복발화/진동 방지)
+    const isOne = (G.hands[s] || []).length === 1;
+    if (isOne && !oneTileSeen.has(s)) { oneTileSeen.add(s); flashBanner('1장!'); }
+    else if (!isOne) oneTileSeen.delete(s);
+  });
 }
 // 내 턴 편집 시 보드/랙/힌트만 갱신 + 실시간 중계
 function renderPlay() {

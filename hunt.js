@@ -121,6 +121,7 @@
       M.h_cam = { x: FIELD_W / 2, y: FIELD_H / 2 };
       // 술래 쿨다운(로컬 표시용; 권위는 호스트)
       M.h_cool = 0;            // ms 남음
+      M.h_coolMax = COOL_OK;   // 현재 쿨다운 길이(링 표시 분모)
       M.h_lastEmote = 0;       // 내 감정표현 타임스탬프
       M.h_emotes = {};         // seat -> 표시 만료 t(ms)
       // 호스트 권위 추적
@@ -165,7 +166,7 @@
         if (myRole(M) === 'seeker') {
           if (M.h_cool <= 0) {
             // 즉시 쿨다운(연타 방지) — 판정은 호스트
-            M.h_cool = COOL_OK;
+            M.h_cool = COOL_OK; M.h_coolMax = COOL_OK;
             M.send({ kill: 1, seat: M.mySeat, x: Math.round(me.x), y: Math.round(me.y), t: now });
             M.vibrate(15);
             // 내가 호스트면 직접 판정
@@ -244,7 +245,7 @@
           ctx.strokeStyle = M.h_cool > 0 ? 'rgba(255,93,93,0.35)' : 'rgba(255,93,93,0.85)';
           ctx.beginPath(); ctx.arc(sx(me.x), sy(me.y), AIM_R, 0, Math.PI * 2); ctx.stroke();
           if (M.h_cool > 0) {   // 쿨다운 호(시계방향 감소)
-            const frac = M.h_cool / COOL_MISS;
+            const frac = M.h_cool / (M.h_coolMax || COOL_MISS);   // 실제 쿨 길이로 나눠야 정상/미스 모두 정확
             ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 3;
             ctx.beginPath();
             ctx.arc(sx(me.x), sy(me.y), AIM_R + 5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, frac));
@@ -290,7 +291,7 @@
     onPeer(M, seat, msg) {
       if (msg.emote) { M.h_emotes[seat] = (msg.t || M.simT()) + 900; return; }
       // 호스트가 통지한 오인 패널티 — 내가 그 술래면 쿨다운 연장
-      if (msg.miss && msg.seat === M.mySeat && myRole(M) === 'seeker') { M.h_cool = COOL_MISS; return; }
+      if (msg.miss && msg.seat === M.mySeat && myRole(M) === 'seeker') { M.h_cool = COOL_MISS; M.h_coolMax = COOL_MISS; return; }
       if (msg.kill && M.isHost) {
         // 호스트가 권위 판정(자기 kill 은 step 에서 직접 처리됨)
         if (seat !== M.mySeat) judgeKill(M, seat, msg.x | 0, msg.y | 0);
@@ -371,7 +372,7 @@
       // 오인 — 술래에게만 패널티(쿨다운↑). 본인이 술래면 쿨 연장.
       M.h_misses = (M.h_misses || 0) + 1;
       M.h_msg = '오인! (군중 NPC)';
-      if (seekerSeat === M.mySeat) M.h_cool = COOL_MISS;
+      if (seekerSeat === M.mySeat) { M.h_cool = COOL_MISS; M.h_coolMax = COOL_MISS; }
       else M.send({ miss: 1, seat: seekerSeat, t });   // 술래에게 쿨 패널티 통지
     }
   }
