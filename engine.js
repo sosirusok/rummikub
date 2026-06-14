@@ -97,6 +97,9 @@ function multisetKey(ids) { return ids.slice().sort().join(','); }
 
 /* --------------------------- 턴 검증 ------------------------------------ */
 function validateTurn(state, seat, startBoard, curBoard, startRack, curRack) {
+  const curFlat = curBoard.flat();
+  if (new Set(curFlat).size !== curFlat.length)
+    return { ok: false, msg: '같은 타일이 두 곳에 놓였어요.' };   // Set dedup 으로 중복 통과 방지
   const startSet = new Set(startBoard.flat());
   const curSet = new Set(curBoard.flat());
   const removed = [...startSet].filter(id => !curSet.has(id));

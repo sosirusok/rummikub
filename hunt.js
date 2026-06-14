@@ -170,7 +170,7 @@
             M.send({ kill: 1, seat: M.mySeat, x: Math.round(me.x), y: Math.round(me.y), t: now });
             M.vibrate(15);
             // 내가 호스트면 직접 판정
-            if (M.isHost) judgeKill(M, M.mySeat, Math.round(me.x), Math.round(me.y));
+            if (M.isHost) judgeKill(M, M.mySeat, Math.round(me.x), Math.round(me.y), now);
           }
         } else {
           // hider 감정표현(하트) — 위험하지만 본인 표현
@@ -294,7 +294,7 @@
       if (msg.miss && msg.seat === M.mySeat && myRole(M) === 'seeker') { M.h_cool = COOL_MISS; M.h_coolMax = COOL_MISS; return; }
       if (msg.kill && M.isHost) {
         // 호스트가 권위 판정(자기 kill 은 step 에서 직접 처리됨)
-        if (seat !== M.mySeat) judgeKill(M, seat, msg.x | 0, msg.y | 0);
+        if (seat !== M.mySeat) judgeKill(M, seat, msg.x | 0, msg.y | 0, msg.t || M.simT());
       }
     },
 
@@ -334,11 +334,11 @@
   //   최근접이 hider → 색출(alive=false, 중도색출 표기) + pushPatch
   //   최근접이 NPC   → 오인(쿨다운↑, misses++)  (alive 변경 없음)
   // =========================================================================
-  function judgeKill(M, seekerSeat, kx, ky) {
+  function judgeKill(M, seekerSeat, kx, ky, atT) {
     if (!M.isHost) return;
     // 술래만 제거 가능
     if ((M.state.roles || {})[seekerSeat] !== 'seeker') return;
-    const t = M.simT();
+    const t = (atT != null ? atT : M.simT());   // 킬이 발생한 시점 기준으로 판정(원격 킬 좌표 어긋남↓)
     let best = null, bestD = AIM_R; // 반경 내만
     // 후보 1: 살아있는 hider(원격은 peerAt, 본인은 local)
     const roles = M.state.roles || {};
@@ -348,7 +348,7 @@
       if (M.h_alive[seat] === false) continue;     // 이미 색출
       let pos = null;
       if (seat === M.mySeat && M.local) pos = M.local;
-      else { const pp = M.peerAt(seat); if (pp && pp.x != null) pos = pp; }
+      else { const pp = M.peerAt(seat, t); if (pp && pp.x != null) pos = pp; }
       if (!pos) continue;
       const d = Math.hypot(pos.x - kx, pos.y - ky);
       if (d <= bestD) { bestD = d; best = { type: 'hider', seat }; }
