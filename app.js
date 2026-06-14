@@ -39,7 +39,7 @@ let DEV_SEL = new Set();         // 강제 초기화로 선택된 방들
 const DEV_PW = 'Lemon14436';
 let resultLeaveIv = null, resultLeaveAt = 0;   // 결과창 자동 홈이동 카운트다운
 
-const GAME_CAP = { rummikub: 4, davinci: 4, mafia: 12, race: 8, hunt: 8 };
+const GAME_CAP = { rummikub: 4, davinci: 4, splendor: 4, mafia: 12, race: 8, hunt: 8 };
 function curGame() { return ROOM ? ROOM.game : null; }
 function capOf(game) { return GAME_CAP[game] || 8; }            // 게임별 최대 인원
 function minOf(game) { return game === 'mafia' ? 4 : 2; }       // 게임별 최소 시작 인원
@@ -61,6 +61,7 @@ function handleAct(act, el) {
   if (typeof chatOnAct === 'function' && chatOnAct(act)) return;   // 채팅 위임(모든 화면 공통)
   if (act.indexOf('dv_') === 0) { davinciAct(act, el); return; }   // 다빈치 코드 액션 위임
   if (act.indexOf('mf_') === 0) { mafiaAct(act, el); return; }     // 마피아 액션 위임
+  if (act.indexOf('sp_') === 0) { splendorAct(act, el); return; }  // 스플랜더 액션 위임
   switch (act) {
     case 'authTab': switchAuthTab(el.dataset.tab); break;
     case 'authSubmit': doAuth(); break;
@@ -188,7 +189,7 @@ function goHome() {
 /* ============================ 로비 ==================================== */
 function cleanupLobby() { if (lobbyCh) { leaveChannel(lobbyCh); lobbyCh = null; } _lobbySig = null; }
 function cleanupRoom() {
-  stopTimer(); miniStop(); davinciStop(); mafiaStop(); disarmResultLeave();
+  stopTimer(); miniStop(); davinciStop(); mafiaStop(); splendorStop(); disarmResultLeave();
   if (typeof chatLeave === 'function') chatLeave();
   if (roomDbCh) { leaveChannel(roomDbCh); roomDbCh = null; }
   if (presenceCh) { leaveChannel(presenceCh); presenceCh = null; }
@@ -299,7 +300,7 @@ async function refreshRoom() {
   if (g && g !== mySnapGame && MEMBERS.some(m => m.user_id === ME.id)) { mySnapGame = g; updateMemberSnapshot(ROOM_ID, ME, g); }
 
   if (ROOM.status === 'waiting') {
-    stopTimer(); miniStop(); davinciStop(); mafiaStop(); disarmResultLeave();
+    stopTimer(); miniStop(); davinciStop(); mafiaStop(); splendorStop(); disarmResultLeave();
     const sig = JSON.stringify({ g: ROOM.game, h: ROOM.host_id, ts: ROOM.turn_seconds, tab: WAIT_TAB,
       m: MEMBERS.map(m => [m.user_id, m.seat, m.role, m.score, m.streak, m.wins, m.losses, m.display_game, m.display_score]).sort() });
     if (sig === lastRoomSig && SCREEN === 'room') return;   // 대기실 내용 동일 → 재렌더 생략(렉↓)
@@ -310,9 +311,10 @@ async function refreshRoom() {
     if (ROOM.game === 'rummikub') enterGameView();
     else if (ROOM.game === 'davinci') enterDavinciView();
     else if (ROOM.game === 'mafia') enterMafiaView();
+    else if (ROOM.game === 'splendor') enterSplendorView();
     else enterMiniView();
   } else if (ROOM.status === 'finished') {
-    stopTimer(); miniStop(); davinciStop(); mafiaStop();
+    stopTimer(); miniStop(); davinciStop(); mafiaStop(); splendorStop();
     if (SCREEN !== 'result') renderResult();   // 멤버 이탈 이벤트마다 재렌더/카운트다운 리셋 방지
   }
 }
@@ -322,6 +324,7 @@ async function onPresence(state) {
   presentIds = Object.keys(state || {});
   // 다빈치는 타이머가 없어 턴홀더가 탭을 닫으면 멈춤 → presence 이탈을 즉시 중퇴 처리 트리거
   if (ROOM && ROOM.status === 'playing' && ROOM.game === 'davinci') { davinciOnRoom(ROOM); return; }
+  if (ROOM && ROOM.status === 'playing' && ROOM.game === 'splendor') { splendorOnRoom(ROOM); return; }
   if (!ROOM || ROOM.status !== 'waiting' || !MEMBERS.length) return;
   const earliest = MEMBERS.slice().sort((a, b) => new Date(a.joined_at) - new Date(b.joined_at));
   const janitor = earliest.find(m => presentIds.includes(m.user_id));
@@ -397,7 +400,7 @@ function waitBody(tab, amHost, g, cap) {
     const lock5 = headcount >= 5;                      // 5명 이상이면 cap<=4 게임 전환 금지(마피아만)
     const picks = MODE === 'mini'
       ? [['race', '🏁 운빨 대시'], ['hunt', '🕵️ 나도 사람이야']]
-      : [['rummikub', '🀄 루미큐브'], ['davinci', '🔢 다빈치 코드'], ['mafia', '🔪 마피아']];
+      : [['rummikub', '🀄 루미큐브'], ['davinci', '🔢 다빈치 코드'], ['splendor', '💎 스플랜더'], ['mafia', '🔪 마피아']];
     const gamePick = `<div class="game-select">${picks.map(([k, lab]) => {
       const locked = lock5 && capOf(k) <= 4;
       return `<button class="chip ${ROOM.game === k ? 'is-active' : ''} ${locked ? 'is-locked' : ''}" data-act="setGame" data-game="${k}" ${locked ? 'disabled' : ''}>${lab}</button>`;
@@ -431,7 +434,7 @@ function decoBody() {
   return `<div class="deco">
     <p class="muted">점수 아래·이름 옆에 보일 티어를 고르세요. 이름 색도 이 티어색이 돼요.</p>
     <div class="deco-preview">미리보기: ${preview}</div>
-    ${opt('', '숨김')}${opt('rummikub', '루미큐브')}${opt('davinci', '다빈치 코드')}${opt('mafia', '마피아')}${opt('race', '운빨 대시')}${opt('hunt', '나도 사람이야')}
+    ${opt('', '숨김')}${opt('rummikub', '루미큐브')}${opt('davinci', '다빈치 코드')}${opt('splendor', '스플랜더')}${opt('mafia', '마피아')}${opt('race', '운빨 대시')}${opt('hunt', '나도 사람이야')}
   </div>`;
 }
 function tierLadderHTML(g) {
@@ -504,6 +507,8 @@ async function doStart() {
       st.n = seated.length; st.passStreak = 0; st.results = null;
     } else if (game === 'davinci') {
       st = davinciInitialState(seated.map(m => ({ seat: m.seat, user_id: m.user_id, name: m.name })), scoresMap);
+    } else if (game === 'splendor') {
+      st = splendorInitialState(seated.map(m => ({ seat: m.seat, user_id: m.user_id, name: m.name })), scoresMap);
     } else if (game === 'mafia') {
       const seed = ((serverNow() & 0x7fffffff) ^ (ROOM_ID * 2654435761)) >>> 0;
       st = { game: 'mafia', seed, players: {}, names: {}, scores: {}, n: seated.length,
@@ -540,6 +545,13 @@ function enterDavinciView() {
   amSpectator = (mySeat == null);
   if (SCREEN !== 'davinci' || !DV.on || DV.roomId !== ROOM_ID) davinciEnter(ROOM, ME, mySeat, amSpectator);
   else davinciOnRoom(ROOM);
+}
+function enterSplendorView() {
+  G = ROOM.state;
+  mySeat = seatOfUser(G, ME.id);
+  amSpectator = (mySeat == null);
+  if (SCREEN !== 'splendor' || !SP.on || SP.roomId !== ROOM_ID) splendorEnter(ROOM, ME, mySeat, amSpectator);
+  else splendorOnRoom(ROOM);
 }
 function enterMafiaView() {
   G = ROOM.state;
@@ -1035,7 +1047,7 @@ async function showRank(game) {
   app().innerHTML = `
     <section class="screen screen--rank">
       <header class="room__top"><button class="btn btn--ghost" data-act="backHome">← 홈</button><b style="margin-left:6px">🏆 랭킹</b><span class="spacer"></span></header>
-      <nav class="game-select game-select--wrap">${tab('rummikub', '루미큐브')}${tab('davinci', '다빈치 코드')}${tab('mafia', '마피아')}${tab('race', '운빨 대시')}${tab('hunt', '나도 사람이야')}</nav>
+      <nav class="game-select game-select--wrap">${tab('rummikub', '루미큐브')}${tab('davinci', '다빈치 코드')}${tab('splendor', '스플랜더')}${tab('mafia', '마피아')}${tab('race', '운빨 대시')}${tab('hunt', '나도 사람이야')}</nav>
       <ol class="board-rank grow scrollable">
         ${list.map((u, i) => `<li class="board-rank__row ${u.id === ME.id ? 'is-me' : ''}">
           <span class="pos">${i + 1}</span>
