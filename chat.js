@@ -1,22 +1,24 @@
 /* =========================================================================
-   chat.js — 모든 게임/대기실 공용 실시간 채팅
-   - body 레벨 떠있는 위젯(#chatRoot) → #app 재렌더에 안 지워짐(바텀시트와 동일 전략)
-   - 전송은 broadcast(휘발, DB 미경유 → 렉 0). self:false 라 내 메시지는 로컬에 즉시 추가.
-   - data-act(chatToggle/chatSend)는 ui-core 통합입력이 처리, 입력창은 네이티브(타이핑 정상).
-   의존: net.js(joinChat/leaveChannel), ui-core.js(esc). app.js 가 chatEnter/chatLeave/chatOnAct 호출.
+   chat.js — 모든 게임/대기실 공용 실시간 채팅 (드래그 이동 가능)
+   - body 레벨 #chatRoot(고정) → #app 재렌더에 안 지워짐. broadcast 휘발(렉 0).
+   - 토글/닫기/드래그는 위젯 자체 리스너로 처리(전역 탭 시스템에 의존 X → 실기기서 확실).
+     · 💬(FAB): 탭=열고닫기 / 끌면=위치 이동   · 헤더: 끌어서 이동   · ✕: 닫기
+   의존: net.js(joinChat/leaveChannel), ui-core.js(esc). app.js 가 chatEnter/chatLeave 호출.
    ========================================================================= */
-const CHAT = { on: false, roomId: null, me: null, ch: null, send: null, msgs: [], open: false, unread: 0 };
+const CHAT = { on: false, roomId: null, me: null, ch: null, send: null, msgs: [], open: false, unread: 0, drag: null, moved: false };
 
 function chatInjectStyles() {
   if (document.getElementById('chatCSS')) return;
   const s = document.createElement('style'); s.id = 'chatCSS';
   s.textContent = `
-  .chat-fab{position:fixed;right:12px;bottom:12px;z-index:1200;width:52px;height:52px;border-radius:50%;border:none;background:#2b6cff;color:#fff;font-size:23px;box-shadow:0 4px 14px rgba(0,0,0,.45);cursor:pointer;touch-action:manipulation}
+  #chatRoot{position:fixed;right:12px;bottom:12px;z-index:1200}
+  .chat-fab{position:relative;width:54px;height:54px;border-radius:50%;border:none;background:#2b6cff;color:#fff;font-size:24px;box-shadow:0 4px 14px rgba(0,0,0,.45);cursor:grab;touch-action:none;display:flex;align-items:center;justify-content:center;user-select:none}
   .chat-fab.is-open{background:#3a4660}
   .chat-fab__b{position:absolute;top:-3px;right:-3px;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:#e0444a;color:#fff;font-size:11px;line-height:18px;font-weight:800;box-sizing:border-box}
-  .chat-box{position:fixed;right:12px;bottom:74px;z-index:1200;width:min(92vw,360px);height:min(56vh,440px);display:flex;flex-direction:column;background:#10131a;border:1px solid #2a3550;border-radius:14px;overflow:hidden;box-shadow:0 10px 34px rgba(0,0,0,.55)}
-  .chat-box__hd{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#161b26;border-bottom:1px solid #2a3550;color:#e8edf6;font-size:14px}
-  .chat-cl{background:none;border:none;color:#9fb0c3;font-size:17px;cursor:pointer;padding:2px 6px}
+  .chat-box{position:absolute;right:0;bottom:64px;width:min(92vw,360px);height:min(56vh,440px);display:flex;flex-direction:column;background:#10131a;border:1px solid #2a3550;border-radius:14px;overflow:hidden;box-shadow:0 10px 34px rgba(0,0,0,.55)}
+  .chat-box__hd{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:#161b26;border-bottom:1px solid #2a3550;color:#e8edf6;font-size:14px;cursor:grab;touch-action:none;user-select:none}
+  .chat-box__hd .chat-grip{color:#5e6b85;font-size:12px;margin-left:6px}
+  .chat-cl{background:#22304a;border:none;color:#cdd9ec;font-size:15px;cursor:pointer;width:30px;height:30px;border-radius:8px;line-height:30px;text-align:center;flex:none}
   .chat-msgs{flex:1;list-style:none;margin:0;padding:8px;overflow-y:auto;display:flex;flex-direction:column;gap:6px}
   .chat-empty{color:#6b7790;text-align:center;font-size:13px;margin:auto 0}
   .chat-m{max-width:82%;align-self:flex-start;background:#1b2230;border-radius:10px;padding:5px 9px}
@@ -27,8 +29,8 @@ function chatInjectStyles() {
   .chat-form{display:flex;gap:6px;padding:8px;border-top:1px solid #2a3550;background:#0d1017}
   .chat-in{flex:1;min-width:0;background:#1b2230;border:1px solid #2a3550;border-radius:9px;color:#fff;padding:9px 10px;font-size:15px;outline:none}
   .chat-in:focus{border-color:#2b6cff}
-  .chat-snd{background:#2b6cff;border:none;color:#fff;border-radius:9px;padding:0 14px;font-weight:700;cursor:pointer;touch-action:manipulation}
-  @media(max-width:380px){.chat-box{width:94vw;right:3vw;height:min(54vh,400px)}}`;
+  .chat-snd{background:#2b6cff;border:none;color:#fff;border-radius:9px;padding:0 14px;font-weight:700;cursor:pointer}
+  @media(max-width:380px){.chat-box{width:94vw;height:min(54vh,400px)}}`;
   document.head.appendChild(s);
 }
 
@@ -42,7 +44,7 @@ function chatEnter(roomId, me) {
 function chatLeave() {
   if (CHAT.ch) { try { leaveChannel(CHAT.ch); } catch (e) {} }
   CHAT.ch = null; CHAT.send = null;
-  CHAT.on = false; CHAT.roomId = null; CHAT.msgs = []; CHAT.open = false; CHAT.unread = 0;
+  CHAT.on = false; CHAT.roomId = null; CHAT.msgs = []; CHAT.open = false; CHAT.unread = 0; CHAT.drag = null;
   const r = document.getElementById('chatRoot'); if (r) r.remove();
 }
 function chatRecv(m) {
@@ -57,24 +59,60 @@ function chatMount() {
   let r = document.getElementById('chatRoot');
   if (!r) { r = document.createElement('div'); r.id = 'chatRoot'; document.body.appendChild(r); }
   r.innerHTML = `
-    <button class="chat-fab" data-act="chatToggle" aria-label="채팅">💬<span class="chat-fab__b" data-role="cbadge" hidden></span></button>
     <div class="chat-box" data-role="cbox" hidden>
-      <div class="chat-box__hd"><b>💬 채팅</b><button class="chat-cl" data-act="chatToggle" aria-label="닫기">✕</button></div>
+      <div class="chat-box__hd" data-role="chd"><span><b>💬 채팅</b><span class="chat-grip">⠿ 끌어서 이동</span></span><button class="chat-cl" data-role="ccl" aria-label="닫기">✕</button></div>
       <ul class="chat-msgs" data-role="cmsgs"></ul>
       <form class="chat-form" data-role="cform">
         <input class="chat-in" data-role="cin" maxlength="200" placeholder="메시지 입력…" autocomplete="off" />
-        <button type="submit" class="chat-snd" data-act="chatSend">전송</button>
+        <button type="submit" class="chat-snd">전송</button>
       </form>
-    </div>`;
-  const f = r.querySelector('[data-role="cform"]');
-  if (f) f.addEventListener('submit', (e) => { e.preventDefault(); chatDoSend(); });
+    </div>
+    <button class="chat-fab" data-role="cfab" aria-label="채팅">💬<span class="chat-fab__b" data-role="cbadge" hidden></span></button>`;
+  const fab = r.querySelector('[data-role="cfab"]');
+  const hd  = r.querySelector('[data-role="chd"]');
+  const cl  = r.querySelector('[data-role="ccl"]');
+  const form = r.querySelector('[data-role="cform"]');
+  if (fab) fab.addEventListener('pointerdown', (e) => { e.preventDefault(); chatDragStart('fab', e); });
+  if (hd)  hd.addEventListener('pointerdown', (e) => { if (e.target.closest('.chat-cl')) return; e.preventDefault(); chatDragStart('hd', e); });
+  if (cl)  cl.addEventListener('click', () => chatToggle(false));
+  if (form) form.addEventListener('submit', (e) => { e.preventDefault(); chatDoSend(); });
   chatList(); chatBadge();
 }
-function chatToggle() {
-  CHAT.open = !CHAT.open;
+
+/* ----- 드래그 이동(+ FAB 은 안 끌면 탭=열고닫기) ----- */
+function chatDragStart(kind, e) {
+  const r = document.getElementById('chatRoot'); if (!r) return;
+  const b = r.getBoundingClientRect();
+  CHAT.drag = { kind, sx: e.clientX, sy: e.clientY, left: b.left, top: b.top, w: b.width, h: b.height };
+  CHAT.moved = false;
+  window.addEventListener('pointermove', chatDragMove);
+  window.addEventListener('pointerup', chatDragEnd);
+  window.addEventListener('pointercancel', chatDragEnd);
+}
+function chatDragMove(e) {
+  const d = CHAT.drag; if (!d) return;
+  const dx = e.clientX - d.sx, dy = e.clientY - d.sy;
+  if (!CHAT.moved && Math.hypot(dx, dy) > 7) CHAT.moved = true;
+  if (!CHAT.moved) return;
+  const r = document.getElementById('chatRoot'); if (!r) return;
+  let left = d.left + dx, top = d.top + dy;
+  left = Math.max(4, Math.min(window.innerWidth - d.w - 4, left));
+  top  = Math.max(4, Math.min(window.innerHeight - d.h - 4, top));
+  r.style.left = left + 'px'; r.style.top = top + 'px'; r.style.right = 'auto'; r.style.bottom = 'auto';
+}
+function chatDragEnd() {
+  const d = CHAT.drag; CHAT.drag = null;
+  window.removeEventListener('pointermove', chatDragMove);
+  window.removeEventListener('pointerup', chatDragEnd);
+  window.removeEventListener('pointercancel', chatDragEnd);
+  if (d && !CHAT.moved && d.kind === 'fab') chatToggle();   // 안 끌었으면 탭 = 열고닫기
+}
+
+function chatToggle(open) {
+  CHAT.open = (typeof open === 'boolean') ? open : !CHAT.open;
   const box = document.querySelector('[data-role="cbox"]'); if (box) box.hidden = !CHAT.open;
-  const fab = document.querySelector('.chat-fab'); if (fab) fab.classList.toggle('is-open', CHAT.open);
-  if (CHAT.open) { CHAT.unread = 0; chatBadge(); chatList(); const i = document.querySelector('[data-role="cin"]'); if (i) setTimeout(() => { try { i.focus(); } catch (e) {} }, 0); }
+  const fab = document.querySelector('[data-role="cfab"]'); if (fab) fab.classList.toggle('is-open', CHAT.open);
+  if (CHAT.open) { CHAT.unread = 0; chatBadge(); chatList(); const i = document.querySelector('[data-role="cin"]'); if (i) setTimeout(() => { try { i.focus(); } catch (e) {} }, 30); }
 }
 function chatBadge() {
   const b = document.querySelector('[data-role="cbadge"]'); if (!b) return;
@@ -100,9 +138,5 @@ function chatDoSend() {
   chatList();
   try { i.focus(); } catch (e) {}
 }
-function chatOnAct(act) {
-  if (act === 'chatToggle') { chatToggle(); return true; }
-  if (act === 'chatSend') { chatDoSend(); return true; }
-  return false;
-}
+function chatOnAct() { return false; }   // 전역 위임 미사용(직접 리스너로 처리)
 window.chatEnter = chatEnter; window.chatLeave = chatLeave; window.chatOnAct = chatOnAct;
