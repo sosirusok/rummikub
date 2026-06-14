@@ -443,15 +443,18 @@ function tierLadderHTML(g) {
   const score = (g && ME.games && ME.games[g]) ? ME.games[g].score : 0;
   const cur = tierForScore(score);
   return `<div class="tier-list-wrap">
-    <div class="center" style="padding:8px">${g ? GAME_NAME[g] : '내'} 티어: ${tierBadgeHTML(score)} <span class="muted">(${score}점)</span></div>
+    <div class="tier-hero">${emblemHTML(g, score, 'lg')}
+      <div class="tier-hero__txt"><div class="tier-hero__name" style="--tc:${cur.color}">${cur.fullName}</div>
+        <div class="muted">${g ? GAME_NAME[g] : '내'} · ${score}점</div></div></div>
     <ul class="tier-list">
       ${TIER_LADDER.slice().reverse().map(t => {
         const full = t.division ? `${t.name} ${ROMAN[t.division]}` : t.name;
-        return `<li class="tier-row ${t.level === cur.level ? 'is-cur' : ''}" style="--tc:${t.color}"><span class="tg">${t.logo}</span><span class="tier-row__name">${full}</span><span class="tier-row__cut">${t.min}점 +</span></li>`;
+        return `<li class="tier-row ${t.level === cur.level ? 'is-cur' : ''}" style="--tc:${t.color}">${emblemHTML(g, t.min, 'sm')}<span class="tier-row__name">${full}</span><span class="tier-row__cut">${t.min}점 +</span></li>`;
       }).join('')}
     </ul>
+    ${scoreTableHTML(g)}
     <div class="muted center" style="padding:10px;font-size:12px;line-height:1.6">
-      점수는 <b>얼마나 크게 이겼/졌는지</b>로 변동. 고티어일수록 적게 오르고 많이 내려가요(1등/승리는 항상 +).<br>
+      점수는 <b>등수·인원·티어</b>로 정해져요(위 표). 고티어일수록 적게 오르고 많이 내려가요(1등/승리는 항상 +).<br>
       연승 보너스: 다이아 이하 2연승부터. 게임마다 티어가 따로 쌓여요.
     </div></div>`;
 }
