@@ -141,8 +141,8 @@ function dvValidGaps(hand, tile) {
 function dvTileFace(t, reveal) {
   const cls = t.c === 'b' ? 'dvt--black' : 'dvt--white';
   const shown = reveal || t.up;
-  const face = !shown ? '?' : (t.j ? '–' : t.v);
-  return `<span class="dvt ${cls}${(shown && t.j) ? ' dvt--joker' : ''}${t.up ? ' is-up' : ''}">${face}</span>`;   // 가린 조커는 색 표시 안 함(비밀)
+  const face = !shown ? '?' : (t.j ? '–' : t.v);   // 조커는 공개/내것일 때 '–'(검/흰 칩색은 그대로 보임), 가린 조커는 '?'(조커인지 비밀)
+  return `<span class="dvt ${cls}${t.up ? ' is-up' : ''}">${face}</span>`;
 }
 // 내 패 한 칸: 공개된(상대에게 노출) 타일은 👁 표시. 내 가린 조커는 탭해 위치 이동(canMove).
 function dvMySlot(tile, s, canMove) {
@@ -242,39 +242,26 @@ function dvRender() {
     </li>`;
   }).join('');
 
-  // 내 패(값 보임). 배치 단계면 끼울 자리 버튼을 사이사이에.
+  // 내 패(값 보임). 게임 중엔 조커 이동 불가 — 뽑은 타일(조커 포함) 배치만 가능.
   let mineHTML = '';
   if (!DV.amSpectator && DV.mySeat != null) {
     const myHand = s.hands[DV.mySeat] || [];
     const myDead = !dvAlive(s, DV.mySeat);
-    const canMoveJoker = myTurn && !placeStep && !myDead;
-    let handInner, hint = '';
+    let handInner;
     if (placeStep) {
-      const gaps = dvValidGaps(myHand, s.drawn);
+      const gaps = dvValidGaps(myHand, s.drawn);   // 조커를 뽑았으면 어디든, 숫자면 정렬 위치
       let h = '';
       for (let i = 0; i <= myHand.length; i++) {
         h += gaps.includes(i) ? `<button class="dv-gap" data-act="dv_place" data-gap="${i}">＋</button>` : `<span class="dv-gap dv-gap--no"></span>`;
         if (i < myHand.length) h += dvMySlot(myHand[i], s, false);
       }
       handInner = h;
-    } else if (DV.jokerMove) {
-      // 조커 이동 모드: 조커 뺀 손패의 모든 자리(＋) 표시
-      const rest = myHand.filter(t => t.id !== DV.jokerMove);
-      let h = '';
-      for (let i = 0; i <= rest.length; i++) {
-        h += `<button class="dv-gap" data-act="dv_jokermove" data-gap="${i}">＋</button>`;
-        if (i < rest.length) h += dvMySlot(rest[i], s, false);
-      }
-      handInner = h;
-      hint = `<div class="dv-pickhint is-armed">🃏 조커를 놓을 자리(＋)를 고르세요 <button class="btn btn--ghost" data-act="dv_jokercancel">취소</button></div>`;
     } else {
-      handInner = myHand.map(tile => dvMySlot(tile, s, canMoveJoker)).join('');
-      if (canMoveJoker && myHand.some(t => t.j && !t.up)) hint = `<div class="dv-pickhint muted">🃏 조커 칩을 탭하면 위치를 바꿀 수 있어요(어디든)</div>`;
+      handInner = myHand.map(tile => dvMySlot(tile, s, false)).join('');
     }
     mineHTML = `<div class="dv-mine ${myDead ? 'is-dead' : ''}">
       <div class="dv-mine__label">${myDead ? '내 패 (탈락)' : '내 패 (나만 값 보임 · 👁=상대에게 공개된 타일)'}</div>
       <div class="dv-hand dv-hand--mine">${handInner}</div>
-      ${hint}
     </div>`;
   }
 
@@ -347,7 +334,7 @@ async function davinciAct(act, el) {
     case 'dv_cancel': DV.pick = null; closeSheet(); dvRender(); return;
     case 'dv_guess': return dvGuess(el.dataset.j === '1' ? null : Number(el.dataset.v), el.dataset.j === '1');
     case 'dv_stop': return dvStop();
-    case 'dv_jokerpick': DV.jokerMove = el.dataset.id; dvRender(); return;       // 내 조커 이동 시작
+    case 'dv_jokerpick': if (DV.state && DV.state.phase === 'setup' && !(DV.state.ready && DV.state.ready[DV.mySeat])) { DV.jokerMove = el.dataset.id; dvRender(); } return;   // 준비 단계에서만
     case 'dv_jokercancel': DV.jokerMove = null; dvRender(); return;
     case 'dv_jokermove': return dvMoveJoker(Number(el.dataset.gap));
     case 'dv_ready': return dvReady();
@@ -447,15 +434,15 @@ async function dvPlace(gap) {
 }
 
 // 내 가린 조커를 원하는 자리로 이동(와일드 — 어디든). 턴 소비 없음.
+// 조커 이동은 "준비 단계"에서만(게임 중 X). 게임 중 조커는 뽑았을 때 dvPlace 로만 배치.
 async function dvMoveJoker(gap) {
   if (!DV.jokerMove) return;
   const st = DV.state || {};
   const inSetup = st.phase === 'setup' && !(st.ready && st.ready[DV.mySeat]);
-  if (!inSetup && !dvIsMyTurn()) return;
+  if (!inSetup) { DV.jokerMove = null; return; }
   const jid = DV.jokerMove; DV.jokerMove = null;
   const ok = await dvCommit(s => {
-    const setupOk = s.phase === 'setup' && !(s.ready && s.ready[DV.mySeat]);
-    if (!setupOk && Number(s.turn) !== Number(DV.mySeat)) return null;
+    if (!(s.phase === 'setup' && !(s.ready && s.ready[DV.mySeat]))) return null;
     const hand = s.hands[DV.mySeat];
     const idx = hand.findIndex(t => t.id === jid);
     if (idx < 0 || !hand[idx].j || hand[idx].up) return null;

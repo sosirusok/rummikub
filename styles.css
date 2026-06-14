@@ -453,7 +453,6 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
   color:var(--accent); font-weight:900; font-size:18px; cursor:pointer; touch-action:manipulation; flex:0 0 auto;}
 .dv-gap:active{transform:scale(.92);}
 .dv-gap--no{display:inline-block; width:4px;}
-.dvt--joker{background:linear-gradient(135deg,#7c3aed,#a855f7); color:#fff; border-color:#5b21b6;}
 .dv-slot{position:relative;}
 .dv-slot.is-fresh .dvt{outline:3px solid var(--warn); outline-offset:1px;}
 .dv-slot--exposed .dvt{outline:2px solid var(--danger); outline-offset:1px;}   /* 내 패 중 상대에게 공개된 타일 */
