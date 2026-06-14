@@ -58,6 +58,7 @@ async function boot() {
 
 /* ----------------------------- 액션 위임 ------------------------------- */
 function handleAct(act, el) {
+  if (typeof chatOnAct === 'function' && chatOnAct(act)) return;   // 채팅 위임(모든 화면 공통)
   if (act.indexOf('dv_') === 0) { davinciAct(act, el); return; }   // 다빈치 코드 액션 위임
   if (act.indexOf('mf_') === 0) { mafiaAct(act, el); return; }     // 마피아 액션 위임
   switch (act) {
@@ -188,6 +189,7 @@ function goHome() {
 function cleanupLobby() { if (lobbyCh) { leaveChannel(lobbyCh); lobbyCh = null; } _lobbySig = null; }
 function cleanupRoom() {
   stopTimer(); miniStop(); davinciStop(); mafiaStop(); disarmResultLeave();
+  if (typeof chatLeave === 'function') chatLeave();
   if (roomDbCh) { leaveChannel(roomDbCh); roomDbCh = null; }
   if (presenceCh) { leaveChannel(presenceCh); presenceCh = null; }
   if (hbIv) { clearInterval(hbIv); hbIv = null; }
@@ -259,6 +261,7 @@ async function enterRoomFlow(roomId) {
     await refreshLbCache(true);
     roomDbCh = subscribeRoom(roomId, () => scheduleRoomRefresh());
     presenceCh = joinPresence(roomId, ME, { name: ME.real_name }, onPresence);
+    if (typeof chatEnter === 'function') chatEnter(roomId, ME);
     hbIv = setInterval(() => heartbeat(ME.token, roomId), 4000);
     WAIT_TAB = 'seat';
     try { localStorage.setItem('rk_last_room', String(roomId)); } catch (e) {}   // 홈 '이어서 입장'용

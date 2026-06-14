@@ -250,4 +250,11 @@ function joinBroadcast(roomId, onMsg) {
   ch.subscribe();
   return { ch, send: (payload) => { try { ch.send({ type: 'broadcast', event: 'm', payload }); } catch (e) {} } };
 }
+// broadcast 채팅: 방 단위 휘발 메시지(DB 미경유). 미니게임 'm' 채널과 분리된 'c' 채널.
+function joinChat(roomId, onMsg) {
+  const ch = sb.channel('room-' + roomId + '-chat', { config: { broadcast: { self: false } } });
+  ch.on('broadcast', { event: 'c' }, (p) => onMsg(p.payload));
+  ch.subscribe();
+  return { ch, send: (payload) => { try { ch.send({ type: 'broadcast', event: 'c', payload }); } catch (e) {} } };
+}
 function leaveChannel(ch) { if (ch) try { sb.removeChannel(ch); } catch (e) {} }
