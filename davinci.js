@@ -87,7 +87,7 @@ function davinciEnter(room, me, mySeat, amSpectator) {
   DV.room = room; DV.roomId = room.id; DV.state = room.state || {};
   DV.version = room.version;
   DV.me = me; DV.mySeat = mySeat; DV.amSpectator = amSpectator;
-  DV.pick = null;
+  DV.pick = null; DV.finishedSent = false;
   setScreen('davinci');
   dvRender();
   dvMaybeStartPlay();
@@ -97,7 +97,7 @@ function davinciEnter(room, me, mySeat, amSpectator) {
 function davinciOnRoom(room) {
   if (!DV.on || room.id !== DV.roomId) return;
   if (room.version != null && room.version < DV.version) return;
-  const advanced = room.version == null || room.version > DV.version;   // 실제 새 수가 들어왔을 때만
+  const advanced = room.version != null && room.version > DV.version;   // 실제 새 수가 들어왔을 때만(멤버행 변동·동일버전 제외)
   DV.room = room; DV.state = room.state || {};
   DV.version = room.version;
   if (advanced) { DV.jokerMove = null; if (DV.pick) { DV.pick = null; closeSheet(); } }   // 멤버행 변동만으론 시트/이동 유지
@@ -107,7 +107,7 @@ function davinciOnRoom(room) {
   dvMaybeFinish();
 }
 function davinciStop() {
-  DV.on = false; DV.pick = null; DV.jokerMove = null;
+  DV.on = false; DV.pick = null; DV.jokerMove = null; DV.finishedSent = false;
   DV.room = DV.state = null; DV.roomId = null;
 }
 
@@ -508,7 +508,7 @@ async function dvStop() {
 
 function dvEndTurn(s) {
   s.lastHit = false; s.drawn = null; s.fresh = null;
-  if (dvAliveSeats(s).length > 1) s.turn = dvNextSeat(s, DV.mySeat);
+  if (dvAliveSeats(s).length > 1) s.turn = dvNextSeat(s, s.turn);   // 상태의 현재 턴 기준(클라 식별자 의존 X)
 }
 
 /* ----------------------------- 중퇴 처리 ----------------------------- */
@@ -538,7 +538,7 @@ async function dvSkipDeparted() {
 /* ----------------------------- 종료/정산 ----------------------------- */
 async function dvMaybeFinish() {
   const s = DV.state; if (!s || s.phase === 'setup' || DV.amSpectator) return;
-  if (s.ranks) { try { await finishGame(DV.roomId, DV.me.token, 'davinci'); } catch (e) {} return; }
+  if (s.ranks) { if (DV.finishedSent) return; DV.finishedSent = true; try { await finishGame(DV.roomId, DV.me.token, 'davinci'); } catch (e) {} return; }
   const alive = dvAliveSeats(s);
   if (alive.length > 1) return;
   const seats = dvSeats(s);

@@ -146,9 +146,9 @@ function miniLoop(ts) {
   MINI._netT += dt;
   if (MINI._netT >= MINI_NET_MS) {
     MINI._netT = 0;
-    if (!MINI.amSpectator && MINI.mod.netPayload) {
-      const p = MINI.mod.netPayload(MINI);
-      if (p) MINI.bc.send({ seat: MINI.mySeat, t: MINI.simT(), ...p });
+    if (!MINI.amSpectator && MINI.mod.netPayload && MINI.bc) {
+      try { const p = MINI.mod.netPayload(MINI); if (p) MINI.bc.send({ seat: MINI.mySeat, t: MINI.simT(), ...p }); }
+      catch (e) { console.error('mini net', e); }   // 송신 실패해도 루프(rAF 재예약)는 계속
     }
   }
   // 그리기
@@ -182,9 +182,9 @@ function onPeerMsg(msg) {
   e.last = msg;
   if (MINI.mod && MINI.mod.onPeer) { try { MINI.mod.onPeer(MINI, s, msg); } catch (err) {} }
 }
-MINI.peerAt = function (seat) {
+MINI.peerAt = function (seat, atT) {
   const e = MINI.peers[seat]; if (!e || !e.buf.length) return null;
-  const target = MINI.simT() - MINI_INTERP_MS;
+  const target = (atT != null ? atT : MINI.simT()) - MINI_INTERP_MS;
   const b = e.buf;
   if (b.length === 1 || target <= b[0].t) return b[0].p;
   for (let i = 0; i < b.length - 1; i++) {
