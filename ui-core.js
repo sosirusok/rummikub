@@ -24,7 +24,7 @@ function sameAction(a, b) {
 }
 // 탭은 "누른 버튼에서 손을 떼야" 발동(누르는 순간 X). 스크롤 중 오클릭/연타 오작동 방지.
 function bindAppInput(onAct, onTap, tapActive) {
-  const root = app();
+  const root = document;   // #app 밖의 바텀시트(#uiSheet)·스크림 버튼도 잡도록 전역 바인딩
   root.addEventListener('pointerdown', (e) => {
     if (e.button != null && e.button !== 0) return;          // 좌클릭/터치만
     const actEl = e.target.closest('[data-act]');

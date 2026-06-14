@@ -98,6 +98,7 @@ function davinciEnter(room, me, mySeat, amSpectator) {
   DV.pick = null;
   setScreen('davinci');
   dvRender();
+  dvSkipDeparted();
   // 게임 종료 판정(생존 1명) — 어느 클라든 발견하면 정산 시도(멱등)
   dvMaybeFinish();
 }
@@ -111,7 +112,31 @@ function davinciOnRoom(room) {
   // 진행 중 상대 수가 들어오면 내 선택 시트는 닫는다(상태 변동)
   if (DV.pick) { DV.pick = null; closeSheet(); }
   dvRender();
+  dvSkipDeparted();
   dvMaybeFinish();
+}
+
+// 중퇴(방을 나간) 생존 플레이어를 탈락 처리 → 차례 멈춤 방지 + 자동 꼴찌권(elimOrder 앞=최하위)
+async function dvSkipDeparted() {
+  const s = DV.state; if (!s || s.ranks || DV.amSpectator) return;
+  const members = (typeof MEMBERS !== 'undefined') ? MEMBERS : [];
+  const isMember = uid => members.some(m => m.user_id === uid);
+  const departed = dvAliveSeats(s).filter(seat => { const uid = (s.players || {})[seat]; return uid && !isMember(uid); });
+  if (!departed.length) return;
+  // 리더(접속 중 최저 좌석 생존자)만 1회 처리
+  const present = dvAliveSeats(s).filter(seat => { const uid = (s.players || {})[seat]; return uid && isMember(uid); });
+  if (!present.length || Number(present[0]) !== Number(DV.mySeat)) return;
+  const ok = await dvCommit(base => {
+    if (base.ranks) return null;
+    let changed = false;
+    departed.forEach(seat => {
+      if (dvAlive(base, seat)) { base.eliminated[seat] = true; (base.elimOrder = base.elimOrder || []).push(seat); dvLog(base, `🚪 ${base.names[seat]} 중퇴 — 탈락 처리`); changed = true; }
+    });
+    if (!changed) return null;
+    if (!dvAlive(base, Number(base.turn)) && dvAliveSeats(base).length > 1) base.turn = dvNextSeat(base, Number(base.turn));
+    return base;
+  });
+  if (ok) { dvRender(); dvMaybeFinish(); }
 }
 
 function davinciStop() {

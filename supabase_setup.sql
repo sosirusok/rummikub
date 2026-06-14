@@ -461,7 +461,7 @@ begin
         from public.user_game_stats where user_id = v_uid and game = 'race';
       v_curscore := coalesce(v_curscore,0); v_curstreak := coalesce(v_curstreak,0);
     end if;
-    v_perf := (v_avgrank - v_rank) * 6;
+    v_perf := (v_avgrank - v_rank) * 10;
     v_won  := (v_rank = 1);
     v_tr   := public.rk_streak_treatment_race(v_n, v_rank, v_tied);
     select * into r from public.rk_apply_score('race', v_perf, v_curscore, v_curstreak, v_won, v_tr);
@@ -515,7 +515,7 @@ begin
       select coalesce(score,0), coalesce(streak,0) into v_curscore, v_curstreak from public.user_game_stats where user_id=v_uid and game='davinci';
       v_curscore := coalesce(v_curscore,0); v_curstreak := coalesce(v_curstreak,0);
     end if;
-    v_perf := (v_avgrank - v_rank) * 9;
+    v_perf := (v_avgrank - v_rank) * 13;
     v_won  := (v_rank = 1);
     v_tr   := public.rk_streak_treatment_race(v_n, v_rank, v_tied);
     select * into r from public.rk_apply_score('davinci', v_perf, v_curscore, v_curstreak, v_won, v_tr);
@@ -538,7 +538,7 @@ create or replace function public.rk_finish_hunt(p_token uuid, p_room int)
 returns jsonb language plpgsql security definer set search_path = public, extensions as $$
 declare
   v_user uuid; v_room public.rooms; v_state jsonb; v_players jsonb; v_roles jsonb; v_alive jsonb; v_caught jsonb;
-  v_seats text[]; v_n int; v_h int; v_found int; v_results jsonb := '{}'::jsonb;
+  v_seats text[]; v_n int; v_h int; v_found int; v_results jsonb := '{}'::jsonb; v_present uuid[]; v_quit boolean;
   i int; v_seat text; v_uid uuid; v_role text; v_alivev boolean; v_caughtv boolean;
   v_curscore int; v_curstreak int; v_perf numeric; v_won boolean; v_tr text; v_delta int; v_ns int; r record; v_w int; v_l int;
   CAP constant int := 80;
@@ -551,6 +551,7 @@ begin
   if v_room.status <> 'playing' then return coalesce(v_room.state->'results', '{}'::jsonb); end if;
   v_state := v_room.state; v_players := v_state->'players';
   v_roles := v_state->'roles'; v_alive := coalesce(v_state->'alive','{}'::jsonb); v_caught := coalesce(v_state->'caughtMid','{}'::jsonb);
+  select array_agg(user_id) into v_present from public.room_members where room_id = p_room;   -- 중퇴 판별
   if not exists (select 1 from jsonb_each_text(v_players) e where e.value = v_user::text) then raise exception 'NOT_A_PLAYER'; end if;
   select array_agg(key) into v_seats from jsonb_object_keys(v_players) key;
   v_n := coalesce(array_length(v_seats,1),0);
@@ -574,23 +575,25 @@ begin
       v_curscore := coalesce(v_curscore,0); v_curstreak := coalesce(v_curstreak,0);
     end if;
     if v_role = 'seeker' then
-      v_perf := (v_found - v_h/2.0) * 7;
+      v_perf := (v_found - v_h/2.0) * 11;
       v_won  := (v_found >= v_h);
       v_tr   := case when v_found >= ceil(v_h/2.0) then 'apply' when v_found >= 1 then 'maintain' else 'break' end;
     else
       v_alivev  := coalesce((v_alive->>v_seat)::boolean, true);
       v_caughtv := coalesce((v_caught->>v_seat)::boolean, false);
-      v_perf := case when v_alivev then 7 else -7 end;
+      v_perf := case when v_alivev then 11 else -11 end;
       v_won  := v_alivev;
       v_tr   := case when v_alivev then 'apply' when v_caughtv then 'maintain' else 'break' end;
     end if;
+    v_quit := (v_uid is not null and not (v_uid = any(coalesce(v_present, array[]::uuid[]))));
+    if v_quit then v_perf := -28; v_won := false; v_tr := 'break'; end if;   -- 중퇴=패배+차감
     select * into r from public.rk_apply_score('hunt', v_perf, v_curscore, v_curstreak, v_won, v_tr);
     v_delta := greatest(-CAP, least(CAP, r.delta));
     v_ns := greatest(0, v_curscore + v_delta);
     perform public.rk_bump_stats(v_uid, 'hunt', v_ns, r.new_streak, v_won);
     v_w:=0; v_l:=0; if v_uid is not null then select wins,losses into v_w,v_l from public.user_game_stats where user_id=v_uid and game='hunt'; v_w:=coalesce(v_w,0); v_l:=coalesce(v_l,0); end if;
     v_results := jsonb_set(v_results, array[v_seat], jsonb_build_object(
-      'role',v_role,'won',v_won,
+      'role',v_role,'won',v_won,'quit',coalesce(v_quit,false),
       'found', (case when v_role='seeker' then v_found else null end),
       'survived', (case when v_role='hider' then coalesce((v_alive->>v_seat)::boolean,true) else null end),
       'delta',v_delta,'bonus',r.bonus,'prevScore',v_curscore,'newScore',v_ns,'streak',r.new_streak,'treatment',v_tr,'prevStreak',v_curstreak,'wins',v_w,'losses',v_l));
@@ -912,21 +915,21 @@ language plpgsql immutable set search_path = public as $$
 declare L int; gm numeric; lm numeric; tx numeric; mw int; br numeric; adj numeric; d int; b int; ns int;
 begin
   L := public.rk_tier_level(coalesce(p_score,0));
-  if p_game = 'rummikub' then
-    gm := greatest(0.42, 1 - L*0.011); lm := least(2.10, 1 + L*0.020); tx := L*0.85;
-    mw := greatest(8, round(28 - L*0.45)::int); br := 0.10;
+  if p_game = 'rummikub' then     -- R4: 상승폭 강화(minWin↑·tax↓·gain↑)
+    gm := greatest(0.50, 1.20 - L*0.011); lm := least(2.10, 1 + L*0.020); tx := L*0.55;
+    mw := greatest(16, round(50 - L*0.70)::int); br := 0.10;
   elsif p_game = 'davinci' then
-    gm := greatest(0.42, 1 - L*0.011); lm := least(2.08, 1 + L*0.020); tx := L*0.60;
-    mw := greatest(6, round(20 - L*0.34)::int); br := 0.10;
-  elsif p_game = 'mafia' then     -- 루미와 다른 결: 마진無 진영 승패, 낮은 tax·둥근 큰 minWin·연승보너스 큼
-    gm := greatest(0.50, 1 - L*0.010); lm := least(2.00, 1 + L*0.018); tx := L*0.30;
-    mw := greatest(10, round(24 - L*0.40)::int); br := 0.12;
+    gm := greatest(0.50, 1.20 - L*0.011); lm := least(2.08, 1 + L*0.020); tx := L*0.45;
+    mw := greatest(13, round(40 - L*0.55)::int); br := 0.10;
+  elsif p_game = 'mafia' then     -- 진영 승패 고정형(루미와 다른 결) + 상승폭 강화
+    gm := greatest(0.55, 1.20 - L*0.010); lm := least(2.00, 1 + L*0.018); tx := L*0.25;
+    mw := greatest(16, round(40 - L*0.50)::int); br := 0.12;
   elsif p_game = 'race' then
-    gm := greatest(0.45, 1 - L*0.011); lm := least(2.05, 1 + L*0.019); tx := L*0.32;
-    mw := greatest(4, round(12 - L*0.18)::int); br := 0.08;
+    gm := greatest(0.55, 1.15 - L*0.011); lm := least(2.05, 1 + L*0.019); tx := L*0.25;
+    mw := greatest(8, round(24 - L*0.30)::int); br := 0.08;
   else  -- hunt
-    gm := greatest(0.45, 1 - L*0.011); lm := least(2.05, 1 + L*0.019); tx := L*0.30;
-    mw := greatest(4, round(11 - L*0.16)::int); br := 0.08;
+    gm := greatest(0.55, 1.15 - L*0.011); lm := least(2.05, 1 + L*0.019); tx := L*0.25;
+    mw := greatest(8, round(22 - L*0.28)::int); br := 0.08;
   end if;
   adj := p_perf - tx;
   if adj >= 0 then d := round(adj * gm)::int; else d := round(adj * lm)::int; end if;
@@ -1194,7 +1197,7 @@ create or replace function public.rk_finish_mafia(p_token uuid, p_room int)
 returns jsonb language plpgsql security definer set search_path = public, extensions as $$
 declare
   v_user uuid; v_room public.rooms; v_state jsonb; v_players jsonb; v_winner text;
-  v_seats text[]; v_n int; v_results jsonb := '{}'::jsonb;
+  v_seats text[]; v_n int; v_results jsonb := '{}'::jsonb; v_present uuid[]; v_quit boolean;
   i int; v_seat text; v_uid uuid; v_role text; v_camp text; v_won boolean;
   v_curscore int; v_curstreak int; v_perf numeric; v_tr text; v_delta int; v_ns int; r record; v_w int; v_l int;
   CAP constant int := 80;
@@ -1206,6 +1209,7 @@ begin
   if coalesce(v_room.game,'') <> 'mafia' then raise exception 'WRONG_GAME'; end if;
   if v_room.status <> 'playing' then return coalesce(v_room.state->'results','{}'::jsonb); end if;
   v_state := v_room.state; v_players := v_state->'players'; v_winner := v_state->>'winner';
+  select array_agg(user_id) into v_present from public.room_members where room_id = p_room;   -- 현재 방에 남은 사람(중퇴 판별)
   if not exists (select 1 from jsonb_each_text(v_players) e where e.value=v_user::text) then raise exception 'NOT_A_PLAYER'; end if;
   if v_winner is null or (v_state->>'phase') <> 'end' then raise exception 'NOT_OVER'; end if;
   select array_agg(key) into v_seats from jsonb_object_keys(v_players) key;
@@ -1225,19 +1229,21 @@ begin
       v_curscore := coalesce(v_curscore,0); v_curstreak := coalesce(v_curstreak,0);
     end if;
     if v_camp = 'mafia' then
-      v_perf := case when v_won then 22 else -13 end;   -- 1 vs 다수: 이기면 크게, 져도 연착륙(maintain)
+      v_perf := case when v_won then 34 else -18 end;   -- 1 vs 다수: 이기면 크게, 져도 연착륙(maintain)
       v_tr   := case when v_won then 'apply' else 'maintain' end;
     else
-      v_perf := case when v_won then 13 else -9 end;     -- 시민 진영: 작고 꾸준한 변동
+      v_perf := case when v_won then 20 else -13 end;     -- 시민 진영: 작고 꾸준한 변동
       v_tr   := case when v_won then 'apply' else 'break' end;
     end if;
+    v_quit := (v_uid is not null and not (v_uid = any(coalesce(v_present, array[]::uuid[]))));
+    if v_quit then v_perf := -28; v_won := false; v_tr := 'break'; end if;   -- 중퇴=패배+차감
     select * into r from public.rk_apply_score('mafia', v_perf, v_curscore, v_curstreak, v_won, v_tr);
     v_delta := greatest(-CAP, least(CAP, r.delta));
     v_ns := greatest(0, v_curscore + v_delta);
     perform public.rk_bump_stats(v_uid, 'mafia', v_ns, r.new_streak, v_won);
     v_w:=0; v_l:=0; if v_uid is not null then select wins,losses into v_w,v_l from public.user_game_stats where user_id=v_uid and game='mafia'; v_w:=coalesce(v_w,0); v_l:=coalesce(v_l,0); end if;
     v_results := jsonb_set(v_results, array[v_seat], jsonb_build_object(
-      'role',v_role,'camp',v_camp,'won',v_won,
+      'role',v_role,'camp',v_camp,'won',v_won,'quit',coalesce(v_quit,false),
       'delta',v_delta,'bonus',r.bonus,'prevScore',v_curscore,'newScore',v_ns,
       'streak',r.new_streak,'treatment',v_tr,'prevStreak',v_curstreak,'wins',v_w,'losses',v_l));
   end loop;

@@ -46,12 +46,13 @@ function tierForScore(score) {
 function tierLevel(score) { return tierForScore(score).level; }
 
 /* ----------------------------- 점수 엔진 ------------------------------- */
+// 점수 상승폭 강화(2026-06-14 R4): minWin↑·tax↓·gainMult↑. 서버 rk_apply_score 와 동일 유지.
 const SCORE_CFG = {
-  rummikub: { gainMult: L => Math.max(0.42, 1 - L * 0.011), lossMult: L => Math.min(2.10, 1 + L * 0.020), tax: L => L * 0.85, minWin: L => Math.max(8, Math.round(28 - L * 0.45)), bonusRate: 0.10 },
-  davinci:  { gainMult: L => Math.max(0.42, 1 - L * 0.011), lossMult: L => Math.min(2.08, 1 + L * 0.020), tax: L => L * 0.60, minWin: L => Math.max(6, Math.round(20 - L * 0.34)), bonusRate: 0.10 },
-  mafia:    { gainMult: L => Math.max(0.50, 1 - L * 0.010), lossMult: L => Math.min(2.00, 1 + L * 0.018), tax: L => L * 0.30, minWin: L => Math.max(10, Math.round(24 - L * 0.40)), bonusRate: 0.12 },
-  race:     { gainMult: L => Math.max(0.45, 1 - L * 0.011), lossMult: L => Math.min(2.05, 1 + L * 0.019), tax: L => L * 0.32, minWin: L => Math.max(4, Math.round(12 - L * 0.18)), bonusRate: 0.08 },
-  hunt:     { gainMult: L => Math.max(0.45, 1 - L * 0.011), lossMult: L => Math.min(2.05, 1 + L * 0.019), tax: L => L * 0.30, minWin: L => Math.max(4, Math.round(11 - L * 0.16)), bonusRate: 0.08 },
+  rummikub: { gainMult: L => Math.max(0.50, 1.20 - L * 0.011), lossMult: L => Math.min(2.10, 1 + L * 0.020), tax: L => L * 0.55, minWin: L => Math.max(16, Math.round(50 - L * 0.70)), bonusRate: 0.10 },
+  davinci:  { gainMult: L => Math.max(0.50, 1.20 - L * 0.011), lossMult: L => Math.min(2.08, 1 + L * 0.020), tax: L => L * 0.45, minWin: L => Math.max(13, Math.round(40 - L * 0.55)), bonusRate: 0.10 },
+  mafia:    { gainMult: L => Math.max(0.55, 1.20 - L * 0.010), lossMult: L => Math.min(2.00, 1 + L * 0.018), tax: L => L * 0.25, minWin: L => Math.max(16, Math.round(40 - L * 0.50)), bonusRate: 0.12 },
+  race:     { gainMult: L => Math.max(0.55, 1.15 - L * 0.011), lossMult: L => Math.min(2.05, 1 + L * 0.019), tax: L => L * 0.25, minWin: L => Math.max(8, Math.round(24 - L * 0.30)), bonusRate: 0.08 },
+  hunt:     { gainMult: L => Math.max(0.55, 1.15 - L * 0.011), lossMult: L => Math.min(2.05, 1 + L * 0.019), tax: L => L * 0.25, minWin: L => Math.max(8, Math.round(22 - L * 0.28)), bonusRate: 0.08 },
 };
 const STREAK_BASE_RK = { 2: { 1: 'apply', 2: 'break' }, 3: { 1: 'apply', 2: 'maintain', 3: 'break' }, 4: { 1: 'apply', 2: 'apply', 3: 'maintain', 4: 'break' } };
 function streakRummikub(n, rank, tied) { if (rank === 1) return 'apply'; if (tied) return 'maintain'; return STREAK_BASE_RK[n][rank]; }

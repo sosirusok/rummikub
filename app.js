@@ -966,6 +966,7 @@ function renderResult() {
           let tag = '';
           if (game === 'hunt') tag = r.role === 'seeker' ? ` <span class="role-tag">🕵️술래 ${r.found != null ? r.found + '색출' : ''}</span>` : ` <span class="role-tag">🙂${r.survived ? '생존' : '색출됨'}</span>`;
           else if (game === 'mafia') { const rn = { mafia: '🔪 마피아', police: '🚓 경찰', doctor: '🚑 의사', citizen: '🙂 시민' }[r.role] || ''; tag = ` <span class="role-tag">${rn} · ${r.won ? '승리' : '패배'}</span>`; }
+          if (r.quit) tag += ' <span class="role-tag">🚪중퇴</span>';
           const rec = (r.wins != null) ? `${r.wins}승 ${r.losses}패` : '';
           return `<li class="rank-row ${r.won ? 'is-winner' : ''}">
             <span class="rank-row__place">${place}</span>
