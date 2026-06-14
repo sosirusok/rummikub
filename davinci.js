@@ -70,6 +70,8 @@ function davinciInitialState(seated, scoresMap) {
 
   return {
     game: 'davinci', seed, players, names, scores, n,
+    phase: 'setup',  // setup(준비: 조커배치+준비완료, 색 비공개) → play
+    ready: {},       // seat -> 준비완료 여부
     turn: seats[0],
     hands, pool,
     drawn: null,     // 뽑았으나 아직 배치 안 한 타일
@@ -88,6 +90,7 @@ function davinciEnter(room, me, mySeat, amSpectator) {
   DV.pick = null;
   setScreen('davinci');
   dvRender();
+  dvMaybeStartPlay();
   dvSkipDeparted();
   dvMaybeFinish();
 }
@@ -99,6 +102,7 @@ function davinciOnRoom(room) {
   DV.version = room.version;
   if (advanced) { DV.jokerMove = null; if (DV.pick) { DV.pick = null; closeSheet(); } }   // 멤버행 변동만으론 시트/이동 유지
   dvRender();
+  dvMaybeStartPlay();
   dvSkipDeparted();
   dvMaybeFinish();
 }
@@ -148,9 +152,67 @@ function dvMySlot(tile, s, canMove) {
 }
 
 /* ----------------------------- 렌더 ---------------------------------- */
+// 준비(셋업) 화면: 전원 준비 전까지 상대 패 색 비공개 + 내 조커 위치 배치 + 준비완료
+function dvRenderSetup(s) {
+  const seats = dvSeats(s);
+  const iAmReady = DV.amSpectator || !!(s.ready && s.ready[DV.mySeat]);
+  const readyCount = seats.filter(seat => s.ready && s.ready[seat]).length;
+  const oppoHTML = seats.filter(seat => seat !== DV.mySeat).map(seat => {
+    const t = tierForScore((s.scores || {})[seat] || 0);
+    const rdy = !!(s.ready && s.ready[seat]);
+    const cnt = (s.hands[seat] || []).length;
+    return `<li class="dv-oppo ${rdy ? 'is-turn' : ''}">
+      <div class="dv-oppo__head">
+        <span class="dv-oppo__name tier-name" style="--tc:${t.color}">${esc(s.names[seat])}</span>
+        <span class="dv-oppo__cnt">${cnt}장 · ${rdy ? '✅ 준비완료' : '⏳ 준비중'}</span>
+      </div>
+      <div class="dv-hand">${Array.from({ length: cnt }).map(() => `<span class="dvt dvt--hidden">?</span>`).join('')}</div>
+    </li>`;
+  }).join('');
+  let mineHTML = '';
+  if (!DV.amSpectator && DV.mySeat != null) {
+    const myHand = s.hands[DV.mySeat] || [];
+    const canMove = !iAmReady;
+    let handInner, hint = '';
+    if (DV.jokerMove && canMove) {
+      const rest = myHand.filter(t => t.id !== DV.jokerMove);
+      let h = '';
+      for (let i = 0; i <= rest.length; i++) { h += `<button class="dv-gap" data-act="dv_jokermove" data-gap="${i}">＋</button>`; if (i < rest.length) h += dvMySlot(rest[i], s, false); }
+      handInner = h;
+      hint = `<div class="dv-pickhint is-armed">🃏 조커를 놓을 자리(＋)를 고르세요 <button class="btn btn--ghost" data-act="dv_jokercancel">취소</button></div>`;
+    } else {
+      handInner = myHand.map(tile => dvMySlot(tile, s, canMove)).join('');
+      if (canMove && myHand.some(t => t.j)) hint = `<div class="dv-pickhint muted">🃏 조커 칩을 탭해 위치를 마음대로 정하세요</div>`;
+    }
+    mineHTML = `<div class="dv-mine">
+      <div class="dv-mine__label">내 패 (나만 값 보임 · 색은 모두 준비할 때까지 비공개)</div>
+      <div class="dv-hand dv-hand--mine">${handInner}</div>${hint}</div>`;
+  }
+  let action;
+  if (DV.amSpectator) action = `<div class="dv-note">👁 관전 — 모두 준비 중 (${readyCount}/${seats.length})</div>`;
+  else if (iAmReady) action = `<div class="dv-note">✅ 준비 완료 — 다른 사람을 기다리는 중 (${readyCount}/${seats.length})</div>`;
+  else action = `<div class="dv-actbar">
+      <div class="dv-step">🃏 조커 위치를 정한 뒤 준비하세요. (준비 후엔 못 바꿔요)</div>
+      <button class="btn btn--primary btn--lg" data-act="dv_ready">준비 완료</button>
+    </div>`;
+  app().innerHTML = `
+    <section class="screen screen--davinci">
+      <header class="topbar">
+        <div class="turn-pill is-mine">🎴 준비 중 ${readyCount}/${seats.length}</div>
+        <span class="room-tag">방${DV.roomId}·🂠${s.pool.length}</span>
+        <span class="dv-alive">${s.n}인</span>
+        <button class="btn btn--ghost" data-act="leave" style="margin-left:6px">나가기</button>
+      </header>
+      <ul class="dv-oppos grow scrollable">${oppoHTML}</ul>
+      ${mineHTML}
+      <footer class="dv-foot">${action}</footer>
+    </section>`;
+}
+
 function dvRender() {
   const s = DV.state; if (!s) return;
   if (s.ranks) return;   // 종료는 app.js 결과화면 처리
+  if (s.phase === 'setup') { dvRenderSetup(s); return; }   // 준비 단계
   const seats = dvSeats(s);
   const myTurn = dvIsMyTurn();
   const curName = s.names[Number(s.turn)] || ('좌석' + s.turn);
@@ -288,7 +350,48 @@ async function davinciAct(act, el) {
     case 'dv_jokerpick': DV.jokerMove = el.dataset.id; dvRender(); return;       // 내 조커 이동 시작
     case 'dv_jokercancel': DV.jokerMove = null; dvRender(); return;
     case 'dv_jokermove': return dvMoveJoker(Number(el.dataset.gap));
+    case 'dv_ready': return dvReady();
   }
+}
+
+// 준비 완료(셋업). 전원 준비되면 리더가 play 로 전환.
+async function dvReady() {
+  const s = DV.state; if (!s || s.phase !== 'setup' || DV.amSpectator) return;
+  DV.jokerMove = null;
+  const ok = await dvCommit(base => {
+    if (base.phase !== 'setup') return null;
+    base.ready = base.ready || {};
+    if (base.ready[DV.mySeat]) return null;
+    base.ready[DV.mySeat] = true;
+    return base;
+  });
+  if (ok) { dvRender(); dvMaybeStartPlay(); }
+}
+function dvIsLive(s, seat) {
+  const uid = (s.players || {})[seat];
+  const members = (typeof MEMBERS !== 'undefined') ? MEMBERS : [];
+  const pres = (typeof presentIds !== 'undefined') ? presentIds : null;
+  return uid && members.some(m => m.user_id === uid) && (!pres || pres.length === 0 || pres.includes(uid));
+}
+// 전원(접속자) 준비 완료면 리더가 play 로 전환. 이탈자는 준비된 것으로 간주.
+async function dvMaybeStartPlay() {
+  const s = DV.state; if (!s || s.phase !== 'setup' || DV.amSpectator) return;
+  const seats = dvSeats(s);
+  const allReady = seats.every(seat => (s.ready && s.ready[seat]) || !dvIsLive(s, seat));
+  if (!allReady) return;
+  const live = seats.filter(seat => dvIsLive(s, seat));
+  const leader = live.length ? live[0] : seats[0];
+  if (Number(leader) !== Number(DV.mySeat)) return;
+  await dvCommit(base => {
+    if (base.phase !== 'setup') return null;
+    const sts = dvSeats(base);
+    if (!sts.every(seat => (base.ready && base.ready[seat]) || !dvIsLive(base, seat))) return null;
+    base.phase = 'play';
+    base.turn = sts[0];
+    dvLog(base, `🎬 모두 준비 완료 — 게임 시작!`);
+    return base;
+  });
+  dvRender();
 }
 
 /* ----------------------------- 수(手) 처리 --------------------------- */
@@ -345,10 +448,14 @@ async function dvPlace(gap) {
 
 // 내 가린 조커를 원하는 자리로 이동(와일드 — 어디든). 턴 소비 없음.
 async function dvMoveJoker(gap) {
-  if (!dvIsMyTurn() || !DV.jokerMove) return;
+  if (!DV.jokerMove) return;
+  const st = DV.state || {};
+  const inSetup = st.phase === 'setup' && !(st.ready && st.ready[DV.mySeat]);
+  if (!inSetup && !dvIsMyTurn()) return;
   const jid = DV.jokerMove; DV.jokerMove = null;
   const ok = await dvCommit(s => {
-    if (Number(s.turn) !== Number(DV.mySeat)) return null;
+    const setupOk = s.phase === 'setup' && !(s.ready && s.ready[DV.mySeat]);
+    if (!setupOk && Number(s.turn) !== Number(DV.mySeat)) return null;
     const hand = s.hands[DV.mySeat];
     const idx = hand.findIndex(t => t.id === jid);
     if (idx < 0 || !hand[idx].j || hand[idx].up) return null;
@@ -419,7 +526,7 @@ function dvEndTurn(s) {
 
 /* ----------------------------- 중퇴 처리 ----------------------------- */
 async function dvSkipDeparted() {
-  const s = DV.state; if (!s || s.ranks || DV.amSpectator) return;
+  const s = DV.state; if (!s || s.ranks || s.phase === 'setup' || DV.amSpectator) return;
   const members = (typeof MEMBERS !== 'undefined') ? MEMBERS : [];
   const pres = (typeof presentIds !== 'undefined') ? presentIds : null;
   // 살아있음 = 멤버행 존재 AND (접속정보 모르면 통과 / 알면 접속중). 탭 닫힌 턴홀더(행 남아도 presence 빠짐)도 중퇴 처리.
@@ -443,7 +550,7 @@ async function dvSkipDeparted() {
 
 /* ----------------------------- 종료/정산 ----------------------------- */
 async function dvMaybeFinish() {
-  const s = DV.state; if (!s || DV.amSpectator) return;
+  const s = DV.state; if (!s || s.phase === 'setup' || DV.amSpectator) return;
   if (s.ranks) { try { await finishGame(DV.roomId, DV.me.token, 'davinci'); } catch (e) {} return; }
   const alive = dvAliveSeats(s);
   if (alive.length > 1) return;
