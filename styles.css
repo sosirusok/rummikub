@@ -446,3 +446,15 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .mf-abstain-row .btn{min-width:120px;}
 /* 홈 직전방 이어가기 칩 */
 .resume-chip{margin:0 14px 8px;}
+
+/* ===================== R4: 다빈치 정식룰(끼우기/조커/새타일) ===================== */
+.dv-hand--mine{align-items:center;}
+.dv-gap{min-width:24px; min-height:46px; border-radius:7px; border:2px dashed var(--accent); background:rgba(59,130,246,.14);
+  color:var(--accent); font-weight:900; font-size:18px; cursor:pointer; touch-action:manipulation; flex:0 0 auto;}
+.dv-gap:active{transform:scale(.92);}
+.dv-gap--no{display:inline-block; width:4px;}
+.dvt--joker{background:linear-gradient(135deg,#7c3aed,#a855f7); color:#fff; border-color:#5b21b6;}
+.dv-slot.is-fresh .dvt{outline:3px solid var(--warn); outline-offset:1px;}
+.dv-num--joker{width:100%; min-height:46px; margin-bottom:8px; border-radius:8px; border:1px solid #5b21b6;
+  background:linear-gradient(135deg,#7c3aed,#a855f7); color:#fff; font-weight:900; font-size:16px; touch-action:manipulation;}
+.dv-drawn .dvt{vertical-align:middle;}
