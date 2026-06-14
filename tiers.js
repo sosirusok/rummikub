@@ -6,9 +6,9 @@
    - 의존: ui-core.js(esc) 가 먼저 로드돼야 함.
    ========================================================================= */
 
-const GAME_NAME  = { rummikub: '루미큐브', davinci: '다빈치 코드', race: '운빨 대시',  hunt: '나도 사람이야', mafia: '마피아' };
-const GAME_SHORT = { rummikub: '루미',     davinci: '다빈치',      race: '운빨',       hunt: '나도사람',     mafia: '마피아' };
-const GAME_LOGO  = { rummikub: '🀄',       davinci: '🔢',          race: '🏁',         hunt: '🕵️',          mafia: '🔪' };
+const GAME_NAME  = { rummikub: '루미큐브', davinci: '다빈치 코드', splendor: '스플랜더', race: '운빨 대시',  hunt: '나도 사람이야', mafia: '마피아' };
+const GAME_SHORT = { rummikub: '루미',     davinci: '다빈치',      splendor: '스플랜더', race: '운빨',       hunt: '나도사람',     mafia: '마피아' };
+const GAME_LOGO  = { rummikub: '🀄',       davinci: '🔢',          splendor: '💎',       race: '🏁',         hunt: '🕵️',          mafia: '🔪' };
 
 /* ----------------------------- 티어 사다리 ----------------------------- */
 const TIER_DEFS = [
@@ -79,6 +79,104 @@ function applyScore(game, perf, score, prevStreak, isWin, treatment) {
     bonus = Math.round(delta * newStreak * C.bonusRate); delta += bonus;
   }
   return { delta, bonus, newStreak, newScore: Math.max(0, (score || 0) + delta), level: L };
+}
+
+/* ===================== 고정 점수표 (보드게임: 등수·인원·티어별 절대 증감) =====================
+   사용자 확정 테이블. 공식이 아니라 룩업 — (게임·티어·인원·등수) → 정확한 점수 변화량.
+   서버 rk_rank_points 와 1:1 동일해야 함. 마피아는 기여도 기반(아래 MAFIA_*).
+   티어키: wood/iron/bronze/silver/gold/platinum/emerald/diamond/master/grandmaster/challenger */
+const TIER_KEY_CUTS = [
+  ['challenger', 15000], ['grandmaster', 13500], ['master', 12000],
+  ['diamond', 9000], ['emerald', 7000], ['platinum', 5400], ['gold', 3800],
+  ['silver', 2200], ['bronze', 1000], ['iron', 200], ['wood', 0],
+];
+function tierKeyForScore(score) {
+  score = Math.max(0, score || 0);
+  for (const [key, min] of TIER_KEY_CUTS) if (score >= min) return key;
+  return 'wood';
+}
+// SCORE_TABLE[game][tierKey] = { 2:[1위,2위], 3:[1위,2위,3위], 4:[1위,2위,3위,4위] }
+const SCORE_TABLE = {
+  rummikub: {
+    wood:        { 2:[110,0],   3:[120,90,0],    4:[150,100,50,0] },
+    iron:        { 2:[100,-10], 3:[110,80,-10],  4:[130,100,40,-20] },
+    bronze:      { 2:[90,-20],  3:[100,60,-20],  4:[120,90,20,-40] },
+    silver:      { 2:[80,-30],  3:[90,50,-40],   4:[110,90,0,-60] },
+    gold:        { 2:[70,-40],  3:[80,30,-60],   4:[100,80,-20,-80] },
+    platinum:    { 2:[60,-50],  3:[80,20,-80],   4:[100,70,-40,-100] },
+    emerald:     { 2:[50,-70],  3:[70,10,-100],  4:[90,60,-50,-120] },
+    diamond:     { 2:[50,-90],  3:[70,0,-120],   4:[90,50,-60,-140] },
+    master:      { 2:[40,-90],  3:[60,0,-130],   4:[80,50,-60,-150] },
+    grandmaster: { 2:[40,-110], 3:[60,-10,-140], 4:[80,40,-70,-160] },
+    challenger:  { 2:[30,-110], 3:[50,-20,-140], 4:[70,40,-80,-170] },
+  },
+  davinci: {
+    wood:        { 2:[90,0],    3:[100,80,0],    4:[120,90,40,0] },
+    iron:        { 2:[80,-10],  3:[100,70,-20],  4:[110,90,30,-20] },
+    bronze:      { 2:[70,-20],  3:[90,70,-40],   4:[100,80,20,-30] },
+    silver:      { 2:[70,-30],  3:[80,60,-50],   4:[90,80,10,-50] },
+    gold:        { 2:[60,-40],  3:[70,50,-60],   4:[90,70,0,-70] },
+    platinum:    { 2:[60,-50],  3:[70,40,-80],   4:[80,60,-10,-90] },
+    emerald:     { 2:[50,-70],  3:[60,20,-100],  4:[70,50,-30,-110] },
+    diamond:     { 2:[50,-90],  3:[60,10,-120],  4:[70,40,-40,-130] },
+    master:      { 2:[40,-90],  3:[50,0,-120],   4:[70,40,-40,-150] },
+    grandmaster: { 2:[40,-110], 3:[50,-10,-130], 4:[60,30,-50,-150] },
+    challenger:  { 2:[30,-110], 3:[40,-10,-130], 4:[50,30,-50,-160] },
+  },
+  splendor: {
+    wood:        { 2:[130,0],   3:[150,90,50],   4:[180,140,80,0] },
+    iron:        { 2:[130,-10], 3:[150,80,20],   4:[170,130,60,-20] },
+    bronze:      { 2:[120,-20], 3:[140,60,0],    4:[160,120,40,-40] },
+    silver:      { 2:[110,-30], 3:[130,50,-20],  4:[150,110,20,-60] },
+    gold:        { 2:[100,-40], 3:[120,30,-40],  4:[140,100,0,-80] },
+    platinum:    { 2:[90,-50],  3:[110,20,-50],  4:[130,90,-10,-100] },
+    emerald:     { 2:[80,-70],  3:[100,10,-70],  4:[120,80,-20,-120] },
+    diamond:     { 2:[70,-90],  3:[90,0,-90],    4:[110,70,-30,-140] },
+    master:      { 2:[60,-90],  3:[80,0,-110],   4:[100,60,-40,-150] },
+    grandmaster: { 2:[50,-110], 3:[70,-10,-120], 4:[90,50,-50,-160] },
+    challenger:  { 2:[40,-110], 3:[60,-20,-130], 4:[80,40,-60,-170] },
+  },
+};
+// 등수 기반 점수 변화량 룩업(루미/다빈치/스플랜더). rank=1..n(동률은 공동등수 index).
+function rankPoints(game, score, n, rank) {
+  const g = SCORE_TABLE[game]; if (!g) return 0;
+  const row = g[tierKeyForScore(score)]; if (!row) return 0;
+  const nn = Math.max(2, Math.min(4, n || 2));
+  const arr = row[nn] || row[4];
+  const idx = Math.max(1, Math.min(arr.length, rank || arr.length)) - 1;
+  return arr[idx];
+}
+
+/* ===================== 마피아: 기여도 기반 점수 =====================
+   진영 승패 베이스(티어별) + 역할 기여도(살인/조사정답/세이브/생존).
+   승리 진영은 트롤이어도 무조건 +1 이상. 패배는 기여도로 손실만 줄임(최대 0). */
+const MAFIA_BASE = {  // 앵커=나무/브론즈/골드/다이아/챌린저 · 나머지=내분 보간(아이언·실버=평균, 플래/에메=골드:다이아 2:1·1:2, 마스터/그마=다이아:챌린저 2:1·1:2)
+  wood:        { mwin:150, cwin:75, loss:0 },
+  iron:        { mwin:135, cwin:67, loss:-10 },
+  bronze:      { mwin:120, cwin:58, loss:-20 },
+  silver:      { mwin:102, cwin:47, loss:-33 },
+  gold:        { mwin:84,  cwin:36, loss:-46 },
+  platinum:    { mwin:74,  cwin:30, loss:-59 },
+  emerald:     { mwin:64,  cwin:24, loss:-73 },
+  diamond:     { mwin:54,  cwin:18, loss:-86 },
+  master:      { mwin:47,  cwin:15, loss:-96 },
+  grandmaster: { mwin:41,  cwin:13, loss:-106 },
+  challenger:  { mwin:34,  cwin:10, loss:-116 },
+};
+const MAFIA_CONTRIB = { kill:8, invest:10, save:12, survive:6 };  // 살인·정답조사·세이브·시민생존(1회)
+// info: { won, camp:'mafia'|'citizens', role, survived, kills, hits, saves }
+function mafiaPoints(score, info) {
+  const b = MAFIA_BASE[tierKeyForScore(score)] || MAFIA_BASE.wood;
+  let base = info.won ? (info.camp === 'mafia' ? b.mwin : b.cwin) : b.loss;
+  let contrib = 0;
+  if (info.role === 'mafia')       contrib = (info.kills || 0) * MAFIA_CONTRIB.kill;
+  else if (info.role === 'police') contrib = (info.hits  || 0) * MAFIA_CONTRIB.invest;
+  else if (info.role === 'doctor') contrib = (info.saves || 0) * MAFIA_CONTRIB.save;
+  else if (info.survived)          contrib = MAFIA_CONTRIB.survive;
+  let delta = base + contrib;
+  if (info.won) delta = Math.max(delta, 1);   // 승리진영 무조건 +1 이상
+  else delta = Math.min(delta, 0);            // 패배는 최대 0(기여도로 손실만 경감)
+  return { delta, newScore: Math.max(0, Math.min(15000, (score || 0) + delta)) };
 }
 
 /* ----------------------------- 표시 헬퍼 ------------------------------- */

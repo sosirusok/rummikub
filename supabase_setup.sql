@@ -1280,3 +1280,529 @@ do $$ begin
     insert into public.app_migrations(key) values ('mafia_reset_20260614');
   end if;
 end $$;
+
+-- =====================================================================
+-- v4: 점수 고정테이블(루미/다빈치/스플랜더) + 마피아 기여도 점수 + 스플랜더 보드게임
+--     ⚠ 멱등. 파일 끝에 append. create-or-replace 가 위 정의를 override.
+-- =====================================================================
+
+-- ---- 게임 화이트리스트에 'splendor' 추가(없으면 스플랜더가 rummikub 으로 폴백) ----
+alter table public.users drop constraint if exists users_display_game_chk;
+alter table public.users drop constraint if exists users_display_game_check;
+alter table public.users add  constraint users_display_game_chk
+  check (display_game is null or display_game in ('rummikub','davinci','splendor','race','hunt','mafia'));
+alter table public.user_game_stats drop constraint if exists user_game_stats_game_check;
+alter table public.user_game_stats add  constraint user_game_stats_game_check
+  check (game in ('rummikub','davinci','splendor','race','hunt','mafia'));
+
+create or replace function public.rk_leaderboard(p_game text default 'rummikub')
+returns table(id uuid, username citext, real_name text, score int, wins int, losses int, streak int)
+language sql security definer set search_path = public, extensions as $$
+  select u.id, u.username, u.real_name, s.score, s.wins, s.losses, s.streak
+  from public.user_game_stats s join public.users u on u.id = s.user_id
+  where s.game = case when p_game in ('rummikub','davinci','splendor','race','hunt','mafia') then p_game else 'rummikub' end
+  order by s.score desc, s.wins desc, u.real_name asc limit 100;
+$$;
+
+create or replace function public.rk_set_display(p_token uuid, p_game text)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare v_user uuid; v_score int;
+begin
+  select id into v_user from public.users where token = p_token;
+  if v_user is null then raise exception 'BAD_TOKEN'; end if;
+  if p_game is not null and p_game not in ('rummikub','davinci','splendor','race','hunt','mafia') then raise exception 'BAD_GAME'; end if;
+  update public.users set display_game = p_game where id = v_user;
+  if p_game is null then return jsonb_build_object('game', null, 'score', 0); end if;
+  select coalesce(score,0) into v_score from public.user_game_stats where user_id = v_user and game = p_game;
+  return jsonb_build_object('game', p_game, 'score', coalesce(v_score,0));
+end; $$;
+
+-- rk_me: splendor 기본 stats 포함
+create or replace function public.rk_me(p_token uuid)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare u public.users; g jsonb; disp jsonb; ds int;
+begin
+  if p_token is null then return null; end if;
+  select * into u from public.users where token = p_token;
+  if not found then return null; end if;
+  select coalesce(jsonb_object_agg(game, jsonb_build_object('score',score,'wins',wins,'losses',losses,'streak',streak)), '{}'::jsonb)
+    into g from public.user_game_stats where user_id = u.id;
+  g := jsonb_build_object(
+    'rummikub', coalesce(g->'rummikub', jsonb_build_object('score',0,'wins',0,'losses',0,'streak',0)),
+    'davinci',  coalesce(g->'davinci',  jsonb_build_object('score',0,'wins',0,'losses',0,'streak',0)),
+    'splendor', coalesce(g->'splendor', jsonb_build_object('score',0,'wins',0,'losses',0,'streak',0)),
+    'mafia',    coalesce(g->'mafia',    jsonb_build_object('score',0,'wins',0,'losses',0,'streak',0)),
+    'race',     coalesce(g->'race',     jsonb_build_object('score',0,'wins',0,'losses',0,'streak',0)),
+    'hunt',     coalesce(g->'hunt',     jsonb_build_object('score',0,'wins',0,'losses',0,'streak',0)));
+  if u.display_game is null then
+    disp := jsonb_build_object('game', null, 'score', 0);
+  else
+    ds := coalesce((g->u.display_game->>'score')::int, 0);
+    disp := jsonb_build_object('game', u.display_game, 'score', ds);
+  end if;
+  return jsonb_build_object('id',u.id,'username',u.username,'real_name',u.real_name,
+                            'display_game',u.display_game,'games',g,'display',disp,'token',u.token);
+end; $$;
+
+-- rooms_game_guard: 보드룸(1~5) splendor 허용 + cap
+create or replace function public.rooms_game_guard() returns trigger as $$
+declare v_newcap int;
+begin
+  if new.game is not null then
+    if new.id between 1 and 5  and new.game not in ('rummikub','davinci','splendor','mafia') then new.game := null; end if;
+    if new.id between 6 and 10 and new.game not in ('race','hunt')                          then new.game := null; end if;
+  end if;
+  if tg_op='UPDATE' and old.game is distinct from new.game and old.status <> 'waiting' then
+    new.game := old.game;
+  end if;
+  if tg_op='UPDATE' and new.game is distinct from old.game and new.game is not null then
+    v_newcap := case new.game when 'mafia' then 12 when 'rummikub' then 4 when 'davinci' then 4 when 'splendor' then 4 else 8 end;
+    if v_newcap <= 4 and (select count(*) from public.room_members where room_id = new.id) >= 5 then
+      new.game := old.game;
+    end if;
+  end if;
+  return new;
+end; $$ language plpgsql;
+drop trigger if exists trg_rooms_game_guard on public.rooms;
+create trigger trg_rooms_game_guard before insert or update on public.rooms
+  for each row execute function public.rooms_game_guard();
+
+-- rk_take_seat: splendor cap=4
+create or replace function public.rk_take_seat(p_token uuid, p_room int, p_seat int)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare v_user uuid; v_status text; v_game text; v_cap int;
+begin
+  select id into v_user from public.users where token = p_token;
+  if v_user is null then raise exception 'BAD_TOKEN'; end if;
+  select status, game into v_status, v_game from public.rooms where id = p_room;
+  if v_status is null then raise exception 'NO_ROOM'; end if;
+  if v_status <> 'waiting' then return jsonb_build_object('ok',false,'reason','not_waiting'); end if;
+  v_cap := case v_game when 'mafia' then 12 when 'rummikub' then 4 when 'davinci' then 4 when 'splendor' then 4 when 'race' then 8 when 'hunt' then 8
+                       else (case when p_room between 1 and 5 then 4 else 8 end) end;
+  if p_seat < 1 or p_seat > v_cap then raise exception 'BAD_SEAT'; end if;
+  if exists (select 1 from public.room_members where room_id=p_room and seat=p_seat and user_id<>v_user) then
+    return jsonb_build_object('ok',false,'reason','taken');
+  end if;
+  if (select count(*) from public.room_members where room_id=p_room and seat is not null and user_id<>v_user) >= v_cap then
+    return jsonb_build_object('ok',false,'reason','full');
+  end if;
+  begin
+    update public.room_members set seat = p_seat, role = 'player' where room_id = p_room and user_id = v_user;
+    if not found then return jsonb_build_object('ok',false,'reason','not_member'); end if;
+  exception when unique_violation then return jsonb_build_object('ok',false,'reason','taken');
+  end;
+  return jsonb_build_object('ok',true,'seat',p_seat);
+end; $$;
+
+-- ---- 고정 점수표 룩업(서버=클라 tiers.js 동일) ----
+create or replace function public.rk_tier_key(p_score int)
+returns text language sql immutable set search_path = public as $$
+  select case
+    when s >= 15000 then 'challenger' when s >= 13500 then 'grandmaster'
+    when s >= 12000 then 'master' when s >= 9000 then 'diamond'
+    when s >= 7000 then 'emerald' when s >= 5400 then 'platinum'
+    when s >= 3800 then 'gold' when s >= 2200 then 'silver'
+    when s >= 1000 then 'bronze' when s >= 200 then 'iron' else 'wood' end
+  from (select greatest(0, coalesce(p_score,0)) as s) t;
+$$;
+
+create or replace function public.rk_rank_points(p_game text, p_score int, p_n int, p_rank int)
+returns int language plpgsql immutable set search_path = public as $$
+declare
+  t jsonb := '{"rummikub":{"wood":{"2":[110,0],"3":[120,90,0],"4":[150,100,50,0]},"iron":{"2":[100,-10],"3":[110,80,-10],"4":[130,100,40,-20]},"bronze":{"2":[90,-20],"3":[100,60,-20],"4":[120,90,20,-40]},"silver":{"2":[80,-30],"3":[90,50,-40],"4":[110,90,0,-60]},"gold":{"2":[70,-40],"3":[80,30,-60],"4":[100,80,-20,-80]},"platinum":{"2":[60,-50],"3":[80,20,-80],"4":[100,70,-40,-100]},"emerald":{"2":[50,-70],"3":[70,10,-100],"4":[90,60,-50,-120]},"diamond":{"2":[50,-90],"3":[70,0,-120],"4":[90,50,-60,-140]},"master":{"2":[40,-90],"3":[60,0,-130],"4":[80,50,-60,-150]},"grandmaster":{"2":[40,-110],"3":[60,-10,-140],"4":[80,40,-70,-160]},"challenger":{"2":[30,-110],"3":[50,-20,-140],"4":[70,40,-80,-170]}},"davinci":{"wood":{"2":[90,0],"3":[100,80,0],"4":[120,90,40,0]},"iron":{"2":[80,-10],"3":[100,70,-20],"4":[110,90,30,-20]},"bronze":{"2":[70,-20],"3":[90,70,-40],"4":[100,80,20,-30]},"silver":{"2":[70,-30],"3":[80,60,-50],"4":[90,80,10,-50]},"gold":{"2":[60,-40],"3":[70,50,-60],"4":[90,70,0,-70]},"platinum":{"2":[60,-50],"3":[70,40,-80],"4":[80,60,-10,-90]},"emerald":{"2":[50,-70],"3":[60,20,-100],"4":[70,50,-30,-110]},"diamond":{"2":[50,-90],"3":[60,10,-120],"4":[70,40,-40,-130]},"master":{"2":[40,-90],"3":[50,0,-120],"4":[70,40,-40,-150]},"grandmaster":{"2":[40,-110],"3":[50,-10,-130],"4":[60,30,-50,-150]},"challenger":{"2":[30,-110],"3":[40,-10,-130],"4":[50,30,-50,-160]}},"splendor":{"wood":{"2":[130,0],"3":[150,90,50],"4":[180,140,80,0]},"iron":{"2":[130,-10],"3":[150,80,20],"4":[170,130,60,-20]},"bronze":{"2":[120,-20],"3":[140,60,0],"4":[160,120,40,-40]},"silver":{"2":[110,-30],"3":[130,50,-20],"4":[150,110,20,-60]},"gold":{"2":[100,-40],"3":[120,30,-40],"4":[140,100,0,-80]},"platinum":{"2":[90,-50],"3":[110,20,-50],"4":[130,90,-10,-100]},"emerald":{"2":[80,-70],"3":[100,10,-70],"4":[120,80,-20,-120]},"diamond":{"2":[70,-90],"3":[90,0,-90],"4":[110,70,-30,-140]},"master":{"2":[60,-90],"3":[80,0,-110],"4":[100,60,-40,-150]},"grandmaster":{"2":[50,-110],"3":[70,-10,-120],"4":[90,50,-50,-160]},"challenger":{"2":[40,-110],"3":[60,-20,-130],"4":[80,40,-60,-170]}}}'::jsonb;
+  v_tier text; nn int; rk int; arr jsonb;
+begin
+  v_tier := public.rk_tier_key(p_score);
+  nn := least(4, greatest(2, coalesce(p_n,2)));
+  arr := t -> p_game -> v_tier -> nn::text;
+  if arr is null then return 0; end if;
+  rk := least(jsonb_array_length(arr), greatest(1, coalesce(p_rank, jsonb_array_length(arr))));
+  return coalesce((arr ->> (rk-1))::int, 0);
+end; $$;
+
+-- ---- 루미큐브: 등수(손패점수 오름차순, 동률=공동등수) → 고정표 ----
+create or replace function public.rk_finish_game(p_token uuid, p_room int)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare
+  v_user uuid; v_room public.rooms; v_state jsonb; v_players jsonb;
+  v_seats text[]; v_n int; v_handpts jsonb := '{}'::jsonb; v_results jsonb := '{}'::jsonb;
+  v_over boolean := false; v_passStreak int; v_sorted text[]; i int; j int; k int;
+  v_rank int; v_seat text; v_uid uuid; v_won boolean; v_hp int;
+  v_cnt int; v_distinct int; v_bad int; v_pool int; v_curscore int; v_curstreak int;
+  v_delta int; v_ns int; v_nstreak int; v_w int; v_l int;
+begin
+  select id into v_user from public.users where token = p_token;
+  if v_user is null then raise exception 'BAD_TOKEN'; end if;
+  select * into v_room from public.rooms where id = p_room for update;
+  if not found then raise exception 'NO_ROOM'; end if;
+  if v_room.status <> 'playing' then return coalesce(v_room.state->'results', '{}'::jsonb); end if;
+  v_state := v_room.state; v_players := v_state->'players';
+  if not exists (select 1 from jsonb_each_text(v_players) e where e.value = v_user::text) then raise exception 'NOT_A_PLAYER'; end if;
+  select array_agg(key) into v_seats from jsonb_object_keys(v_state->'hands') key;
+  v_n := coalesce(array_length(v_seats,1),0);
+  if v_n not between 2 and 4 then raise exception 'BAD_N'; end if;
+
+  with allids as (
+    select e.val from jsonb_each(v_state->'hands') h cross join lateral jsonb_array_elements_text(h.value) as e(val)
+    union all
+    select e.val from jsonb_array_elements(v_state->'board') as setj cross join lateral jsonb_array_elements_text(setj.value) as e(val)
+    union all
+    select e.val from jsonb_array_elements_text(v_state->'pool') as e(val))
+  select count(*), count(distinct val),
+         count(*) filter (where val !~ '^(black|red|blue|orange)_([1-9]|1[0-3])_[01]$' and val !~ '^joker_[01]$')
+    into v_cnt, v_distinct, v_bad from allids;
+  if v_cnt <> 106 or v_distinct <> 106 or v_bad > 0 then raise exception 'NOT_CONSERVED'; end if;
+  v_pool := coalesce(jsonb_array_length(v_state->'pool'), 0);
+  if v_pool > 106 - 14 * v_n then raise exception 'BAD_POOL'; end if;
+
+  for i in 1 .. v_n loop
+    select coalesce(sum(case when t like 'joker%' then 30 else split_part(t,'_',2)::int end),0)
+      into v_hp from jsonb_array_elements_text(v_state->'hands'->(v_seats[i])) t;
+    v_handpts := jsonb_set(v_handpts, array[v_seats[i]], to_jsonb(v_hp));
+    if v_hp = 0 then v_over := true; end if;
+  end loop;
+  v_passStreak := coalesce((v_state->>'passStreak')::int, 0);
+  if v_passStreak >= v_n then v_over := true; end if;
+  if not v_over then raise exception 'NOT_OVER'; end if;
+
+  select array_agg(s order by (v_handpts->>s)::int, s::int) into v_sorted from unnest(v_seats) s;
+  i := 1;
+  while i <= v_n loop
+    j := i;
+    while j < v_n and (v_handpts->>v_sorted[j+1])::int = (v_handpts->>v_sorted[i])::int loop j := j + 1; end loop;
+    v_rank := i;
+    for k in i .. j loop
+      v_seat := v_sorted[k]; v_uid := (v_players->>v_seat)::uuid;
+      v_curscore := 0; v_curstreak := 0;
+      if v_uid is not null then
+        select coalesce(score,0), coalesce(streak,0) into v_curscore, v_curstreak
+          from public.user_game_stats where user_id = v_uid and game = 'rummikub';
+        v_curscore := coalesce(v_curscore,0); v_curstreak := coalesce(v_curstreak,0);
+      end if;
+      v_won := (v_rank = 1);
+      v_delta := public.rk_rank_points('rummikub', v_curscore, v_n, v_rank);
+      v_ns := greatest(0, least(15000, v_curscore + v_delta));
+      v_nstreak := case when v_won then v_curstreak + 1 else 0 end;
+      perform public.rk_bump_stats(v_uid, 'rummikub', v_ns, v_nstreak, v_won);
+      v_w:=0; v_l:=0; if v_uid is not null then select wins,losses into v_w,v_l from public.user_game_stats where user_id=v_uid and game='rummikub'; v_w:=coalesce(v_w,0); v_l:=coalesce(v_l,0); end if;
+      v_results := jsonb_set(v_results, array[v_seat], jsonb_build_object(
+        'rank',v_rank,'delta',v_delta,'bonus',0,'won',v_won,'handPoints',(v_handpts->>v_seat)::int,
+        'prevScore',v_curscore,'newScore',v_ns,'streak',v_nstreak,'treatment',case when v_won then 'apply' else 'break' end,'prevStreak',v_curstreak,'wins',v_w,'losses',v_l));
+    end loop;
+    i := j + 1;
+  end loop;
+  v_state := jsonb_set(v_state, '{results}', v_results);
+  v_state := jsonb_set(v_state, '{status}',  '"finished"'::jsonb);
+  update public.rooms set status='finished', state=v_state, version=version+1 where id=p_room;
+  return v_results;
+end; $$;
+
+-- ---- 다빈치: 탈락순위(클라 ranks) → 고정표 ----
+create or replace function public.rk_finish_davinci(p_token uuid, p_room int)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare
+  v_user uuid; v_room public.rooms; v_state jsonb; v_players jsonb; v_ranks jsonb;
+  v_seats text[]; v_n int; v_results jsonb := '{}'::jsonb;
+  i int; v_seat text; v_uid uuid; v_rank int; v_curscore int; v_curstreak int;
+  v_won boolean; v_delta int; v_ns int; v_nstreak int; v_w int; v_l int;
+begin
+  select id into v_user from public.users where token = p_token;
+  if v_user is null then raise exception 'BAD_TOKEN'; end if;
+  select * into v_room from public.rooms where id = p_room for update;
+  if not found then raise exception 'NO_ROOM'; end if;
+  if coalesce(v_room.game,'') <> 'davinci' then raise exception 'WRONG_GAME'; end if;
+  if v_room.status <> 'playing' then return coalesce(v_room.state->'results','{}'::jsonb); end if;
+  v_state := v_room.state; v_players := v_state->'players'; v_ranks := v_state->'ranks';
+  if not exists (select 1 from jsonb_each_text(v_players) e where e.value=v_user::text) then raise exception 'NOT_A_PLAYER'; end if;
+  if v_ranks is null then raise exception 'NO_RANKS'; end if;
+  select array_agg(key) into v_seats from jsonb_object_keys(v_players) key;
+  v_n := coalesce(array_length(v_seats,1),0);
+  if v_n not between 2 and 4 then raise exception 'BAD_N'; end if;
+  perform 1 from unnest(v_seats) s where (v_ranks->>s) is null;
+  if found then raise exception 'BAD_RANKS'; end if;
+  for i in 1 .. v_n loop
+    v_seat := v_seats[i]; v_rank := (v_ranks->>v_seat)::int;
+    if v_rank < 1 or v_rank > v_n then raise exception 'BAD_RANK_VAL'; end if;
+    v_uid := (v_players->>v_seat)::uuid;
+    v_curscore := 0; v_curstreak := 0;
+    if v_uid is not null then
+      select coalesce(score,0), coalesce(streak,0) into v_curscore, v_curstreak from public.user_game_stats where user_id=v_uid and game='davinci';
+      v_curscore := coalesce(v_curscore,0); v_curstreak := coalesce(v_curstreak,0);
+    end if;
+    v_won := (v_rank = 1);
+    v_delta := public.rk_rank_points('davinci', v_curscore, v_n, v_rank);
+    v_ns := greatest(0, least(15000, v_curscore + v_delta));
+    v_nstreak := case when v_won then v_curstreak + 1 else 0 end;
+    perform public.rk_bump_stats(v_uid, 'davinci', v_ns, v_nstreak, v_won);
+    v_w:=0; v_l:=0; if v_uid is not null then select wins,losses into v_w,v_l from public.user_game_stats where user_id=v_uid and game='davinci'; v_w:=coalesce(v_w,0); v_l:=coalesce(v_l,0); end if;
+    v_results := jsonb_set(v_results, array[v_seat], jsonb_build_object(
+      'rank',v_rank,'delta',v_delta,'bonus',0,'won',v_won,
+      'prevScore',v_curscore,'newScore',v_ns,'streak',v_nstreak,'treatment',case when v_won then 'apply' else 'break' end,'prevStreak',v_curstreak,'wins',v_w,'losses',v_l));
+  end loop;
+  v_state := jsonb_set(v_state, '{results}', v_results);
+  v_state := jsonb_set(v_state, '{status}',  '"finished"'::jsonb);
+  update public.rooms set status='finished', state=v_state, version=version+1 where id=p_room;
+  return v_results;
+end; $$;
+
+-- ---- 스플랜더: 점수순위(클라 ranks: 명성↓→카드수↑ 타이브레이크) → 고정표 ----
+create or replace function public.rk_finish_splendor(p_token uuid, p_room int)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare
+  v_user uuid; v_room public.rooms; v_state jsonb; v_players jsonb; v_ranks jsonb; v_pts jsonb; v_cards jsonb;
+  v_seats text[]; v_n int; v_results jsonb := '{}'::jsonb;
+  i int; v_seat text; v_uid uuid; v_rank int; v_curscore int; v_curstreak int;
+  v_won boolean; v_delta int; v_ns int; v_nstreak int; v_w int; v_l int;
+begin
+  select id into v_user from public.users where token = p_token;
+  if v_user is null then raise exception 'BAD_TOKEN'; end if;
+  select * into v_room from public.rooms where id = p_room for update;
+  if not found then raise exception 'NO_ROOM'; end if;
+  if coalesce(v_room.game,'') <> 'splendor' then raise exception 'WRONG_GAME'; end if;
+  if v_room.status <> 'playing' then return coalesce(v_room.state->'results','{}'::jsonb); end if;
+  v_state := v_room.state; v_players := v_state->'players'; v_ranks := v_state->'ranks';
+  v_pts := coalesce(v_state->'points','{}'::jsonb); v_cards := coalesce(v_state->'cardCounts','{}'::jsonb);
+  if not exists (select 1 from jsonb_each_text(v_players) e where e.value=v_user::text) then raise exception 'NOT_A_PLAYER'; end if;
+  if v_ranks is null then raise exception 'NO_RANKS'; end if;
+  select array_agg(key) into v_seats from jsonb_object_keys(v_players) key;
+  v_n := coalesce(array_length(v_seats,1),0);
+  if v_n not between 2 and 4 then raise exception 'BAD_N'; end if;
+  perform 1 from unnest(v_seats) s where (v_ranks->>s) is null;
+  if found then raise exception 'BAD_RANKS'; end if;
+  for i in 1 .. v_n loop
+    v_seat := v_seats[i]; v_rank := (v_ranks->>v_seat)::int;
+    if v_rank < 1 or v_rank > v_n then raise exception 'BAD_RANK_VAL'; end if;
+    v_uid := (v_players->>v_seat)::uuid;
+    v_curscore := 0; v_curstreak := 0;
+    if v_uid is not null then
+      select coalesce(score,0), coalesce(streak,0) into v_curscore, v_curstreak from public.user_game_stats where user_id=v_uid and game='splendor';
+      v_curscore := coalesce(v_curscore,0); v_curstreak := coalesce(v_curstreak,0);
+    end if;
+    v_won := (v_rank = 1);
+    v_delta := public.rk_rank_points('splendor', v_curscore, v_n, v_rank);
+    v_ns := greatest(0, least(15000, v_curscore + v_delta));
+    v_nstreak := case when v_won then v_curstreak + 1 else 0 end;
+    perform public.rk_bump_stats(v_uid, 'splendor', v_ns, v_nstreak, v_won);
+    v_w:=0; v_l:=0; if v_uid is not null then select wins,losses into v_w,v_l from public.user_game_stats where user_id=v_uid and game='splendor'; v_w:=coalesce(v_w,0); v_l:=coalesce(v_l,0); end if;
+    v_results := jsonb_set(v_results, array[v_seat], jsonb_build_object(
+      'rank',v_rank,'delta',v_delta,'bonus',0,'won',v_won,
+      'points',coalesce((v_pts->>v_seat)::int,0),'cards',coalesce((v_cards->>v_seat)::int,0),
+      'prevScore',v_curscore,'newScore',v_ns,'streak',v_nstreak,'treatment',case when v_won then 'apply' else 'break' end,'prevStreak',v_curstreak,'wins',v_w,'losses',v_l));
+  end loop;
+  v_state := jsonb_set(v_state, '{results}', v_results);
+  v_state := jsonb_set(v_state, '{status}',  '"finished"'::jsonb);
+  update public.rooms set status='finished', state=v_state, version=version+1 where id=p_room;
+  return v_results;
+end; $$;
+
+-- ---- 마피아 기여도 누적 컬럼 ----
+alter table public.mafia_secrets add column if not exists kills int not null default 0;
+alter table public.mafia_secrets add column if not exists saves int not null default 0;
+alter table public.mafia_secrets add column if not exists hits  int not null default 0;
+
+-- ---- mf_resolve_phase: 밤 해소 시 기여도(성공살인/세이브/정답조사) 누적 추가 ----
+create or replace function public.mf_resolve_phase(p_token uuid, p_room int, p_expected text)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare
+  v_user uuid; v_room public.rooms; v_state jsonb; v_phase text; v_day int;
+  v_kill int; v_save int; v_killed int; v_saved boolean;
+  v_votes jsonb; v_exec int; v_top int; v_second int; v_execRole text; v_name text; r record;
+  v_aliveMafia int; v_aliveOther int; v_winner text; v_log jsonb;
+  me public.mafia_secrets; v_pending int; v_alive int; v_cast int; v_lim int; v_elapsed numeric; v_complete boolean;
+begin
+  select id into v_user from public.users where token=p_token;
+  if v_user is null then raise exception 'BAD_TOKEN'; end if;
+  select * into v_room from public.rooms where id=p_room for update;
+  if not found or v_room.status<>'playing' or coalesce(v_room.game,'')<>'mafia' then
+    return jsonb_build_object('ok',false,'reason','wrong_state'); end if;
+  select * into me from public.mafia_secrets where room_id=p_room and user_id=v_user;
+  if not found then raise exception 'NOT_A_PLAYER'; end if;
+  v_state := v_room.state; v_phase := v_state->>'phase'; v_day := coalesce((v_state->>'day')::int,1);
+  if v_phase <> p_expected then return jsonb_build_object('ok',false,'reason','phase_moved'); end if;
+
+  v_complete := false;
+  if v_phase = 'night' then
+    select count(*) into v_pending from public.mafia_secrets s
+      where s.room_id=p_room and s.role in ('mafia','police','doctor')
+        and coalesce((v_state->'alive'->>(s.seat::text))::boolean,false) and s.night_kind is null;
+    v_complete := (v_pending = 0); v_lim := 60;
+  elsif v_phase = 'day' then
+    select count(*) into v_alive from jsonb_each(v_state->'alive') where value = 'true'::jsonb;
+    select count(*) into v_cast  from jsonb_object_keys(coalesce(v_state->'votes','{}'::jsonb));
+    v_complete := (v_cast >= v_alive); v_lim := 90;
+  else
+    return jsonb_build_object('ok',false,'reason','noop');
+  end if;
+  if not v_complete then
+    v_elapsed := case when v_room.turn_started_at is null then 1e9
+                      else extract(epoch from (now() - v_room.turn_started_at)) end;
+    if v_elapsed < v_lim then return jsonb_build_object('ok',false,'reason','too_early'); end if;
+  end if;
+
+  v_log := coalesce(v_state->'log','[]'::jsonb);
+
+  if v_phase = 'night' then
+    select night_target into v_kill from public.mafia_secrets where room_id=p_room and role='mafia' and night_kind='kill' limit 1;
+    select night_target into v_save from public.mafia_secrets where room_id=p_room and role='doctor' and night_kind='save' limit 1;
+    v_killed := null; v_saved := false;
+    if v_kill is not null then
+      if v_save is not null and v_save = v_kill then v_saved := true; else v_killed := v_kill; end if;
+    end if;
+    if v_killed is not null then
+      v_state := jsonb_set(v_state, array['alive', v_killed::text], 'false'::jsonb);
+      select coalesce(v_state->'names'->>(v_killed::text),'') into v_name;
+      v_log := v_log || to_jsonb(array['☀️ '||v_day||'일차 아침 — '||v_name||' 님이 밤사이 살해당했습니다.']);
+    elsif v_saved then
+      v_log := v_log || to_jsonb(array['☀️ '||v_day||'일차 아침 — 의사가 살렸습니다! 사망자가 없습니다.']);
+    else
+      v_log := v_log || to_jsonb(array['☀️ '||v_day||'일차 아침 — 아무도 죽지 않았습니다.']);
+    end if;
+    v_state := jsonb_set(v_state, '{lastNight}', jsonb_build_object('killed', coalesce(to_jsonb(v_killed),'null'::jsonb), 'saved', v_saved));
+    -- 기여도 누적: 성공한 마피아 살인 / 의사 세이브 / 경찰 정답조사
+    if v_killed is not null then
+      update public.mafia_secrets set kills = kills + 1 where room_id=p_room and role='mafia' and night_kind='kill';
+    end if;
+    if v_saved then
+      update public.mafia_secrets set saves = saves + 1 where room_id=p_room and role='doctor' and night_kind='save';
+    end if;
+    update public.mafia_secrets set hits = hits + 1
+      where room_id=p_room and role='police' and night_kind='investigate' and police_result is true;
+    update public.mafia_secrets set night_kind=null, night_target=null where room_id=p_room;
+  else  -- day
+    v_votes := coalesce(v_state->'votes','{}'::jsonb);
+    v_top := 0; v_exec := null; v_second := -1;
+    for r in select value::int as tgt, count(*)::int as c from jsonb_each_text(v_votes)
+             where value <> '0' group by value order by count(*) desc, value::int asc loop
+      if v_exec is null then v_top := r.c; v_exec := r.tgt;
+      elsif v_second = -1 then v_second := r.c;
+      end if;
+    end loop;
+    if v_top <= 0 or v_second = v_top then v_exec := null; end if;
+    v_execRole := null;
+    if v_exec is not null then
+      select role into v_execRole from public.mafia_secrets where room_id=p_room and seat=v_exec;
+      v_state := jsonb_set(v_state, array['alive', v_exec::text], 'false'::jsonb);
+      select coalesce(v_state->'names'->>(v_exec::text),'') into v_name;
+      v_log := v_log || to_jsonb(array['⚖️ '||v_name||' 님이 투표로 처형 — 정체는 '||
+        (case v_execRole when 'mafia' then '🔪 마피아' when 'police' then '🚓 경찰' when 'doctor' then '🚑 의사' else '🙂 시민' end)||'!']);
+    else
+      v_log := v_log || to_jsonb(array['⚖️ 투표가 동률/무효여서 아무도 처형되지 않았습니다.']);
+    end if;
+    v_state := jsonb_set(v_state, '{lastVote}', jsonb_build_object('executed',coalesce(to_jsonb(v_exec),'null'::jsonb),'role',coalesce(to_jsonb(v_execRole),'null'::jsonb)));
+  end if;
+
+  select count(*) into v_aliveMafia from public.mafia_secrets s
+    where s.room_id=p_room and s.role='mafia' and coalesce((v_state->'alive'->>(s.seat::text))::boolean,false);
+  select count(*) into v_aliveOther from public.mafia_secrets s
+    where s.room_id=p_room and s.role<>'mafia' and coalesce((v_state->'alive'->>(s.seat::text))::boolean,false);
+  v_winner := null;
+  if v_aliveMafia = 0 then v_winner := 'citizens';
+  elsif v_aliveMafia >= v_aliveOther then v_winner := 'mafia';
+  end if;
+
+  if v_winner is not null then
+    v_state := jsonb_set(v_state, '{phase}', '"end"'::jsonb);
+    v_state := jsonb_set(v_state, '{winner}', to_jsonb(v_winner));
+    v_log := v_log || to_jsonb(array[(case when v_winner='citizens' then '🎉 시민 승리! 마피아를 처단했습니다.' else '🔪 마피아 승리! 마을이 무너졌습니다.' end)]);
+  elsif v_phase = 'night' then
+    v_state := jsonb_set(v_state, '{votes}', '{}'::jsonb);
+    v_state := jsonb_set(v_state, '{voteCount}', '{}'::jsonb);
+    v_state := jsonb_set(v_state, '{phase}', '"day"'::jsonb);
+    v_log := v_log || to_jsonb(array['🗳️ '||v_day||'일차 낮 — 토론 후 처형할 사람을 투표하세요.']);
+  else
+    v_state := jsonb_set(v_state, '{day}', to_jsonb(v_day+1));
+    v_state := jsonb_set(v_state, '{votes}', '{}'::jsonb);
+    v_state := jsonb_set(v_state, '{voteCount}', '{}'::jsonb);
+    v_state := jsonb_set(v_state, '{phase}', '"night"'::jsonb);
+    v_log := v_log || to_jsonb(array['🌙 '||(v_day+1)||'일차 밤이 되었습니다.']);
+  end if;
+
+  if jsonb_array_length(v_log) > 30 then
+    select jsonb_agg(e order by o) into v_log
+    from (select e, o from jsonb_array_elements(v_log) with ordinality t(e, o) order by o desc limit 30) z;
+  end if;
+  v_state := jsonb_set(v_state, '{log}', v_log);
+  update public.rooms set state=v_state, version=version+1 where id=p_room;
+  return jsonb_build_object('ok',true,'phase',v_state->>'phase','winner',v_winner);
+end; $$;
+
+-- ---- 마피아 정산: 기여도 기반(진영 베이스 + 역할기여), 승리진영 무조건 +1 이상 ----
+create or replace function public.rk_finish_mafia(p_token uuid, p_room int)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare
+  v_user uuid; v_room public.rooms; v_state jsonb; v_players jsonb; v_winner text;
+  v_seats text[]; v_n int; v_results jsonb := '{}'::jsonb; v_present uuid[]; v_quit boolean;
+  i int; v_seat text; v_uid uuid; v_role text; v_camp text; v_won boolean;
+  v_curscore int; v_curstreak int; v_delta int; v_ns int; v_nstreak int; v_w int; v_l int;
+  v_tierkey text; v_base int; v_contrib int; v_kills int; v_saves int; v_hits int; v_survived boolean;
+  v_mbase jsonb := '{"wood":{"mwin":150,"cwin":75,"loss":0},"iron":{"mwin":135,"cwin":67,"loss":-10},"bronze":{"mwin":120,"cwin":58,"loss":-20},"silver":{"mwin":102,"cwin":47,"loss":-33},"gold":{"mwin":84,"cwin":36,"loss":-46},"platinum":{"mwin":74,"cwin":30,"loss":-59},"emerald":{"mwin":64,"cwin":24,"loss":-73},"diamond":{"mwin":54,"cwin":18,"loss":-86},"master":{"mwin":47,"cwin":15,"loss":-96},"grandmaster":{"mwin":41,"cwin":13,"loss":-106},"challenger":{"mwin":34,"cwin":10,"loss":-116}}'::jsonb;
+begin
+  select id into v_user from public.users where token = p_token;
+  if v_user is null then raise exception 'BAD_TOKEN'; end if;
+  select * into v_room from public.rooms where id = p_room for update;
+  if not found then raise exception 'NO_ROOM'; end if;
+  if coalesce(v_room.game,'') <> 'mafia' then raise exception 'WRONG_GAME'; end if;
+  if v_room.status <> 'playing' then return coalesce(v_room.state->'results','{}'::jsonb); end if;
+  v_state := v_room.state; v_players := v_state->'players'; v_winner := v_state->>'winner';
+  select array_agg(user_id) into v_present from public.room_members where room_id = p_room;
+  if not exists (select 1 from jsonb_each_text(v_players) e where e.value=v_user::text) then raise exception 'NOT_A_PLAYER'; end if;
+  if v_winner is null or (v_state->>'phase') <> 'end' then raise exception 'NOT_OVER'; end if;
+  select array_agg(key) into v_seats from jsonb_object_keys(v_players) key;
+  v_n := coalesce(array_length(v_seats,1),0);
+  if v_n < 4 or v_n > 12 then raise exception 'BAD_N'; end if;
+
+  for i in 1 .. v_n loop
+    v_seat := v_seats[i]; v_uid := (v_players->>v_seat)::uuid;
+    select role, kills, saves, hits into v_role, v_kills, v_saves, v_hits
+      from public.mafia_secrets where room_id=p_room and seat=v_seat::int;
+    v_role := coalesce(v_role,'citizen'); v_kills:=coalesce(v_kills,0); v_saves:=coalesce(v_saves,0); v_hits:=coalesce(v_hits,0);
+    v_camp := case when v_role='mafia' then 'mafia' else 'citizens' end;
+    v_won  := (v_camp = v_winner);
+    v_survived := coalesce((v_state->'alive'->>v_seat)::boolean, false);
+    v_curscore := 0; v_curstreak := 0;
+    if v_uid is not null then
+      select coalesce(score,0), coalesce(streak,0) into v_curscore, v_curstreak
+        from public.user_game_stats where user_id=v_uid and game='mafia';
+      v_curscore := coalesce(v_curscore,0); v_curstreak := coalesce(v_curstreak,0);
+    end if;
+    v_tierkey := public.rk_tier_key(v_curscore);
+    v_quit := (v_uid is not null and not (v_uid = any(coalesce(v_present, array[]::uuid[]))));
+
+    if v_won and v_camp='mafia' then v_base := (v_mbase->v_tierkey->>'mwin')::int;
+    elsif v_won then v_base := (v_mbase->v_tierkey->>'cwin')::int;
+    else v_base := (v_mbase->v_tierkey->>'loss')::int; end if;
+
+    if v_quit then
+      v_contrib := 0; v_won := false; v_delta := (v_mbase->v_tierkey->>'loss')::int;   -- 중퇴=기여 무효+패배 손실
+    else
+      if v_role='mafia' then v_contrib := v_kills * 8;
+      elsif v_role='police' then v_contrib := v_hits * 10;
+      elsif v_role='doctor' then v_contrib := v_saves * 12;
+      elsif v_survived then v_contrib := 6;
+      else v_contrib := 0; end if;
+      v_delta := v_base + v_contrib;
+      if v_won then v_delta := greatest(v_delta, 1);    -- 승리진영 무조건 +1 이상
+      else v_delta := least(v_delta, 0); end if;          -- 패배는 최대 0(기여로 손실만 경감)
+    end if;
+
+    v_ns := greatest(0, least(15000, v_curscore + v_delta));
+    v_nstreak := case when v_won then v_curstreak + 1 else 0 end;
+    perform public.rk_bump_stats(v_uid, 'mafia', v_ns, v_nstreak, v_won);
+    v_w:=0; v_l:=0; if v_uid is not null then select wins,losses into v_w,v_l from public.user_game_stats where user_id=v_uid and game='mafia'; v_w:=coalesce(v_w,0); v_l:=coalesce(v_l,0); end if;
+    v_results := jsonb_set(v_results, array[v_seat], jsonb_build_object(
+      'role',v_role,'camp',v_camp,'won',v_won,'quit',coalesce(v_quit,false),
+      'kills',v_kills,'saves',v_saves,'hits',v_hits,'survived',v_survived,'contrib',v_contrib,
+      'delta',v_delta,'bonus',0,'prevScore',v_curscore,'newScore',v_ns,
+      'streak',v_nstreak,'treatment',case when v_won then 'apply' else 'break' end,'prevStreak',v_curstreak,'wins',v_w,'losses',v_l));
+  end loop;
+  v_state := jsonb_set(v_state, '{results}', v_results);
+  v_state := jsonb_set(v_state, '{status}',  '"finished"'::jsonb);
+  update public.rooms set status='finished', state=v_state, version=version+1 where id=p_room;
+  delete from public.mafia_secrets where room_id = p_room;
+  return v_results;
+end; $$;
+
+-- ---- 권한(신규 함수) ----
+grant execute on function public.rk_tier_key(int)                to anon, authenticated;
+grant execute on function public.rk_rank_points(text,int,int,int) to anon, authenticated;
+grant execute on function public.rk_finish_splendor(uuid,int)    to anon, authenticated;
