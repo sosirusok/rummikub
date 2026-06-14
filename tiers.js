@@ -203,17 +203,88 @@ function decoChipHTML(game, score) {
   return `<span class="deco-chip" style="--tc:${t.color}">${GAME_SHORT[game]} ${t.fullName}(${score || 0})</span>`;
 }
 
-/* ----------------------------- 티어 엠블럼(보드게임 전용 컨셉 + 티어별 화려도) ----------------------------- */
-// 보드게임마다 전용 컨셉 아이콘. 티어가 오를수록 CSS 가 점점 화려한 테두리/광채/회전 광선을 입힘.
-const GAME_EMBLEM = { rummikub: '🃏', davinci: '🗝️', splendor: '💎', mafia: '🔪', race: '🏁', hunt: '🕵️' };
-const EMBLEM_GAMES = ['rummikub', 'davinci', 'splendor', 'mafia'];   // 보드게임만 전용 컨셉 엠블럼(그 외는 티어 이모지)
+/* ----------------------------- 티어 엠블럼(SVG 크레스트, 게임별 컨셉 + 티어별 화려도) ----------------------------- */
 const TIER_INFO = {}; TIER_DEFS.forEach(d => TIER_INFO[d.key] = { name: d.name, color: d.color, logo: d.logo });
-
+// 티어별 팔레트(다색) + 장식 단계(orn). 고티어일수록 다색·광선·날개·보석·왕관으로 escalation.
+const TIER_EMB = {
+  wood:        { body:['#8a6a44','#5a4026'],                                 rim:['#a07c50','#3f2c18'], glow:'#7a5a36', orn:0 },
+  iron:        { body:['#aab1bc','#6b727d'],                                 rim:['#d2d8e0','#565b63'], glow:'#9aa3ad', orn:1 },
+  bronze:      { body:['#cf8743','#8a4f22'],                                 rim:['#eaa869','#6e3f18'], glow:'#c8803f', orn:1 },
+  silver:      { body:['#d4deea','#8c99ad'],                                 rim:['#ffffff','#7d8a9d'], glow:'#cdd8e6', orn:2 },
+  gold:        { body:['#ffda6e','#c8901c'],                                 rim:['#fff0b0','#a9760f'], glow:'#ffcc44', orn:2 },
+  platinum:    { body:['#a8f2e7','#2bb6a3'],                                 rim:['#e6fffb','#1f9b8e'], glow:'#5fe6d4', orn:3 },
+  emerald:     { body:['#86f0a6','#16a34a'],                                 rim:['#d6ffe2','#0f8a44'], glow:'#3fdd7a', orn:3 },
+  diamond:     { body:['#c6e9ff','#3aa0ff','#7c5cff'],                       rim:['#ffffff','#4aa8ff'], glow:'#6cc0ff', orn:4 },
+  master:      { body:['#ff9ae0','#b14de0','#6a5cff'],                       rim:['#ffd0f5','#7a3cff'], glow:'#c060f0', orn:5 },
+  grandmaster: { body:['#ffe06a','#ff7a3a','#e0444a'],                       rim:['#fff0b0','#c83030'], glow:'#ff6a3a', orn:6 },
+  challenger:  { body:['#fff7d2','#ffd84a','#7af0ff','#ff9ae0','#b08bff'],   rim:['#ffffff','#ffd84a'], glow:'#ffe27a', orn:7 },
+};
+let _embN = 0;
+function _embStops(cols) { return cols.map((c, i) => `<stop offset="${Math.round(i / (cols.length - 1) * 100)}%" stop-color="${c}"/>`).join(''); }
+const _EMB_SHIELD = 'M60 16 L100 30 V70 Q100 112 60 134 Q20 112 20 70 V30 Z';
+const _EMB_SHIELD_IN = 'M60 26 L92 37 V69 Q92 103 60 121 Q28 103 28 69 V37 Z';
+function _embIcon(game, id) {
+  const lite = `url(#${id}i)`, ol = 'rgba(0,0,0,.32)';
+  if (game === 'splendor') return `<g stroke="${ol}" stroke-width="1.4" stroke-linejoin="round">
+    <polygon points="60,52 78,64 60,92 42,64" fill="${lite}"/><polygon points="48,57 72,57 78,64 42,64" fill="#fff" opacity=".55"/>
+    <polygon points="48,57 72,57 60,52" fill="${lite}"/><line x1="42" y1="64" x2="60" y2="64"/><line x1="78" y1="64" x2="60" y2="64"/><line x1="60" y1="64" x2="60" y2="92"/></g>`;
+  if (game === 'mafia') return `<g fill="${lite}" stroke="${ol}" stroke-width="1.3" stroke-linejoin="round">
+    <polygon points="60,46 65,70 60,96 55,70"/><polygon points="60,46 63,68 60,72 57,68" fill="#fff" opacity=".5" stroke="none"/>
+    <rect x="46" y="92" width="28" height="6" rx="2.5"/><rect x="56" y="98" width="8" height="17" rx="2.5"/><circle cx="60" cy="118" r="4"/></g>`;
+  if (game === 'davinci') return `<g fill="none" stroke="${lite}" stroke-width="6.5" stroke-linecap="round">
+    <circle cx="60" cy="60" r="14"/><line x1="60" y1="74" x2="60" y2="112"/><line x1="60" y1="100" x2="71" y2="100"/><line x1="60" y1="109" x2="68" y2="109"/></g>
+    <circle cx="60" cy="60" r="5.5" fill="rgba(0,0,0,.42)"/>`;
+  if (game === 'rummikub') return `<g><rect x="44" y="52" width="32" height="40" rx="6" fill="${lite}" stroke="${ol}" stroke-width="1.4"/>
+    <polygon points="60,58 64,71 78,71 67,79 71,92 60,84 49,92 53,79 42,71 56,71" transform="translate(8.4,10) scale(.86)" fill="url(#${id}a)" stroke="${ol}" stroke-width="1"/></g>`;
+  if (game === 'race') return `<g><line x1="46" y1="50" x2="46" y2="116" stroke="${lite}" stroke-width="5" stroke-linecap="round"/>
+    <g transform="translate(49,52)">${[0,1,2,3].map(r => [0,1,2].map(cc => `<rect x="${cc*10}" y="${r*8}" width="10" height="8" fill="${(r+cc)%2?'#fff':'#222'}"/>`).join('')).join('')}<rect width="30" height="32" fill="none" stroke="${ol}"/></g></g>`;
+  if (game === 'hunt') return `<g fill="none" stroke="${lite}" stroke-width="6" stroke-linecap="round"><circle cx="55" cy="62" r="15"/><line x1="66" y1="73" x2="82" y2="100"/></g><circle cx="55" cy="62" r="8" fill="rgba(255,255,255,.25)"/>`;
+  return `<polygon points="60,46 67,66 88,66 71,79 77,100 60,87 43,100 49,79 32,66 53,66" fill="${lite}" stroke="${ol}" stroke-width="1.4"/>`;
+}
+function _embRays(id, orn) {
+  if (orn < 4) return ''; const n = 24, sp = [];
+  for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2, long = i % 2 === 0, r1 = 58, r2 = long ? 94 : 80, w = long ? .045 : .03, a1 = a - w, a2 = a + w;
+    sp.push(`<polygon points="${(60+Math.cos(a1)*r1).toFixed(1)},${(72+Math.sin(a1)*r1).toFixed(1)} ${(60+Math.cos(a)*r2).toFixed(1)},${(72+Math.sin(a)*r2).toFixed(1)} ${(60+Math.cos(a2)*r1).toFixed(1)},${(72+Math.sin(a2)*r1).toFixed(1)}" fill="url(#${id}r)"/>`); }
+  return `<g class="er" opacity="${orn>=7?.95:orn>=6?.85:.6}">${sp.join('')}</g>`;
+}
+function _embWings(id, orn) {
+  if (orn < 3) return '';
+  const leaf = (x, s) => `<g transform="translate(${x},92) scale(${s},1)">${[0,1,2,3,4].map(i => `<ellipse cx="${-6-i*7}" cy="${-i*9}" rx="9" ry="4.5" transform="rotate(${-28-i*8} ${-6-i*7} ${-i*9})" fill="url(#${id}w)" stroke="rgba(0,0,0,.18)" stroke-width=".6"/>`).join('')}</g>`;
+  return leaf(24, 1) + leaf(96, -1);
+}
+function _embGems(id, orn) {
+  if (orn < 4) return '';
+  const g = (x, y, r) => `<g><polygon points="${x},${y-r} ${x+r},${y} ${x},${y+r} ${x-r},${y}" fill="url(#${id}g)" stroke="rgba(0,0,0,.3)" stroke-width=".8"/><polygon points="${x},${y-r} ${x+r},${y} ${x},${y}" fill="#fff" opacity=".5"/></g>`;
+  return g(60, 18, 5) + (orn >= 5 ? g(24, 58, 4) + g(96, 58, 4) : '');
+}
+function _embCrown(id, orn) {
+  if (orn < 6) return '';
+  return `<path d="M40 18 L48 4 L60 14 L72 4 L80 18 Z" fill="url(#${id}c)" stroke="rgba(90,60,0,.5)" stroke-width="1"/>`
+    + (orn >= 7 ? `<circle cx="48" cy="6" r="2.6" fill="#ff5a7a"/><circle cx="72" cy="6" r="2.6" fill="#5ac8ff"/><circle cx="60" cy="14" r="3" fill="#7affb0"/>` : '');
+}
 function emblemHTML(game, score, size) {
   const t = tierForScore(score || 0);
-  const icon = (game && EMBLEM_GAMES.includes(game)) ? GAME_EMBLEM[game] : t.logo;
-  return `<span class="emb emb--${size || 'sm'} emb--${t.key}" style="--tc:${t.color}" title="${t.fullName}">`
-    + `<i class="emb__halo"></i><i class="emb__rays"></i><span class="emb__core">${icon}</span><i class="emb__shine"></i></span>`;
+  const c = TIER_EMB[t.key] || TIER_EMB.wood, id = 'e' + (++_embN), orn = c.orn;
+  const glA = orn >= 6 ? .95 : orn >= 4 ? .7 : orn >= 2 ? .45 : .18;
+  const defs = `<defs>
+    <linearGradient id="${id}f" x1="0" y1="0" x2="0" y2="1">${_embStops(c.rim)}</linearGradient>
+    <linearGradient id="${id}b" x1="0" y1="0" x2="0" y2="1">${_embStops(c.body)}</linearGradient>
+    <linearGradient id="${id}a" x1="0" y1="0" x2="0" y2="1">${_embStops(c.body)}</linearGradient>
+    <linearGradient id="${id}w" x1="0" y1="0" x2="0" y2="1">${_embStops(c.rim)}</linearGradient>
+    <linearGradient id="${id}i" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fff"/><stop offset="100%" stop-color="#cfd8e6"/></linearGradient>
+    <linearGradient id="${id}c" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ffe98a"/><stop offset="100%" stop-color="#d79a18"/></linearGradient>
+    <radialGradient id="${id}g">${_embStops(c.body.length > 2 ? [c.body[0], c.body[2]] : c.body)}</radialGradient>
+    <linearGradient id="${id}r" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${c.body[0]}" stop-opacity=".95"/><stop offset="100%" stop-color="${c.glow}" stop-opacity=".15"/></linearGradient>
+    <radialGradient id="${id}gl" cx="50%" cy="44%" r="62%"><stop offset="0%" stop-color="${c.glow}" stop-opacity="${glA}"/><stop offset="100%" stop-color="${c.glow}" stop-opacity="0"/></radialGradient>
+    <filter id="${id}s" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="2" stdDeviation="2.2" flood-color="rgba(0,0,0,.5)"/></filter></defs>`;
+  return `<span class="emb emb--${size || 'sm'} emb--${t.key}" title="${t.fullName}"><svg viewBox="0 0 120 150" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${defs}
+    ${orn >= 2 ? `<ellipse class="egl" cx="60" cy="68" rx="70" ry="74" fill="url(#${id}gl)"/>` : ''}
+    ${_embRays(id, orn)}${_embWings(id, orn)}
+    <g filter="url(#${id}s)"><path d="${_EMB_SHIELD}" fill="url(#${id}f)"/>
+      <path d="${_EMB_SHIELD}" fill="url(#${id}b)" transform="translate(0,0) scale(.93)" transform-origin="60 75"/>
+      <path d="M60 16 L100 30 V50 Q60 38 20 50 V30 Z" fill="#fff" opacity="${orn >= 1 ? .22 : .12}"/>
+      <path d="${_EMB_SHIELD_IN}" fill="#0a0e16" opacity=".28"/>${_embIcon(game, id)}</g>
+    ${_embGems(id, orn)}${_embCrown(id, orn)}</svg></span>`;
 }
 
 /* ----------------------------- 점수 증감 테이블(티어 화면) ----------------------------- */
