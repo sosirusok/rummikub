@@ -461,7 +461,7 @@ begin
         from public.user_game_stats where user_id = v_uid and game = 'race';
       v_curscore := coalesce(v_curscore,0); v_curstreak := coalesce(v_curstreak,0);
     end if;
-    v_perf := (v_avgrank - v_rank) * 10;
+    v_perf := (v_avgrank - v_rank) * 6;
     v_won  := (v_rank = 1);
     v_tr   := public.rk_streak_treatment_race(v_n, v_rank, v_tied);
     select * into r from public.rk_apply_score('race', v_perf, v_curscore, v_curstreak, v_won, v_tr);
@@ -515,7 +515,7 @@ begin
       select coalesce(score,0), coalesce(streak,0) into v_curscore, v_curstreak from public.user_game_stats where user_id=v_uid and game='davinci';
       v_curscore := coalesce(v_curscore,0); v_curstreak := coalesce(v_curstreak,0);
     end if;
-    v_perf := (v_avgrank - v_rank) * 13;
+    v_perf := (v_avgrank - v_rank) * 9;
     v_won  := (v_rank = 1);
     v_tr   := public.rk_streak_treatment_race(v_n, v_rank, v_tied);
     select * into r from public.rk_apply_score('davinci', v_perf, v_curscore, v_curstreak, v_won, v_tr);
@@ -575,13 +575,13 @@ begin
       v_curscore := coalesce(v_curscore,0); v_curstreak := coalesce(v_curstreak,0);
     end if;
     if v_role = 'seeker' then
-      v_perf := (v_found - v_h/2.0) * 11;
+      v_perf := (v_found - v_h/2.0) * 7;
       v_won  := (v_found >= v_h);
       v_tr   := case when v_found >= ceil(v_h/2.0) then 'apply' when v_found >= 1 then 'maintain' else 'break' end;
     else
       v_alivev  := coalesce((v_alive->>v_seat)::boolean, true);
       v_caughtv := coalesce((v_caught->>v_seat)::boolean, false);
-      v_perf := case when v_alivev then 11 else -11 end;
+      v_perf := case when v_alivev then 7 else -7 end;
       v_won  := v_alivev;
       v_tr   := case when v_alivev then 'apply' when v_caughtv then 'maintain' else 'break' end;
     end if;
@@ -912,28 +912,31 @@ create or replace function public.rk_apply_score(
   p_game text, p_perf numeric, p_score int, p_prev_streak int, p_is_win boolean, p_treatment text)
 returns table(delta int, bonus int, new_streak int, new_score int, lvl int)
 language plpgsql immutable set search_path = public as $$
-declare L int; gm numeric; lm numeric; tx numeric; mw int; br numeric; adj numeric; d int; b int; ns int;
+declare L int; gm numeric; lm numeric; tx numeric; mw int; br numeric; adj numeric; d int; b int; ns int; gb numeric;
 begin
   L := public.rk_tier_level(coalesce(p_score,0));
-  if p_game = 'rummikub' then     -- R4: 상승폭 강화(minWin↑·tax↓·gain↑)
-    gm := greatest(0.50, 1.20 - L*0.011); lm := least(2.10, 1 + L*0.020); tx := L*0.55;
-    mw := greatest(16, round(50 - L*0.70)::int); br := 0.10;
+  -- 베이스(원래값): 감소는 이 값 그대로 유지. 획득만 아래 gb 밴드로 가산.
+  if p_game = 'rummikub' then
+    gm := greatest(0.42, 1 - L*0.011); lm := least(2.10, 1 + L*0.020); tx := L*0.85;
+    mw := greatest(8, round(28 - L*0.45)::int); br := 0.10;
   elsif p_game = 'davinci' then
-    gm := greatest(0.50, 1.20 - L*0.011); lm := least(2.08, 1 + L*0.020); tx := L*0.45;
-    mw := greatest(13, round(40 - L*0.55)::int); br := 0.10;
-  elsif p_game = 'mafia' then     -- 진영 승패 고정형(루미와 다른 결) + 상승폭 강화
-    gm := greatest(0.55, 1.20 - L*0.010); lm := least(2.00, 1 + L*0.018); tx := L*0.25;
-    mw := greatest(16, round(40 - L*0.50)::int); br := 0.12;
+    gm := greatest(0.42, 1 - L*0.011); lm := least(2.08, 1 + L*0.020); tx := L*0.60;
+    mw := greatest(6, round(20 - L*0.34)::int); br := 0.10;
+  elsif p_game = 'mafia' then
+    gm := greatest(0.50, 1 - L*0.010); lm := least(2.00, 1 + L*0.018); tx := L*0.30;
+    mw := greatest(10, round(24 - L*0.40)::int); br := 0.12;
   elsif p_game = 'race' then
-    gm := greatest(0.55, 1.15 - L*0.011); lm := least(2.05, 1 + L*0.019); tx := L*0.25;
-    mw := greatest(8, round(24 - L*0.30)::int); br := 0.08;
+    gm := greatest(0.45, 1 - L*0.011); lm := least(2.05, 1 + L*0.019); tx := L*0.32;
+    mw := greatest(4, round(12 - L*0.18)::int); br := 0.08;
   else  -- hunt
-    gm := greatest(0.55, 1.15 - L*0.011); lm := least(2.05, 1 + L*0.019); tx := L*0.25;
-    mw := greatest(8, round(22 - L*0.28)::int); br := 0.08;
+    gm := greatest(0.45, 1 - L*0.011); lm := least(2.05, 1 + L*0.019); tx := L*0.30;
+    mw := greatest(4, round(11 - L*0.16)::int); br := 0.08;
   end if;
+  -- 저티어 획득 가산(감소는 불변): 나무~아이언 ×2.0, 브론즈~실버 ×1.5, 골드~플래 ×1.2, 에메+ ×1.0
+  gb := case when L <= 4 then 2.0 when L <= 12 then 1.5 when L <= 20 then 1.2 else 1.0 end;
   adj := p_perf - tx;
-  if adj >= 0 then d := round(adj * gm)::int; else d := round(adj * lm)::int; end if;
-  if p_is_win then d := greatest(d, mw); end if;
+  if adj >= 0 then d := round(adj * gm * gb)::int; else d := round(adj * lm)::int; end if;   -- 획득만 가산, 감소 불변
+  if p_is_win then d := greatest(d, round(mw * gb)::int); end if;
   ns := case p_treatment when 'apply' then coalesce(p_prev_streak,0)+1
                          when 'maintain' then coalesce(p_prev_streak,0)
                          else 0 end;
@@ -1229,10 +1232,10 @@ begin
       v_curscore := coalesce(v_curscore,0); v_curstreak := coalesce(v_curstreak,0);
     end if;
     if v_camp = 'mafia' then
-      v_perf := case when v_won then 34 else -18 end;   -- 1 vs 다수: 이기면 크게, 져도 연착륙(maintain)
+      v_perf := case when v_won then 22 else -13 end;   -- 1 vs 다수: 이기면 크게, 져도 연착륙(maintain)
       v_tr   := case when v_won then 'apply' else 'maintain' end;
     else
-      v_perf := case when v_won then 20 else -13 end;     -- 시민 진영: 작고 꾸준한 변동
+      v_perf := case when v_won then 13 else -9 end;     -- 시민 진영: 작고 꾸준한 변동
       v_tr   := case when v_won then 'apply' else 'break' end;
     end if;
     v_quit := (v_uid is not null and not (v_uid = any(coalesce(v_present, array[]::uuid[]))));

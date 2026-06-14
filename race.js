@@ -34,9 +34,9 @@
 
   // 운동 파라미터(고정스텝 dt=ms)
   const SPD       = 0.115;    // 기본 이속(px/ms)
-  const DASH_SPD  = 0.230;    // 대시 중 이속
-  const DASH_DUR  = 360;      // 대시 지속(ms)
-  const DASH_CD   = 900;      // 대시 쿨다운(ms)
+  const DASH_SPD  = 0.230;    // 대시 중 이속(= 기본 ×2)
+  const DASH_DUR  = 1500;     // 대시 지속 1.5초
+  const DASH_CD   = 6000;     // 대시 쿨다운 6초
 
   // 셀 종류
   const WALL = 1, FLOOR = 0;
@@ -291,59 +291,64 @@
       }
     },
 
-    /* draw: 2D 톱다운. 카메라가 내 캐릭터 추적. 화면밖 컬링. */
+    /* draw: 줌인 톱다운(시야 제한) + 하늘색 투명벽 + 비네팅. 카메라가 내 캐릭터 추적. */
     draw(M) {
       const ctx = M.ctx, W = M.W, H = M.H;
       if (!M.maze) return;
       const grid = M.maze.grid;
-
-      // 카메라: 내 캐릭터를 화면 중앙에(관전자는 결승 부근)
+      const Z = M.lowPower ? 1.55 : 1.85;        // 줌인 → 앞이 안 보임(복불복)
       const camTX = M.local ? M.local.x : cellCenterX(M.maze.goalCol);
       const camTY = M.local ? M.local.y : cellCenterY(GOAL_ROW + 4);
-      const camX = camTX - W * 0.5;
-      const camY = camTY - H * 0.55;
-      const sx = (wx) => Math.round(wx - camX);
-      const sy = (wy) => Math.round(wy - camY);
+      const cx0 = W * 0.5, cy0 = H * 0.55;
+      const sx = (wx) => Math.round((wx - camTX) * Z + cx0);
+      const sy = (wy) => Math.round((wy - camTY) * Z + cy0);
+      const TZ = TILE * Z;
 
-      // 배경
       ctx.fillStyle = '#0b1018'; ctx.fillRect(0, 0, W, H);
 
-      // 보이는 셀 범위(컬링)
-      const c0 = Math.max(0, Math.floor(camX / TILE) - 1);
-      const c1 = Math.min(COLS - 1, Math.ceil((camX + W) / TILE) + 1);
-      const r0 = Math.max(0, Math.floor(camY / TILE) - 1);
-      const r1 = Math.min(ROWS - 1, Math.ceil((camY + H) / TILE) + 1);
+      // 보이는 셀 범위(줌 반영 컬링)
+      const halfW = (W * 0.5) / Z, halfUp = (H * 0.55) / Z, halfDn = (H * 0.45) / Z;
+      const c0 = Math.max(0, Math.floor((camTX - halfW) / TILE) - 1);
+      const c1 = Math.min(COLS - 1, Math.ceil((camTX + halfW) / TILE) + 1);
+      const r0 = Math.max(0, Math.floor((camTY - halfUp) / TILE) - 1);
+      const r1 = Math.min(ROWS - 1, Math.ceil((camTY + halfDn) / TILE) + 1);
 
-      // 바닥(통로)만 그림 — 벽은 어두운 배경 그대로(통로/벽 외형은 균일)
       for (let r = r0; r <= r1; r++) {
         for (let c = c0; c <= c1; c++) {
-          if (grid[r][c] !== FLOOR) continue;
-          const isGoal = (r <= GOAL_ROW + 0);
-          ctx.fillStyle = isGoal ? '#1d3350' : '#1b2740';
-          ctx.fillRect(sx(c * TILE) + 1, sy(r * TILE) + 1, TILE - 1, TILE - 1);
+          const X = sx(c * TILE), Y = sy(r * TILE);
+          if (grid[r][c] === FLOOR) {
+            ctx.fillStyle = (r <= GOAL_ROW) ? '#1d3350' : '#172238';
+            ctx.fillRect(X + 1, Y + 1, TZ - 1, TZ - 1);
+          } else {
+            // 투명벽: 하늘색 반투명으로 구별(부딪히면 못 지나감)
+            ctx.fillStyle = 'rgba(120,200,255,0.28)';
+            ctx.fillRect(X, Y, Math.ceil(TZ), Math.ceil(TZ));
+            ctx.strokeStyle = 'rgba(150,215,255,0.5)'; ctx.lineWidth = 1;
+            ctx.strokeRect(X + 0.5, Y + 0.5, TZ - 1, TZ - 1);
+          }
         }
       }
 
-      // 결승 체크무늬 바
-      drawFinish(M, ctx, sx, sy);
+      drawFinish(M, ctx, sx, sy, TZ);
 
-      // 원격 플레이어(컬링)
       for (const seat of M.seats) {
         if (seat === M.mySeat) continue;
         const p = M.peerAt(seat);
         if (!p || p.x == null || p.y == null) continue;
         const px = sx(p.x), py = sy(p.y);
-        if (px < -30 || px > W + 30 || py < -30 || py > H + 30) continue;
-        drawRunner(ctx, px, py, seat, !!p.fin, M.lowPower, false, false);
+        if (px < -40 || px > W + 40 || py < -40 || py > H + 40) continue;
+        drawRunner(ctx, px, py, seat, !!p.fin, M.lowPower, false, false, Z);
       }
-      // 내 캐릭터(맨 위)
-      if (M.local) {
-        const L = M.local;
-        drawRunner(ctx, sx(L.x), sy(L.y), M.mySeat, L.fin, M.lowPower, true, M.simT() < L.dashUntil);
-      }
+      if (M.local) { const L = M.local; drawRunner(ctx, sx(L.x), sy(L.y), M.mySeat, L.fin, M.lowPower, true, M.simT() < L.dashUntil, Z); }
 
-      // 미니맵(우상단) — 저사양 생략
-      if (!M.lowPower) drawMiniMap(M, ctx, W, H);
+      // 시야 제한 비네팅(복불복 핵심): 캐릭터 주변만 밝게, 가장자리는 어둡게
+      if (!M.lowPower) {
+        const inner = Math.min(W, H) * 0.30, outer = Math.max(W, H) * 0.66;
+        const g = ctx.createRadialGradient(cx0, cy0, inner, cx0, cy0, outer);
+        g.addColorStop(0, 'rgba(6,9,15,0)');
+        g.addColorStop(1, 'rgba(6,9,15,0.94)');
+        ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+      }
     },
 
     /* hud: 순위·진행률·타이머 */
@@ -363,9 +368,12 @@
         timerTxt = `${(t / 1000).toFixed(1)}s`;
       }
       const stateTxt = L && L.fin ? '🏁 완주' : `진행 ${pct}%`;
+      let dashTxt = '';
+      if (L && !L.fin) { const cd = Math.max(0, L.dashCdUntil - t); dashTxt = cd > 0 ? `대시 ${(cd / 1000).toFixed(1)}s` : '대시 ⚡준비'; }
       return `<div class="mini-hud__row">`
         + `<span>순위 <b>${rank}</b>/${M.n}</span>`
         + `<span>${stateTxt}</span>`
+        + (dashTxt ? `<span>${dashTxt}</span>` : '')
         + `<span>${timerTxt}</span>`
         + `</div>`;
     },
@@ -431,8 +439,8 @@
 
   /* ----------------------------- 그리기 헬퍼 ------------------------- */
   // 캐릭터 = 원 + 좌석색 + 번호
-  function drawRunner(ctx, cx, cy, seat, fin, lowPower, isMe, dashing) {
-    const r = PR + 3;
+  function drawRunner(ctx, cx, cy, seat, fin, lowPower, isMe, dashing, scale) {
+    const r = (PR + 3) * (scale || 1);
     if (dashing && !lowPower) {
       ctx.fillStyle = 'rgba(255,255,255,0.16)';
       ctx.beginPath(); ctx.arc(cx, cy, r * 1.5, 0, Math.PI * 2); ctx.fill();
@@ -450,9 +458,9 @@
   }
 
   // 결승 체크무늬(결승 행 통로 위)
-  function drawFinish(M, ctx, sx, sy) {
+  function drawFinish(M, ctx, sx, sy, TZ) {
     const y = sy(GOAL_ROW * TILE);
-    const cell = Math.round(TILE / 2);
+    const cell = Math.round((TZ || TILE) / 2);
     const x0 = sx(0), x1 = sx(COLS * TILE);
     for (let x = x0; x < x1; x += cell) {
       const k = Math.floor((x - x0) / cell) % 2;
