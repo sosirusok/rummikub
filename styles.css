@@ -481,6 +481,14 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .emb--wood{--th:1.08;} .emb--iron{--th:1.08;} .emb--bronze{--th:.854;} .emb--silver{--th:.813;}
 .emb--gold{--th:.817;} .emb--platinum{--th:.777;} .emb--emerald{--th:.719;} .emb--diamond{--th:.690;}
 .emb--master{--th:.701;} .emb--grandmaster{--th:.698;} .emb--challenger{--th:1;}
+/* 좌석·홈헤더·랭킹 한정: 저티어가 너무 작아 안 보이는 문제 → 압축 스케일(챌린저=100% 기준).
+   사다리(.tier-row)·히어로(.tier-hero)·점수표(.sc-tier)는 실측 비율 그대로 유지. */
+:is(.seat__emb,.lobby__hello,.score-tier) :is(.emb--wood,.emb--iron){--tw:.75;}
+:is(.seat__emb,.lobby__hello,.score-tier) :is(.emb--bronze,.emb--silver){--tw:.80;}
+:is(.seat__emb,.lobby__hello,.score-tier) :is(.emb--gold,.emb--platinum){--tw:.85;}
+:is(.seat__emb,.lobby__hello,.score-tier) :is(.emb--diamond,.emb--emerald){--tw:.90;}
+:is(.seat__emb,.lobby__hello,.score-tier) :is(.emb--master,.emb--grandmaster){--tw:.95;}
+:is(.seat__emb,.lobby__hello,.score-tier) .emb--challenger{--tw:1;}
 /* 티어별 발광색 */
 .emb--wood{--ec:#b88a5a;} .emb--iron{--ec:#cfd6e0;}
 .emb--bronze{--ec:#e08a3a;} .emb--silver{--ec:#dfe8f2;} .emb--gold{--ec:#ffce4a;} .emb--platinum{--ec:#62e6d6;}
