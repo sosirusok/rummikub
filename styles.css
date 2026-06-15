@@ -468,7 +468,7 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 
 /* ===== 티어 엠블럼(이미지 에셋 + 티어별 라이브 이펙트) ===== */
 /* 크기 = 기준폭(--w, 챌린저=tw1) × 티어별 소스 실측 비례(--tw). 높이는 이미지 본연 비율(auto) → 날개·왕관 잘림 없음 */
-.emb{position:relative; display:inline-block; width:calc(var(--w,32px) * var(--tw,1)); height:calc(var(--w,32px) * var(--tw,1) * var(--th,.8)); line-height:0; flex:none; vertical-align:middle;}
+.emb{position:relative; display:inline-block; isolation:isolate; width:calc(var(--w,32px) * var(--tw,1)); height:calc(var(--w,32px) * var(--tw,1) * var(--th,.8)); line-height:0; flex:none; vertical-align:middle;}
 .emb img{width:100%; height:100%; object-fit:contain; display:block;}
 .emb--xs{--w:28px;} .emb--eqs{--w:38px;} .emb--eq{--w:54px;} .emb--sm{--w:50px;} .emb--md{--w:92px;} .emb--lg{--w:140px;}
 .deco-emb{vertical-align:middle; margin-right:3px;}
@@ -486,18 +486,18 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .emb--bronze{--ec:#e08a3a;} .emb--silver{--ec:#dfe8f2;} .emb--gold{--ec:#ffce4a;} .emb--platinum{--ec:#62e6d6;}
 .emb--emerald{--ec:#5ee884;} .emb--diamond{--ec:#86d6ff;} .emb--master{--ec:#c66bf0;} .emb--grandmaster{--ec:#cfe6ff;} .emb--challenger{--ec:#ffdf72;}
 /* ── 4단계 라이브 이펙트: 저(무) · 중(적당 발광) · 고(화려: 발광+광택+둥실) · 초고(매우 화려: 강발광+밝은 광택+반짝 스파클+둥실) ── */
-/* 광택 스윕(::after) — 엠블럼 실루엣(이미지 알파)으로 마스킹해 모양 위로만 흐름 */
-.emb::after{content:""; position:absolute; inset:0; pointer-events:none; opacity:0; z-index:2;
+/* 광택 스윕(::after) — 실루엣 마스킹 + screen 블렌드(빛 더하기) → 엠블럼을 덮지 않고 가는 글린트만 흐름 */
+.emb::after{content:""; position:absolute; inset:0; pointer-events:none; opacity:0; z-index:2; mix-blend-mode:screen;
   -webkit-mask:var(--src) center/contain no-repeat; mask:var(--src) center/contain no-repeat;
-  background:linear-gradient(105deg, transparent 42%, rgba(255,255,255,.85) 50%, transparent 58%);
+  background:linear-gradient(105deg, transparent 45%, rgba(255,255,255,.8) 50%, transparent 55%);
   background-size:260% 100%; background-position:210% 0;}
-/* 반짝 스파클(::before) — 초고티어 전용, 실루엣 위 작은 하이라이트가 깜빡 */
-.emb::before{content:""; position:absolute; inset:0; pointer-events:none; opacity:0; z-index:3;
+/* 반짝 스파클(::before) — 초고티어 전용. screen 블렌드라 중앙을 가리지 않고 살짝 반짝. 위치는 상단·가장자리 위주 */
+.emb::before{content:""; position:absolute; inset:0; pointer-events:none; opacity:0; z-index:3; mix-blend-mode:screen;
   -webkit-mask:var(--src) center/contain no-repeat; mask:var(--src) center/contain no-repeat;
   background:
-    radial-gradient(circle at 30% 26%, rgba(255,255,255,.98) 0, transparent 13%),
-    radial-gradient(circle at 70% 40%, rgba(255,255,255,.92) 0, transparent 11%),
-    radial-gradient(circle at 48% 72%, rgba(255,255,255,.85) 0, transparent 10%);}
+    radial-gradient(circle at 26% 20%, #fff 0, transparent 8%),
+    radial-gradient(circle at 76% 28%, rgba(255,255,255,.85) 0, transparent 7%),
+    radial-gradient(circle at 62% 58%, rgba(255,255,255,.7) 0, transparent 6%);}
 
 /* 저티어(나무·아이언): 이펙트 없음 (정적) */
 
