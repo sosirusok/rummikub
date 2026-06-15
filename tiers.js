@@ -223,9 +223,9 @@ function decoChipHTML(game, score) {
   return `<span class="deco-chip" style="--tc:${t.color}">${GAME_SHORT[game]} ${t.fullName}(${score || 0})</span>`;
 }
 
-/* ----------------------------- 티어 엠블럼(좀비고 래더식 — 채도 높은 티어색 컬러 배지 + 게임별 고유 모티브) ----------------------------- */
+/* ----------------------------- 티어 엠블럼(좀비고 래더식 — 배경 없이 오브젝트 자체, 티어가 색/크기/광택) ----------------------------- */
 const TIER_INFO = {}; TIER_DEFS.forEach(d => TIER_INFO[d.key] = { name: d.name, color: d.color, logo: d.logo });
-// 티어키 → [밝은,중간,진한] 채도 높은 색 + 강조색 + 장식단계(st).
+// 티어키 → 장식단계(st) + [밝은,중간,진한] 색 + 강조색. 오브젝트 자체를 이 색으로 칠하고 st 로 크기·광택·장식 결정.
 const _EMB = {
   wood:        { st:0, pal:['#e6c79c','#b07c44','#5e4326'], acc:'#eccfa2' },
   iron:        { st:0, pal:['#d2dae4','#8a94a2','#586070'], acc:'#cdd8e6' },
@@ -240,69 +240,91 @@ const _EMB = {
   challenger:  { st:4, pal:['#ffe7a0','#ff5ea8','#7a3cff'], acc:'#ffd76a' },
 };
 let _embN = 0;
-function _eDefs(id, pal, acc) {
+function _oDefs(id, pal, acc) {
   return `<defs>
-    <radialGradient id="${id}bg" cx="50%" cy="38%" r="72%"><stop offset="0%" stop-color="${pal[0]}"/><stop offset="52%" stop-color="${pal[1]}"/><stop offset="100%" stop-color="${pal[2]}"/></radialGradient>
-    <linearGradient id="${id}sheen" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fff" stop-opacity=".55"/><stop offset="40%" stop-color="#fff" stop-opacity=".08"/><stop offset="100%" stop-color="#fff" stop-opacity="0"/></linearGradient>
-    <radialGradient id="${id}halo" cx="50%" cy="42%" r="60%"><stop offset="0%" stop-color="${acc}" stop-opacity=".9"/><stop offset="100%" stop-color="${acc}" stop-opacity="0"/></radialGradient>
-    <linearGradient id="${id}ring" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fff3b0"/><stop offset="38%" stop-color="#f5cf63"/><stop offset="70%" stop-color="#c98f24"/><stop offset="100%" stop-color="#8a5e12"/></linearGradient>
-    <linearGradient id="${id}ringI" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ffe27a"/><stop offset="100%" stop-color="#a9760f"/></linearGradient>
+    <linearGradient id="${id}body" x1="0" y1="0" x2="0.3" y2="1"><stop offset="0%" stop-color="${pal[0]}"/><stop offset="55%" stop-color="${pal[1]}"/><stop offset="100%" stop-color="${pal[2]}"/></linearGradient>
+    <radialGradient id="${id}bodyR" cx="40%" cy="30%" r="80%"><stop offset="0%" stop-color="#fff"/><stop offset="30%" stop-color="${pal[0]}"/><stop offset="72%" stop-color="${pal[1]}"/><stop offset="100%" stop-color="${pal[2]}"/></radialGradient>
+    <linearGradient id="${id}gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fff3b0"/><stop offset="45%" stop-color="#f0c64f"/><stop offset="100%" stop-color="#9a6c12"/></linearGradient>
+    <linearGradient id="${id}sheen" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#fff" stop-opacity="0"/><stop offset="45%" stop-color="#fff" stop-opacity=".7"/><stop offset="62%" stop-color="#fff" stop-opacity="0"/></linearGradient>
+    <radialGradient id="${id}glow" cx="50%" cy="46%" r="52%"><stop offset="0%" stop-color="${acc}" stop-opacity=".7"/><stop offset="100%" stop-color="${acc}" stop-opacity="0"/></radialGradient>
     <linearGradient id="${id}steel" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#39424f"/><stop offset="30%" stop-color="#aebccd"/><stop offset="50%" stop-color="#fff"/><stop offset="58%" stop-color="#eef4fb"/><stop offset="74%" stop-color="#8b99ab"/><stop offset="100%" stop-color="#2a323d"/></linearGradient>
-    <linearGradient id="${id}go" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fff7cf"/><stop offset="34%" stop-color="#f4d678"/><stop offset="64%" stop-color="#d39a2c"/><stop offset="100%" stop-color="#8c5e12"/></linearGradient>
-    <linearGradient id="${id}gr" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#1b1b22"/><stop offset="50%" stop-color="#4a3b4f"/><stop offset="100%" stop-color="#15151b"/></linearGradient>
-    <radialGradient id="${id}gem" cx="38%" cy="30%" r="80%"><stop offset="0%" stop-color="#fff"/><stop offset="34%" stop-color="${acc}"/><stop offset="100%" stop-color="${pal[2]}"/></radialGradient>
-    <radialGradient id="${id}gemBig" cx="40%" cy="28%" r="85%"><stop offset="0%" stop-color="#fff"/><stop offset="30%" stop-color="${acc}"/><stop offset="72%" stop-color="${pal[1]}"/><stop offset="100%" stop-color="${pal[2]}"/></radialGradient>
-    <filter id="${id}ds" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="1.2" stdDeviation="1.3" flood-color="rgba(0,0,0,.45)"/></filter>
-    <clipPath id="${id}cc"><circle cx="60" cy="60" r="46"/></clipPath></defs>`;
+    <filter id="${id}ds" x="-40%" y="-40%" width="180%" height="180%"><feDropShadow dx="0" dy="1.3" stdDeviation="1.5" flood-color="rgba(0,0,0,.5)"/></filter>
+    <filter id="${id}gl" x="-70%" y="-70%" width="240%" height="240%"><feGaussianBlur stdDeviation="2.4"/></filter></defs>`;
 }
-function _eRays(id, n, op) { let s = `<g class="er" opacity="${op}">`; for (let i = 0; i < n; i++) { const a = i/n*Math.PI*2, lng = i%2===0, r2 = lng?46:38, w = lng?.06:.035;
-  s += `<polygon points="${(60+Math.cos(a-w)*12).toFixed(1)},${(60+Math.sin(a-w)*12).toFixed(1)} ${(60+Math.cos(a)*r2).toFixed(1)},${(60+Math.sin(a)*r2).toFixed(1)} ${(60+Math.cos(a+w)*12).toFixed(1)},${(60+Math.sin(a+w)*12).toFixed(1)}" fill="#fff" opacity=".5"/>`; } return s + `</g>`; }
-function _eGem(id, cx, cy, r) { return `<g stroke="rgba(0,0,0,.28)" stroke-width=".6" stroke-linejoin="round"><polygon points="${cx},${cy-r} ${cx+r*0.92},${cy-r*0.28} ${cx+r*0.57},${cy+r} ${cx-r*0.57},${cy+r} ${cx-r*0.92},${cy-r*0.28}" fill="url(#${id}gem)"/><polygon points="${cx},${cy-r} ${cx+r*0.4},${cy-r*0.05} ${cx},${cy+r*0.25} ${cx-r*0.4},${cy-r*0.05}" fill="#fff" opacity=".55"/></g>`; }
-function _eWing(id) { const N = 6; let f = ''; for (let i = 0; i < N; i++) { const ang = -76+i*15, len = 30-i*2.8, w = 5.6-i*0.45;
-  f += `<g transform="rotate(${ang})"><path d="M0 0 C ${w} ${-len*0.35}, ${w*0.7} ${-len*0.8}, 0 ${-len} C ${-w*0.7} ${-len*0.8}, ${-w} ${-len*0.35}, 0 0 Z" fill="url(#${id}ringI)" stroke="rgba(80,52,8,.3)" stroke-width=".3"/></g>`; } return f; }
-/* 게임별 고유 모티브 */
-function _Mknife(id) { return `
-  <g filter="url(#${id}ds)"><path d="M60 22 C 66 42, 70 62, 68 80 L60 92 L52 80 C 50 62, 54 42, 60 22 Z" fill="url(#${id}steel)" stroke="#222a35" stroke-width="1"/><path d="M60 22 C 63 40, 64 58, 63.5 72" stroke="#fff" stroke-width="1.4" opacity=".85" fill="none"/></g>
-  <g filter="url(#${id}ds)"><path d="M36 84 C 42 78, 52 81, 56 87 L64 87 C 68 81, 78 78, 84 84 C 78 91, 68 87, 64 90 L56 90 C 52 87, 42 91, 36 84 Z" fill="url(#${id}go)" stroke="#6c4908" stroke-width="1"/><circle cx="36" cy="84" r="3" fill="url(#${id}gem)"/><circle cx="84" cy="84" r="3" fill="url(#${id}gem)"/></g>
-  <g filter="url(#${id}ds)"><rect x="55" y="90" width="10" height="18" rx="4" fill="url(#${id}gr)" stroke="#0d0d12" stroke-width=".6"/><g stroke="#caa24a" stroke-width="1" opacity=".85"><line x1="55.5" y1="94" x2="64.5" y2="96"/><line x1="55.5" y1="99" x2="64.5" y2="101"/></g></g>
-  <g filter="url(#${id}ds)"><circle cx="60" cy="111" r="6.5" fill="url(#${id}go)" stroke="#6c4908" stroke-width="1"/>${_eGem(id,60,111,4.4)}</g>`; }
-function _Mgem(id) { const cx=60,cy=62,r=24;
-  return `<g filter="url(#${id}ds)"><polygon points="${cx-r},${cy-r*0.5} ${cx-r*0.5},${cy-r} ${cx+r*0.5},${cy-r} ${cx+r},${cy-r*0.5} ${cx},${cy+r*1.15}" fill="url(#${id}gemBig)" stroke="rgba(0,0,0,.3)" stroke-width="1.2" stroke-linejoin="round"/>
-    <polygon points="${cx-r},${cy-r*0.5} ${cx+r},${cy-r*0.5} ${cx},${cy-r*0.1}" fill="#fff" opacity=".55"/>
-    <line x1="${cx-r*0.5}" y1="${cy-r}" x2="${cx}" y2="${cy+r*1.15}" stroke="rgba(0,0,0,.22)"/><line x1="${cx+r*0.5}" y1="${cy-r}" x2="${cx}" y2="${cy+r*1.15}" stroke="rgba(0,0,0,.22)"/>
-    <line x1="${cx-r}" y1="${cy-r*0.5}" x2="${cx}" y2="${cy+r*1.15}" stroke="rgba(0,0,0,.16)"/><line x1="${cx+r}" y1="${cy-r*0.5}" x2="${cx}" y2="${cy+r*1.15}" stroke="rgba(0,0,0,.16)"/></g>
-    <g fill="#fff">${[[48,46,2.2],[74,52,1.8],[60,92,1.6]].map(([x,y,rr])=>`<circle cx="${x}" cy="${y}" r="${rr}" opacity=".9"/>`).join('')}</g>`; }
-function _Mastro(id) { let g = `<g filter="url(#${id}ds)"><circle cx="60" cy="62" r="26" fill="none" stroke="url(#${id}go)" stroke-width="4"/><circle cx="60" cy="62" r="19" fill="none" stroke="url(#${id}ringI)" stroke-width="2.4" stroke-dasharray="3 4"/><circle cx="60" cy="62" r="11" fill="rgba(10,12,20,.32)" stroke="url(#${id}go)" stroke-width="1.6"/><path d="M60 36 L60 88 M34 62 L86 62" stroke="url(#${id}ringI)" stroke-width="1.4" opacity=".8"/>`;
-  for (let i = 0; i < 8; i++) { const a = i/8*Math.PI*2; g += `<text x="${(60+Math.cos(a)*22).toFixed(1)}" y="${(64.5+Math.sin(a)*22).toFixed(1)}" font-size="6" fill="#fff" text-anchor="middle">${'✦✧⟡◇✶✷❖✸'[i]}</text>`; }
-  return g + `<circle cx="60" cy="62" r="3.4" fill="#fff"/></g>`; }
-function _star(cx, cy, r, fill) { return `<polygon points="${Array.from({length:10},(_,i)=>{const a=-Math.PI/2+i*Math.PI/5,rr=i%2?r*.45:r;return `${(cx+Math.cos(a)*rr).toFixed(1)},${(cy+Math.sin(a)*rr).toFixed(1)}`}).join(' ')}" fill="${fill}" stroke="rgba(0,0,0,.3)" stroke-width="1"/>`; }
-function _Mjoker(id) {
-  const tile = (x,y,rot,fill,t,tc) => `<g transform="rotate(${rot} ${x+11} ${y+18})" filter="url(#${id}ds)"><rect x="${x}" y="${y}" width="22" height="36" rx="5" fill="${fill}" stroke="rgba(0,0,0,.3)" stroke-width="1.2"/><text x="${x+11}" y="${y+24}" font-size="18" font-weight="900" font-family="sans-serif" fill="${tc}" text-anchor="middle">${t}</text></g>`;
-  return `${tile(30,52,-14,'#f2ecdc','7','#d8443f')}${tile(68,52,14,'#f2ecdc','3','#2b6cff')}<g filter="url(#${id}ds)">${_star(60,62,22,`url(#${id}go)`)}${_star(60,62,11,'#fff8e0')}</g>`; }
-function _Mcard(id) {
-  const card = (x,y,rot,fill) => `<g transform="rotate(${rot} ${x+13} ${y+20})" filter="url(#${id}ds)"><rect x="${x}" y="${y}" width="26" height="40" rx="5" fill="${fill}" stroke="#fff" stroke-width="2.2"/><ellipse cx="${x+13}" cy="${y+20}" rx="9" ry="13" transform="rotate(34 ${x+13} ${y+20})" fill="#fff" opacity=".92"/></g>`;
-  return `${card(26,50,-22,'#1fa85a')}${card(40,46,-7,'#e8b21e')}${card(56,44,8,'#2b6cff')}${card(70,50,22,'#d8443f')}`; }
-function _Mflag(id) { return `<g filter="url(#${id}ds)"><line x1="46" y1="38" x2="46" y2="92" stroke="#fff" stroke-width="5" stroke-linecap="round"/><g transform="translate(49,40)">${[0,1,2,3,4].map(r=>[0,1,2,3].map(c=>`<rect x="${c*8}" y="${r*8}" width="8" height="8" fill="${(r+c)%2?'#fff':'#1a1a1a'}"/>`).join('')).join('')}<rect width="32" height="40" fill="none" stroke="rgba(0,0,0,.3)"/></g></g>`; }
-function _Mmag(id) { return `<g filter="url(#${id}ds)"><circle cx="56" cy="58" r="20" fill="rgba(10,12,20,.28)" stroke="url(#${id}go)" stroke-width="5"/><circle cx="56" cy="58" r="11" fill="#fff" opacity=".25"/><line x1="70" y1="72" x2="88" y2="92" stroke="url(#${id}go)" stroke-width="7" stroke-linecap="round"/></g>`; }
-function _Mdefault(id) { return `<g filter="url(#${id}ds)">${_star(60,62,24,`url(#${id}go)`)}<circle cx="60" cy="58" r="6" fill="#fff" opacity=".7"/></g>`; }
-const _MOTIF = { mafia:_Mknife, splendor:_Mgem, davinci:_Mastro, rummikub:_Mjoker, uno:_Mcard, race:_Mflag, hunt:_Mmag };
-
+const _oSpk = l => `<g fill="#fff">${l.map(([x,y,r])=>`<circle cx="${x}" cy="${y}" r="${r}" opacity=".9"/>`).join('')}</g>`;
+const _oCrown = id => `<g transform="translate(50,7)"><path d="M-13 9 L-8 -4 L0 4 L8 -4 L13 9 Q0 4 -13 9 Z" fill="url(#${id}gold)" stroke="#6c4908" stroke-width=".7"/></g>`;
+const _oWrap = (id, st, body) => { const sc = 0.8 + st*0.09; return `<g transform="translate(50 60) scale(${sc}) translate(-50 -60)">${body}${st>=4?_oCrown(id):''}</g>`; };
+function _oStar(r, f, cy) { return `<polygon points="${Array.from({length:10},(_,i)=>{const a=-Math.PI/2+i*Math.PI/5,rr=i%2?r*.45:r;return `${(50+Math.cos(a)*rr).toFixed(1)},${((cy||58)+Math.sin(a)*rr).toFixed(1)}`}).join(' ')}" fill="${f}" stroke="rgba(0,0,0,.3)" stroke-width="1"/>`; }
+function _oUno(id, st, pal, acc) {
+  const goldF = st>=2, multi = st>=4, glossy = st>=3, tilt = st>=2?-8:0; let inner;
+  if (multi) inner = `<clipPath id="${id}ov"><ellipse cx="50" cy="60" rx="15" ry="24" transform="rotate(32 50 60)"/></clipPath>
+    <g clip-path="url(#${id}ov)"><rect x="20" y="20" width="30" height="40" fill="#e0444a"/><rect x="50" y="20" width="30" height="40" fill="#e8b21e"/><rect x="20" y="60" width="30" height="40" fill="#2b6cff"/><rect x="50" y="60" width="30" height="40" fill="#2faa55"/></g>
+    <ellipse cx="50" cy="60" rx="15" ry="24" transform="rotate(32 50 60)" fill="none" stroke="#fff" stroke-width="2.4"/>
+    <text x="50" y="66" font-size="15" font-weight="900" font-family="sans-serif" fill="#fff" text-anchor="middle" stroke="#222" stroke-width=".6">+4</text>`;
+  else inner = `<ellipse cx="50" cy="60" rx="15" ry="24" transform="rotate(32 50 60)" fill="${st>=3?acc:'#fff'}" opacity=".92"/><text x="50" y="67" font-size="20" font-weight="900" font-family="sans-serif" fill="url(#${id}body)" text-anchor="middle">${st>=2?'7':'?'}</text>`;
+  const body = `<g transform="rotate(${tilt} 50 60)"><g filter="url(#${id}ds)"><rect x="28" y="18" width="44" height="84" rx="8" fill="${multi?'#15151c':`url(#${id}body)`}" stroke="${goldF?`url(#${id}gold)`:'#fff'}" stroke-width="${goldF?4:3}"/>${inner}${glossy?`<path d="M30 22 Q50 30 70 22 L70 44 Q50 52 30 44 Z" fill="url(#${id}sheen)" opacity=".5"/>`:''}</g></g>${st>=3?_oSpk([[24,30,2],[78,36,1.8],[26,92,1.6]]):''}`;
+  return _oWrap(id, st, body);
+}
+function _oKnife(id, st, pal, acc) {
+  const blade = st>=4?`url(#${id}body)`:`url(#${id}steel)`;
+  const body = `${st>=4?`<g filter="url(#${id}gl)"><path d="M50 14 L60 78 L50 96 L40 78 Z" fill="${acc}" opacity=".8"/></g>`:''}
+    <g filter="url(#${id}ds)"><path d="M50 16 C 57 40, 61 64, 59 84 L50 98 L41 84 C 39 64, 43 40, 50 16 Z" fill="${blade}" stroke="#222a35" stroke-width="1"/><path d="M50 16 C 53 38, 54 58, 53.5 74" stroke="#fff" stroke-width="1.5" opacity=".85" fill="none"/></g>
+    <g filter="url(#${id}ds)"><path d="M28 86 C 35 79, 45 82, 49 89 L51 89 C 55 82, 65 79, 72 86 C 65 94, 55 89, 51 92 L49 92 C 45 89, 35 94, 28 86 Z" fill="url(#${id}gold)" stroke="#6c4908" stroke-width="1"/></g>
+    <g filter="url(#${id}ds)"><rect x="45" y="92" width="10" height="18" rx="4" fill="#2a2030" stroke="#0d0d12"/></g>
+    <g filter="url(#${id}ds)"><circle cx="50" cy="113" r="6.5" fill="url(#${id}gold)" stroke="#6c4908"/><circle cx="50" cy="113" r="3.4" fill="${acc}"/></g>
+    ${st>=3?_oSpk([[24,40,2],[76,44,1.8]]):''}`;
+  return _oWrap(id, st, body);
+}
+function _oGem(id, st, pal, acc) {
+  const cx=50,cy=58,r=30, fill=st>=2?`url(#${id}bodyR)`:`url(#${id}body)`;
+  const body = `${st>=4?`<g filter="url(#${id}gl)"><polygon points="${cx-r},${cy-r*0.5} ${cx},${cy-r*1.1} ${cx+r},${cy-r*0.5} ${cx},${cy+r*1.2}" fill="${acc}" opacity=".7"/></g>`:''}
+    <g filter="url(#${id}ds)" stroke="rgba(0,0,0,.3)" stroke-width="1.2" stroke-linejoin="round">
+      <polygon points="${cx-r},${cy-r*0.5} ${cx-r*0.5},${cy-r} ${cx+r*0.5},${cy-r} ${cx+r},${cy-r*0.5} ${cx},${cy+r*1.2}" fill="${fill}"/>
+      <polygon points="${cx-r},${cy-r*0.5} ${cx+r},${cy-r*0.5} ${cx},${cy-r*0.05}" fill="#fff" opacity=".5"/>
+      <line x1="${cx-r*0.5}" y1="${cy-r}" x2="${cx}" y2="${cy+r*1.2}"/><line x1="${cx+r*0.5}" y1="${cy-r}" x2="${cx}" y2="${cy+r*1.2}"/>
+      <line x1="${cx-r}" y1="${cy-r*0.5}" x2="${cx}" y2="${cy+r*1.2}"/><line x1="${cx+r}" y1="${cy-r*0.5}" x2="${cx}" y2="${cy+r*1.2}"/></g>
+    ${st>=3?_oSpk([[34,40,2.2],[68,46,1.8],[50,92,1.8]]):''}`;
+  return _oWrap(id, st, body);
+}
+function _oKey(id, st, pal, acc) {
+  const fill = st>=2?`url(#${id}gold)`:`url(#${id}steel)`;
+  const body = `${st>=4?`<g filter="url(#${id}gl)"><circle cx="50" cy="36" r="20" fill="${acc}" opacity=".7"/></g>`:''}
+    <g filter="url(#${id}ds)"><circle cx="50" cy="36" r="17" fill="none" stroke="${fill}" stroke-width="8"/><circle cx="50" cy="36" r="6" fill="${st>=3?acc:'#1a1f2a'}"/>
+      <rect x="46" y="50" width="8" height="50" rx="2" fill="${fill}"/><rect x="54" y="78" width="12" height="7" rx="2" fill="${fill}"/><rect x="54" y="90" width="9" height="7" rx="2" fill="${fill}"/></g>
+    ${st>=3?_oSpk([[30,28,2],[70,30,1.8],[50,104,1.6]]):''}`;
+  return _oWrap(id, st, body);
+}
+function _oTile(id, st, pal, acc) {
+  const multi = st>=4;
+  const body = `<g filter="url(#${id}ds)"><rect x="26" y="22" width="48" height="72" rx="10" fill="${multi?'#15151c':`url(#${id}body)`}" stroke="${st>=2?`url(#${id}gold)`:'rgba(0,0,0,.3)'}" stroke-width="${st>=2?3.5:1.5}"/>
+    ${multi?`${_oStar(22,`url(#${id}gold)`,58)}${_oStar(11,'#fff8e0',58)}`:`<text x="50" y="70" font-size="40" font-weight="900" font-family="sans-serif" fill="${st>=3?acc:'#fff'}" text-anchor="middle">7</text>`}
+    ${st>=3?`<path d="M30 26 Q50 34 70 26 L70 46 Q50 54 30 46 Z" fill="url(#${id}sheen)" opacity=".45"/>`:''}</g>${st>=3?_oSpk([[24,30,2],[78,34,1.8],[50,98,1.6]]):''}`;
+  return _oWrap(id, st, body);
+}
+function _oFlag(id, st, pal, acc) {
+  const body = `${st>=4?`<g filter="url(#${id}ds)"><path d="M36 96 L64 96 L60 110 L40 110 Z" fill="url(#${id}gold)" stroke="#6c4908"/></g>`:''}
+    <g filter="url(#${id}ds)"><line x1="36" y1="22" x2="36" y2="100" stroke="${st>=2?`url(#${id}gold)`:'#cdd8e6'}" stroke-width="6" stroke-linecap="round"/>
+      <g transform="translate(39,24)">${[0,1,2,3,4,5].map(r=>[0,1,2,3,4].map(c=>`<rect x="${c*9}" y="${r*9}" width="9" height="9" fill="${(r+c)%2?(st>=4?['#e0444a','#e8b21e','#2faa55','#2b6cff'][(r+c)%4]:'#fff'):(st>=2?pal[1]:'#1a1a1a')}"/>`).join('')).join('')}<rect width="45" height="54" fill="none" stroke="rgba(0,0,0,.3)"/></g></g>
+    ${st>=3?_oSpk([[28,30,2],[82,40,1.8]]):''}`;
+  return _oWrap(id, st, body);
+}
+function _oMag(id, st, pal, acc) {
+  const ring = st>=2?`url(#${id}gold)`:`url(#${id}steel)`;
+  const body = `${st>=4?`<g filter="url(#${id}gl)"><circle cx="46" cy="48" r="26" fill="${acc}" opacity=".7"/></g>`:''}
+    <g filter="url(#${id}ds)"><circle cx="46" cy="48" r="24" fill="${st>=3?'rgba(10,12,20,.3)':'rgba(255,255,255,.12)'}" stroke="${ring}" stroke-width="7"/>
+      ${st>=4?`<g transform="translate(46,48)"><ellipse rx="13" ry="9" fill="#fff"/><circle r="6" fill="${acc}"/><circle r="2.6" fill="#0c0f17"/></g>`:`<circle cx="40" cy="42" r="7" fill="#fff" opacity=".3"/>`}
+      <line x1="64" y1="66" x2="86" y2="92" stroke="${ring}" stroke-width="9" stroke-linecap="round"/></g>
+    ${st>=3?_oSpk([[28,28,2],[70,26,1.8]]):''}`;
+  return _oWrap(id, st, body);
+}
+const _MOTIF = { uno:_oUno, mafia:_oKnife, splendor:_oGem, davinci:_oKey, rummikub:_oTile, race:_oFlag, hunt:_oMag };
 function emblemHTML(game, score, size) {
   const t = tierForScore(score || 0);
   const c = _EMB[t.key] || _EMB.wood, st = c.st, pal = c.pal, acc = c.acc;
   const id = 'e' + (++_embN) + '_';
-  const motif = (_MOTIF[game] || _Mdefault)(id);
-  let s = `<span class="emb emb--${size || 'sm'} emb--${t.key}" title="${t.fullName}"><svg viewBox="0 0 120 124" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${_eDefs(id, pal, acc)}`;
-  s += `<ellipse class="egl" cx="60" cy="60" rx="58" ry="60" fill="url(#${id}halo)" opacity="${st>=4?.9:st>=2?.6:.4}"/>`;
-  if (st >= 3) s += `<g transform="translate(60,74)">${_eWing(id)}</g><g transform="translate(60,74) scale(-1,1)">${_eWing(id)}</g>`;
-  s += `<circle cx="60" cy="60" r="46" fill="url(#${id}bg)"/>`;
-  s += `<g clip-path="url(#${id}cc)">${st>=2 ? _eRays(id, 24, st>=4?.5:.32) : ''}<ellipse cx="60" cy="40" rx="44" ry="30" fill="url(#${id}sheen)"/></g>`;
-  s += `<circle cx="60" cy="60" r="46" fill="none" stroke="url(#${id}ring)" stroke-width="${st>=2?5:4}"/><circle cx="60" cy="60" r="41" fill="none" stroke="#fff" stroke-opacity=".22" stroke-width="1"/>`;
-  if (st >= 1) { const n = st>=3?16:12; let st2 = ''; for (let i = 0; i < n; i++) { const a = i/n*Math.PI*2; st2 += `<circle cx="${(60+Math.cos(a)*46).toFixed(1)}" cy="${(60+Math.sin(a)*46).toFixed(1)}" r="${st>=3?1.6:1.2}" fill="url(#${id}ringI)"/>`; } s += st2; }
-  s += motif;
-  s += _eGem(id, 60, 16, st>=4?5:4);
-  if (st >= 4) s += `<g transform="translate(60,7)"><path d="M-15 9 L-9 -5 L0 4 L9 -5 L15 9 Q0 3 -15 9 Z" fill="url(#${id}go)" stroke="#6c4908" stroke-width=".7"/></g>`;
-  if (st >= 2) s += `<g fill="#fff">${[[30,40,1.8],[90,44,1.6],[36,84,1.3],[86,84,1.3]].map(([x,y,r])=>`<circle cx="${x}" cy="${y}" r="${r}" opacity=".85"/>`).join('')}</g>`;
+  let s = `<span class="emb emb--${size || 'sm'} emb--${t.key}" title="${t.fullName}"><svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${_oDefs(id, pal, acc)}`;
+  if (st >= 3) s += `<ellipse class="egl" cx="50" cy="56" rx="42" ry="46" fill="url(#${id}glow)" opacity="${st>=4?.7:.4}"/>`;
+  s += (_MOTIF[game] || _oKnife)(id, st, pal, acc);
   return s + `</svg></span>`;
 }
 
