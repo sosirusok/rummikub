@@ -478,24 +478,49 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .emb--wood{--ec:#b88a5a;} .emb--iron{--ec:#cfd6e0;}
 .emb--bronze{--ec:#e08a3a;} .emb--silver{--ec:#dfe8f2;} .emb--gold{--ec:#ffce4a;} .emb--platinum{--ec:#62e6d6;}
 .emb--emerald{--ec:#5ee884;} .emb--diamond{--ec:#86d6ff;} .emb--master{--ec:#c66bf0;} .emb--grandmaster{--ec:#cfe6ff;} .emb--challenger{--ec:#ffdf72;}
-/* 광택 스윕 — 엠블럼 실루엣(이미지 알파)으로 마스킹해 모양 위로만 흐름 */
-.emb::after{content:""; position:absolute; inset:0; pointer-events:none; opacity:0;
+/* ── 4단계 라이브 이펙트: 저(무) · 중(적당 발광) · 고(화려: 발광+광택+둥실) · 초고(매우 화려: 강발광+밝은 광택+반짝 스파클+둥실) ── */
+/* 광택 스윕(::after) — 엠블럼 실루엣(이미지 알파)으로 마스킹해 모양 위로만 흐름 */
+.emb::after{content:""; position:absolute; inset:0; pointer-events:none; opacity:0; z-index:2;
   -webkit-mask:var(--src) center/contain no-repeat; mask:var(--src) center/contain no-repeat;
-  background:linear-gradient(105deg, transparent 42%, rgba(255,255,255,.9) 50%, transparent 58%);
+  background:linear-gradient(105deg, transparent 42%, rgba(255,255,255,.85) 50%, transparent 58%);
   background-size:260% 100%; background-position:210% 0;}
-/* 중티어(브론즈~플래): 적당한 발광 맥동 */
-.emb--bronze img,.emb--silver img,.emb--gold img,.emb--platinum img{animation:embglow 2.8s ease-in-out infinite;}
-/* 고티어(에메~마스터): 발광 + 광택 스윕 + 둥실 */
-.emb--emerald img,.emb--diamond img,.emb--master img{animation:embglow 2.2s ease-in-out infinite, embfloat 3.4s ease-in-out infinite;}
-.emb--emerald::after,.emb--diamond::after,.emb--master::after{opacity:1; animation:embshine 3.6s ease-in-out infinite;}
-/* 초고티어(그마·챌린저): 강한 발광 + 빠른 광택 + 둥실 */
-.emb--grandmaster img,.emb--challenger img{animation:embglowS 1.7s ease-in-out infinite, embfloat 3s ease-in-out infinite;}
-.emb--grandmaster::after,.emb--challenger::after{opacity:1; animation:embshine 2.4s ease-in-out infinite;}
+/* 반짝 스파클(::before) — 초고티어 전용, 실루엣 위 작은 하이라이트가 깜빡 */
+.emb::before{content:""; position:absolute; inset:0; pointer-events:none; opacity:0; z-index:3;
+  -webkit-mask:var(--src) center/contain no-repeat; mask:var(--src) center/contain no-repeat;
+  background:
+    radial-gradient(circle at 30% 26%, rgba(255,255,255,.98) 0, transparent 13%),
+    radial-gradient(circle at 70% 40%, rgba(255,255,255,.92) 0, transparent 11%),
+    radial-gradient(circle at 48% 72%, rgba(255,255,255,.85) 0, transparent 10%);}
+
+/* 저티어(나무·아이언): 이펙트 없음 (정적) */
+
+/* 중티어(브론즈·실버·골드): 적당한 발광 맥동 */
+.emb--bronze img,.emb--silver img,.emb--gold img{animation:embglow 2.8s ease-in-out infinite;}
+
+/* 고티어(플래티넘·에메랄드·다이아): 화려 — 발광↑ + 광택 스윕 + 둥실 */
+.emb--platinum img,.emb--emerald img,.emb--diamond img{animation:embglowHi 2.2s ease-in-out infinite, embfloat 3.4s ease-in-out infinite;}
+.emb--platinum::after,.emb--emerald::after,.emb--diamond::after{opacity:1; animation:embshine 3.4s ease-in-out infinite;}
+
+/* 초고티어(마스터·그마·챌린저): 매우 화려 — 강발광+채도 + 밝고 빠른 광택 + 반짝 스파클 + 둥실 */
+.emb--master img,.emb--grandmaster img,.emb--challenger img{animation:embglowS 1.7s ease-in-out infinite, embfloat 2.9s ease-in-out infinite;}
+.emb--master::after,.emb--grandmaster::after,.emb--challenger::after{opacity:1; animation:embshineS 2.3s ease-in-out infinite;
+  background:linear-gradient(105deg, transparent 38%, rgba(255,255,255,1) 50%, transparent 62%); background-size:300% 100%;}
+.emb--master::before,.emb--grandmaster::before,.emb--challenger::before{animation:embsparkle 2.1s ease-in-out infinite;}
+
 @keyframes embglow{0%,100%{filter:drop-shadow(0 0 1px var(--ec,#fff));} 50%{filter:drop-shadow(0 0 5px var(--ec,#fff)) brightness(1.06);}}
-@keyframes embglowS{0%,100%{filter:drop-shadow(0 0 2px var(--ec,#fff)) brightness(1);} 50%{filter:drop-shadow(0 0 9px var(--ec,#fff)) brightness(1.12);}}
-@keyframes embfloat{0%,100%{transform:translateY(0.5%);} 50%{transform:translateY(-3%);}}
+@keyframes embglowHi{0%,100%{filter:drop-shadow(0 0 2px var(--ec,#fff));} 50%{filter:drop-shadow(0 0 9px var(--ec,#fff)) brightness(1.10) saturate(1.12);}}
+@keyframes embglowS{0%,100%{filter:drop-shadow(0 0 3px var(--ec,#fff)) saturate(1.05);} 50%{filter:drop-shadow(0 0 15px var(--ec,#fff)) drop-shadow(0 0 4px #fff) brightness(1.15) saturate(1.3);}}
+@keyframes embfloat{0%,100%{transform:translateY(0.5%);} 50%{transform:translateY(-3.5%);}}
 @keyframes embshine{0%{background-position:210% 0;} 60%,100%{background-position:-130% 0;}}
-@media (prefers-reduced-motion: reduce){ .emb img{animation:none !important;} .emb::after{animation:none !important; opacity:0 !important;} }
+@keyframes embshineS{0%{background-position:210% 0;} 55%,100%{background-position:-140% 0;}}
+@keyframes embsparkle{0%,100%{opacity:0; transform:scale(.94);} 42%{opacity:.85;} 50%{opacity:1; transform:scale(1.04);} 64%{opacity:.35;}}
+/* 모션 최소화(절전/접근성): 애니메이션은 끄되 티어별 정적 발광은 유지 → 이펙트가 "안 보이는" 일 없음 */
+@media (prefers-reduced-motion: reduce){
+  .emb img{animation:none !important;} .emb::after,.emb::before{animation:none !important; opacity:0 !important;}
+  .emb--bronze img,.emb--silver img,.emb--gold img{filter:drop-shadow(0 0 3px var(--ec,#fff));}
+  .emb--platinum img,.emb--emerald img,.emb--diamond img{filter:drop-shadow(0 0 6px var(--ec,#fff)) saturate(1.1);}
+  .emb--master img,.emb--grandmaster img,.emb--challenger img{filter:drop-shadow(0 0 9px var(--ec,#fff)) saturate(1.2) brightness(1.05);}
+}
 /* 티어 화면 hero / 사다리 행 */
 .tier-hero{display:flex; align-items:center; gap:14px; padding:12px;}
 .tier-hero__name{font-size:20px; font-weight:900; color:var(--tc); text-shadow:0 0 8px var(--tc);}
