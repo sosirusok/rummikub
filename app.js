@@ -387,13 +387,24 @@ function waitBody(tab, amHost, g, cap) {
       const st = statsOf(m.user_id);
       const sc = st.score ?? 0, wn = st.wins ?? 0, ls = st.losses ?? 0, sk = st.streak ?? 0;   // 교차게임 스냅샷 폴백 제거
       const isMe = m.user_id === ME.id;
-      const nameColor = m.display_game ? m.display_score : null;   // 이름색 = 꾸미기 표시게임
+      const decoGame = m.display_game;                 // 꾸미기에서 고른 대표 게임
+      const decoScore = m.display_score || 0;
+      const decoTier = decoGame ? tierForScore(decoScore) : null;
+      const curG = g || 'rummikub';                    // 현재(플레이 중인) 게임 — lbCache 기준과 일치
+      const curTier = tierForScore(sc);
       seats.push(`<li class="seat is-occupied ${isMe ? 'is-me' : ''}" data-seat="${n}">
         <span class="seat__no">${n}</span>
-        <span class="seat__main">
-          <span class="seat__name">${nameHTML(m.name, nameColor)}${isMe ? ' <small>(나)</small>' : ''}${ROOM.host_id === m.user_id ? ' <span class="seat__badge">방장</span>' : ''}${m.display_game ? ' ' + decoChipHTML(m.display_game, m.display_score) : ''}</span>
-          <span class="seat__record">${wn}승 ${ls}패 · ${tierBadgeHTML(g, sc)} ${streakHTML(sk)}</span>
-        </span>${m.display_game ? `<span class="seat__emb">${decoEmblemHTML(m.user_id, 'eq')}</span>` : ''}${amHost && !isMe ? `<button class="seat__kick" data-act="kick" data-uid="${m.user_id}" aria-label="내보내기">✕</button>` : ''}</li>`);
+        <div class="seat__main">
+          <div class="seat__name" ${decoTier ? `style="--tc:${decoTier.color}"` : ''}>${nameHTML(m.name, decoGame ? decoScore : null)}${isMe ? ' <small>(나)</small>' : ''}${ROOM.host_id === m.user_id ? ' <span class="seat__badge">방장</span>' : ''}</div>
+          ${decoGame
+            ? `<div class="seat__rep" style="--tc:${decoTier.color}"><span class="seat__rep-txt">대표 게임: ${GAME_NAME[decoGame]} ${decoTier.fullName} ${decoScore}</span><span class="seat__rep-emb">${emblemHTML(decoGame, decoScore, 'eq')}</span></div>`
+            : `<div class="seat__rep seat__rep--none">대표 게임 미설정</div>`}
+          <div class="seat__record">${wn}승 ${ls}패 ${streakHTML(sk)}</div>
+        </div>
+        <div class="seat__cur" style="--tc:${curTier.color}">
+          <span class="seat__cur-emb">${emblemHTML(curG, sc, 'eq')}</span>
+          <span class="seat__cur-line">${curTier.fullName}, ${sc}</span>
+        </div>${amHost && !isMe ? `<button class="seat__kick" data-act="kick" data-uid="${m.user_id}" aria-label="내보내기">✕</button>` : ''}</li>`);
     } else {
       const canSit = !mySeatNow && !iAmSpectator;
       seats.push(`<li class="seat is-empty${canSit ? ' is-joinable' : ''}" ${canSit ? `data-act="sit" data-seat="${n}"` : ''}>＋ ${n}번${canSit ? ' 앉기' : ''}</li>`);

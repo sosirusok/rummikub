@@ -83,6 +83,7 @@ function unoInitialState(seated, scoresMap){
   let turn=seats[0];
   let color = top.color;              // 현재 유효색
   let pendingColor=false;             // Wild 시작 시 첫 플레이어 색 선택 대기
+  let pendingDraw=0;                  // 누적 Draw Two(+2 받아치기 스택). 0 이면 없음
   const log=[];
 
   // 좌석 인덱스 헬퍼(현재 dir 기준 다음 좌석)
@@ -98,14 +99,14 @@ function unoInitialState(seated, scoresMap){
     if(n===2){ log.push('🔁 시작 Reverse(2인=스킵) — 첫 플레이어 스킵'); turn=step(seats[0]); }  // 2인은 스킵처럼: seats[1] 부터
     else { log.push('🔁 시작 Reverse — 방향 반전'); turn=seats[0]; }            // 방향만 반전, 첫 플레이어는 seats[0] 유지
   } else if(top.kind==='draw2'){
-    for(let d=0;d<2;d++){ if(draw.length) hands[turn].push(draw.shift()); }
-    log.push(`➕2 시작 Draw Two — ${names[turn]} 2장 뽑고 스킵`); turn=step(turn);
+    pendingDraw=2;   // 첫 플레이어가 +2 로 받아치거나 2장 받기
+    log.push(`➕2 시작 Draw Two — ${names[turn]} 에게 +2 (받아치거나 받기)`);
   }
 
   return {
     game:'uno', seed, players, names, scores, n,
     hands, draw, discard, color, dir, turn, firstSeat:seats[0],
-    pendingColor, drawnId:null, said,
+    pendingColor, pendingDraw, drawnId:null, said,
     lastActorSeat:null,             // 직전에 카드를 낸 좌석(우노 미선언 자동잡기 판단)
     log, ranks:null, results:null, points:{},
   };
@@ -224,9 +225,13 @@ function unoRender(){
     const cardsH=hand.map(c=>{
       let playable=false;
       if(myTurn){
-        const legal = c.kind==='wild4' ? unoCanPlayWild4(s, UN.mySeat) : unoMatches(s, c);
-        // 공식 룰: 뽑은 뒤에는 '방금 뽑은 카드'만 낼 수 있음. 뽑기 전에는 합법 카드 모두.
-        playable = s.drawnId!=null ? (c.id===s.drawnId && legal) : legal;
+        if((s.pendingDraw||0)>0){
+          playable = (c.kind==='draw2');   // +2 누적 중엔 Draw Two 로만 받아치기
+        } else {
+          const legal = c.kind==='wild4' ? unoCanPlayWild4(s, UN.mySeat) : unoMatches(s, c);
+          // 공식 룰: 뽑은 뒤에는 '방금 뽑은 카드'만 낼 수 있음. 뽑기 전에는 합법 카드 모두.
+          playable = s.drawnId!=null ? (c.id===s.drawnId && legal) : legal;
+        }
       }
       return unoCardBtn(s, c, playable);
     }).join('');
@@ -246,6 +251,15 @@ function unoRender(){
     action = chooser
       ? `<div class="uno-actbar"><div class="uno-step">시작 색을 정하세요</div>${UNO_COLORS.map(c=>`<button class="uno-coltap" style="--cc:${UNO_COLHEX[c]}" data-act="uno_startcolor" data-c="${c}">${UNO_COLNAME[c]}</button>`).join('')}</div>`
       : `<div class="uno-note">${esc(curName)} 님이 시작 색을 정하는 중…</div>`;
+  }
+  else if(myTurn && (s.pendingDraw||0)>0){
+    // +2 누적 받아치기 국면: Draw Two 로 받아치거나 누적분 받기
+    const pd=s.pendingDraw;
+    const canStack=(s.hands[UN.mySeat]||[]).some(c=>c.kind==='draw2');
+    action=`<div class="uno-actbar">
+      <div class="uno-step">➕${pd} 누적! ${canStack?'+2 카드를 내서 받아치거나, ':''}${pd}장 받기</div>
+      <button class="btn btn--primary" data-act="uno_takedraw">➕${pd}장 받기</button>
+    </div>`;
   }
   else if(myTurn){
     const drew = s.drawnId!=null;
@@ -291,6 +305,7 @@ async function unoAct(act, el){
     case 'uno_pickcolor': return unoPickColor(el.dataset.c);
     case 'uno_startcolor': return unoStartColor(el.dataset.c);
     case 'uno_draw': return unoDraw();
+    case 'uno_takedraw': return unoTakeDraw();
     case 'uno_pass': return unoPass();
     case 'uno_uno': return unoSayUno();
     case 'uno_catch': return unoCatch(Number(el.dataset.seat));
@@ -328,6 +343,8 @@ async function unoDoPlay(cardId, chosenColor){
     const idx=hand.findIndex(c=>c.id===cardId); if(idx<0) return null;
     const card=hand[idx];
     if(s.drawnId!=null && cardId!==s.drawnId) return null;   // 뽑은 뒤에는 뽑은 카드만
+    // +2 누적 대기 중엔 오직 Draw Two 로만 받아치기 가능(그 외 카드/와일드4 금지)
+    if((s.pendingDraw||0)>0 && card.kind!=='draw2') return null;
     // 합법성 재검증
     if(card.kind==='wild4'){ if(!unoCanPlayWild4(s, seat)) return null; }
     else if(!unoMatches(s, card)) return null;
@@ -362,7 +379,7 @@ async function unoDoPlay(cardId, chosenColor){
     } else {
       next=adv(seat);                                  // 바로 다음 좌석
       if(card.kind==='skip'){ unoLog(s,`⏭ ${nm} Skip — ${s.names[next]} 스킵`); next=adv(next); }
-      else if(card.kind==='draw2'){ let dn=0; for(let d=0;d<2;d++){ if(unoDrawOne(s, next)) dn++; } unoLog(s,`➕2 ${nm} Draw Two — ${s.names[next]} ${dn}장 뽑고 스킵`); next=adv(next); }
+      else if(card.kind==='draw2'){ s.pendingDraw=(s.pendingDraw||0)+2; unoLog(s,`➕2 ${nm} Draw Two — ${s.names[next]} 에게 +${s.pendingDraw} (받아치거나 받기)`); }   // 즉시 안 뽑힘: 다음 사람이 +2 로 받아치거나 받기
       else if(card.kind==='wild4'){ let dn=0; for(let d=0;d<4;d++){ if(unoDrawOne(s, next)) dn++; } unoLog(s,`➕4 ${nm} Wild Draw Four → ${cn} — ${s.names[next]} ${dn}장 뽑고 스킵`); next=adv(next); }
       else if(card.kind==='wild'){ unoLog(s,`🌈 ${nm} Wild → ${cn}`); }
       else { unoLog(s,`🎴 ${nm} ${card.val}(${UNO_COLNAME[card.color]})`); }
@@ -380,6 +397,7 @@ async function unoDraw(){
   const ok=await unoCommit(s=>{
     if(s.ranks || s.pendingColor || Number(s.turn)!==Number(UN.mySeat)) return null;
     if(s.drawnId!=null) return null;
+    if((s.pendingDraw||0)>0) return null;   // +2 누적 중엔 일반 뽑기 불가 → '받기'로
     const seat=Number(UN.mySeat);
     unoAutoCatch(s, seat);
     const c=unoDrawOne(s, seat);
@@ -392,6 +410,23 @@ async function unoDraw(){
     // 뽑은 카드가 낼 수 없으면 자동으로 턴 넘김
     const playable = c.kind==='wild4' ? unoCanPlayWild4(s, seat) : unoMatches(s, c);
     if(!playable){ s.drawnId=null; s.lastActorSeat=seat; s.turn=unoNextSeat(s, seat); }
+    return s;
+  });
+  if(ok){ unoRender(); unoMaybeFinish(); }
+}
+// +2 누적 받기: 누적된 만큼 뽑고 스킵(받아치지 않을 때)
+async function unoTakeDraw(){
+  if(!unoIsMyTurn()) return;
+  const ok=await unoCommit(s=>{
+    if(s.ranks || s.pendingColor || Number(s.turn)!==Number(UN.mySeat)) return null;
+    if(!((s.pendingDraw||0)>0)) return null;
+    const seat=Number(UN.mySeat);
+    unoAutoCatch(s, seat);
+    const want=s.pendingDraw; let dn=0;
+    for(let d=0; d<want; d++){ if(unoDrawOne(s, seat)) dn++; }
+    unoLog(s,`➕ ${s.names[seat]} +${dn}장 받고 스킵`);
+    s.pendingDraw=0; s.drawnId=null; s.lastActorSeat=seat;
+    s.turn=unoNextSeat(s, seat);
     return s;
   });
   if(ok){ unoRender(); unoMaybeFinish(); }
