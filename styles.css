@@ -553,3 +553,148 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .sc-c{font-weight:800;}
 .sc-pos{color:#46d17f;} .sc-neg{color:#ef6b6b;} .sc-zero{color:#8a96a8;}
 .sc-note{font-size:11.5px; color:var(--ink-dim); line-height:1.6; padding:4px 2px;}
+
+
+/* ===================== 폴더폰 통합 보정 (max-width:380px / max-height:600px) =====================
+   목적: 각 게임의 테이블/보드/손패 컨테이너가 flex:1; min-height:0 으로 남는 세로공간을 차지하게 보장.
+   로그=vh 캡+overflow-y:auto, 안내/단계문=폰트·패딩·line-height 축소(가능하면 1줄).
+   기존 @media(max-width:360px)(282/360/426행) 및 @media(max-height:430px)(307행)과 임계값이 달라
+   더 좁은 360/430 블록은 그대로 우선 적용되며(cascade), 본 블록은 380/600 구간의 공백을 메운다.
+   - 미니게임(.mini-hud)은 절대배치 캔버스 오버레이라 폰트/패딩만 축소.
+   - .dv-foot 푸터는 davinci/splendor/uno/mafia가 공유하므로 게임 한정 셀렉터로 충돌 회피. */
+
+/* ---------- 공통: 좁은 폭(max-width:380px) ---------- */
+@media (max-width:380px){
+  /* 공통 헤더 슬림화(루미/다빈치/스플렌더/우노/마피아 공유 .topbar) */
+  .topbar{padding:3px 6px; padding-top:max(3px,env(safe-area-inset-top)); gap:4px;}
+  .topbar .timer{width:32px; height:32px;}
+
+  /* 공통 로그(.dv-log 계열): 13vh 캡 + 내부 스크롤 + 폰트/패딩 축소 */
+  .dv-log{max-height:13vh; overflow-y:auto; padding:2px 10px; font-size:11px; line-height:1.3;}
+
+  /* 공통 단계/안내문 축소(긴 문장은 폰트·line-height만, 짧은 라벨은 1줄 말줄임 개별 처리) */
+  .dv-step{font-size:12px; gap:4px; line-height:1.25;}
+  .dv-actbar{gap:5px;}
+
+  /* ===== 루미큐브 ===== */
+  /* 헤더: 360px 블록(297행)이 oppo-strip을 자기 줄(flex-basis:100%)로 떨궈 2줄로 부풀림 → 같은 줄(가로 스크롤)로 복귀 */
+  .oppo-strip{max-width:48%; flex-basis:auto; order:0; margin-left:auto; margin-top:0; overflow-x:auto;}
+  .oppo{min-width:30px; font-size:10px; padding:2px 4px;}
+  .meld-hint{padding:2px 8px; font-size:11px; line-height:1.2; gap:6px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .board{flex:1 1 auto; min-height:0; padding:6px;}      /* 보드가 회수된 세로 흡수 */
+  .dock{padding:4px 6px; padding-bottom:max(4px,env(safe-area-inset-bottom)); gap:4px;}
+  .rack{max-height:22vh; min-height:calc(var(--tile-h) + 10px); padding:4px 4px;}  /* 34vh→22vh, 보드 침범 방지 */
+  .action-bar .btn{min-height:38px; font-size:13px; padding:0 8px;}
+
+  /* ===== 다빈치 ===== */
+  .dv-oppos{flex:1 1 auto; min-height:0; overflow-y:auto; padding:6px;}            /* 보드(상대패)가 세로 흡수 */
+  .dv-mine{max-height:24vh; overflow-y:auto; padding:6px 10px;}                    /* 34vh→24vh */
+  .dv-hand--mine .dvt{width:30px; height:42px; font-size:17px;}
+  .dv-mine__label,.dv-pickhint,.dv-note{font-size:11px; padding:3px; margin-bottom:3px; line-height:1.25;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .dv-oppo{padding:6px;}
+  .screen--davinci .dv-foot{padding:6px 10px max(8px,env(safe-area-inset-bottom));}
+  .dv-actbar .btn--lg{min-height:40px; padding:8px 12px; font-size:14px;}
+
+  /* ===== 스플렌더 ===== */
+  .screen--splendor{padding:4px; gap:4px;}
+  .sp-board{flex:1 1 auto; min-height:0; overflow-y:auto;}                         /* 카드 보드가 세로 흡수 */
+  .sp-log{max-height:13vh; overflow-y:auto; margin:2px 0; padding:2px 8px; font-size:11px; line-height:1.25;}
+  .sp-step{font-size:10px; line-height:1.2; max-height:2.6em; overflow:hidden;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;}      /* 긴 안내문 2줄 클램프 */
+  .sp-tok{width:34px; height:34px; font-size:13px;}                               /* 6개 1줄 유지 */
+  .sp-card{min-height:58px; padding:3px;}
+  .sp-omini{flex:1 1 100%; padding:3px 6px; font-size:11px;}
+  .sp-me{max-height:26vh; overflow-y:auto; padding:4px 6px; font-size:11px;}      /* 예약카드 무제한 확장 차단 */
+  .sp-me__resv .sp-card{flex:0 0 52px; min-height:48px;}
+  .sp-nobles,.sp-bank{gap:4px;}
+  .screen--splendor .dv-foot{padding:5px 8px max(6px,env(safe-area-inset-bottom)); font-size:12px;}
+
+  /* ===== 우노 ===== */
+  .screen--uno{padding:4px; gap:4px;}
+  .screen--uno .uno-center{flex:1 1 auto; min-height:0; overflow-y:auto; width:100%;
+    justify-content:flex-start; gap:5px;}                                         /* 핵심: 테이블이 세로 흡수 */
+  .screen--uno .uno-discard{transform:scale(1.18);}                               /* 확보 공간을 버린더미에 환원 */
+  .screen--uno .uno-pile{margin-top:2px; gap:3px;}
+  .screen--uno .uno-log{max-height:13vh; overflow-y:auto; font-size:11px; margin:2px 0; line-height:1.25;}
+  .screen--uno .uno-omini{flex:1 1 100%; min-width:0; padding:3px 6px; font-size:11px;}
+  .screen--uno .uno-me{padding:4px 6px; font-size:11px;}
+  .screen--uno .uno-hand{max-height:22vh; gap:3px; margin-top:4px;}               /* 30vh→22vh */
+  .screen--uno .uno-step{font-size:11px; line-height:1.25; flex:1 1 100%;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .screen--uno .uno-note{font-size:12px; padding:2px;}
+  .screen--uno .dv-foot{padding:5px 8px max(5px,env(safe-area-inset-bottom));}
+
+  /* ===== 마피아 ===== */
+  .screen--mafia .mf-grid{flex:1 1 auto; min-height:0; padding:6px;}              /* 플레이어 그리드가 세로 흡수 */
+  .mf-log{max-height:13vh; overflow-y:auto; font-size:11px; padding:3px 10px; line-height:1.35;}
+  .mf-rolecard{margin:4px 8px 0; padding:5px 10px;}
+  .mf-rolecard__role{font-size:13px;}
+  .mf-rolecard__desc{font-size:11px; margin-top:1px; line-height:1.3;}
+  .screen--mafia .dv-foot{padding:6px 10px max(6px,env(safe-area-inset-bottom)); flex:0 0 auto;}
+  .screen--mafia .mf-note{padding:3px 6px; line-height:1.3; font-size:12px;}
+  .screen--mafia .mf-abstain-row{margin-top:4px;}
+  .screen--mafia .mf-result{margin:4px 10px 0; padding:6px 10px; font-size:13px;}
+  .mf-player{min-height:44px; padding:8px 10px;}                                  /* 1열(426행) 전환 시 세로 절감 */
+  .screen--mafia .topbar{padding:3px 8px; padding-top:max(3px,env(safe-area-inset-top)); gap:6px; flex:0 0 auto;}
+  .screen--mafia .mf-timer{font-size:11px;}
+
+  /* ===== 미니게임(race/hunt): 절대배치 캔버스 오버레이 — 폰트/패딩만 ===== */
+  .mini-hud{font-size:10px; padding:max(4px,env(safe-area-inset-top)) 6px 4px; gap:4px; line-height:1.15;}
+  .mini-hud__row{flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch;
+    scrollbar-width:none; gap:4px; justify-content:space-between;}                /* pill 2줄 줄바꿈 → 1줄 가로스크롤 */
+  .mini-hud__row span{padding:2px 7px; background:rgba(0,0,0,.32);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:0 0 auto;}
+  .mini-hud__msg{margin-top:2px; font-size:11px; max-width:100%;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .banner-1tile{font-size:26px; top:38%;}
+  .mini-leave{padding:2px 8px; font-size:11px; min-height:30px;}
+}
+
+/* ---------- 공통: 낮은 세로(max-height:600px) — 가로폭 무관, 세로 압박 전용 ---------- */
+@media (max-height:600px){
+  /* 공통 헤더/로그 슬림화 */
+  .topbar{padding:3px 6px; padding-top:max(3px,env(safe-area-inset-top)); gap:4px;}
+  .topbar .timer{width:32px; height:32px;}
+  .dv-log{max-height:12vh; overflow-y:auto; font-size:11px; line-height:1.3;}
+  .dv-step{font-size:12px; line-height:1.25;}
+
+  /* 루미: 보드가 남는 세로 흡수 + 손패/도크/버튼 축소 */
+  .board{flex:1 1 auto; min-height:0;}
+  .rack{max-height:20vh; min-height:0;}
+  .dock{padding:4px 6px; gap:4px;}
+  .action-bar .btn{min-height:36px; font-size:13px;}
+  .meld-hint{padding:2px 8px; font-size:11px; line-height:1.2;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+
+  /* 다빈치 */
+  .dv-oppos{flex:1 1 auto; min-height:0; overflow-y:auto;}
+  .dv-mine{max-height:22vh; overflow-y:auto;}
+  .screen--davinci .dv-foot{padding:5px 10px max(6px,env(safe-area-inset-bottom));}
+
+  /* 스플렌더 */
+  .sp-board{flex:1 1 auto; min-height:0; overflow-y:auto;}
+  .sp-log{max-height:12vh; overflow-y:auto; font-size:11px;}
+  .sp-me{max-height:24vh; overflow-y:auto;}
+  .sp-card{min-height:54px;}
+
+  /* 우노 */
+  .screen--uno .uno-center{flex:1 1 auto; min-height:0; overflow-y:auto; width:100%;}
+  .screen--uno .uno-log{max-height:11vh; overflow-y:auto; font-size:11px; margin:2px 0;}
+  .screen--uno .uno-hand{max-height:20vh; overflow-y:auto;}
+  .screen--uno .dv-foot{padding:4px 8px max(4px,env(safe-area-inset-bottom));}
+
+  /* 마피아 */
+  .screen--mafia .mf-grid{flex:1 1 auto; min-height:0;}
+  .mf-log{max-height:14vh; overflow-y:auto;}
+  .screen--mafia .mf-rolecard{margin:3px 8px 0; padding:4px 10px;}
+  .screen--mafia .dv-foot{padding:6px 10px max(6px,env(safe-area-inset-bottom));}
+
+  /* 미니게임(race/hunt): 세로 짧을 때 가상패드 축소(430행 블록보다 완만, 430px가 cascade상 우선) */
+  .vctl--pad{width:clamp(72px,24vw,96px); height:clamp(72px,24vw,96px);
+    bottom:max(8px,env(safe-area-inset-bottom)); opacity:.85;}
+  .vctl--act{width:clamp(54px,16vw,74px); height:clamp(54px,16vw,74px);
+    bottom:max(12px,env(safe-area-inset-bottom)); font-size:13px; opacity:.9;}
+  .mini-spectate{bottom:8px; padding:5px 12px; font-size:12px;}
+}
