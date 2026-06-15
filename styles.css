@@ -496,7 +496,7 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 /* 티어별 발광색 */
 .emb--wood{--ec:#b88a5a;} .emb--iron{--ec:#cfd6e0;}
 .emb--bronze{--ec:#e08a3a;} .emb--silver{--ec:#dfe8f2;} .emb--gold{--ec:#ffce4a;} .emb--platinum{--ec:#62e6d6;}
-.emb--emerald{--ec:#5ee884;} .emb--diamond{--ec:#86d6ff;} .emb--master{--ec:#c66bf0;} .emb--grandmaster{--ec:#cfe6ff;} .emb--challenger{--ec:#ffdf72;}
+.emb--emerald{--ec:#5ee884;} .emb--diamond{--ec:#86d6ff;} .emb--master{--ec:#c66bf0;} .emb--grandmaster{--ec:#ff3b3b;} .emb--challenger{--ec:#ffdf72;}
 /* ── 티어별 라이브 이펙트(사양 고정) ──
    나무·아이언: 무효과 / 브론즈·실버: 정적 발광(움직임X) / 골드·플래티넘: 발광 맥동
    에메랄드·다이아: +광택 스윕 / 마스터·그마: +내부 별빛 반짝 & 발광색=티어 전용색
@@ -532,20 +532,21 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .emb--gold img,.emb--platinum img,.emb--emerald img,.emb--diamond img,
 .emb--master img,.emb--grandmaster img,.emb--challenger img{animation:embPulse 2.4s ease-in-out infinite;}
 
-/* 에메랄드+: 광택 스윕 추가 */
+/* 에메랄드+: 광택 스윕 추가. 주기 — 에메랄드·다이아 9.6s(3배), 마스터·그마·챌린저 6.4s(2배) */
 .emb--emerald::after,.emb--diamond::after,
-.emb--master::after,.emb--grandmaster::after,.emb--challenger::after{opacity:1; animation:embShine 3.2s ease-in-out infinite; will-change:background-position;}
+.emb--master::after,.emb--grandmaster::after,.emb--challenger::after{opacity:1; will-change:background-position;}
+.emb--emerald::after,.emb--diamond::after{animation:embShine 9.6s ease-in-out infinite;}
+.emb--master::after,.emb--grandmaster::after,.emb--challenger::after{animation:embShine 6.4s ease-in-out infinite;}
 
 /* 마스터+: 내부 별빛 반짝 추가 */
 .emb--master::before,.emb--grandmaster::before,.emb--challenger::before{animation:embSparkle 1.8s ease-in-out infinite; will-change:opacity,transform;}
 
-/* 챌린저: 낙뢰(좀비고 챔피언풍) — 엠블럼 위로 번개가 중간중간 내리꽂힘 */
-.emb-bolt{position:absolute; left:50%; top:-28%; width:55%; height:150%; transform:translateX(-50%);
-  pointer-events:none; z-index:4; opacity:0; mix-blend-mode:screen;
-  background:linear-gradient(180deg, rgba(170,225,255,0) 0%, #bfe6ff 42%, #fff 54%, rgba(170,225,255,0) 100%);
-  clip-path:polygon(52% 0,62% 34%,53% 36%,66% 60%,55% 62%,60% 100%,42% 56%,52% 54%,40% 30%,50% 28%);
-  filter:drop-shadow(0 0 5px #9fd6ff) drop-shadow(0 0 2px #fff);
-  animation:embBolt 3.4s ease-out infinite; will-change:opacity,transform;}
+/* 챌린저: 낙뢰(좀비고 챔피언풍) — 엠블럼 실루엣 내부에서만(밖으로 안 튀어나옴) 작은 번개가 곳곳에 자주 번쩍 */
+.emb-bolt{content:""; position:absolute; inset:0; pointer-events:none; z-index:4; opacity:0; mix-blend-mode:screen;
+  background:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Cg%20fill='none'%20stroke='%23dff1ff'%20stroke-width='2.4'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpolyline%20points='31,14%2026,31%2033,29%2027,49'/%3E%3Cpolyline%20points='71,17%2065,33%2072,31%2066,53'/%3E%3Cpolyline%20points='51,41%2046,55%2053,53%2048,73'/%3E%3Cpolyline%20points='21,52%2017,63%2023,61%2019,77'/%3E%3C/g%3E%3C/svg%3E") center/100% 100% no-repeat;
+  -webkit-mask:var(--src) center/contain no-repeat; mask:var(--src) center/contain no-repeat;
+  filter:drop-shadow(0 0 2px #bfe6ff);
+  animation:embBolt 1.7s ease-out infinite; will-change:opacity;}
 
 @keyframes embPulse{
   0%,100%{filter:drop-shadow(0 0 calc(var(--gs) * .35px) var(--gc)) brightness(1) saturate(1);}
@@ -553,13 +554,11 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 @keyframes embShine{0%{background-position:210% 0;} 58%,100%{background-position:-140% 0;}}
 @keyframes embSparkle{0%,100%{opacity:.15; transform:scale(.92);} 25%{opacity:.95; transform:scale(1.05);}
   50%{opacity:.35; transform:scale(.96);} 75%{opacity:1; transform:scale(1.08);}}
+/* 두 번의 번쩍(크래클) — 주기 1.7s 라 더 자주, 매번 곳곳의 작은 번개가 점멸 */
 @keyframes embBolt{
-  0%,7%{opacity:0; transform:translateX(-50%) translateY(-6%) scaleY(.92);}
-  9%{opacity:1; transform:translateX(-50%) translateY(0) scaleY(1);}
-  11%{opacity:.15;} 13%{opacity:.95;} 16%{opacity:0;}
-  60%{opacity:0; transform:translateX(-50%) translateY(-4%) scaleY(.95);}
-  62%{opacity:.9; transform:translateX(-50%) translateY(0) scaleY(1);}
-  64%{opacity:.2;} 66%,100%{opacity:0;}}
+  0%,100%{opacity:0;}
+  4%{opacity:.9;} 7%{opacity:.1;} 10%{opacity:.8;} 14%{opacity:0;}
+  50%{opacity:0;} 53%{opacity:.7;} 56%{opacity:.12;} 59%{opacity:.6;} 63%{opacity:0;}}
 /* 모션 최소화(절전/접근성): 애니메이션은 끄되 티어별 정적 발광은 유지(색·크기 사양 동일) → 이펙트가 "안 보이는" 일 없음 */
 @media (prefers-reduced-motion: reduce){
   .emb img{animation:none !important;} .emb::after,.emb::before,.emb-bolt{animation:none !important; opacity:0 !important;}
