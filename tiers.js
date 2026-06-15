@@ -237,7 +237,8 @@ function emblemHTML(game, score, size) {
   const t = tierForScore(score || 0);
   const g = EMBLEM_GAMES.indexOf(game) >= 0 ? game : 'mafia';
   const src = `emblems/${g}_${t.key}.png`;
-  return `<span class="emb emb--${size || 'sm'} emb--${t.key}" title="${t.fullName}" style="--src:url(${src})"><img src="${src}" alt="" loading="lazy" decoding="async"></span>`;
+  const bolt = t.key === 'challenger' ? '<i class="emb-bolt"></i>' : '';   // 챌린저 전용 낙뢰 레이어
+  return `<span class="emb emb--${size || 'sm'} emb--${t.key}" title="${t.fullName}" style="--src:url(${src})"><img src="${src}" alt="" loading="lazy" decoding="async">${bolt}</span>`;
 }
 
 /* ----------------------------- 점수 증감 테이블(티어 화면) ----------------------------- */
