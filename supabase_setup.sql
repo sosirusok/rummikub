@@ -1810,3 +1810,179 @@ end; $$;
 grant execute on function public.rk_tier_key(int)                to anon, authenticated;
 grant execute on function public.rk_rank_points(text,int,int,int) to anon, authenticated;
 grant execute on function public.rk_finish_splendor(uuid,int)    to anon, authenticated;
+
+-- =====================================================================
+-- v5: 'uno' 보드게임 추가 (멱등, 파일 끝에 append, create-or-replace override)
+-- 우노 점수제 = 다빈치 코드와 동일(고정표). 4인까지.
+-- =====================================================================
+alter table public.rooms drop constraint if exists rooms_game_chk;
+alter table public.rooms add  constraint rooms_game_chk
+  check (game is null or game in ('rummikub','davinci','splendor','uno','race','hunt','mafia'));
+alter table public.users drop constraint if exists users_display_game_chk;
+alter table public.users drop constraint if exists users_display_game_check;
+alter table public.users add  constraint users_display_game_chk
+  check (display_game is null or display_game in ('rummikub','davinci','splendor','uno','race','hunt','mafia'));
+alter table public.user_game_stats drop constraint if exists user_game_stats_game_check;
+alter table public.user_game_stats add  constraint user_game_stats_game_check
+  check (game in ('rummikub','davinci','splendor','uno','race','hunt','mafia'));
+
+create or replace function public.rk_leaderboard(p_game text default 'rummikub')
+returns table(id uuid, username citext, real_name text, score int, wins int, losses int, streak int)
+language sql security definer set search_path = public, extensions as $$
+  select u.id, u.username, u.real_name, s.score, s.wins, s.losses, s.streak
+  from public.user_game_stats s join public.users u on u.id = s.user_id
+  where s.game = case when p_game in ('rummikub','davinci','splendor','uno','race','hunt','mafia') then p_game else 'rummikub' end
+  order by s.score desc, s.wins desc, u.real_name asc limit 100;
+$$;
+
+create or replace function public.rk_set_display(p_token uuid, p_game text)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare v_user uuid; v_score int;
+begin
+  select id into v_user from public.users where token = p_token;
+  if v_user is null then raise exception 'BAD_TOKEN'; end if;
+  if p_game is not null and p_game not in ('rummikub','davinci','splendor','uno','race','hunt','mafia') then raise exception 'BAD_GAME'; end if;
+  update public.users set display_game = p_game where id = v_user;
+  if p_game is null then return jsonb_build_object('game', null, 'score', 0); end if;
+  select coalesce(score,0) into v_score from public.user_game_stats where user_id = v_user and game = p_game;
+  return jsonb_build_object('game', p_game, 'score', coalesce(v_score,0));
+end; $$;
+
+create or replace function public.rk_me(p_token uuid)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare u public.users; g jsonb; disp jsonb; ds int;
+begin
+  if p_token is null then return null; end if;
+  select * into u from public.users where token = p_token;
+  if not found then return null; end if;
+  select coalesce(jsonb_object_agg(game, jsonb_build_object('score',score,'wins',wins,'losses',losses,'streak',streak)), '{}'::jsonb)
+    into g from public.user_game_stats where user_id = u.id;
+  g := jsonb_build_object(
+    'rummikub', coalesce(g->'rummikub', jsonb_build_object('score',0,'wins',0,'losses',0,'streak',0)),
+    'davinci',  coalesce(g->'davinci',  jsonb_build_object('score',0,'wins',0,'losses',0,'streak',0)),
+    'splendor', coalesce(g->'splendor', jsonb_build_object('score',0,'wins',0,'losses',0,'streak',0)),
+    'uno',      coalesce(g->'uno',      jsonb_build_object('score',0,'wins',0,'losses',0,'streak',0)),
+    'mafia',    coalesce(g->'mafia',    jsonb_build_object('score',0,'wins',0,'losses',0,'streak',0)),
+    'race',     coalesce(g->'race',     jsonb_build_object('score',0,'wins',0,'losses',0,'streak',0)),
+    'hunt',     coalesce(g->'hunt',     jsonb_build_object('score',0,'wins',0,'losses',0,'streak',0)));
+  if u.display_game is null then
+    disp := jsonb_build_object('game', null, 'score', 0);
+  else
+    ds := coalesce((g->u.display_game->>'score')::int, 0);
+    disp := jsonb_build_object('game', u.display_game, 'score', ds);
+  end if;
+  return jsonb_build_object('id',u.id,'username',u.username,'real_name',u.real_name,
+                            'display_game',u.display_game,'games',g,'display',disp,'token',u.token);
+end; $$;
+
+create or replace function public.rooms_game_guard() returns trigger as $$
+declare v_newcap int;
+begin
+  if new.game is not null then
+    if new.id between 1 and 5  and new.game not in ('rummikub','davinci','splendor','uno','mafia') then new.game := null; end if;
+    if new.id between 6 and 10 and new.game not in ('race','hunt')                                then new.game := null; end if;
+  end if;
+  if tg_op='UPDATE' and old.game is distinct from new.game and old.status <> 'waiting' then
+    new.game := old.game;
+  end if;
+  if tg_op='UPDATE' and new.game is distinct from old.game and new.game is not null then
+    v_newcap := case new.game when 'mafia' then 12 when 'rummikub' then 4 when 'davinci' then 4 when 'splendor' then 4 when 'uno' then 4 else 8 end;
+    if v_newcap <= 4 and (select count(*) from public.room_members where room_id = new.id) >= 5 then
+      new.game := old.game;
+    end if;
+  end if;
+  return new;
+end; $$ language plpgsql;
+drop trigger if exists trg_rooms_game_guard on public.rooms;
+create trigger trg_rooms_game_guard before insert or update on public.rooms
+  for each row execute function public.rooms_game_guard();
+
+create or replace function public.rk_take_seat(p_token uuid, p_room int, p_seat int)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare v_user uuid; v_status text; v_game text; v_cap int;
+begin
+  select id into v_user from public.users where token = p_token;
+  if v_user is null then raise exception 'BAD_TOKEN'; end if;
+  select status, game into v_status, v_game from public.rooms where id = p_room;
+  if v_status is null then raise exception 'NO_ROOM'; end if;
+  if v_status <> 'waiting' then return jsonb_build_object('ok',false,'reason','not_waiting'); end if;
+  v_cap := case v_game when 'mafia' then 12 when 'rummikub' then 4 when 'davinci' then 4 when 'splendor' then 4 when 'uno' then 4 when 'race' then 8 when 'hunt' then 8
+                       else (case when p_room between 1 and 5 then 4 else 8 end) end;
+  if p_seat < 1 or p_seat > v_cap then raise exception 'BAD_SEAT'; end if;
+  if exists (select 1 from public.room_members where room_id=p_room and seat=p_seat and user_id<>v_user) then
+    return jsonb_build_object('ok',false,'reason','taken');
+  end if;
+  if (select count(*) from public.room_members where room_id=p_room and seat is not null and user_id<>v_user) >= v_cap then
+    return jsonb_build_object('ok',false,'reason','full');
+  end if;
+  begin
+    update public.room_members set seat = p_seat, role = 'player' where room_id = p_room and user_id = v_user;
+    if not found then return jsonb_build_object('ok',false,'reason','not_member'); end if;
+  exception when unique_violation then return jsonb_build_object('ok',false,'reason','taken');
+  end;
+  return jsonb_build_object('ok',true,'seat',p_seat);
+end; $$;
+
+create or replace function public.rk_rank_points(p_game text, p_score int, p_n int, p_rank int)
+returns int language plpgsql immutable set search_path = public as $$
+declare
+  t jsonb := '{"rummikub":{"wood":{"2":[110,0],"3":[120,90,0],"4":[150,100,50,0]},"iron":{"2":[100,-10],"3":[110,80,-10],"4":[130,100,40,-20]},"bronze":{"2":[90,-20],"3":[100,60,-20],"4":[120,90,20,-40]},"silver":{"2":[80,-30],"3":[90,50,-40],"4":[110,90,0,-60]},"gold":{"2":[70,-40],"3":[80,30,-60],"4":[100,80,-20,-80]},"platinum":{"2":[60,-50],"3":[80,20,-80],"4":[100,70,-40,-100]},"emerald":{"2":[50,-70],"3":[70,10,-100],"4":[90,60,-50,-120]},"diamond":{"2":[50,-90],"3":[70,0,-120],"4":[90,50,-60,-140]},"master":{"2":[40,-90],"3":[60,0,-130],"4":[80,50,-60,-150]},"grandmaster":{"2":[40,-110],"3":[60,-10,-140],"4":[80,40,-70,-160]},"challenger":{"2":[30,-110],"3":[50,-20,-140],"4":[70,40,-80,-170]}},"davinci":{"wood":{"2":[90,0],"3":[100,80,0],"4":[120,90,40,0]},"iron":{"2":[80,-10],"3":[100,70,-20],"4":[110,90,30,-20]},"bronze":{"2":[70,-20],"3":[90,70,-40],"4":[100,80,20,-30]},"silver":{"2":[70,-30],"3":[80,60,-50],"4":[90,80,10,-50]},"gold":{"2":[60,-40],"3":[70,50,-60],"4":[90,70,0,-70]},"platinum":{"2":[60,-50],"3":[70,40,-80],"4":[80,60,-10,-90]},"emerald":{"2":[50,-70],"3":[60,20,-100],"4":[70,50,-30,-110]},"diamond":{"2":[50,-90],"3":[60,10,-120],"4":[70,40,-40,-130]},"master":{"2":[40,-90],"3":[50,0,-120],"4":[70,40,-40,-150]},"grandmaster":{"2":[40,-110],"3":[50,-10,-130],"4":[60,30,-50,-150]},"challenger":{"2":[30,-110],"3":[40,-10,-130],"4":[50,30,-50,-160]}},"splendor":{"wood":{"2":[130,0],"3":[150,90,50],"4":[180,140,80,0]},"iron":{"2":[130,-10],"3":[150,80,20],"4":[170,130,60,-20]},"bronze":{"2":[120,-20],"3":[140,60,0],"4":[160,120,40,-40]},"silver":{"2":[110,-30],"3":[130,50,-20],"4":[150,110,20,-60]},"gold":{"2":[100,-40],"3":[120,30,-40],"4":[140,100,0,-80]},"platinum":{"2":[90,-50],"3":[110,20,-50],"4":[130,90,-10,-100]},"emerald":{"2":[80,-70],"3":[100,10,-70],"4":[120,80,-20,-120]},"diamond":{"2":[70,-90],"3":[90,0,-90],"4":[110,70,-30,-140]},"master":{"2":[60,-90],"3":[80,0,-110],"4":[100,60,-40,-150]},"grandmaster":{"2":[50,-110],"3":[70,-10,-120],"4":[90,50,-50,-160]},"challenger":{"2":[40,-110],"3":[60,-20,-130],"4":[80,40,-60,-170]}},"uno":{"wood":{"2":[90,0],"3":[100,80,0],"4":[120,90,40,0]},"iron":{"2":[80,-10],"3":[100,70,-20],"4":[110,90,30,-20]},"bronze":{"2":[70,-20],"3":[90,70,-40],"4":[100,80,20,-30]},"silver":{"2":[70,-30],"3":[80,60,-50],"4":[90,80,10,-50]},"gold":{"2":[60,-40],"3":[70,50,-60],"4":[90,70,0,-70]},"platinum":{"2":[60,-50],"3":[70,40,-80],"4":[80,60,-10,-90]},"emerald":{"2":[50,-70],"3":[60,20,-100],"4":[70,50,-30,-110]},"diamond":{"2":[50,-90],"3":[60,10,-120],"4":[70,40,-40,-130]},"master":{"2":[40,-90],"3":[50,0,-120],"4":[70,40,-40,-150]},"grandmaster":{"2":[40,-110],"3":[50,-10,-130],"4":[60,30,-50,-150]},"challenger":{"2":[30,-110],"3":[40,-10,-130],"4":[50,30,-50,-160]}}}'::jsonb;
+  v_tier text; nn int; rk int; arr jsonb;
+begin
+  v_tier := public.rk_tier_key(p_score);
+  nn := least(4, greatest(2, coalesce(p_n,2)));
+  arr := t -> p_game -> v_tier -> nn::text;
+  if arr is null then return 0; end if;
+  rk := least(jsonb_array_length(arr), greatest(1, coalesce(p_rank, jsonb_array_length(arr))));
+  return coalesce((arr ->> (rk-1))::int, 0);
+end; $$;
+
+-- 우노 정산: 손패점수 오름차순 순위(클라 ranks) → 고정표 (rk_finish_davinci 클론, game='uno')
+create or replace function public.rk_finish_uno(p_token uuid, p_room int)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare
+  v_user uuid; v_room public.rooms; v_state jsonb; v_players jsonb; v_ranks jsonb;
+  v_seats text[]; v_n int; v_results jsonb := '{}'::jsonb;
+  i int; v_seat text; v_uid uuid; v_rank int; v_curscore int; v_curstreak int;
+  v_won boolean; v_delta int; v_ns int; v_nstreak int; v_w int; v_l int;
+begin
+  select id into v_user from public.users where token = p_token;
+  if v_user is null then raise exception 'BAD_TOKEN'; end if;
+  select * into v_room from public.rooms where id = p_room for update;
+  if not found then raise exception 'NO_ROOM'; end if;
+  if coalesce(v_room.game,'') <> 'uno' then raise exception 'WRONG_GAME'; end if;
+  if v_room.status <> 'playing' then return coalesce(v_room.state->'results','{}'::jsonb); end if;
+  v_state := v_room.state; v_players := v_state->'players'; v_ranks := v_state->'ranks';
+  if not exists (select 1 from jsonb_each_text(v_players) e where e.value=v_user::text) then raise exception 'NOT_A_PLAYER'; end if;
+  if v_ranks is null then raise exception 'NO_RANKS'; end if;
+  select array_agg(key) into v_seats from jsonb_object_keys(v_players) key;
+  v_n := coalesce(array_length(v_seats,1),0);
+  if v_n not between 2 and 4 then raise exception 'BAD_N'; end if;
+  perform 1 from unnest(v_seats) s where (v_ranks->>s) is null;
+  if found then raise exception 'BAD_RANKS'; end if;
+  for i in 1 .. v_n loop
+    v_seat := v_seats[i]; v_rank := (v_ranks->>v_seat)::int;
+    if v_rank < 1 or v_rank > v_n then raise exception 'BAD_RANK_VAL'; end if;
+    v_uid := (v_players->>v_seat)::uuid;
+    v_curscore := 0; v_curstreak := 0;
+    if v_uid is not null then
+      select coalesce(score,0), coalesce(streak,0) into v_curscore, v_curstreak from public.user_game_stats where user_id=v_uid and game='uno';
+      v_curscore := coalesce(v_curscore,0); v_curstreak := coalesce(v_curstreak,0);
+    end if;
+    v_won := (v_rank = 1);
+    v_delta := public.rk_rank_points('uno', v_curscore, v_n, v_rank);
+    v_ns := greatest(0, least(15000, v_curscore + v_delta));
+    v_nstreak := case when v_won then v_curstreak + 1 else 0 end;
+    perform public.rk_bump_stats(v_uid, 'uno', v_ns, v_nstreak, v_won);
+    v_w:=0; v_l:=0; if v_uid is not null then select wins,losses into v_w,v_l from public.user_game_stats where user_id=v_uid and game='uno'; v_w:=coalesce(v_w,0); v_l:=coalesce(v_l,0); end if;
+    v_results := jsonb_set(v_results, array[v_seat], jsonb_build_object(
+      'rank',v_rank,'delta',v_delta,'bonus',0,'won',v_won,
+      'prevScore',v_curscore,'newScore',v_ns,'streak',v_nstreak,'treatment',case when v_won then 'apply' else 'break' end,'prevStreak',v_curstreak,'wins',v_w,'losses',v_l));
+  end loop;
+  v_state := jsonb_set(v_state, '{results}', v_results);
+  v_state := jsonb_set(v_state, '{status}',  '"finished"'::jsonb);
+  update public.rooms set status='finished', state=v_state, version=version+1 where id=p_room;
+  return v_results;
+end; $$;
+
+grant execute on function public.rk_finish_uno(uuid,int) to anon, authenticated;

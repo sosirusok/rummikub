@@ -6,9 +6,9 @@
    - 의존: ui-core.js(esc) 가 먼저 로드돼야 함.
    ========================================================================= */
 
-const GAME_NAME  = { rummikub: '루미큐브', davinci: '다빈치 코드', splendor: '스플랜더', race: '운빨 대시',  hunt: '나도 사람이야', mafia: '마피아' };
-const GAME_SHORT = { rummikub: '루미',     davinci: '다빈치',      splendor: '스플랜더', race: '운빨',       hunt: '나도사람',     mafia: '마피아' };
-const GAME_LOGO  = { rummikub: '🀄',       davinci: '🔢',          splendor: '💎',       race: '🏁',         hunt: '🕵️',          mafia: '🔪' };
+const GAME_NAME  = { rummikub: '루미큐브', davinci: '다빈치 코드', splendor: '스플랜더', uno: '우노', race: '운빨 대시',  hunt: '나도 사람이야', mafia: '마피아' };
+const GAME_SHORT = { rummikub: '루미',     davinci: '다빈치',      splendor: '스플랜더', uno: '우노', race: '운빨',       hunt: '나도사람',     mafia: '마피아' };
+const GAME_LOGO  = { rummikub: '🀄',       davinci: '🔢',          splendor: '💎',       uno: '🎴', race: '🏁',         hunt: '🕵️',          mafia: '🔪' };
 
 /* ----------------------------- 티어 사다리 ----------------------------- */
 const TIER_DEFS = [
@@ -123,6 +123,19 @@ const SCORE_TABLE = {
     grandmaster: { 2:[40,-110], 3:[50,-10,-130], 4:[60,30,-50,-150] },
     challenger:  { 2:[30,-110], 3:[40,-10,-130], 4:[50,30,-50,-160] },
   },
+  uno: {
+    wood:        { 2:[90,0],    3:[100,80,0],    4:[120,90,40,0] },
+    iron:        { 2:[80,-10],  3:[100,70,-20],  4:[110,90,30,-20] },
+    bronze:      { 2:[70,-20],  3:[90,70,-40],   4:[100,80,20,-30] },
+    silver:      { 2:[70,-30],  3:[80,60,-50],   4:[90,80,10,-50] },
+    gold:        { 2:[60,-40],  3:[70,50,-60],   4:[90,70,0,-70] },
+    platinum:    { 2:[60,-50],  3:[70,40,-80],   4:[80,60,-10,-90] },
+    emerald:     { 2:[50,-70],  3:[60,20,-100],  4:[70,50,-30,-110] },
+    diamond:     { 2:[50,-90],  3:[60,10,-120],  4:[70,40,-40,-130] },
+    master:      { 2:[40,-90],  3:[50,0,-120],   4:[70,40,-40,-150] },
+    grandmaster: { 2:[40,-110], 3:[50,-10,-130], 4:[60,30,-50,-150] },
+    challenger:  { 2:[30,-110], 3:[40,-10,-130], 4:[50,30,-50,-160] },
+  },
   splendor: {
     wood:        { 2:[130,0],   3:[150,90,50],   4:[180,140,80,0] },
     iron:        { 2:[130,-10], 3:[150,80,20],   4:[170,130,60,-20] },
@@ -196,6 +209,13 @@ function tierBadgeHTML(score) {
 }
 function streakHTML(streak) { return streak >= 1 ? `<span class="streak">🔥 ${streak}연승</span>` : ''; }
 
+// 꾸미기에서 고른 표시 엠블럼(이름 옆 항상 표시용). userId 로 room_members(MEMBERS) 미러에서 표시게임/점수 조회.
+function decoEmblemHTML(userId, size) {
+  const M = (typeof MEMBERS !== 'undefined') ? MEMBERS : [];
+  const m = M.find(x => x.user_id === userId);
+  if (!m || !m.display_game) return '';
+  return emblemHTML(m.display_game, m.display_score || 0, size || 'xs');
+}
 // 꾸미기 칩: (짧은게임명) 티어(점수). game=null → 빈 문자열.
 function decoChipHTML(game, score) {
   if (!game) return '';

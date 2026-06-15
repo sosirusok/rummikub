@@ -234,7 +234,7 @@ function mfRender() {
     const sel = (isDay && Number(myVote) === seat) ? 'is-myvote' : '';
     return `<button class="mf-player ${alive ? '' : 'is-dead'} ${isMe ? 'is-me' : ''} ${target ? 'is-target' : ''} ${sel}" data-seat="${seat}" ${act}>
       <span class="mf-player__seat">${seat}</span>
-      <span class="mf-player__name">${esc(mafiaName(s, seat))}${isMe ? ' (나)' : ''}</span>
+      <span class="mf-player__name">${decoEmblemHTML((s.players || {})[seat])}${esc(mafiaName(s, seat))}${isMe ? ' (나)' : ''}</span>
       ${alive ? (isDay && vc ? `<span class="mf-player__votes">🗳 ${vc}</span>` : '') : '<span class="mf-player__dead">💀</span>'}
     </button>`;
   }).join('');
