@@ -119,13 +119,13 @@ function unoEnter(room, me, mySeat, amSpectator){
 }
 function unoOnRoom(room){
   if(!UN.on || room.id!==UN.roomId) return;
-  if(room.version!=null && room.version<UN.version) return;
+  if(room.version!=null && room.version<UN.version){ UN.pendingWild=null; closeSheet(); return; }   // 버전 역행 — 색선택 시트 닫기
   const adv = room.version==null || room.version>UN.version;
   UN.room=room; UN.state=room.state||{}; UN.version=room.version;
   if(adv){ UN.pendingWild=null; unoRender(); }
   unoSkipDeparted(); unoMaybeFinish();
 }
-function unoStop(){ UN.on=false; UN.pendingWild=null; UN.room=UN.state=null; UN.roomId=null; }
+function unoStop(){ UN.on=false; UN.pendingWild=null; UN.room=UN.state=null; UN.roomId=null; UN._finishSent=false; }
 
 /* ----------------------------- 헬퍼 ---------------------------------- */
 function unoSeats(s){ return Object.keys(s.players||{}).map(Number).sort((a,b)=>a-b); }
@@ -163,9 +163,10 @@ function unoEnsureDraw(s, want){
   want=want||1;
   if(s.draw.length>=want) return;
   if(s.discard.length>1){
+    const lenBefore=s.discard.length;
     const top=s.discard.pop();
     const rest=s.discard.splice(0, s.discard.length);   // 나머지 전부
-    const rng=unoRng((s.seed^ (s.discard.length+1)^ (top.id?top.id.length:0)^ 0x9e3779b9)>>>0);
+    const rng=unoRng((s.seed^ lenBefore^ (top.id?top.id.length:0)^ 0x9e3779b9)>>>0);
     unoShuffle(rest, rng);
     s.draw=s.draw.concat(rest);
     s.discard=[top];
@@ -314,8 +315,8 @@ async function unoPlay(cardId){
   await unoDoPlay(cardId, null);
 }
 async function unoPickColor(c){
+  const cardId=UN.pendingWild; UN.pendingWild=null;   // closeSheet 의 onClose 가 pendingWild 를 비우므로 먼저 캡처
   closeSheet();
-  const cardId=UN.pendingWild; UN.pendingWild=null;
   if(!cardId || !unoIsMyTurn()) return;
   await unoDoPlay(cardId, c);
 }
@@ -361,8 +362,8 @@ async function unoDoPlay(cardId, chosenColor){
     } else {
       next=adv(seat);                                  // 바로 다음 좌석
       if(card.kind==='skip'){ unoLog(s,`⏭ ${nm} Skip — ${s.names[next]} 스킵`); next=adv(next); }
-      else if(card.kind==='draw2'){ for(let d=0;d<2;d++) unoDrawOne(s, next); unoLog(s,`➕2 ${nm} Draw Two — ${s.names[next]} 2장 뽑고 스킵`); next=adv(next); }
-      else if(card.kind==='wild4'){ for(let d=0;d<4;d++) unoDrawOne(s, next); unoLog(s,`➕4 ${nm} Wild Draw Four → ${cn} — ${s.names[next]} 4장 뽑고 스킵`); next=adv(next); }
+      else if(card.kind==='draw2'){ let dn=0; for(let d=0;d<2;d++){ if(unoDrawOne(s, next)) dn++; } unoLog(s,`➕2 ${nm} Draw Two — ${s.names[next]} ${dn}장 뽑고 스킵`); next=adv(next); }
+      else if(card.kind==='wild4'){ let dn=0; for(let d=0;d<4;d++){ if(unoDrawOne(s, next)) dn++; } unoLog(s,`➕4 ${nm} Wild Draw Four → ${cn} — ${s.names[next]} ${dn}장 뽑고 스킵`); next=adv(next); }
       else if(card.kind==='wild'){ unoLog(s,`🌈 ${nm} Wild → ${cn}`); }
       else { unoLog(s,`🎴 ${nm} ${card.val}(${UNO_COLNAME[card.color]})`); }
     }
@@ -384,13 +385,13 @@ async function unoDraw(){
     const c=unoDrawOne(s, seat);
     if(!c){ // 더 뽑을 카드 없음 → 그냥 패스
       unoLog(s,`🂠 ${s.names[seat]} 뽑을 카드가 없어 패스`);
-      s.drawnId=null; s.turn=unoNextSeat(s, seat); return s;
+      s.drawnId=null; s.lastActorSeat=seat; s.turn=unoNextSeat(s, seat); return s;
     }
     s.drawnId=c.id;
     unoLog(s,`🂠 ${s.names[seat]} 카드를 뽑음`);
     // 뽑은 카드가 낼 수 없으면 자동으로 턴 넘김
     const playable = c.kind==='wild4' ? unoCanPlayWild4(s, seat) : unoMatches(s, c);
-    if(!playable){ s.drawnId=null; s.turn=unoNextSeat(s, seat); }
+    if(!playable){ s.drawnId=null; s.lastActorSeat=seat; s.turn=unoNextSeat(s, seat); }
     return s;
   });
   if(ok){ unoRender(); unoMaybeFinish(); }
@@ -405,6 +406,7 @@ async function unoPass(){
     unoAutoCatch(s, seat);
     s.drawnId=null;
     unoLog(s,`⏭ ${s.names[seat]} 패스`);
+    s.lastActorSeat=seat;
     s.turn=unoNextSeat(s, seat);
     return s;
   });
@@ -444,9 +446,8 @@ async function unoCatch(targetSeat){
     if(base.ranks) return null;
     const h=base.hands[targetSeat]||[];
     if(h.length!==1 || base.said[targetSeat]) return null;   // 이미 선언했거나 1장 아님
-    for(let d=0;d<2;d++) unoDrawOne(base, targetSeat);
-    base.said[targetSeat]=false;
-    unoLog(base, `👮 ${base.names[targetSeat]} UNO 미선언 적발! +2장`);
+    let dn=0; for(let d=0;d<2;d++){ if(unoDrawOne(base, targetSeat)) dn++; }
+    unoLog(base, `👮 ${base.names[targetSeat]} UNO 미선언 적발! +${dn}장`);
     return base;
   });
   if(ok){ unoRender(); }
@@ -458,9 +459,8 @@ function unoAutoCatch(s, actorSeat){
   if(prev==null || Number(prev)===Number(actorSeat)) return;
   const h=s.hands[prev]||[];
   if(h.length===1 && !s.said[prev]){
-    for(let d=0;d<2;d++) unoDrawOne(s, prev);
-    s.said[prev]=false;
-    unoLog(s, `👮 ${s.names[prev]} UNO 미선언 — 자동 +2장`);
+    let dn=0; for(let d=0;d<2;d++){ if(unoDrawOne(s, prev)) dn++; }
+    unoLog(s, `👮 ${s.names[prev]} UNO 미선언 — 자동 +${dn}장`);
   }
 }
 
@@ -513,6 +513,8 @@ async function unoSkipDeparted(){
       base.drawnId=null;
       base.turn=unoNextSeat(base, base.turn);
     }
+    const liveSeats=unoSeats(base).filter(x=>unoIsLive(base,x));
+    if(liveSeats.length<=1 && !base.ranks){ return unoDoFinish(base); }   // 생존 ≤1명 → 종료
     return base;
   });
   if(ok){ unoRender(); unoMaybeFinish(); }
@@ -520,7 +522,7 @@ async function unoSkipDeparted(){
 async function unoMaybeFinish(){
   const s=UN.state; if(!s || UN.amSpectator || !s.ranks) return;
   if(UN._finishSent) return; UN._finishSent=true;
-  try{ await finishGame(UN.roomId, UN.me.token, 'uno'); }catch(e){}
+  try{ await finishGame(UN.roomId, UN.me.token, 'uno'); }catch(e){ UN._finishSent=false; }   // 실패 시 다음 호출에서 재시도
 }
 
 window.unoInitialState=unoInitialState;
