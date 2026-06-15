@@ -199,8 +199,9 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .seat__name small{color:var(--ink-dim); font-weight:500;}
 .seat__scoreline{display:flex; align-items:center; gap:10px; font-size:17px; margin-top:1px;}
 .tier-list{list-style:none; margin:0; padding:10px; display:grid; gap:6px;}
-.tier-row{display:grid; grid-template-columns:auto 1fr auto; gap:10px; align-items:center;
+.tier-row{display:grid; grid-template-columns:54px 1fr auto; gap:10px; align-items:center;
   padding:10px 12px; border-radius:10px; background:var(--panel2); border-left:6px solid var(--tc);}
+.tier-row .emb{margin:0 auto;}  /* 비례 폭이라도 고정 슬롯 중앙정렬 → 티어명 세로 정렬 유지 */
 .tier-row.is-cur{outline:2px solid var(--tc); background:#222a38;}
 .tier-row .tg{font-size:22px; filter:drop-shadow(0 0 5px var(--tc));}
 .tier-row__name{font-weight:800; color:var(--tc); text-shadow:0 0 5px var(--tc);}
@@ -463,12 +464,18 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .dv-drawn .dvt{vertical-align:middle;}
 
 /* ===== 티어 엠블럼(이미지 에셋 + 티어별 라이브 이펙트) ===== */
-.emb{position:relative; display:inline-block; width:var(--w,32px); height:calc(var(--w,32px) * 0.95); line-height:0; flex:none; vertical-align:middle;}
-.emb img{width:100%; height:100%; object-fit:contain; display:block;}
-.emb--xs{--w:24px;} .emb--sm{--w:34px;} .emb--md{--w:62px;} .emb--lg{--w:104px;}
+/* 크기 = 기준폭(--w, 챌린저=tw1) × 티어별 소스 실측 비례(--tw). 높이는 이미지 본연 비율(auto) → 날개·왕관 잘림 없음 */
+.emb{position:relative; display:inline-block; width:calc(var(--w,32px) * var(--tw,1)); line-height:0; flex:none; vertical-align:middle;}
+.emb img{width:100%; height:auto; display:block;}
+.emb--xs{--w:28px;} .emb--sm{--w:50px;} .emb--md{--w:92px;} .emb--lg{--w:140px;}
 .deco-emb{vertical-align:middle; margin-right:3px;}
-.tier-row .emb--sm{--w:32px;}
+.tier-row .emb--sm{--w:50px;}
+/* 티어별 소스 실측 비례(챌린저=1.000). "챌린저 N% → 전 티어 동일 배율" — 사이즈 클래스 --w 하나만 바꾸면 전체가 같은 배율 */
+.emb--wood{--tw:.367;} .emb--iron{--tw:.373;} .emb--bronze{--tw:.485;} .emb--silver{--tw:.538;}
+.emb--gold{--tw:.615;} .emb--platinum{--tw:.663;} .emb--emerald{--tw:.716;} .emb--diamond{--tw:.840;}
+.emb--master{--tw:.852;} .emb--grandmaster{--tw:.882;} .emb--challenger{--tw:1;}
 /* 티어별 발광색 */
+.emb--wood{--ec:#b88a5a;} .emb--iron{--ec:#cfd6e0;}
 .emb--bronze{--ec:#e08a3a;} .emb--silver{--ec:#dfe8f2;} .emb--gold{--ec:#ffce4a;} .emb--platinum{--ec:#62e6d6;}
 .emb--emerald{--ec:#5ee884;} .emb--diamond{--ec:#86d6ff;} .emb--master{--ec:#c66bf0;} .emb--grandmaster{--ec:#cfe6ff;} .emb--challenger{--ec:#ffdf72;}
 /* 광택 스윕 — 엠블럼 실루엣(이미지 알파)으로 마스킹해 모양 위로만 흐름 */
