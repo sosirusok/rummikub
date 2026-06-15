@@ -237,7 +237,7 @@ const _EMB = {
   diamond:     { sz:0.98, wl:56, wn:7, halo:0, glow:.6,  pal:['#f4ffff','#aae8ff','#46a6e0'], acc:'#ffe7a0' },
   master:      { sz:1.02, wl:62, wn:8, halo:0, glow:.72, pal:['#c79cff','#7a3cd0','#241038'], acc:'#ff3a5a' },
   grandmaster: { sz:1.05, wl:64, wn:8, halo:1, glow:.8,  pal:['#eef7ff','#bfe0ff','#ff9ae0'], acc:'#7fd6ff' },
-  challenger:  { sz:1.07, wl:66, wn:8, halo:0, glow:.85, pal:['#fff2a0','#ff9a2e','#d8480e'], acc:'#7fd6ff' },
+  challenger:  { sz:1.07, wl:66, wn:8, halo:0, glow:.85, pal:['#fffae0','#ffdf72','#efa42a'], acc:'#8fd8ff' },
 };
 let _embN = 0;
 function _oDefs(id, pal, acc){
