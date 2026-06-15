@@ -147,7 +147,7 @@ function headerHTML() {
   const dg = ME.display && ME.display.game ? ME.display.game : null;
   const dscore = ME.display ? ME.display.score : 0;
   return `<span class="lobby__hello">${nameHTML(ME.real_name, dg ? dscore : null)}
-    <small>${dg ? decoChipHTML(dg, dscore) : '<span class="muted">티어 숨김</span>'}</small></span>`;
+    <small>${dg ? decoChipEmbHTML(dg, dscore, 'eqs') : '<span class="muted">티어 숨김</span>'}</small></span>`;
 }
 function goHome() {
   cleanupRoom(); cleanupLobby(); ROOM_ID = null; setScreen('home');
@@ -391,9 +391,9 @@ function waitBody(tab, amHost, g, cap) {
       seats.push(`<li class="seat is-occupied ${isMe ? 'is-me' : ''}" data-seat="${n}">
         <span class="seat__no">${n}</span>
         <span class="seat__main">
-          <span class="seat__name">${decoEmblemHTML(m.user_id)}${nameHTML(m.name, nameColor)}${isMe ? ' <small>(나)</small>' : ''}${ROOM.host_id === m.user_id ? ' <span class="seat__badge">방장</span>' : ''}${m.display_game ? ' ' + decoChipHTML(m.display_game, m.display_score) : ''}</span>
-          <span class="seat__record">${wn}승 ${ls}패 · ${tierBadgeHTML(sc)} ${streakHTML(sk)}</span>
-        </span>${amHost && !isMe ? `<button class="seat__kick" data-act="kick" data-uid="${m.user_id}" aria-label="내보내기">✕</button>` : ''}</li>`);
+          <span class="seat__name">${nameHTML(m.name, nameColor)}${isMe ? ' <small>(나)</small>' : ''}${ROOM.host_id === m.user_id ? ' <span class="seat__badge">방장</span>' : ''}${m.display_game ? ' ' + decoChipHTML(m.display_game, m.display_score) : ''}</span>
+          <span class="seat__record">${wn}승 ${ls}패 · ${tierBadgeHTML(g, sc)} ${streakHTML(sk)}</span>
+        </span>${m.display_game ? `<span class="seat__emb">${decoEmblemHTML(m.user_id, 'eq')}</span>` : ''}${amHost && !isMe ? `<button class="seat__kick" data-act="kick" data-uid="${m.user_id}" aria-label="내보내기">✕</button>` : ''}</li>`);
     } else {
       const canSit = !mySeatNow && !iAmSpectator;
       seats.push(`<li class="seat is-empty${canSit ? ' is-joinable' : ''}" ${canSit ? `data-act="sit" data-seat="${n}"` : ''}>＋ ${n}번${canSit ? ' 앉기' : ''}</li>`);
@@ -433,9 +433,9 @@ function decoBody() {
   const opt = (val, label) => {
     const score = val ? (ME.games && ME.games[val] ? ME.games[val].score : 0) : 0;
     return `<button class="deco-opt ${cur === val ? 'is-active' : ''}" data-act="setDisplay" data-dg="${val}">
-      <span>${label}</span>${val ? decoChipHTML(val, score) : '<span class="muted">아무것도 안 보임</span>'}</button>`;
+      <span>${label}</span>${val ? decoChipEmbHTML(val, score, 'eqs') : '<span class="muted">아무것도 안 보임</span>'}</button>`;
   };
-  const preview = cur ? `${nameHTML(ME.real_name, ME.display.score)} ${decoChipHTML(cur, ME.display.score)}` : `${nameHTML(ME.real_name, null)} <span class="muted">(숨김)</span>`;
+  const preview = cur ? `${nameHTML(ME.real_name, ME.display.score)} ${decoChipEmbHTML(cur, ME.display.score, 'eq')}` : `${nameHTML(ME.real_name, null)} <span class="muted">(숨김)</span>`;
   return `<div class="deco">
     <p class="muted">점수 아래·이름 옆에 보일 티어를 고르세요. 이름 색도 이 티어색이 돼요.</p>
     <div class="deco-preview">미리보기: ${preview}</div>
@@ -1019,7 +1019,7 @@ function renderResult() {
             <div class="rr">
               <div class="rr__l1"><span class="rr__name">${G.players ? decoEmblemHTML(G.players[r.seat]) : ''}${nameHTML(G.names[r.seat], r.newScore)}${r.won ? ' 🏆' : ''}${tag}</span>
                 <span class="rank-row__delta ${r.delta >= 0 ? 'delta--up' : 'delta--down'}">${r.delta >= 0 ? '+' : ''}${r.delta}${r.bonus > 0 ? ` <small>🔥+${r.bonus}</small>` : ''}</span></div>
-              <div class="rr__l2"><span class="rr__sc">${r.prevScore || 0} → <b>${r.newScore || 0}</b></span> ${tierBadgeHTML(r.newScore)} ${chg}</div>
+              <div class="rr__l2"><span class="rr__sc">${r.prevScore || 0} → <b>${r.newScore || 0}</b></span> ${tierBadgeHTML(game, r.newScore)} ${chg}</div>
               <div class="rr__l3 muted">${GAME_SHORT[game] || ''} ${rec} · 연승 ${streakChangeHTML(r.prevStreak, r.streak)}</div>
             </div>
           </li>`;
@@ -1070,7 +1070,7 @@ async function showRank(game) {
           <span class="pos">${i + 1}</span>
           <span>${nameHTML(u.real_name, u.score)}<small class="muted"> ${tierForScore(u.score).fullName}${u.streak >= 1 ? ' · 🔥' + u.streak : ''}</small></span>
           <span>${u.wins}승${u.losses}패</span>
-          <span>${scoreTierHTML(u.score)}</span></li>`).join('') || '<li class="muted center" style="padding:20px">아직 기록이 없어요</li>'}
+          <span>${scoreTierHTML(RANK_GAME, u.score)}</span></li>`).join('') || '<li class="muted center" style="padding:20px">아직 기록이 없어요</li>'}
       </ol>
     </section>`;
 }

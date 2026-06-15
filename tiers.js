@@ -199,13 +199,15 @@ function nameHTML(name, score) {
   const t = tierForScore(score || 0);
   return `<span class="tier-name" style="--tc:${t.color}">${esc(name)}</span>`;
 }
-function scoreTierHTML(score) {
+// 랭킹: (이모지)점수(이모지) → 점수 + 오른쪽 엠블럼(효과 버전). game 필수.
+function scoreTierHTML(game, score) {
   const t = tierForScore(score || 0);
-  return `<span class="score-tier" style="--tc:${t.color}"><span class="tg">${t.logo}</span><b>${score || 0}</b><span class="tg">${t.logo}</span></span>`;
+  return `<span class="score-tier" style="--tc:${t.color}"><b>${score || 0}</b>${emblemHTML(game, score, 'eqs')}</span>`;
 }
-function tierBadgeHTML(score) {
+// 티어 배지: 이모지 → 엠블럼(효과) + 티어명. game 필수.
+function tierBadgeHTML(game, score) {
   const t = tierForScore(score || 0);
-  return `<span class="tier-badge" style="--tc:${t.color}">${t.logo} ${t.fullName}</span>`;
+  return `<span class="tier-badge" style="--tc:${t.color}">${emblemHTML(game, score, 'xs')}<span class="tier-badge__t">${t.fullName}</span></span>`;
 }
 function streakHTML(streak) { return streak >= 1 ? `<span class="streak">🔥 ${streak}연승</span>` : ''; }
 
@@ -221,6 +223,11 @@ function decoChipHTML(game, score) {
   if (!game) return '';
   const t = tierForScore(score || 0);
   return `<span class="deco-chip" style="--tc:${t.color}">${GAME_SHORT[game]} ${t.fullName}(${score || 0})</span>`;
+}
+// 칩 + 오른쪽에 장착 엠블럼(효과 버전). 점수 오른쪽에 엠블럼 노출용(홈/미리보기/꾸미기옵션).
+function decoChipEmbHTML(game, score, size) {
+  if (!game) return '';
+  return `${decoChipHTML(game, score)}${emblemHTML(game, score, size || 'eqs')}`;
 }
 
 /* ----------------------------- 티어 엠블럼(이미지 에셋 — 좀비고풍 77종, emblems/<game>_<tier>.png) ----------------------------- */
@@ -238,9 +245,9 @@ function _scCell(v) { const c = v > 0 ? 'pos' : v < 0 ? 'neg' : 'zero'; return `
 function _scBoardTable(game, n) {
   const tbl = SCORE_TABLE[game];
   let head = '<th>티어</th>'; for (let r = 1; r <= n; r++) head += `<th>${r}위</th>`;
-  const body = TIER_KEY_CUTS.map(([key]) => {
+  const body = TIER_KEY_CUTS.map(([key, min]) => {
     const info = TIER_INFO[key];
-    return `<tr><th class="sc-tier" style="--tc:${info.color}">${info.logo} ${info.name}</th>${(tbl[key][n] || []).map(_scCell).join('')}</tr>`;
+    return `<tr><th class="sc-tier" style="--tc:${info.color}">${emblemHTML(game, min, 'xs')}<span class="sc-tier__t">${info.name}</span></th>${(tbl[key][n] || []).map(_scCell).join('')}</tr>`;
   }).join('');
   return `<div class="sc-sub"><div class="sc-cap">${n}인전</div><table class="sc-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
 }
@@ -253,9 +260,9 @@ function scoreTableHTML(game) {
   }
   if (game === 'mafia') {
     const head = `<th>티어</th><th>🔪마피아 승</th><th>🙂시민 승</th><th>패배</th>`;
-    const body = TIER_KEY_CUTS.map(([key]) => {
+    const body = TIER_KEY_CUTS.map(([key, min]) => {
       const info = TIER_INFO[key]; const b = MAFIA_BASE[key];
-      return `<tr><th class="sc-tier" style="--tc:${info.color}">${info.logo} ${info.name}</th>${_scCell(b.mwin)}${_scCell(b.cwin)}${_scCell(b.loss)}</tr>`;
+      return `<tr><th class="sc-tier" style="--tc:${info.color}">${emblemHTML('mafia', min, 'xs')}<span class="sc-tier__t">${info.name}</span></th>${_scCell(b.mwin)}${_scCell(b.cwin)}${_scCell(b.loss)}</tr>`;
     }).join('');
     return `<div class="sc-wrap"><div class="sc-title">📊 티어별 진영 승패 점수(기본)</div>`
       + `<div class="sc-sub"><table class="sc-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`
@@ -268,7 +275,7 @@ function scoreTableHTML(game) {
     const info = TIER_INFO[key]; let a, b;
     if (isRace) { a = applyScore('race', (2.5 - 1) * 6, min, 0, true, 'apply').delta; b = applyScore('race', (2.5 - 4) * 6, min, 0, false, 'break').delta; }
     else { a = applyScore('hunt', 7, min, 0, true, 'apply').delta; b = applyScore('hunt', -7, min, 0, false, 'break').delta; }
-    return `<tr><th class="sc-tier" style="--tc:${info.color}">${info.logo} ${info.name}</th>${_scCell(a)}${_scCell(b)}</tr>`;
+    return `<tr><th class="sc-tier" style="--tc:${info.color}">${emblemHTML(game, min, 'xs')}<span class="sc-tier__t">${info.name}</span></th>${_scCell(a)}${_scCell(b)}</tr>`;
   }).join('');
   return `<div class="sc-wrap"><div class="sc-title">📊 티어별 점수 증감(대략)</div>`
     + `<div class="sc-sub"><table class="sc-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`

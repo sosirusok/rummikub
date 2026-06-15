@@ -47,7 +47,7 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .lobby__top{display:flex; align-items:center; gap:8px; padding:12px;
   border-bottom:1px solid var(--line); padding-top:max(12px,env(safe-area-inset-top));}
 .lobby__hello{font-weight:800; font-size:16px;}
-.lobby__hello small{color:var(--ink-dim); font-weight:500; margin-left:6px;}
+.lobby__hello small{display:inline-flex; align-items:center; gap:5px; color:var(--ink-dim); font-weight:500; margin-left:6px; vertical-align:middle;}
 .lobby__top .spacer{flex:1;}
 .room-grid{list-style:none; margin:0; padding:12px; display:grid; gap:10px; grid-template-columns:1fr;}
 .room-card{display:grid; grid-template-columns:1fr auto auto; align-items:center; gap:10px;
@@ -66,9 +66,11 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
   border-bottom:1px solid var(--line); padding-top:max(12px,env(safe-area-inset-top));}
 .room__top .spacer{flex:1;}
 .seat-list{list-style:none; margin:0; padding:12px; display:grid; gap:8px;}
-.seat{display:grid; grid-template-columns:auto 1fr auto; gap:10px; align-items:center;
-  padding:12px; border-radius:12px; background:var(--panel2); border:1px solid var(--line); min-height:62px;}
+.seat{display:grid; grid-template-columns:auto 1fr auto auto; gap:10px; align-items:center;
+  padding:12px; border-radius:12px; background:var(--panel2); border:1px solid var(--line); min-height:72px;}
 .seat__no{font-weight:800; color:var(--ink-dim); font-size:13px;}
+/* 점수 오른쪽 2줄 높이 장착 엠블럼(엠블럼 박스 높이가 --th로 확정돼 행을 부풀리지 않음) */
+.seat__emb{display:flex; align-items:center; justify-content:center; flex:0 0 auto; min-width:54px;}
 .seat__main{display:flex; flex-direction:column; gap:2px; min-width:0;}
 .seat__name{font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
 .seat__record{font-size:12px; color:var(--ink-dim);}
@@ -192,15 +194,16 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .score-tier{display:inline-flex; align-items:center; gap:4px; color:var(--tc,#fff); font-weight:900;}
 .score-tier b{font-variant-numeric:tabular-nums; font-size:1.05em;}
 .score-tier .tg{font-size:.95em; filter:drop-shadow(0 0 4px var(--tc));}
-.tier-badge{color:var(--tc,#fff); font-weight:700; font-size:.92em; white-space:nowrap;}
+.tier-badge{display:inline-flex; align-items:center; gap:3px; color:var(--tc,#fff); font-weight:700; font-size:.92em; white-space:nowrap; vertical-align:middle;}
+.tier-badge__t{line-height:1;}
 .streak{color:#ff8c2e; font-weight:800; text-shadow:0 0 6px rgba(255,140,46,.6); white-space:nowrap;}
 .tier-up{color:var(--ok); font-weight:800;} .tier-down{color:var(--danger); font-weight:800;}
 .seat{grid-template-columns:auto 1fr;}
 .seat__name small{color:var(--ink-dim); font-weight:500;}
 .seat__scoreline{display:flex; align-items:center; gap:10px; font-size:17px; margin-top:1px;}
 .tier-list{list-style:none; margin:0; padding:10px; display:grid; gap:6px;}
-.tier-row{display:grid; grid-template-columns:54px 1fr auto; gap:10px; align-items:center;
-  padding:10px 12px; border-radius:10px; background:var(--panel2); border-left:6px solid var(--tc);}
+.tier-row{display:grid; grid-template-columns:72px 1fr auto; gap:10px; align-items:center;
+  padding:8px 12px; border-radius:10px; background:var(--panel2); border-left:6px solid var(--tc);}
 .tier-row .emb{margin:0 auto;}  /* 비례 폭이라도 고정 슬롯 중앙정렬 → 티어명 세로 정렬 유지 */
 .tier-row.is-cur{outline:2px solid var(--tc); background:#222a38;}
 .tier-row .tg{font-size:22px; filter:drop-shadow(0 0 5px var(--tc));}
@@ -383,7 +386,7 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .dev-rooms .chip{flex:none;}
 .chip.is-locked{opacity:.4;}
 .game-select--wrap{flex-wrap:wrap;}
-.seat.is-occupied{grid-template-columns:auto 1fr auto;}
+.seat.is-occupied{grid-template-columns:auto 1fr auto auto;}
 .seat__kick{flex:0 0 auto; min-width:34px; min-height:34px; border-radius:8px; border:1px solid var(--line);
   background:transparent; color:var(--danger); font-weight:900; font-size:15px; cursor:pointer; touch-action:manipulation; align-self:center;}
 .seat__kick:active{transform:scale(.92);}
@@ -465,15 +468,19 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 
 /* ===== 티어 엠블럼(이미지 에셋 + 티어별 라이브 이펙트) ===== */
 /* 크기 = 기준폭(--w, 챌린저=tw1) × 티어별 소스 실측 비례(--tw). 높이는 이미지 본연 비율(auto) → 날개·왕관 잘림 없음 */
-.emb{position:relative; display:inline-block; width:calc(var(--w,32px) * var(--tw,1)); line-height:0; flex:none; vertical-align:middle;}
-.emb img{width:100%; height:auto; display:block;}
-.emb--xs{--w:28px;} .emb--sm{--w:50px;} .emb--md{--w:92px;} .emb--lg{--w:140px;}
+.emb{position:relative; display:inline-block; width:calc(var(--w,32px) * var(--tw,1)); height:calc(var(--w,32px) * var(--tw,1) * var(--th,.8)); line-height:0; flex:none; vertical-align:middle;}
+.emb img{width:100%; height:100%; object-fit:contain; display:block;}
+.emb--xs{--w:28px;} .emb--eqs{--w:38px;} .emb--eq{--w:54px;} .emb--sm{--w:50px;} .emb--md{--w:92px;} .emb--lg{--w:140px;}
 .deco-emb{vertical-align:middle; margin-right:3px;}
-.tier-row .emb--sm{--w:50px;}
+.tier-row .emb--sm{--w:66px;}  /* 티어표: 챌린저가 행에 꽉 차게 + 아이언도 잘 보이게(비율 유지) */
 /* 티어별 소스 실측 비례(챌린저=1.000). "챌린저 N% → 전 티어 동일 배율" — 사이즈 클래스 --w 하나만 바꾸면 전체가 같은 배율 */
 .emb--wood{--tw:.367;} .emb--iron{--tw:.373;} .emb--bronze{--tw:.485;} .emb--silver{--tw:.538;}
 .emb--gold{--tw:.615;} .emb--platinum{--tw:.663;} .emb--emerald{--tw:.716;} .emb--diamond{--tw:.840;}
 .emb--master{--tw:.852;} .emb--grandmaster{--tw:.882;} .emb--challenger{--tw:1;}
+/* 티어별 종횡비(높이/너비, 소스 실측) → 박스 높이 확정(이미지 본연크기 누수로 인한 레이아웃 부풀림 방지) */
+.emb--wood{--th:1.08;} .emb--iron{--th:1.08;} .emb--bronze{--th:.854;} .emb--silver{--th:.813;}
+.emb--gold{--th:.817;} .emb--platinum{--th:.777;} .emb--emerald{--th:.719;} .emb--diamond{--th:.690;}
+.emb--master{--th:.701;} .emb--grandmaster{--th:.698;} .emb--challenger{--th:1;}
 /* 티어별 발광색 */
 .emb--wood{--ec:#b88a5a;} .emb--iron{--ec:#cfd6e0;}
 .emb--bronze{--ec:#e08a3a;} .emb--silver{--ec:#dfe8f2;} .emb--gold{--ec:#ffce4a;} .emb--platinum{--ec:#62e6d6;}
@@ -534,6 +541,7 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .sc-table th,.sc-table td{padding:4px 6px; text-align:center; border-bottom:1px solid #222a38; white-space:nowrap;}
 .sc-table thead th{color:var(--ink-dim); font-weight:700;}
 .sc-tier{text-align:left !important; color:var(--tc); font-weight:800; text-shadow:0 0 5px var(--tc);}
+.sc-tier{display:flex; align-items:center; gap:4px;} .sc-tier__t{line-height:1;}
 .sc-c{font-weight:800;}
 .sc-pos{color:#46d17f;} .sc-neg{color:#ef6b6b;} .sc-zero{color:#8a96a8;}
 .sc-note{font-size:11.5px; color:var(--ink-dim); line-height:1.6; padding:4px 2px;}
