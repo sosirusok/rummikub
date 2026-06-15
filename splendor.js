@@ -216,7 +216,7 @@ function spPlayerMini(s, seat){
   const p=s.P[seat]; const t=tierForScore((s.scores||{})[seat]||0);
   const bon=[0,1,2,3,4].map(i=>p.bon[i]?`<span class="sp-b" style="--cc:${SP_COL[i]};--ct:${SP_TXT[i]}">${p.bon[i]}</span>`:'').join('');
   return `<div class="sp-omini ${Number(s.turn)===seat?'is-turn':''}">
-    <div class="sp-omini__hd"><span class="tier-name" style="--tc:${t.color}">${esc(s.names[seat])}</span><b>${p.pts}점</b></div>
+    <div class="sp-omini__hd"><span>${decoEmblemHTML(s.players[seat])}<span class="tier-name" style="--tc:${t.color}">${esc(s.names[seat])}</span></span><b>${p.pts}점</b></div>
     <div class="sp-omini__b">${bon||'<span class="muted">보너스 없음</span>'} <span class="muted">🪙${p.tok.reduce((a,b)=>a+b,0)} ·예약${p.resv.length}</span></div>
   </div>`;
 }

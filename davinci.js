@@ -162,7 +162,7 @@ function dvRenderSetup(s) {
     const cnt = (s.hands[seat] || []).length;
     return `<li class="dv-oppo ${rdy ? 'is-turn' : ''}">
       <div class="dv-oppo__head">
-        <span class="dv-oppo__name tier-name" style="--tc:${t.color}">${esc(s.names[seat])}</span>
+        <span class="dv-oppo__name">${decoEmblemHTML(s.players[seat])}<span class="tier-name" style="--tc:${t.color}">${esc(s.names[seat])}</span></span>
         <span class="dv-oppo__cnt">${cnt}장 · ${rdy ? '✅ 준비완료' : '⏳ 준비중'}</span>
       </div>
       <div class="dv-hand">${Array.from({ length: cnt }).map(() => `<span class="dvt dvt--hidden">?</span>`).join('')}</div>
@@ -234,7 +234,7 @@ function dvRender() {
     }).join('');
     return `<li class="dv-oppo ${Number(s.turn) === seat ? 'is-turn' : ''} ${dead ? 'is-dead' : ''}">
       <div class="dv-oppo__head">
-        <span class="dv-oppo__name tier-name" style="--tc:${t.color}">${esc(s.names[seat])}</span>
+        <span class="dv-oppo__name">${decoEmblemHTML(s.players[seat])}<span class="tier-name" style="--tc:${t.color}">${esc(s.names[seat])}</span></span>
         ${dead ? '<span class="dv-dead">탈락</span>' : `<span class="dv-oppo__cnt">${hand.length}장</span>`}
       </div>
       <div class="dv-hand">${tilesHTML}</div>

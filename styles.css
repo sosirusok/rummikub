@@ -465,7 +465,8 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 /* ===== 티어 엠블럼(SVG 크레스트 · 티어별 화려도 escalation) ===== */
 .emb{display:inline-block; width:var(--w,32px); height:calc(var(--w,32px) * 1.25); line-height:0; flex:none; vertical-align:middle;}
 .emb svg{width:100%; height:100%; display:block; overflow:visible;}
-.emb--sm{--w:32px;} .emb--md{--w:58px;} .emb--lg{--w:96px;}
+.emb--xs{--w:22px;} .emb--sm{--w:32px;} .emb--md{--w:58px;} .emb--lg{--w:96px;}
+.deco-emb{vertical-align:middle; margin-right:3px;}
 .emb .er{transform-box:fill-box; transform-origin:center; animation:embspin 9s linear infinite;}
 .emb--master .er{animation-duration:7s;} .emb--grandmaster .er{animation-duration:5.5s;} .emb--challenger .er{animation-duration:4s;}
 .emb .egl{transform-box:fill-box; transform-origin:center;}
