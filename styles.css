@@ -211,7 +211,10 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .tier-row__cut{color:var(--ink-dim); font-variant-numeric:tabular-nums;}
 
 /* ===================== HOME ===================== */
-.home-cards{display:flex; flex-direction:column; gap:14px; padding:16px; justify-content:center;}
+/* 폴더폰/낮은 화면에서 카드가 넘쳐도 스크롤로 도달 가능(개발자 카드 잘림·접근불가 해결).
+   safe center: 넘칠 땐 자동으로 start 정렬로 폴백 → 위·아래가 잘려 못 누르는 일 없음. */
+.home-cards{display:flex; flex-direction:column; gap:14px; padding:16px;
+  justify-content:safe center; overflow-y:auto; min-height:0; -webkit-overflow-scrolling:touch;}
 .home-card{appearance:none; border:1px solid var(--line); color:var(--ink); border-radius:18px;
   padding:24px 18px; display:flex; flex-direction:column; align-items:center; gap:6px; text-align:center;
   cursor:pointer; touch-action:manipulation; min-height:128px; justify-content:center;}
@@ -468,7 +471,8 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 
 /* ===== 티어 엠블럼(이미지 에셋 + 티어별 라이브 이펙트) ===== */
 /* 크기 = 기준폭(--w, 챌린저=tw1) × 티어별 소스 실측 비례(--tw). 높이는 이미지 본연 비율(auto) → 날개·왕관 잘림 없음 */
-.emb{position:relative; display:inline-block; isolation:isolate; width:calc(var(--w,32px) * var(--tw,1)); height:calc(var(--w,32px) * var(--tw,1) * var(--th,.8)); line-height:0; flex:none; vertical-align:middle;}
+.emb{position:relative; display:inline-block; isolation:isolate; width:calc(var(--w,32px) * var(--tw,1)); height:calc(var(--w,32px) * var(--tw,1) * var(--th,.8)); line-height:0; flex:none; vertical-align:middle;
+  contain:layout style;}   /* 레이아웃/스타일 격리 → 재계산 범위 축소(발광은 박스 밖이라 paint 격리는 제외) */
 .emb img{width:100%; height:100%; object-fit:contain; display:block;}
 .emb--xs{--w:28px;} .emb--eqs{--w:38px;} .emb--eq{--w:54px;} .emb--sm{--w:50px;} .emb--md{--w:92px;} .emb--lg{--w:140px;}
 .deco-emb{vertical-align:middle; margin-right:3px;}
@@ -513,28 +517,29 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .emb--bronze img,.emb--silver img,.emb--gold img{animation:embglow 2.8s ease-in-out infinite;}
 
 /* 고티어(플래티넘·에메랄드·다이아): 화려 — 발광↑ + 광택 스윕 + 둥실 */
-.emb--platinum img,.emb--emerald img,.emb--diamond img{animation:embglowHi 2.2s ease-in-out infinite, embfloat 3.4s ease-in-out infinite;}
-.emb--platinum::after,.emb--emerald::after,.emb--diamond::after{opacity:1; animation:embshine 3.4s ease-in-out infinite;}
+.emb--platinum img,.emb--emerald img,.emb--diamond img{animation:embglowHi 2.2s ease-in-out infinite, embfloat 3.4s ease-in-out infinite; will-change:filter,transform;}
+.emb--platinum::after,.emb--emerald::after,.emb--diamond::after{opacity:1; animation:embshine 3.4s ease-in-out infinite; will-change:background-position;}
 
 /* 초고티어(마스터·그마·챌린저): 매우 화려 — 강발광+채도 + 밝고 빠른 광택 + 반짝 스파클 + 둥실 */
-.emb--master img,.emb--grandmaster img,.emb--challenger img{animation:embglowS 1.7s ease-in-out infinite, embfloat 2.9s ease-in-out infinite;}
-.emb--master::after,.emb--grandmaster::after,.emb--challenger::after{opacity:1; animation:embshineS 2.3s ease-in-out infinite;
-  background:linear-gradient(105deg, transparent 38%, rgba(255,255,255,1) 50%, transparent 62%); background-size:300% 100%;}
-.emb--master::before,.emb--grandmaster::before,.emb--challenger::before{animation:embsparkle 2.1s ease-in-out infinite;}
+.emb--master img,.emb--grandmaster img,.emb--challenger img{animation:embglowS 1.7s ease-in-out infinite, embfloat 2.9s ease-in-out infinite; will-change:filter,transform;}
+.emb--master::after,.emb--grandmaster::after,.emb--challenger::after{opacity:1; animation:embshineS 2.3s ease-in-out infinite; will-change:background-position;
+  background:linear-gradient(105deg, transparent 36%, rgba(255,255,255,1) 50%, transparent 64%); background-size:300% 100%;}
+.emb--master::before,.emb--grandmaster::before,.emb--challenger::before{animation:embsparkle 2.1s ease-in-out infinite; will-change:opacity,transform;}
 
-@keyframes embglow{0%,100%{filter:drop-shadow(0 0 1px var(--ec,#fff));} 50%{filter:drop-shadow(0 0 5px var(--ec,#fff)) brightness(1.06);}}
-@keyframes embglowHi{0%,100%{filter:drop-shadow(0 0 2px var(--ec,#fff));} 50%{filter:drop-shadow(0 0 9px var(--ec,#fff)) brightness(1.10) saturate(1.12);}}
-@keyframes embglowS{0%,100%{filter:drop-shadow(0 0 3px var(--ec,#fff)) saturate(1.05);} 50%{filter:drop-shadow(0 0 15px var(--ec,#fff)) drop-shadow(0 0 4px #fff) brightness(1.15) saturate(1.3);}}
-@keyframes embfloat{0%,100%{transform:translateY(0.5%);} 50%{transform:translateY(-3.5%);}}
+/* 강화된 발광(전체 ↑): 블러 반경·밝기·채도 상향 — "이펙트 증가" */
+@keyframes embglow{0%,100%{filter:drop-shadow(0 0 2px var(--ec,#fff)) brightness(1.02);} 50%{filter:drop-shadow(0 0 7px var(--ec,#fff)) brightness(1.10);}}
+@keyframes embglowHi{0%,100%{filter:drop-shadow(0 0 3px var(--ec,#fff)) saturate(1.05);} 50%{filter:drop-shadow(0 0 13px var(--ec,#fff)) drop-shadow(0 0 3px var(--ec,#fff)) brightness(1.14) saturate(1.22);}}
+@keyframes embglowS{0%,100%{filter:drop-shadow(0 0 4px var(--ec,#fff)) saturate(1.1);} 50%{filter:drop-shadow(0 0 22px var(--ec,#fff)) drop-shadow(0 0 7px #fff) brightness(1.22) saturate(1.45);}}
+@keyframes embfloat{0%,100%{transform:translateY(0.5%) translateZ(0);} 50%{transform:translateY(-4%) translateZ(0);}}
 @keyframes embshine{0%{background-position:210% 0;} 60%,100%{background-position:-130% 0;}}
-@keyframes embshineS{0%{background-position:210% 0;} 55%,100%{background-position:-140% 0;}}
-@keyframes embsparkle{0%,100%{opacity:0; transform:scale(.94);} 42%{opacity:.85;} 50%{opacity:1; transform:scale(1.04);} 64%{opacity:.35;}}
+@keyframes embshineS{0%{background-position:210% 0;} 50%,100%{background-position:-150% 0;}}
+@keyframes embsparkle{0%,100%{opacity:0; transform:scale(.9);} 40%{opacity:.95;} 50%{opacity:1; transform:scale(1.08);} 64%{opacity:.4;}}
 /* 모션 최소화(절전/접근성): 애니메이션은 끄되 티어별 정적 발광은 유지 → 이펙트가 "안 보이는" 일 없음 */
 @media (prefers-reduced-motion: reduce){
   .emb img{animation:none !important;} .emb::after,.emb::before{animation:none !important; opacity:0 !important;}
-  .emb--bronze img,.emb--silver img,.emb--gold img{filter:drop-shadow(0 0 3px var(--ec,#fff));}
-  .emb--platinum img,.emb--emerald img,.emb--diamond img{filter:drop-shadow(0 0 6px var(--ec,#fff)) saturate(1.1);}
-  .emb--master img,.emb--grandmaster img,.emb--challenger img{filter:drop-shadow(0 0 9px var(--ec,#fff)) saturate(1.2) brightness(1.05);}
+  .emb--bronze img,.emb--silver img,.emb--gold img{filter:drop-shadow(0 0 4px var(--ec,#fff));}
+  .emb--platinum img,.emb--emerald img,.emb--diamond img{filter:drop-shadow(0 0 8px var(--ec,#fff)) saturate(1.15) brightness(1.04);}
+  .emb--master img,.emb--grandmaster img,.emb--challenger img{filter:drop-shadow(0 0 13px var(--ec,#fff)) drop-shadow(0 0 4px var(--ec,#fff)) saturate(1.3) brightness(1.08);}
 }
 /* 티어 화면 hero / 사다리 행 */
 .tier-hero{display:flex; align-items:center; gap:14px; padding:12px;}
@@ -654,6 +659,11 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 
 /* ---------- 공통: 낮은 세로(max-height:600px) — 가로폭 무관, 세로 압박 전용 ---------- */
 @media (max-height:600px){
+  /* 홈: 카드 압축 + 안내문 숨김 → 개발자 카드까지 한 화면(또는 짧은 스크롤)으로 도달 */
+  .home-cards{gap:10px; padding:12px 14px; justify-content:flex-start;}
+  .home-card{min-height:0; padding:14px 14px;}
+  .home-card__emoji{font-size:32px;} .home-card__title{font-size:19px;} .home-card__sub{font-size:12px;}
+  .screen--home > p.muted{display:none;}
   /* 공통 헤더/로그 슬림화 */
   .topbar{padding:3px 6px; padding-top:max(3px,env(safe-area-inset-top)); gap:4px;}
   .topbar .timer{width:32px; height:32px;}
@@ -697,4 +707,28 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
   .vctl--act{width:clamp(54px,16vw,74px); height:clamp(54px,16vw,74px);
     bottom:max(12px,env(safe-area-inset-bottom)); font-size:13px; opacity:.9;}
   .mini-spectate{bottom:8px; padding:5px 12px; font-size:12px;}
+}
+
+/* ===================== 노트북/데스크톱 최적화 (min-width:900px) =====================
+   가로로 넓은 화면: 마우스 호버 affordance + 홈 카드 가로 배치(세로 스크롤 불필요) +
+   넓은 폭에서 컨테이너 약간 확장. 게임 보드는 그대로 flex:1 로 남는 세로를 채워 테이블 가림 최소화. */
+@media (min-width:900px){
+  /* 홈 3카드를 한 줄로 → 세로 절약, 개발자 카드도 한눈에 */
+  .home-cards{flex-direction:row; flex-wrap:wrap; align-items:center; gap:16px; padding:24px;
+    justify-content:center; align-content:center; max-width:1040px; margin:0 auto;}
+  .home-card{flex:1 1 240px; max-width:340px; min-height:160px; max-height:240px;}
+  /* 마우스 호버 시 살짝 떠오름(터치엔 영향 없음) */
+  .home-card:hover,.room-card:hover,.seat.is-joinable:hover,.deco-opt:hover,.tab:hover{
+    border-color:var(--accent); transform:translateY(-2px); transition:transform .12s, border-color .12s;}
+  .chip:hover,.btn:hover:not([disabled]){filter:brightness(1.08);}
+}
+
+/* ---------- 노트북 랜드스케이프(넓고 낮은 화면): 세로 압박 완화 ---------- */
+@media (min-width:720px) and (max-height:620px){
+  .home-cards{flex-direction:row; flex-wrap:wrap; padding:14px; gap:12px; justify-content:center;}
+  .home-card{flex:1 1 220px; max-width:320px; min-height:120px; padding:14px;}
+  .screen--home > p.muted{display:none;}
+  /* 게임 공통: 위·아래 띠 슬림화하여 보드 영역 확보 */
+  .topbar{padding:4px 10px;} .dock{padding:6px 12px;}
+  .rack{max-height:30vh;}
 }
