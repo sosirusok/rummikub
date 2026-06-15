@@ -203,88 +203,129 @@ function decoChipHTML(game, score) {
   return `<span class="deco-chip" style="--tc:${t.color}">${GAME_SHORT[game]} ${t.fullName}(${score || 0})</span>`;
 }
 
-/* ----------------------------- 티어 엠블럼(SVG 크레스트, 게임별 컨셉 + 티어별 화려도) ----------------------------- */
+/* ----------------------------- 티어 엠블럼(SVG 크레스트 · 게임별 모티브가 단계별로 진화) ----------------------------- */
 const TIER_INFO = {}; TIER_DEFS.forEach(d => TIER_INFO[d.key] = { name: d.name, color: d.color, logo: d.logo });
-// 티어별 팔레트(다색) + 장식 단계(orn). 고티어일수록 다색·광선·날개·보석·왕관으로 escalation.
-const TIER_EMB = {
-  wood:        { body:['#8a6a44','#5a4026'],                                 rim:['#a07c50','#3f2c18'], glow:'#7a5a36', orn:0 },
-  iron:        { body:['#aab1bc','#6b727d'],                                 rim:['#d2d8e0','#565b63'], glow:'#9aa3ad', orn:1 },
-  bronze:      { body:['#cf8743','#8a4f22'],                                 rim:['#eaa869','#6e3f18'], glow:'#c8803f', orn:1 },
-  silver:      { body:['#d4deea','#8c99ad'],                                 rim:['#ffffff','#7d8a9d'], glow:'#cdd8e6', orn:2 },
-  gold:        { body:['#ffda6e','#c8901c'],                                 rim:['#fff0b0','#a9760f'], glow:'#ffcc44', orn:2 },
-  platinum:    { body:['#a8f2e7','#2bb6a3'],                                 rim:['#e6fffb','#1f9b8e'], glow:'#5fe6d4', orn:3 },
-  emerald:     { body:['#86f0a6','#16a34a'],                                 rim:['#d6ffe2','#0f8a44'], glow:'#3fdd7a', orn:3 },
-  diamond:     { body:['#c6e9ff','#3aa0ff','#7c5cff'],                       rim:['#ffffff','#4aa8ff'], glow:'#6cc0ff', orn:4 },
-  master:      { body:['#ff9ae0','#b14de0','#6a5cff'],                       rim:['#ffd0f5','#7a3cff'], glow:'#c060f0', orn:5 },
-  grandmaster: { body:['#ffe06a','#ff7a3a','#e0444a'],                       rim:['#fff0b0','#c83030'], glow:'#ff6a3a', orn:6 },
-  challenger:  { body:['#fff7d2','#ffd84a','#7af0ff','#ff9ae0','#b08bff'],   rim:['#ffffff','#ffd84a'], glow:'#ffe27a', orn:7 },
+// 티어키 → 단계(0~4) + 팔레트(다색) + 아우라색. 단계가 오를수록 모티브 자체가 완전히 달라지고 장식이 극대화.
+const _EMB = {
+  wood:        { st:0, pal:['#8a6a44','#5a4026'],                               glow:'#7a5a36' },
+  iron:        { st:0, pal:['#aab1bc','#6b727d'],                               glow:'#9aa3ad' },
+  bronze:      { st:1, pal:['#cf8743','#8a4f22'],                               glow:'#c8803f' },
+  silver:      { st:1, pal:['#d4deea','#8c99ad'],                               glow:'#cdd8e6' },
+  gold:        { st:2, pal:['#ffda6e','#c8901c'],                               glow:'#ffcc44' },
+  platinum:    { st:2, pal:['#a8f2e7','#2bb6a3'],                               glow:'#5fe6d4' },
+  emerald:     { st:3, pal:['#86f0a6','#16a34a'],                               glow:'#3fdd7a' },
+  diamond:     { st:3, pal:['#c6e9ff','#3aa0ff','#7c5cff'],                     glow:'#6cc0ff' },
+  master:      { st:4, pal:['#ff9ae0','#b14de0','#6a5cff'],                     glow:'#c060f0' },
+  grandmaster: { st:4, pal:['#ffe06a','#ff7a3a','#e0444a'],                     glow:'#ff6a3a' },
+  challenger:  { st:4, pal:['#fff7d2','#ffd84a','#7af0ff','#ff9ae0','#b08bff'], glow:'#ffe27a' },
 };
 let _embN = 0;
-function _embStops(cols) { return cols.map((c, i) => `<stop offset="${Math.round(i / (cols.length - 1) * 100)}%" stop-color="${c}"/>`).join(''); }
-const _EMB_SHIELD = 'M60 16 L100 30 V70 Q100 112 60 134 Q20 112 20 70 V30 Z';
-const _EMB_SHIELD_IN = 'M60 26 L92 37 V69 Q92 103 60 121 Q28 103 28 69 V37 Z';
-function _embIcon(game, id) {
-  const lite = `url(#${id}i)`, ol = 'rgba(0,0,0,.32)';
-  if (game === 'splendor') return `<g stroke="${ol}" stroke-width="1.4" stroke-linejoin="round">
-    <polygon points="60,52 78,64 60,92 42,64" fill="${lite}"/><polygon points="48,57 72,57 78,64 42,64" fill="#fff" opacity=".55"/>
-    <polygon points="48,57 72,57 60,52" fill="${lite}"/><line x1="42" y1="64" x2="60" y2="64"/><line x1="78" y1="64" x2="60" y2="64"/><line x1="60" y1="64" x2="60" y2="92"/></g>`;
-  if (game === 'mafia') return `<g fill="${lite}" stroke="${ol}" stroke-width="1.3" stroke-linejoin="round">
-    <polygon points="60,46 65,70 60,96 55,70"/><polygon points="60,46 63,68 60,72 57,68" fill="#fff" opacity=".5" stroke="none"/>
-    <rect x="46" y="92" width="28" height="6" rx="2.5"/><rect x="56" y="98" width="8" height="17" rx="2.5"/><circle cx="60" cy="118" r="4"/></g>`;
-  if (game === 'davinci') return `<g fill="none" stroke="${lite}" stroke-width="6.5" stroke-linecap="round">
-    <circle cx="60" cy="60" r="14"/><line x1="60" y1="74" x2="60" y2="112"/><line x1="60" y1="100" x2="71" y2="100"/><line x1="60" y1="109" x2="68" y2="109"/></g>
-    <circle cx="60" cy="60" r="5.5" fill="rgba(0,0,0,.42)"/>`;
-  if (game === 'rummikub') return `<g><rect x="44" y="52" width="32" height="40" rx="6" fill="${lite}" stroke="${ol}" stroke-width="1.4"/>
-    <polygon points="60,58 64,71 78,71 67,79 71,92 60,84 49,92 53,79 42,71 56,71" transform="translate(8.4,10) scale(.86)" fill="url(#${id}a)" stroke="${ol}" stroke-width="1"/></g>`;
-  if (game === 'race') return `<g><line x1="46" y1="50" x2="46" y2="116" stroke="${lite}" stroke-width="5" stroke-linecap="round"/>
-    <g transform="translate(49,52)">${[0,1,2,3].map(r => [0,1,2].map(cc => `<rect x="${cc*10}" y="${r*8}" width="10" height="8" fill="${(r+cc)%2?'#fff':'#222'}"/>`).join('')).join('')}<rect width="30" height="32" fill="none" stroke="${ol}"/></g></g>`;
-  if (game === 'hunt') return `<g fill="none" stroke="${lite}" stroke-width="6" stroke-linecap="round"><circle cx="55" cy="62" r="15"/><line x1="66" y1="73" x2="82" y2="100"/></g><circle cx="55" cy="62" r="8" fill="rgba(255,255,255,.25)"/>`;
-  return `<polygon points="60,46 67,66 88,66 71,79 77,100 60,87 43,100 49,79 32,66 53,66" fill="${lite}" stroke="${ol}" stroke-width="1.4"/>`;
+function _gst(cols) { return cols.map((c, i) => `<stop offset="${Math.round(i / (cols.length - 1) * 100)}%" stop-color="${c}"/>`).join(''); }
+const _SHELL = 'M60 10 L102 26 V70 Q102 116 60 140 Q18 116 18 70 V26 Z';
+function _eDefs(id, pal, glow, st) {
+  return `<defs>
+    <linearGradient id="${id}p" x1="0" y1="0" x2="0.3" y2="1">${_gst(pal)}</linearGradient>
+    <linearGradient id="${id}ph" x1="0" y1="0" x2="1" y2="1">${_gst(pal)}</linearGradient>
+    <radialGradient id="${id}bg" cx="50%" cy="42%" r="75%"><stop offset="0%" stop-color="${pal[0]}" stop-opacity=".35"/><stop offset="55%" stop-color="#0c0f17" stop-opacity=".9"/><stop offset="100%" stop-color="#05070c"/></radialGradient>
+    <radialGradient id="${id}gl" cx="50%" cy="46%" r="60%"><stop offset="0%" stop-color="${glow}" stop-opacity="${st>=4?1:st>=3?.8:st>=2?.55:.3}"/><stop offset="100%" stop-color="${glow}" stop-opacity="0"/></radialGradient>
+    <linearGradient id="${id}steel" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#6b7480"/><stop offset="46%" stop-color="#eef3f8"/><stop offset="56%" stop-color="#fff"/><stop offset="100%" stop-color="#566069"/></linearGradient>
+    <linearGradient id="${id}gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fff0a8"/><stop offset="50%" stop-color="#eab94a"/><stop offset="100%" stop-color="#9a6c12"/></linearGradient>
+    <linearGradient id="${id}grip" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#241a12"/><stop offset="50%" stop-color="#5a4632"/><stop offset="100%" stop-color="#1c140d"/></linearGradient>
+    <linearGradient id="${id}lite" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fff"/><stop offset="100%" stop-color="#cfd8e6"/></linearGradient>
+    <radialGradient id="${id}spark"><stop offset="0%" stop-color="#fff"/><stop offset="100%" stop-color="#fff" stop-opacity="0"/></radialGradient>
+    <filter id="${id}ds" x="-40%" y="-40%" width="180%" height="180%"><feDropShadow dx="0" dy="1.4" stdDeviation="1.5" flood-color="rgba(0,0,0,.55)"/></filter>
+    <filter id="${id}bl" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="2.6"/></filter>
+    <clipPath id="${id}sc"><path d="${_SHELL}"/></clipPath></defs>`;
 }
-function _embRays(id, orn) {
-  if (orn < 4) return ''; const n = 24, sp = [];
-  for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2, long = i % 2 === 0, r1 = 58, r2 = long ? 94 : 80, w = long ? .045 : .03, a1 = a - w, a2 = a + w;
-    sp.push(`<polygon points="${(60+Math.cos(a1)*r1).toFixed(1)},${(72+Math.sin(a1)*r1).toFixed(1)} ${(60+Math.cos(a)*r2).toFixed(1)},${(72+Math.sin(a)*r2).toFixed(1)} ${(60+Math.cos(a2)*r1).toFixed(1)},${(72+Math.sin(a2)*r1).toFixed(1)}" fill="url(#${id}r)"/>`); }
-  return `<g class="er" opacity="${orn>=7?.95:orn>=6?.85:.6}">${sp.join('')}</g>`;
+function _eRays(id, n, r1, r2, op) {
+  let s = `<g class="er" opacity="${op}">`;
+  for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2, lng = i % 2 === 0, R = lng ? r2 : r2 * .78, w = lng ? .05 : .028;
+    s += `<polygon points="${(60+Math.cos(a-w)*r1).toFixed(1)},${(70+Math.sin(a-w)*r1).toFixed(1)} ${(60+Math.cos(a)*R).toFixed(1)},${(70+Math.sin(a)*R).toFixed(1)} ${(60+Math.cos(a+w)*r1).toFixed(1)},${(70+Math.sin(a+w)*r1).toFixed(1)}" fill="url(#${id}p)"/>`; }
+  return s + `</g>`;
 }
-function _embWings(id, orn) {
-  if (orn < 3) return '';
-  const leaf = (x, s) => `<g transform="translate(${x},92) scale(${s},1)">${[0,1,2,3,4].map(i => `<ellipse cx="${-6-i*7}" cy="${-i*9}" rx="9" ry="4.5" transform="rotate(${-28-i*8} ${-6-i*7} ${-i*9})" fill="url(#${id}w)" stroke="rgba(0,0,0,.18)" stroke-width=".6"/>`).join('')}</g>`;
-  return leaf(24, 1) + leaf(96, -1);
+function _eSpk(id, l) { return l.map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${r}" fill="url(#${id}spark)"/>`).join(''); }
+function _eFil(id, st) { if (st < 2) return ''; return `<g stroke="rgba(255,255,255,.10)" stroke-width="1.2" fill="none"><path d="M34 40 Q44 34 52 42"/><path d="M86 40 Q76 34 68 42"/><path d="M30 96 Q42 104 54 98"/><path d="M90 96 Q78 104 66 98"/></g>`; }
+function _eWings(id, st) { if (st < 3) return ''; const N = st >= 4 ? 8 : 6;
+  const leaf = (x, s) => `<g transform="translate(${x},100) scale(${s},1)">${Array.from({length:N},(_,i)=>`<path d="M${-3-i*9} ${-i*12} q -15 -4 -26 5 q 13 3 26 -5 z" transform="rotate(${-20-i*6} ${-3-i*9} ${-i*12})" fill="url(#${id}gold)" stroke="rgba(0,0,0,.2)" stroke-width=".5"/>`).join('')}</g>`;
+  return leaf(18, 1) + leaf(102, -1); }
+function _eCrown(id, st) { if (st < 4) return ''; return `<g transform="translate(0,-3)"><path d="M40 20 L46 5 L53 15 L60 3 L67 15 L74 5 L80 20 Q60 14 40 20 Z" fill="url(#${id}gold)" stroke="#7a5510" stroke-width="1"/><circle cx="46" cy="7" r="2.4" fill="#ff5a7a"/><circle cx="74" cy="7" r="2.4" fill="#5ac8ff"/><circle cx="60" cy="6" r="2.8" fill="#7affb0"/></g>`; }
+function _eBanner(id, st) { if (st < 4) return ''; return `<g transform="translate(0,4)"><path d="M36 128 L84 128 L80 140 L60 134 L40 140 Z" fill="url(#${id}gold)" stroke="#7a5510" stroke-width="1"/></g>`; }
+
+/* ===== 게임별 모티브 (단계별로 완전히 다른 그림) ===== */
+function _Mmafia(st, id) {
+  if (st===0) return `<g filter="url(#${id}ds)"><path d="M56 38 L66 92 L60 100 L52 90 Z" fill="#8a7a66" stroke="#3a2c20"/><path d="M56 38 L59 66 L57 74 Z" fill="#fff" opacity=".18"/><path d="M63 72 L67 75 L63.5 77 Z" fill="#3a2c20"/><rect x="52" y="98" width="15" height="22" rx="3" fill="url(#${id}grip)" stroke="#1c140d"/><g stroke="#1c140d" stroke-width="1.2"><line x1="52" y1="104" x2="67" y2="104"/><line x1="52" y1="110" x2="67" y2="110"/><line x1="52" y1="116" x2="67" y2="116"/></g></g>`;
+  if (st===1) return `<g filter="url(#${id}ds)"><path d="M60 30 L67 92 L60 102 L53 92 Z" fill="url(#${id}steel)" stroke="#46505c"/><path d="M60 30 L60 102 L56 92 L58 42 Z" fill="#fff" opacity=".4"/><rect x="42" y="90" width="36" height="7" rx="3.5" fill="url(#${id}p)" stroke="rgba(0,0,0,.3)"/><rect x="55" y="96" width="10" height="26" rx="4" fill="url(#${id}grip)"/><circle cx="60" cy="125" r="5" fill="url(#${id}p)" stroke="rgba(0,0,0,.3)"/></g>`;
+  if (st===2) return `<g filter="url(#${id}ds)"><path d="M60 26 L68 90 L60 102 L52 90 Z" fill="url(#${id}steel)" stroke="#3f4854"/><path d="M60 26 L60 102 L55 90 L57 38 Z" fill="#fff" opacity=".45"/><line x1="60" y1="40" x2="60" y2="86" stroke="#9fb0c3" opacity=".6"/><path d="M38 90 Q44 82 52 90 L68 90 Q76 82 82 90 Q72 100 60 97 Q48 100 38 90 Z" fill="url(#${id}gold)" stroke="#8a5f12"/><rect x="55" y="96" width="10" height="26" rx="4" fill="url(#${id}grip)"/><circle cx="60" cy="125" r="6" fill="url(#${id}gold)" stroke="#8a5f12"/><circle cx="60" cy="125" r="3" fill="url(#${id}p)"/></g>`;
+  if (st===3) return `<g><path d="M60 20 L70 88 L60 102 L50 88 Z" fill="url(#${id}p)" filter="url(#${id}bl)" opacity=".85"/><g filter="url(#${id}ds)"><path d="M60 20 L70 88 L60 102 L50 88 Z" fill="url(#${id}steel)" stroke="#3f4854"/><path d="M60 20 L60 102 L55 88 L57.5 32 Z" fill="#fff" opacity=".5"/><g fill="#fff"><circle cx="60" cy="40" r="1.8"/><circle cx="60" cy="54" r="1.8"/><circle cx="60" cy="68" r="1.8"/></g><path d="M36 90 Q44 80 52 89 L68 89 Q76 80 84 90 Q73 102 60 98 Q47 102 36 90 Z" fill="url(#${id}gold)" stroke="#8a5f12"/><rect x="55" y="96" width="10" height="28" rx="4" fill="url(#${id}grip)"/><circle cx="60" cy="127" r="6.5" fill="url(#${id}p)" stroke="#fff"/></g></g>`;
+  return `<g><path d="M60 14 L73 86 L60 104 L47 86 Z" fill="url(#${id}p)" filter="url(#${id}bl)" opacity=".95"/><g filter="url(#${id}ds)"><path d="M60 14 L73 86 L60 104 L47 86 Z" fill="url(#${id}steel)" stroke="#2f3742" stroke-width="1.2"/><path d="M60 14 L60 104 L54 86 L57 24 Z" fill="#fff" opacity=".55"/><g fill="#fff"><circle cx="60" cy="30" r="2"/><circle cx="60" cy="46" r="2"/><circle cx="60" cy="62" r="2"/><circle cx="60" cy="78" r="2"/></g><path d="M32 88 Q40 74 50 86 Q55 80 60 84 Q65 80 70 86 Q80 74 88 88 Q74 104 60 99 Q46 104 32 88 Z" fill="url(#${id}gold)" stroke="#8a5f12"/><circle cx="32" cy="88" r="3.2" fill="#ff5a7a"/><circle cx="88" cy="88" r="3.2" fill="#5ac8ff"/><rect x="54.5" y="96" width="11" height="30" rx="4.5" fill="url(#${id}grip)"/><circle cx="60" cy="130" r="7.5" fill="url(#${id}gold)" stroke="#8a5f12"/><circle cx="60" cy="130" r="3.6" fill="url(#${id}p)"/></g></g>`;
 }
-function _embGems(id, orn) {
-  if (orn < 4) return '';
-  const g = (x, y, r) => `<g><polygon points="${x},${y-r} ${x+r},${y} ${x},${y+r} ${x-r},${y}" fill="url(#${id}g)" stroke="rgba(0,0,0,.3)" stroke-width=".8"/><polygon points="${x},${y-r} ${x+r},${y} ${x},${y}" fill="#fff" opacity=".5"/></g>`;
-  return g(60, 18, 5) + (orn >= 5 ? g(24, 58, 4) + g(96, 58, 4) : '');
+function _gem(cx, cy, r, fill, id) { return `<g stroke="rgba(0,0,0,.28)" stroke-width="1" stroke-linejoin="round"><polygon points="${cx-r},${cy-r*.55} ${cx-r*.5},${cy-r} ${cx+r*.5},${cy-r} ${cx+r},${cy-r*.55} ${cx},${cy+r*1.1}" fill="${fill}"/><polygon points="${cx-r},${cy-r*.55} ${cx+r},${cy-r*.55} ${cx},${cy-r*.2}" fill="#fff" opacity=".5"/><line x1="${cx-r*.5}" y1="${cy-r}" x2="${cx}" y2="${cy+r*1.1}"/><line x1="${cx+r*.5}" y1="${cy-r}" x2="${cx}" y2="${cy+r*1.1}"/></g>`; }
+function _Msplendor(st, id) {
+  if (st===0) return `<g filter="url(#${id}ds)"><polygon points="46,58 54,48 70,50 76,66 66,84 50,80 42,68" fill="#7d756a" stroke="#3a352e"/><polygon points="54,48 70,50 60,62" fill="#fff" opacity=".15"/></g>`;
+  if (st===1) return `<g filter="url(#${id}ds)">${_gem(60,68,18,`url(#${id}p)`,id)}</g>`;
+  if (st===2) return `<g filter="url(#${id}ds)">${_gem(60,66,20,`url(#${id}p)`,id)}${_gem(40,86,9,`url(#${id}ph)`,id)}${_gem(80,86,9,`url(#${id}ph)`,id)}</g>`;
+  if (st===3) return `<g>${_gem(60,60,22,`url(#${id}p)`,id)}${_gem(40,82,11,`url(#${id}ph)`,id)}${_gem(82,82,11,`url(#${id}ph)`,id)}${_gem(60,96,8,`url(#${id}p)`,id)}${_eSpk(id,[[44,50,3],[78,54,2.4],[60,100,2],[36,76,2]])}</g>`;
+  return `<g>${_gem(60,56,26,`url(#${id}p)`,id)}${_gem(36,80,13,`url(#${id}ph)`,id)}${_gem(84,80,13,`url(#${id}ph)`,id)}${_gem(60,98,11,`url(#${id}p)`,id)}${_gem(46,40,8,`url(#${id}ph)`,id)}${_gem(76,40,8,`url(#${id}ph)`,id)}${_eSpk(id,[[40,44,3.5],[82,46,3],[58,104,2.6],[30,72,2.4],[92,70,2.4],[60,30,3]])}</g>`;
 }
-function _embCrown(id, orn) {
-  if (orn < 6) return '';
-  return `<path d="M40 18 L48 4 L60 14 L72 4 L80 18 Z" fill="url(#${id}c)" stroke="rgba(90,60,0,.5)" stroke-width="1"/>`
-    + (orn >= 7 ? `<circle cx="48" cy="6" r="2.6" fill="#ff5a7a"/><circle cx="72" cy="6" r="2.6" fill="#5ac8ff"/><circle cx="60" cy="14" r="3" fill="#7affb0"/>` : '');
+function _Mdavinci(st, id) {
+  const gl = `<g stroke="url(#${id}lite)" stroke-width="2.2" fill="none" stroke-linecap="round"><path d="M54 54 L66 54 M60 54 L60 80 M54 80 L66 80"/></g>`;
+  if (st===0) return `<g filter="url(#${id}ds)"><circle cx="60" cy="68" r="26" fill="#726a5e" stroke="#3a352e" stroke-width="2"/><path d="M58 46 L62 92" stroke="#3a352e" stroke-width="1.4"/><text x="60" y="76" font-size="22" font-family="serif" fill="#cfc7b8" text-anchor="middle">3</text></g>`;
+  if (st===1) return `<g filter="url(#${id}ds)"><circle cx="60" cy="68" r="27" fill="url(#${id}p)" stroke="rgba(0,0,0,.3)" stroke-width="2"/><circle cx="60" cy="68" r="20" fill="#10141d" opacity=".5"/>${Array.from({length:12},(_,i)=>{const a=i/12*Math.PI*2;return `<line x1="${(60+Math.cos(a)*23).toFixed(1)}" y1="${(68+Math.sin(a)*23).toFixed(1)}" x2="${(60+Math.cos(a)*27).toFixed(1)}" y2="${(68+Math.sin(a)*27).toFixed(1)}" stroke="rgba(0,0,0,.4)" stroke-width="1.6"/>`}).join('')}${gl}</g>`;
+  if (st===2) return `<g filter="url(#${id}ds)"><circle cx="60" cy="68" r="29" fill="url(#${id}p)" stroke="url(#${id}gold)" stroke-width="3"/><circle cx="60" cy="68" r="21" fill="#0c0f17" opacity=".55"/>${Array.from({length:16},(_,i)=>{const a=i/16*Math.PI*2;return `<circle cx="${(60+Math.cos(a)*25).toFixed(1)}" cy="${(68+Math.sin(a)*25).toFixed(1)}" r="1.3" fill="url(#${id}gold)"/>`}).join('')}${gl}</g>`;
+  if (st===3) return `<g><g filter="url(#${id}ds)"><circle cx="60" cy="68" r="30" fill="none" stroke="url(#${id}p)" stroke-width="4"/><circle cx="60" cy="68" r="22" fill="none" stroke="url(#${id}ph)" stroke-width="2.5" stroke-dasharray="4 5"/><circle cx="60" cy="68" r="15" fill="#0c0f17" opacity=".5"/>${Array.from({length:8},(_,i)=>{const a=i/8*Math.PI*2+.2;return `<text x="${(60+Math.cos(a)*26).toFixed(1)}" y="${(70+Math.sin(a)*26).toFixed(1)}" font-size="6" fill="#fff" text-anchor="middle" opacity=".85">${'✦✧⟡◇✶✷❖✸'[i]}</text>`}).join('')}${gl}</g></g>`;
+  return `<g><g filter="url(#${id}ds)"><circle cx="60" cy="66" r="36" fill="none" stroke="url(#${id}p)" stroke-width="5"/><circle cx="60" cy="66" r="28" fill="none" stroke="url(#${id}ph)" stroke-width="3" stroke-dasharray="3 6"/><circle cx="60" cy="66" r="18" fill="none" stroke="url(#${id}lite)" stroke-width="2"/><circle cx="60" cy="66" r="11" fill="#0c0f17" opacity=".5"/>${Array.from({length:10},(_,i)=>{const a=i/10*Math.PI*2;return `<text x="${(60+Math.cos(a)*32).toFixed(1)}" y="${(69+Math.sin(a)*32).toFixed(1)}" font-size="7" fill="#fff" text-anchor="middle">${'✦✧⟡◇✶✷❖✸⬡✺'[i]}</text>`}).join('')}<g stroke="url(#${id}lite)" stroke-width="2.6" fill="none" stroke-linecap="round"><path d="M53 52 L67 52 M60 52 L60 82 M53 82 L67 82"/></g></g>${_eSpk(id,[[34,44,3],[88,48,3],[60,108,2.6],[26,70,2.4]])}</g>`;
 }
+function _tile(x, y, w, h, rot, fill, num) { return `<g transform="rotate(${rot} ${x+w/2} ${y+h/2})"><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="5" fill="${fill}" stroke="rgba(0,0,0,.32)" stroke-width="1.4"/>${num?`<text x="${x+w/2}" y="${y+h*0.62}" font-size="${h*0.5}" font-weight="900" font-family="sans-serif" fill="${num.c}" text-anchor="middle">${num.t}</text>`:''}</g>`; }
+function _star(cx, cy, r, fill) { return `<polygon points="${Array.from({length:10},(_,i)=>{const a=-Math.PI/2+i*Math.PI/5,rr=i%2?r*.45:r;return `${(cx+Math.cos(a)*rr).toFixed(1)},${(cy+Math.sin(a)*rr).toFixed(1)}`}).join(' ')}" fill="${fill}" stroke="rgba(0,0,0,.3)" stroke-width="1"/>`; }
+function _Mrummikub(st, id) {
+  if (st===0) return `<g filter="url(#${id}ds)">${_tile(48,46,26,40,-4,'#cfc6b4',{t:'7',c:'#9a3b3b'})}</g>`;
+  if (st===1) return `<g filter="url(#${id}ds)">${_tile(40,50,24,38,-10,'#e8e2d2',{t:'3',c:'#2b6cff'})}${_tile(58,48,24,38,8,`url(#${id}lite)`,{t:'7',c:'#d8443f'})}</g>`;
+  if (st===2) return `<g filter="url(#${id}ds)">${_tile(48,46,28,42,0,`url(#${id}p)`,null)}${_star(62,67,14,`url(#${id}gold)`)}</g>`;
+  if (st===3) return `<g><g filter="url(#${id}ds)">${_tile(36,52,22,36,-12,'#e8e2d2',{t:'1',c:'#2faa55'})}${_tile(62,52,22,36,12,'#e8e2d2',{t:'9',c:'#e0a020'})}${_tile(48,46,28,44,0,`url(#${id}p)`,null)}${_star(62,68,16,`url(#${id}gold)`)}</g>${_eSpk(id,[[44,48,2.6],[78,52,2.4],[60,98,2.2]])}</g>`;
+  return `<g>${_star(60,66,46,`url(#${id}p)`).replace('stroke-width="1"','stroke-width="0" opacity=".22"')}<g filter="url(#${id}ds)">${_tile(30,54,22,36,-16,`url(#${id}ph)`,{t:'3',c:'#fff'})}${_tile(68,54,22,36,16,`url(#${id}ph)`,{t:'7',c:'#fff'})}${_tile(46,44,30,48,0,`url(#${id}p)`,null)}${_star(61,68,18,`url(#${id}gold)`)}<circle cx="61" cy="64" r="5" fill="#fff" opacity=".8"/></g>${_eSpk(id,[[40,42,3.2],[82,46,3],[60,104,2.6],[28,72,2.4],[92,70,2.4]])}</g>`;
+}
+function _card(x, y, w, h, rot, fill, oval) { return `<g transform="rotate(${rot} ${x+w/2} ${y+h/2})"><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="5" fill="${fill}" stroke="#fff" stroke-width="2"/><ellipse cx="${x+w/2}" cy="${y+h/2}" rx="${w*0.34}" ry="${h*0.42}" transform="rotate(38 ${x+w/2} ${y+h/2})" fill="${oval||'#fff'}" opacity="${oval?1:.92}"/></g>`; }
+function _wild(cx, cy, r) { return `<g><path d="M${cx} ${cy-r} A ${r} ${r} 0 0 1 ${cx+r} ${cy} L ${cx} ${cy} Z" fill="#e0444a"/><path d="M${cx+r} ${cy} A ${r} ${r} 0 0 1 ${cx} ${cy+r} L ${cx} ${cy} Z" fill="#1fa85a"/><path d="M${cx} ${cy+r} A ${r} ${r} 0 0 1 ${cx-r} ${cy} L ${cx} ${cy} Z" fill="#2b6cff"/><path d="M${cx-r} ${cy} A ${r} ${r} 0 0 1 ${cx} ${cy-r} L ${cx} ${cy} Z" fill="#e8b21e"/></g>`; }
+function _Muno(st, id) {
+  if (st===0) return `<g filter="url(#${id}ds)">${_card(48,46,26,42,-5,'#b03a3a','#e2d9c9')}</g>`;
+  if (st===1) return `<g filter="url(#${id}ds)">${_card(38,50,24,40,-12,'#2b6cff')}${_card(58,48,24,40,10,'#e0444a')}</g>`;
+  if (st===2) return `<g filter="url(#${id}ds)">${_card(34,54,22,38,-20,'#1fa85a')}${_card(50,48,22,40,-2,'#e8b21e')}${_card(66,54,22,38,18,'#2b6cff')}</g>`;
+  if (st===3) return `<g><g filter="url(#${id}ds)"><rect x="44" y="44" width="32" height="48" rx="6" fill="#15151c" stroke="#fff" stroke-width="2.4"/><g transform="translate(0,2)">${_wild(60,68,15)}</g></g>${_eSpk(id,[[42,50,2.6],[80,52,2.4],[60,98,2.2]])}</g>`;
+  return `<g><g opacity=".9">${_card(20,40,18,28,-26,'#e0444a')}${_card(86,42,18,28,24,'#1fa85a')}${_card(26,96,18,28,18,'#2b6cff')}</g><g filter="url(#${id}ds)"><rect x="42" y="40" width="36" height="54" rx="7" fill="#0e0e16" stroke="url(#${id}gold)" stroke-width="3"/><g transform="translate(0,3)">${_wild(60,67,18)}</g><circle cx="60" cy="67" r="18" fill="none" stroke="#fff" stroke-width="1.5" opacity=".5"/></g>${_eSpk(id,[[36,44,3.2],[86,46,3],[60,104,2.6],[24,74,2.4]])}</g>`;
+}
+function _Mrace(st, id) {
+  const flag = (sc) => `<g transform="translate(60,68) scale(${sc})"><line x1="-14" y1="-22" x2="-14" y2="26" stroke="url(#${id}lite)" stroke-width="4" stroke-linecap="round"/><g transform="translate(-12,-20)">${[0,1,2,3,4].map(r=>[0,1,2,3].map(cc=>`<rect x="${cc*7}" y="${r*7}" width="7" height="7" fill="${(r+cc)%2?'#fff':'#1a1a1a'}"/>`).join('')).join('')}<rect width="28" height="35" fill="none" stroke="rgba(0,0,0,.3)"/></g></g>`;
+  if (st<2) return `<g filter="url(#${id}ds)">${flag(.85)}</g>`;
+  if (st<4) return `<g><g filter="url(#${id}ds)">${flag(1)}</g>${st>=3?_eSpk(id,[[40,48,2.6],[82,54,2.4]]):''}</g>`;
+  return `<g><path d="M44 96 L76 96 L72 112 L48 112 Z" fill="url(#${id}gold)" stroke="#7a5510"/><path d="M40 60 Q30 62 36 74 Q42 78 46 72" fill="none" stroke="url(#${id}gold)" stroke-width="3"/><path d="M80 60 Q90 62 84 74 Q78 78 74 72" fill="none" stroke="url(#${id}gold)" stroke-width="3"/><g filter="url(#${id}ds)">${flag(1.05)}</g>${_eSpk(id,[[36,46,3],[86,50,3],[60,104,2.4]])}</g>`;
+}
+function _Mhunt(st, id) {
+  const mag = (sc) => `<g transform="translate(58,64) scale(${sc})"><circle cx="0" cy="0" r="20" fill="#0c0f17" opacity=".5" stroke="url(#${id}p)" stroke-width="4"/><line x1="15" y1="15" x2="34" y2="34" stroke="url(#${id}p)" stroke-width="6" stroke-linecap="round"/></g>`;
+  if (st<3) return `<g filter="url(#${id}ds)">${mag(st<1?.85:1)}<circle cx="58" cy="64" r="9" fill="rgba(255,255,255,.18)"/></g>`;
+  if (st<4) return `<g><g filter="url(#${id}ds)">${mag(1)}<g transform="translate(58,64)"><ellipse cx="0" cy="0" rx="12" ry="8" fill="#fff" opacity=".9"/><circle cx="0" cy="0" r="5" fill="url(#${id}p)"/><circle cx="0" cy="0" r="2.2" fill="#0c0f17"/></g></g>${_eSpk(id,[[40,46,2.6],[80,50,2.4]])}</g>`;
+  return `<g><g filter="url(#${id}ds)">${mag(1.1)}<g transform="translate(58,64)"><ellipse cx="0" cy="0" rx="14" ry="9" fill="#fff"/><circle cx="0" cy="0" r="6" fill="url(#${id}p)"/><circle cx="0" cy="0" r="2.6" fill="#0c0f17"/><path d="M-14 0 Q0 -11 14 0 Q0 11 -14 0 Z" fill="none" stroke="url(#${id}p)" stroke-width="1.5" opacity=".6"/></g></g>${_eSpk(id,[[34,46,3],[86,50,3],[60,104,2.4]])}</g>`;
+}
+function _Mdefault(st, id) { return `<g filter="url(#${id}ds)">${_star(60,66,st>=4?30:st>=2?24:20,`url(#${id}p)`)}<circle cx="60" cy="62" r="${st>=4?7:5}" fill="#fff" opacity=".7"/></g>`; }
+const _MOTIF = { mafia:_Mmafia, splendor:_Msplendor, davinci:_Mdavinci, rummikub:_Mrummikub, uno:_Muno, race:_Mrace, hunt:_Mhunt };
+
 function emblemHTML(game, score, size) {
   const t = tierForScore(score || 0);
-  const c = TIER_EMB[t.key] || TIER_EMB.wood, id = 'e' + (++_embN), orn = c.orn;
-  const glA = orn >= 6 ? .95 : orn >= 4 ? .7 : orn >= 2 ? .45 : .18;
-  const defs = `<defs>
-    <linearGradient id="${id}f" x1="0" y1="0" x2="0" y2="1">${_embStops(c.rim)}</linearGradient>
-    <linearGradient id="${id}b" x1="0" y1="0" x2="0" y2="1">${_embStops(c.body)}</linearGradient>
-    <linearGradient id="${id}a" x1="0" y1="0" x2="0" y2="1">${_embStops(c.body)}</linearGradient>
-    <linearGradient id="${id}w" x1="0" y1="0" x2="0" y2="1">${_embStops(c.rim)}</linearGradient>
-    <linearGradient id="${id}i" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fff"/><stop offset="100%" stop-color="#cfd8e6"/></linearGradient>
-    <linearGradient id="${id}c" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ffe98a"/><stop offset="100%" stop-color="#d79a18"/></linearGradient>
-    <radialGradient id="${id}g">${_embStops(c.body.length > 2 ? [c.body[0], c.body[2]] : c.body)}</radialGradient>
-    <linearGradient id="${id}r" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${c.body[0]}" stop-opacity=".95"/><stop offset="100%" stop-color="${c.glow}" stop-opacity=".15"/></linearGradient>
-    <radialGradient id="${id}gl" cx="50%" cy="44%" r="62%"><stop offset="0%" stop-color="${c.glow}" stop-opacity="${glA}"/><stop offset="100%" stop-color="${c.glow}" stop-opacity="0"/></radialGradient>
-    <filter id="${id}s" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="2" stdDeviation="2.2" flood-color="rgba(0,0,0,.5)"/></filter></defs>`;
-  return `<span class="emb emb--${size || 'sm'} emb--${t.key}" title="${t.fullName}"><svg viewBox="0 0 120 150" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${defs}
-    ${orn >= 2 ? `<ellipse class="egl" cx="60" cy="68" rx="70" ry="74" fill="url(#${id}gl)"/>` : ''}
-    ${_embRays(id, orn)}${_embWings(id, orn)}
-    <g filter="url(#${id}s)"><path d="${_EMB_SHIELD}" fill="url(#${id}f)"/>
-      <path d="${_EMB_SHIELD}" fill="url(#${id}b)" transform="translate(0,0) scale(.93)" transform-origin="60 75"/>
-      <path d="M60 16 L100 30 V50 Q60 38 20 50 V30 Z" fill="#fff" opacity="${orn >= 1 ? .22 : .12}"/>
-      <path d="${_EMB_SHIELD_IN}" fill="#0a0e16" opacity=".28"/>${_embIcon(game, id)}</g>
-    ${_embGems(id, orn)}${_embCrown(id, orn)}</svg></span>`;
+  const c = _EMB[t.key] || _EMB.wood, st = c.st, pal = c.pal, glow = c.glow;
+  const id = 'e' + (++_embN) + '_';
+  const fw = st >= 4 ? 5 : st >= 2 ? 3.5 : 2.5;
+  const motif = (_MOTIF[game] || _Mdefault)(st, id);
+  let bg = `<rect width="120" height="150" fill="url(#${id}bg)" clip-path="url(#${id}sc)"/>`
+    + `<g clip-path="url(#${id}sc)">${_eRays(id, 28, 18, st>=4?96:st>=3?80:64, st>=4?.6:st>=3?.4:st>=2?.22:.1)}</g>`
+    + `<ellipse class="egl" cx="60" cy="66" rx="60" ry="66" fill="url(#${id}gl)" clip-path="url(#${id}sc)"/>`;
+  let shell = `<path d="${_SHELL}" fill="url(#${id}p)"/><path d="${_SHELL}" fill="#0a0e16" opacity=".5"/>`
+    + `<path d="${_SHELL}" fill="none" stroke="url(#${id}p)" stroke-width="${fw}"/>`
+    + `<path d="${_SHELL}" fill="none" stroke="#fff" stroke-opacity=".16" stroke-width="1" transform="scale(.965)" transform-origin="60 75"/>`
+    + `<path d="M60 10 L102 26 V46 Q60 34 18 46 V26 Z" fill="#fff" opacity="${st>=1?.16:.08}" clip-path="url(#${id}sc)"/>`;
+  let inner = `<g clip-path="url(#${id}sc)"><ellipse cx="60" cy="64" rx="34" ry="40" fill="${glow}" opacity="${st>=4?.22:st>=3?.16:.1}"/>${st>=2?`<circle cx="60" cy="68" r="40" fill="none" stroke="#fff" stroke-opacity=".06" stroke-width="6"/>`:''}</g>`;
+  const big = `<g transform="translate(60 71) scale(1.08) translate(-60 -71)">${motif}</g>`;
+  const extra = st >= 4 ? `<g clip-path="url(#${id}sc)">${_eSpk(id, [[26,40,3],[96,44,3],[30,100,2.6],[92,98,2.6],[60,24,2.4]])}</g>` : '';
+  return `<span class="emb emb--${size || 'sm'} emb--${t.key}" title="${t.fullName}"><svg viewBox="0 0 120 150" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">`
+    + `${_eDefs(id, pal, glow, st)}${bg}${_eWings(id, st)}${shell}${inner}${_eFil(id, st)}${big}${extra}${_eCrown(id, st)}${_eBanner(id, st)}</svg></span>`;
 }
 
 /* ----------------------------- 점수 증감 테이블(티어 화면) ----------------------------- */
