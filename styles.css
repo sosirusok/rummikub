@@ -463,7 +463,7 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .dv-drawn .dvt{vertical-align:middle;}
 
 /* ===== 티어 엠블럼(SVG 크레스트 · 티어별 화려도 escalation) ===== */
-.emb{display:inline-block; width:var(--w,32px); height:calc(var(--w,32px) * 1.16); line-height:0; flex:none; vertical-align:middle;}
+.emb{display:inline-block; width:var(--w,32px); height:calc(var(--w,32px) * 1.03); line-height:0; flex:none; vertical-align:middle;}
 .emb svg{width:100%; height:100%; display:block; overflow:visible;}
 .emb--xs{--w:22px;} .emb--sm{--w:32px;} .emb--md{--w:58px;} .emb--lg{--w:96px;}
 .deco-emb{vertical-align:middle; margin-right:3px;}
