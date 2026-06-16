@@ -2668,3 +2668,23 @@ begin
   delete from public.mafia_secrets where room_id = p_room;
   return v_results;
 end; $$;
+
+-- =====================================================================
+-- v8: 보안 잠금 내장 (멱등) — ⚠ 파일 맨 끝. 단일 supabase_setup.sql RUN = 항상 잠긴 최종상태.
+--   위쪽(115~120행)의 permissive 정책과 구 무인증 rk_admin_reset_rooms(int[])/grant 가 무엇이든
+--   여기서 읽기전용 정책 + 직접쓰기 revoke + 구 함수 drop 으로 덮어, 재실행/재설치 시 보안 회귀를 막음.
+--   (supabase_lock_rls.sql 와 동일 내용. 신규 클라가 배포된 상태에서만 RUN — 현재 운영 DB는 이미 적용됨)
+-- =====================================================================
+drop policy if exists rooms_all     on public.rooms;
+drop policy if exists members_all   on public.room_members;
+drop policy if exists presence_all  on public.room_presence;
+drop policy if exists rooms_read    on public.rooms;
+drop policy if exists members_read  on public.room_members;
+drop policy if exists presence_read on public.room_presence;
+create policy rooms_read    on public.rooms        for select using (true);
+create policy members_read  on public.room_members for select using (true);
+create policy presence_read on public.room_presence for select using (true);
+revoke insert, update, delete on public.rooms         from anon, authenticated;
+revoke insert, update, delete on public.room_members  from anon, authenticated;
+revoke insert, update, delete on public.room_presence from anon, authenticated;
+drop function if exists public.rk_admin_reset_rooms(int[]);

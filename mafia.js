@@ -165,6 +165,7 @@ async function mfMaybeFinish() {
     if (room && room.status === 'finished') { await refreshRoom(); return; }
     await new Promise(res => setTimeout(res, 600));
   }
+  MF.finishing = false;   // 5회 실패 → 다음 트리거에서 재시도 허용(davinci/uno/splendor 와 일관)
   await refreshRoom();
 }
 

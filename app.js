@@ -141,6 +141,12 @@ async function doAuth() {
   goHome();
 }
 function doLogout() { localStorage.removeItem('rk_token'); TOKEN = null; ME = null; DEV_UNLOCKED = false; DEV_SEL.clear(); cleanupAll(); showLogin(); }
+// 주기적 apiMe 갱신 처리: 객체=정상 / null=토큰무효(타 기기 로그인)→로그아웃 / undefined=일시오류→유지
+function handleMeRefresh(p) {
+  if (p) { ME = p; TOKEN = p.token; return true; }
+  if (p === null && TOKEN) { toast('다른 기기에서 로그인되어 로그아웃됐어요'); doLogout(); }
+  return false;
+}
 
 /* ============================ 홈 ====================================== */
 function headerHTML() {
@@ -175,7 +181,7 @@ function goHome() {
       </div>
       <p class="muted center" style="padding:10px 14px">로그인 후 게임을 고르세요. 티어·전적·꾸미기는 게임별로 따로 쌓여요.</p>
     </section>`;
-  apiMe(TOKEN).then(p => { if (p) { ME = p; TOKEN = p.token; if (SCREEN === 'home') { const h = document.querySelector('.screen--home .lobby__hello'); if (h) h.outerHTML = headerHTML(); } } });
+  apiMe(TOKEN).then(p => { if (handleMeRefresh(p) && SCREEN === 'home') { const h = document.querySelector('.screen--home .lobby__hello'); if (h) h.outerHTML = headerHTML(); } });
   // 직전 방이 아직 진행/대기 중이고 내가 멤버면 '이어서 입장' 칩 표시
   const lr = Number(localStorage.getItem('rk_last_room'));
   if (lr) fetchRoom(lr).then(async r => {
@@ -204,7 +210,7 @@ async function goLobby(mode) {
   MODE = mode; _lobbySig = null; cleanupRoom(); ROOM_ID = null; setScreen('lobby');
   if (!lobbyCh) lobbyCh = subscribeLobby(() => scheduleLobbyRefresh());
   await refreshLobby();
-  apiMe(TOKEN).then(p => { if (p) { ME = p; TOKEN = p.token; } });
+  apiMe(TOKEN).then(handleMeRefresh);
 }
 let _reapAt = 0, _lobbySig = null;
 async function refreshLobby() {
@@ -302,11 +308,11 @@ async function refreshRoom() {
 
   if (ROOM.status === 'waiting') {
     stopTimer(); miniStop(); davinciStop(); mafiaStop(); splendorStop(); unoStop(); disarmResultLeave();
+    await refreshLbCache();   // 게이트 앞에서 먼저 갱신 — 좌석행이 쓰는 lbCache 를 최신화
     const sig = JSON.stringify({ g: ROOM.game, h: ROOM.host_id, ts: ROOM.turn_seconds, tab: WAIT_TAB,
-      m: MEMBERS.map(m => [m.user_id, m.seat, m.role, m.score, m.streak, m.wins, m.losses, m.display_game, m.display_score]).sort() });
+      m: MEMBERS.map(m => { const s = statsOf(m.user_id); return [m.user_id, m.seat, m.role, s.score ?? m.score ?? 0, s.streak ?? m.streak ?? 0, s.wins ?? m.wins ?? 0, s.losses ?? m.losses ?? 0, m.display_game, m.display_score]; }).sort() });
     if (sig === lastRoomSig && SCREEN === 'room') return;   // 대기실 내용 동일 → 재렌더 생략(렉↓)
     lastRoomSig = sig;
-    await refreshLbCache();
     renderWaiting();
   } else if (ROOM.status === 'playing') {
     if (ROOM.game === 'rummikub') enterGameView();
@@ -379,7 +385,7 @@ function waitBody(tab, amHost, g, cap) {
     const m = seatMap[n];
     if (m) {
       const st = statsOf(m.user_id);
-      const sc = st.score ?? 0, wn = st.wins ?? 0, ls = st.losses ?? 0, sk = st.streak ?? 0;   // 교차게임 스냅샷 폴백 제거
+      const sc = st.score ?? m.score ?? 0, wn = st.wins ?? m.wins ?? 0, ls = st.losses ?? m.losses ?? 0, sk = st.streak ?? m.streak ?? 0;   // lbCache 우선 + 현재게임 멤버 스냅샷 폴백(100위 밖/미플레이 0점·아이언 방지)
       const isMe = m.user_id === ME.id;
       const decoGame = m.display_game;                 // 꾸미기에서 고른 대표 게임
       const decoScore = m.display_score || 0;
@@ -1038,7 +1044,7 @@ function renderResult() {
     </section>`;
   if (anyWin) { const w = document.createElement('div'); w.className = 'win-burst'; w.textContent = '🎉'; document.body.appendChild(w); setTimeout(() => w.remove(), 1500); }
   armResultLeave();
-  apiMe(TOKEN).then(p => { if (p) { ME = p; TOKEN = p.token; } });
+  apiMe(TOKEN).then(handleMeRefresh);
 }
 
 /* 게임 종료 → 결과 잠깐 보여준 뒤 전원 자동으로 방에서 나가 홈으로(잔상/폐쇄 방지) */
@@ -1086,7 +1092,7 @@ function showTiers() {
   app().innerHTML = `
     <section class="screen">
       <header class="room__top"><button class="btn btn--ghost" data-act="backHome">← 홈</button><b style="margin-left:6px">🏅 티어</b><span class="spacer"></span></header>
-      <div class="grow scrollable">${tierLadderHTML(ME.display && ME.display.game ? ME.display.game : null)}</div>
+      <div class="grow scrollable">${tierLadderHTML(ME.display && ME.display.game ? ME.display.game : 'rummikub')}</div>
     </section>`;
 }
 function showDeco() {

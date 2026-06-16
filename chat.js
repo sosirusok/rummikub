@@ -11,7 +11,7 @@ function chatInjectStyles() {
   if (document.getElementById('chatCSS')) return;
   const s = document.createElement('style'); s.id = 'chatCSS';
   s.textContent = `
-  #chatRoot{position:fixed;right:12px;bottom:12px;z-index:1200}
+  #chatRoot{position:fixed;right:12px;bottom:calc(58px + env(safe-area-inset-bottom));z-index:1200}  /* 게임 하단 액션버튼(뽑기/푸터) 위로 올림 */
   .chat-fab{position:relative;width:54px;height:54px;border-radius:50%;border:none;background:#2b6cff;color:#fff;font-size:24px;box-shadow:0 4px 14px rgba(0,0,0,.45);cursor:grab;touch-action:none;display:flex;align-items:center;justify-content:center;user-select:none}
   .chat-fab.is-open{background:#3a4660}
   .chat-fab__b{position:absolute;top:-3px;right:-3px;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:#e0444a;color:#fff;font-size:11px;line-height:18px;font-weight:800;box-sizing:border-box}

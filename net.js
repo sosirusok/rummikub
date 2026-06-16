@@ -55,8 +55,8 @@ async function apiLogin(username, password) {
 async function apiMe(token) {
   if (!token) return null;
   const { data, error } = await sb.rpc('rk_me', { p_token: token });
-  if (error) return null;
-  return data;   // {id,username,real_name,display_game,games:{rummikub,race,hunt},display:{game,score},token}
+  if (error) return undefined;   // 네트워크/일시 오류 → 로그인 유지(undefined)
+  return data;                   // null = 토큰 무효(타 기기 로그인) / obj = 정상
 }
 async function apiLeaderboard(game) {
   const { data } = await sb.rpc('rk_leaderboard', { p_game: game || 'rummikub' });

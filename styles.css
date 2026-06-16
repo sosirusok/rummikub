@@ -210,6 +210,7 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .seat__cur-line{font-size:14px; font-weight:800; color:var(--tc,#fff); text-shadow:0 0 5px var(--tc); white-space:nowrap; font-variant-numeric:tabular-nums;}
 .seat__cur-emb .emb{--w:68px;}     /* 우측 현재티어 엠블럼 확대(꽉차게) */
 .seat__rep-emb .emb{--w:60px;}     /* 좌측 대표 엠블럼 확대 */
+.seat__cur-emb .emb,.seat__rep-emb .emb{max-height:50px;}   /* 행높이 균일화 — 고티어(챌린저 등) 엠블럼이 좌석행 부풀리는 것 방지 */
 .tier-list{list-style:none; margin:0; padding:10px; display:grid; gap:6px;}
 .tier-row{display:grid; grid-template-columns:72px 1fr auto; gap:10px; align-items:center;
   padding:8px 12px; border-radius:10px; background:var(--panel2); border-left:6px solid var(--tc);}
