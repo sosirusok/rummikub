@@ -56,7 +56,7 @@ function mfUpdateVotes() {
   const s = MF.state; if (!s) return;
   const myVote = (s.votes && MF.mySeat != null) ? s.votes[MF.mySeat] : undefined;
   document.querySelectorAll('.mf-player').forEach(el => {
-    const seat = Number(el.dataset.seat); if (!seat) return;
+    const seat = Number(el.dataset.seat); if (isNaN(seat)) return;   // 좌석0(falsy)도 처리
     const vc = (s.voteCount && s.voteCount[seat]) || 0;
     let badge = el.querySelector('.mf-player__votes');
     if (mfAlive(s, seat) && vc) {
@@ -114,9 +114,11 @@ async function mfRefreshView() {
   if (s.phase === 'end' || s.results) { mfRender(); mfMaybeFinish(); return; }
   if (MF.amSpectator) { MF.view = { role: null }; mfRender(); return; }
   const key = (s.phase || '') + '|' + (s.day || 0);
-  if (key !== MF.viewKey || !MF.view) {
+  const keyChanged = key !== MF.viewKey;
+  if (keyChanged || !MF.view) {
     try { MF.view = await mfMyView(MF.roomId, MF.me); MF.viewKey = key; } catch (e) { MF.view = MF.view || { role: null }; }
   }
+  if (keyChanged && MF.view) { MF.view.acted = false; }   // 페이즈/일차 전환 시 stale '이미 행동' 제거
   mfRender();
 }
 
@@ -234,7 +236,7 @@ function mfRender() {
     const sel = (isDay && Number(myVote) === seat) ? 'is-myvote' : '';
     return `<button class="mf-player ${alive ? '' : 'is-dead'} ${isMe ? 'is-me' : ''} ${target ? 'is-target' : ''} ${sel}" data-seat="${seat}" ${act}>
       <span class="mf-player__seat">${seat}</span>
-      <span class="mf-player__name">${decoEmblemHTML((s.players || {})[seat])}${esc(mafiaName(s, seat))}${isMe ? ' (나)' : ''}</span>
+      <span class="mf-player__name">${decoEmblemHTML((s.players || {})[seat]) || emblemHTML('mafia', 0, 'xs')}${esc(mafiaName(s, seat))}${isMe ? ' (나)' : ''}</span>
       ${alive ? (isDay && vc ? `<span class="mf-player__votes">🗳 ${vc}</span>` : '') : '<span class="mf-player__dead">💀</span>'}
     </button>`;
   }).join('');

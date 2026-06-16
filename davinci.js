@@ -512,7 +512,7 @@ function dvEndTurn(s) {
 
 /* ----------------------------- 중퇴 처리 ----------------------------- */
 async function dvSkipDeparted() {
-  const s = DV.state; if (!s || s.ranks || s.phase === 'setup' || DV.amSpectator) return;
+  const s = DV.state; if (!s || s.ranks || DV.amSpectator) return;   // setup 중 이탈도 탈락 처리(타이밍 엣지케이스)
   const members = (typeof MEMBERS !== 'undefined') ? MEMBERS : [];
   const pres = (typeof presentIds !== 'undefined') ? presentIds : null;
   // 살아있음 = 멤버행 존재 AND (접속정보 모르면 통과 / 알면 접속중). 탭 닫힌 턴홀더(행 남아도 presence 빠짐)도 중퇴 처리.

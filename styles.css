@@ -758,3 +758,56 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
   .topbar{padding:4px 10px;} .dock{padding:6px 12px;}
   .rack{max-height:30vh;}
 }
+
+/* ===================== [재적용] 인게임 패널·랭킹·결과 엠블럼 저티어 가시(압축) — 종횡비 고정으로 높이 역전 방지 ===================== */
+/* 사다리/히어로/점수표(.sc-tier)는 제외(실측 비율·셀 안정성 유지). 패널은 여유 있어 저티어를 키워 보이게. */
+:is(.seat__emb,.lobby__hello,.score-tier,.uno-omini,.dv-oppo,.mf-player,.sp-omini,.rr,.deco-opt,.deco-preview) .emb{--th:.95;}
+:is(.seat__emb,.lobby__hello,.score-tier,.uno-omini,.dv-oppo,.mf-player,.sp-omini,.rr,.deco-opt,.deco-preview) :is(.emb--wood,.emb--iron){--tw:.72;}
+:is(.seat__emb,.lobby__hello,.score-tier,.uno-omini,.dv-oppo,.mf-player,.sp-omini,.rr,.deco-opt,.deco-preview) :is(.emb--bronze,.emb--silver){--tw:.78;}
+:is(.seat__emb,.lobby__hello,.score-tier,.uno-omini,.dv-oppo,.mf-player,.sp-omini,.rr,.deco-opt,.deco-preview) :is(.emb--gold,.emb--platinum){--tw:.84;}
+:is(.seat__emb,.lobby__hello,.score-tier,.uno-omini,.dv-oppo,.mf-player,.sp-omini,.rr,.deco-opt,.deco-preview) :is(.emb--diamond,.emb--emerald){--tw:.90;}
+:is(.seat__emb,.lobby__hello,.score-tier,.uno-omini,.dv-oppo,.mf-player,.sp-omini,.rr,.deco-opt,.deco-preview) :is(.emb--master,.emb--grandmaster){--tw:.95;}
+:is(.seat__emb,.lobby__hello,.score-tier,.uno-omini,.dv-oppo,.mf-player,.sp-omini,.rr,.deco-opt,.deco-preview) .emb--challenger{--tw:1;}
+
+/* ===================== 초소형 폴더폰(≤300px / ≤430px) 초압축 — 테이블 최대 노출 + 안내 최소화 ===================== */
+@media (max-width:300px), (max-height:430px){
+  :root{ --tile-w:clamp(17px,7.6vw,24px); --hit:38px; }
+  .topbar{ padding:2px 5px; gap:3px; } .topbar .timer{ width:28px; height:28px; }
+  .turn-pill{ padding:2px 6px; font-size:11px; } .room-tag{ font-size:10px; }
+  /* 안내/단계/노트문 1줄 초소형(쓸모없는 안내 줄이기) */
+  .uno-step,.dv-step,.sp-step,.uno-note,.mf-note,.dv-note,.dv-pickhint,.dv-mine__label{
+    font-size:10px !important; line-height:1.15 !important; padding:1px 4px !important; margin:0 !important;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-height:1.4em; }
+  .meld-hint{ padding:1px 6px; font-size:10px; } .meld-hint__label{ display:none; }
+  /* 로그 최소 */
+  .dv-log,.uno-log,.sp-log,.mf-log{ max-height:9vh !important; font-size:9.5px !important; padding:1px 6px !important; line-height:1.25 !important; }
+  /* 상대 패널 1열 압축 */
+  .uno-omini,.sp-omini{ flex:1 1 100% !important; min-width:0 !important; padding:2px 5px; font-size:10px; }
+  .uno-omini__hd{ gap:2px; } .uno-omini__hd span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .uno-back{ width:8px; height:12px; } .uno-catch{ display:none; }   /* 수동 잡기 숨김 → 자동잡기 동치 */
+  /* 카드/타일 축소 → 보드·손패 더 보임 */
+  .uno-cf--lg{ width:46px; height:66px; font-size:24px; } .uno-hand{ max-height:20vh; gap:3px; }
+  .dv-num-grid{ grid-template-columns:repeat(4,1fr); gap:4px; }   /* 추리버튼 6→4열(가로 넘침 해결) */
+  .dv-num,.dv-num--joker{ min-height:36px; font-size:14px; padding:6px 0; }
+  .dvt{ width:26px; height:36px; font-size:14px; } .dv-hand--mine .dvt{ width:28px; height:38px; font-size:15px; }
+  .dv-gap{ min-width:30px; min-height:40px; border-radius:5px; font-size:14px; } .dv-gap--no{ width:2px; }
+  .sp-card{ min-height:48px; padding:2px; } .sp-tok{ width:30px; height:30px; font-size:12px; } .sp-me{ max-height:22vh; }
+  .sp-nobles,.sp-bank{ gap:3px; }
+  /* 테이블/보드가 회수한 세로 흡수(재보장) */
+  .board,.dv-oppos,.sp-board,.mf-grid,.screen--uno .uno-center{ flex:1 1 auto !important; min-height:0 !important; }
+  .rack{ max-height:18vh !important; min-height:0 !important; }
+  /* 루미 상대 스트립 가로 회수 → 보드 확대 */
+  .oppo-strip{ max-width:32%; gap:3px; } .oppo{ min-width:26px; padding:1px 2px; }
+  /* 액션 버튼 컴팩트(터치 38px 유지) */
+  .action-bar .btn,.dv-actbar .btn,.btn--lg{ min-height:38px; font-size:12px; padding:0 8px; }
+  .dock{ padding:3px 5px; gap:3px; }
+  /* 마피아 플레이어/역할카드 컴팩트 */
+  .mf-player{ min-height:40px; padding:6px 8px; font-size:11px; }
+  .mf-rolecard{ margin:2px 6px 0; padding:3px 8px; } .mf-rolecard__role{ font-size:12px; } .mf-rolecard__desc{ font-size:10px; }
+  /* 결과/랭킹 표 셀 패딩 압축(폰트 10px 가독 유지) */
+  .sc-wrap{ padding:3px 5px 8px; } .sc-table{ font-size:10px; } .sc-table th,.sc-table td{ padding:2px 3px; } .sc-tier{ white-space:nowrap; }
+  /* 미니게임 가상패드/HUD 축소 */
+  .vctl--pad{ width:clamp(64px,22vw,84px); height:clamp(64px,22vw,84px); opacity:.82; }
+  .vctl--act{ width:clamp(48px,15vw,64px); height:clamp(48px,15vw,64px); font-size:12px; opacity:.88; }
+  .mini-hud{ font-size:9.5px; padding:max(3px,env(safe-area-inset-top)) 5px 3px; }
+}
