@@ -598,7 +598,7 @@ function unoInjectStyles(){
   .uno-uno{font-size:10px;font-weight:800;padding:0 5px;border-radius:8px}
   .uno-uno.said{background:#2faa55;color:#fff}
   .uno-uno.miss{background:#d8443f;color:#fff}
-  .uno-catch{font-size:11px;padding:2px 8px;margin-left:4px}
+  .uno-catch{font-size:12px;padding:3px 10px;margin-left:4px}   /* 1장 본인이 보는 'UNO 선언'(uno-sayuno)과 동일 크기 — 작아서 탭 빗나가던 문제 해결 */
   .uno-log{margin:4px 0;width:100%}
   .uno-me{background:#10141d;border-top:1px solid #2a3550;padding:6px;font-size:12px}
   .uno-me__row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
