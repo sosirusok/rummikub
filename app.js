@@ -389,7 +389,7 @@ function waitBody(tab, amHost, g, cap) {
       seats.push(`<li class="seat is-occupied ${isMe ? 'is-me' : ''}" data-seat="${n}">
         <span class="seat__no">${n}</span>
         <div class="seat__main">
-          <div class="seat__name" ${decoTier ? `style="--tc:${decoTier.color}"` : ''}>${nameHTML(m.name, decoGame ? decoScore : null)}${isMe ? ' <small>(나)</small>' : ''}${ROOM.host_id === m.user_id ? ' <span class="seat__badge">방장</span>' : ''}</div>
+          <div class="seat__name" style="--tc:${curTier.color}">${nameHTML(m.name, sc)}${isMe ? ' <small>(나)</small>' : ''}${ROOM.host_id === m.user_id ? ' <span class="seat__badge">방장</span>' : ''}</div>
           ${decoGame
             ? `<div class="seat__rep" style="--tc:${decoTier.color}"><span class="seat__rep-txt">대표 게임: ${GAME_NAME[decoGame]} ${decoTier.fullName} ${decoScore}</span><span class="seat__rep-emb">${emblemHTML(decoGame, decoScore, 'eq')}</span></div>`
             : `<div class="seat__rep seat__rep--none">대표 게임 미설정</div>`}
