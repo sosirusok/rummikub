@@ -419,7 +419,15 @@ async function spSkipDeparted(){
 async function spMaybeFinish(){
   const s=SP.state; if(!s || SP.amSpectator || !s.ranks) return;
   if(SP._finishSent) return; SP._finishSent=true;          // 정산 RPC 중복 호출 방지(렉↓)
-  try{ await finishGame(SP.roomId, SP.me.token, 'splendor'); }catch(e){}
+  for(let i=0;i<5;i++){                                     // 마피아식 5회 재시도('집계 중' 영구정지 방지)
+    const r=await finishGame(SP.roomId, SP.me.token, 'splendor');
+    if(r && r.ok){ await refreshRoom(); return; }
+    const room=await fetchRoom(SP.roomId);
+    if(room && room.status==='finished'){ await refreshRoom(); return; }
+    await new Promise(res=>setTimeout(res,600));
+  }
+  SP._finishSent=false;   // 실패 → 다음 트리거에서 재시도 허용
+  await refreshRoom();
 }
 
 window.splendorInitialState=splendorInitialState;

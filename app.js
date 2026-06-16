@@ -542,7 +542,8 @@ async function doStart() {
       }
     }
     const r = await startGame(ROOM_ID, st);
-    if (game === 'mafia' && r.ok) await mafiaStartRoles(ROOM_ID, ME);   // 서버가 역할 비밀 배정 → 밤 시작
+    if (!r.ok) { toast('시작 실패 — 잠시 후 다시 시도해 주세요'); return; }
+    if (game === 'mafia') await mafiaStartRoles(ROOM_ID, ME);   // 서버가 역할 비밀 배정 → 밤 시작
   });
 }
 
@@ -1000,7 +1001,7 @@ function streakChangeHTML(prev, now) {
 function renderResult() {
   G = ROOM.state;
   const results = (G && G.results) || {};
-  const game = G.game || ROOM.game || 'rummikub';
+  const game = (G && G.game) || ROOM.game || 'rummikub';
   const rows = Object.keys(results).map(seat => ({ seat: Number(seat), ...results[seat] }));
   rows.sort((a, b) => (a.rank != null ? a.rank : (a.won ? 0 : 1)) - (b.rank != null ? b.rank : (b.won ? 0 : 1)) || (b.delta - a.delta) || (a.seat - b.seat));
   const amHost = ROOM.host_id === ME.id;

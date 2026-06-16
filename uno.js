@@ -557,7 +557,15 @@ async function unoSkipDeparted(){
 async function unoMaybeFinish(){
   const s=UN.state; if(!s || UN.amSpectator || !s.ranks) return;
   if(UN._finishSent) return; UN._finishSent=true;
-  try{ await finishGame(UN.roomId, UN.me.token, 'uno'); }catch(e){ UN._finishSent=false; }   // 실패 시 다음 호출에서 재시도
+  for(let i=0;i<5;i++){                                     // 마피아식 5회 재시도('집계 중' 영구정지 방지)
+    const r=await finishGame(UN.roomId, UN.me.token, 'uno');
+    if(r && r.ok){ await refreshRoom(); return; }
+    const room=await fetchRoom(UN.roomId);
+    if(room && room.status==='finished'){ await refreshRoom(); return; }
+    await new Promise(res=>setTimeout(res,600));
+  }
+  UN._finishSent=false;   // 실패 → 다음 트리거에서 재시도 허용
+  await refreshRoom();
 }
 
 window.unoInitialState=unoInitialState;

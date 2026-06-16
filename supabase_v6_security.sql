@@ -208,9 +208,7 @@ begin
   v_n := coalesce(array_length(v_seats,1),0);
   if v_n not between 2 and 4 then raise exception 'BAD_N'; end if;
   perform 1 from unnest(v_seats) s where (v_ranks->>s) is null;
-  if found then raise exception 'BAD_RANKS'; end if;
-  if (select count(*) from unnest(v_seats) s where (v_ranks->>s)::int = 1) <> 1 then raise exception 'BAD_RANKS'; end if;  -- 승자 정확히 1명
-  for i in 1 .. v_n loop
+  if found then raise exception 'BAD_RANKS'; end if;  for i in 1 .. v_n loop
     v_seat := v_seats[i]; v_rank := (v_ranks->>v_seat)::int;
     if v_rank < 1 or v_rank > v_n then raise exception 'BAD_RANK_VAL'; end if;
     v_uid := (v_players->>v_seat)::uuid;
@@ -257,9 +255,7 @@ begin
   v_n := coalesce(array_length(v_seats,1),0);
   if v_n not between 2 and 4 then raise exception 'BAD_N'; end if;
   perform 1 from unnest(v_seats) s where (v_ranks->>s) is null;
-  if found then raise exception 'BAD_RANKS'; end if;
-  if (select count(*) from unnest(v_seats) s where (v_ranks->>s)::int = 1) <> 1 then raise exception 'BAD_RANKS'; end if;  -- 승자 정확히 1명
-  for i in 1 .. v_n loop
+  if found then raise exception 'BAD_RANKS'; end if;  for i in 1 .. v_n loop
     v_seat := v_seats[i]; v_rank := (v_ranks->>v_seat)::int;
     if v_rank < 1 or v_rank > v_n then raise exception 'BAD_RANK_VAL'; end if;
     v_uid := (v_players->>v_seat)::uuid;
@@ -306,9 +302,7 @@ begin
   v_n := coalesce(array_length(v_seats,1),0);
   if v_n not between 2 and 4 then raise exception 'BAD_N'; end if;
   perform 1 from unnest(v_seats) s where (v_ranks->>s) is null;
-  if found then raise exception 'BAD_RANKS'; end if;
-  if (select count(*) from unnest(v_seats) s where (v_ranks->>s)::int = 1) <> 1 then raise exception 'BAD_RANKS'; end if;  -- 승자 정확히 1명
-  for i in 1 .. v_n loop
+  if found then raise exception 'BAD_RANKS'; end if;  for i in 1 .. v_n loop
     v_seat := v_seats[i]; v_rank := (v_ranks->>v_seat)::int;
     if v_rank < 1 or v_rank > v_n then raise exception 'BAD_RANK_VAL'; end if;
     v_uid := (v_players->>v_seat)::uuid;

@@ -535,9 +535,22 @@ async function dvSkipDeparted() {
 }
 
 /* ----------------------------- 종료/정산 ----------------------------- */
+// 정산: 마피아식 5회 재시도(finishGame 은 실패 시 throw 가 아니라 {ok:false} 반환 → '집계 중' 영구정지 방지)
+async function dvFinishNow() {
+  if (DV.finishedSent) return; DV.finishedSent = true;
+  for (let i = 0; i < 5; i++) {
+    const r = await finishGame(DV.roomId, DV.me.token, 'davinci');
+    if (r && r.ok) { await refreshRoom(); return; }
+    const room = await fetchRoom(DV.roomId);
+    if (room && room.status === 'finished') { await refreshRoom(); return; }
+    await new Promise(res => setTimeout(res, 600));
+  }
+  DV.finishedSent = false;   // 5회 실패 → 다음 트리거에서 재시도 허용
+  await refreshRoom();
+}
 async function dvMaybeFinish() {
   const s = DV.state; if (!s || s.phase === 'setup' || DV.amSpectator) return;
-  if (s.ranks) { if (DV.finishedSent) return; DV.finishedSent = true; try { await finishGame(DV.roomId, DV.me.token, 'davinci'); } catch (e) {} return; }
+  if (s.ranks) { await dvFinishNow(); return; }
   const alive = dvAliveSeats(s);
   if (alive.length > 1) return;
   const seats = dvSeats(s);
@@ -557,7 +570,7 @@ async function dvMaybeFinish() {
     base.ranks = ranks; dvLog(base, `🏁 게임 종료`);
     return base;
   });
-  try { await finishGame(DV.roomId, DV.me.token, 'davinci'); } catch (e) {}
+  await dvFinishNow();
 }
 
 /* ----------------------------- 전역 노출 ----------------------------- */
