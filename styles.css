@@ -759,6 +759,18 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
   .rack{max-height:30vh;}
 }
 
+/* ---------- 노트북/데스크톱 홈 확대 (넓고 세로 여유 있는 화면) — 폴더폰/좁은 화면은 그대로 ---------- */
+@media (min-width:900px) and (min-height:560px){
+  .home-cards{gap:22px; padding:36px; max-width:1040px; align-content:center;}
+  .home-card{flex:1 1 300px; max-width:360px; min-height:240px; max-height:320px;
+    padding:34px 26px; gap:12px; border-radius:22px;}
+  .home-card__emoji{font-size:66px;}
+  .home-card__title{font-size:30px;}
+  .home-card__sub{font-size:15px; line-height:1.45;}
+  .lobby__top{padding:16px 24px;}
+  .lobby__hello{font-size:19px;}
+}
+
 /* ===================== [재적용] 인게임 패널·랭킹·결과 엠블럼 저티어 가시(압축) — 종횡비 고정으로 높이 역전 방지 ===================== */
 /* 사다리/히어로/점수표(.sc-tier)는 제외(실측 비율·셀 안정성 유지). 패널은 여유 있어 저티어를 키워 보이게. */
 :is(.seat__emb,.lobby__hello,.score-tier,.uno-omini,.dv-oppo,.mf-player,.sp-omini,.rr,.deco-opt,.deco-preview) .emb{--th:.95;}
