@@ -332,15 +332,9 @@ async function onPresence(state) {
   const earliest = MEMBERS.slice().sort((a, b) => new Date(a.joined_at) - new Date(b.joined_at));
   const janitor = earliest.find(m => presentIds.includes(m.user_id));
   if (!janitor || janitor.user_id !== ME.id) return;
-  const nowMs = Date.now();
-  // 갓 입장한 멤버는 presence track 도착 전이라 즉시 정리 보류(8초 유예). 진짜 유령은 서버 rk_reap_stale 가 정리.
-  const absent = MEMBERS.filter(m => !presentIds.includes(m.user_id) && nowMs - new Date(m.joined_at).getTime() > 8000);
-  for (const m of absent) await deleteMember(ROOM_ID, m.user_id);
-  if (ROOM.host_id && !presentIds.includes(ROOM.host_id)) {
-    const next = earliest.find(m => presentIds.includes(m.user_id));
-    if (next) await promoteHost(ROOM_ID, ROOM.host_id, next.user_id);
-  }
-  if (absent.length) refreshRoom();
+  // 유령 멤버/방장 공석 정리는 서버 권위(rk_reap_stale, 하트비트 기반)에 위임 — 클라 임의 삭제 제거(보안)
+  const reaped = await reapStale(ROOM_ID, 12);
+  if (reaped) refreshRoom();
 }
 // 타임아웃 대리자: 접속 중 최저좌석(현재 차례 제외) 1명
 function timeoutActorId() {

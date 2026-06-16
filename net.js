@@ -9,6 +9,8 @@
 
 let sb = null;
 let SERVER_OFFSET = 0; // serverNow - clientNow (ms)
+// 세션 토큰 접근(app.js 전역 ME). 토큰 인자 없는 래퍼들이 RPC 호출 시 사용.
+function _tok() { return (typeof ME !== 'undefined' && ME) ? ME.token : null; }
 
 function configReady() {
   return window.SUPABASE_URL && !String(window.SUPABASE_URL).includes('YOUR_') &&
@@ -97,18 +99,12 @@ function memberSnapshot(me, game) {
 }
 
 async function enterRoom(roomId, me, game) {
-  const snap = memberSnapshot(me, game);
-  await sb.from('room_members').upsert({
-    room_id: roomId, user_id: me.id, seat: null, role: 'player',
-    name: me.real_name, ...snap, joined_at: new Date().toISOString(),
-  }, { onConflict: 'room_id,user_id' });
-  await sb.from('rooms').update({ host_id: me.id }).eq('id', roomId).is('host_id', null);
+  await sb.rpc('rk_enter_room', { p_token: me.token, p_room: roomId, p_game: game || null });
   await heartbeat(me.token, roomId);
 }
-// 방의 게임이 바뀌었을 때(미니게임 방장 선택) 내 표시 스냅샷 갱신
+// 방의 게임이 바뀌었을 때(방장 선택) 내 표시 스냅샷 갱신
 async function updateMemberSnapshot(roomId, me, game) {
-  const snap = memberSnapshot(me, game);
-  await sb.from('room_members').update(snap).eq('room_id', roomId).eq('user_id', me.id);
+  await sb.rpc('rk_update_snapshot', { p_token: me.token, p_room: roomId, p_game: game || null });
 }
 // 원자적 착석 — 유령좌석/동시경합 차단
 async function takeSeat(roomId, me, seat) {
@@ -117,43 +113,32 @@ async function takeSeat(roomId, me, seat) {
   return data || { ok: false, reason: 'err' };
 }
 async function unseat(roomId, me) {
-  await sb.from('room_members').update({ seat: null }).eq('room_id', roomId).eq('user_id', me.id);
+  await sb.rpc('rk_unseat', { p_token: me.token, p_room: roomId });
 }
 async function spectate(roomId, me) {
-  await sb.from('room_members').update({ role: 'spectator', seat: null }).eq('room_id', roomId).eq('user_id', me.id);
+  await sb.rpc('rk_spectate', { p_token: me.token, p_room: roomId });
 }
 async function leaveRoom(roomId, me) {
-  await sb.from('room_members').delete().eq('room_id', roomId).eq('user_id', me.id);
-  await sb.from('room_presence').delete().eq('room_id', roomId).eq('user_id', me.id);
-  const members = await fetchMembers(roomId);
-  if (members.length === 0) {
-    await sb.from('rooms').update({
-      host_id: null, status: 'waiting', state: null, version: 0,
-      game: (roomId >= 1 && roomId <= 5) ? 'rummikub' : null,
-    }).eq('id', roomId);
-  } else {
-    const earliest = members.slice().sort((a, b) => new Date(a.joined_at) - new Date(b.joined_at))[0];
-    await sb.from('rooms').update({ host_id: earliest.user_id }).eq('id', roomId).eq('host_id', me.id);
-  }
+  await sb.rpc('rk_leave_room', { p_token: me.token, p_room: roomId });
 }
 async function setTurnSeconds(roomId, sec) {
-  await sb.from('rooms').update({ turn_seconds: sec }).eq('id', roomId);
+  await sb.rpc('rk_set_turn_seconds', { p_token: _tok(), p_room: roomId, p_sec: sec });
 }
-async function setRoomGame(roomId, game) {   // 미니게임 방장이 종류 선택 (대기 중에만; 트리거가 강제)
-  await sb.from('rooms').update({ game }).eq('id', roomId).eq('status', 'waiting');
+async function setRoomGame(roomId, game) {   // 방장이 종류 선택 (대기 중에만; 트리거가 강제)
+  await sb.rpc('rk_set_room_game', { p_token: _tok(), p_room: roomId, p_game: game });
 }
 async function startGame(roomId, state) {
-  const { data } = await sb.from('rooms')
-    .update({ status: 'playing', state, version: 1 })
-    .eq('id', roomId).eq('status', 'waiting').select();
-  return { ok: !!(data && data.length), version: data && data[0] ? data[0].version : null };
+  const { data, error } = await sb.rpc('rk_start_game', { p_token: _tok(), p_room: roomId, p_state: state });
+  if (error || !data) return { ok: false, version: null };
+  return { ok: !!data.ok, version: (data.version != null ? data.version : null) };
 }
 async function pushState(roomId, state, expectedVersion) {
-  const { data } = await sb.from('rooms')
-    .update({ status: state.status || 'playing', state, version: expectedVersion + 1 })
-    .eq('id', roomId).eq('version', expectedVersion).select();
-  if (data && data.length) return { ok: true, version: data[0].version, room: data[0] };
-  return { ok: false };
+  const { data, error } = await sb.rpc('rk_push_state', {
+    p_token: _tok(), p_room: roomId, p_expected: expectedVersion,
+    p_state: state, p_status: state.status || 'playing',
+  });
+  if (error || !data || !data.ok) return { ok: false };
+  return { ok: true, version: data.version, room: data.room };
 }
 // 원자적 퇴장(서버 RPC). 마지막 1명이 나가면 방을 빈 대기방으로 리셋. RPC 미적용 시 옛 leaveRoom 폴백.
 async function leaveRoomRpc(roomId, me) {
@@ -162,7 +147,7 @@ async function leaveRoomRpc(roomId, me) {
 }
 // 개발자 모드: 선택한 방들 강제 초기화(점수/전적 불변). 반환 처리 방 개수 또는 null.
 async function adminResetRooms(rooms) {
-  const { data, error } = await sb.rpc('rk_admin_reset_rooms', { p_rooms: rooms });
+  const { data, error } = await sb.rpc('rk_admin_reset_rooms', { p_token: _tok(), p_rooms: rooms });
   if (error) { console.warn('admin reset', error); return null; }
   return data;
 }
@@ -207,12 +192,7 @@ async function finishGame(roomId, token, game) {
   if (error) return { ok: false, error };
   return { ok: true, results: data };
 }
-async function promoteHost(roomId, fromHostId, toUserId) {
-  await sb.from('rooms').update({ host_id: toUserId }).eq('id', roomId).eq('host_id', fromHostId);
-}
-async function deleteMember(roomId, userId) {
-  await sb.from('room_members').delete().eq('room_id', roomId).eq('user_id', userId);
-}
+// promoteHost / deleteMember 제거 — 유령/방장 정리는 서버 권위 rk_reap_stale 로 일원화(보안)
 
 /* ----------------------------- 유령정리 ------------------------------ */
 async function heartbeat(token, roomId) {
