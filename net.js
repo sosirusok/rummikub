@@ -151,6 +151,13 @@ async function adminResetRooms(rooms) {
   if (error) { console.warn('admin reset', error); return null; }
   return data;
 }
+/* 개발자 도구: 유저스탯 / 로그 / 공지 (모두 서버 is_admin 검증) */
+async function adminUsers(q) { const { data, error } = await sb.rpc('rk_admin_users', { p_token: _tok(), p_q: q || null }); if (error) { console.warn('admin users', error); return null; } return data; }
+async function adminSetName(uid, name) { const { data, error } = await sb.rpc('rk_admin_set_name', { p_token: _tok(), p_uid: uid, p_name: name }); if (error) return { ok: false, error: String((error && error.message) || error) }; return data; }
+async function adminSetScore(uid, game, score) { const { data, error } = await sb.rpc('rk_admin_set_score', { p_token: _tok(), p_uid: uid, p_game: game, p_score: score }); if (error) return { ok: false, error: String((error && error.message) || error) }; return data; }
+async function adminLogs(game, limit) { const { data, error } = await sb.rpc('rk_admin_logs', { p_token: _tok(), p_game: game || null, p_limit: limit || 80 }); if (error) { console.warn('admin logs', error); return null; } return data; }
+async function setAnnouncement(content, minutes) { const { data, error } = await sb.rpc('rk_set_announcement', { p_token: _tok(), p_content: content, p_minutes: minutes }); if (error) return { ok: false, error: String((error && error.message) || error) }; return data; }
+async function getAnnouncement() { const { data, error } = await sb.rpc('rk_get_announcement'); if (error) return null; return data; }
 // 방장 강퇴(대기 중에만). 반환 {ok}.
 async function kickMember(roomId, me, targetId) {
   const { data, error } = await sb.rpc('rk_kick_member', { p_token: me.token, p_room: roomId, p_target: targetId });

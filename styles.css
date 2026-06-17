@@ -211,6 +211,14 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .seat__cur-emb .emb{--w:68px;}     /* 우측 현재티어 엠블럼 확대(꽉차게) */
 .seat__rep-emb .emb{--w:60px;}     /* 좌측 대표 엠블럼 확대 */
 .seat__cur-emb .emb,.seat__rep-emb .emb{max-height:50px;}   /* 행높이 균일화 — 고티어(챌린저 등) 엠블럼이 좌석행 부풀리는 것 방지 */
+/* 개발자 도구 */
+.dev-tabs{display:flex;gap:6px;flex-wrap:wrap;padding:8px 0;}
+.dev-pane{padding:4px 2px;display:flex;flex-direction:column;gap:8px;}
+.dev-row{display:flex;align-items:center;gap:6px;}
+.dev-lab{width:84px;flex:0 0 auto;color:var(--ink-dim);font-size:13px;}
+.dev-user{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px;border:1px solid var(--line);border-radius:8px;}
+.dev-user__i{min-width:0;}
+.dev-log{padding:6px 8px;border-bottom:1px solid var(--line);line-height:1.5;font-size:13px;}
 .tier-list{list-style:none; margin:0; padding:10px; display:grid; gap:6px;}
 .tier-row{display:grid; grid-template-columns:72px 1fr auto; gap:10px; align-items:center;
   padding:8px 12px; border-radius:10px; background:var(--panel2); border-left:6px solid var(--tc);}
