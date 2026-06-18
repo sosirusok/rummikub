@@ -792,6 +792,20 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 :is(.seat__emb,.lobby__hello,.score-tier,.uno-omini,.dv-oppo,.mf-player,.sp-omini,.rr,.deco-opt,.deco-preview) :is(.emb--master,.emb--grandmaster){--tw:.95;}
 :is(.seat__emb,.lobby__hello,.score-tier,.uno-omini,.dv-oppo,.mf-player,.sp-omini,.rr,.deco-opt,.deco-preview) .emb--challenger{--tw:1;}
 
+/* ===================== 랭킹/점수 표시: 티어별 크기 차이 확실히 — 저티어는 그대로, 위로 갈수록 크게(증가율 가속) ===================== */
+/* .score-tier(점수 옆 엠블럼=랭킹/홈) 한정. 위 압축 오버라이드를 같은 특이도·후순위로 덮어씀. --th(.95)는 유지해 높이 단조. */
+.score-tier .emb--wood{--tw:.72;}
+.score-tier .emb--iron{--tw:.76;}
+.score-tier .emb--bronze{--tw:.86;}
+.score-tier .emb--silver{--tw:.96;}
+.score-tier .emb--gold{--tw:1.08;}
+.score-tier .emb--platinum{--tw:1.20;}
+.score-tier .emb--emerald{--tw:1.34;}
+.score-tier .emb--diamond{--tw:1.48;}
+.score-tier .emb--master{--tw:1.64;}
+.score-tier .emb--grandmaster{--tw:1.80;}
+.score-tier .emb--challenger{--tw:1.98;}
+
 /* ===================== 초소형 폴더폰(≤300px / ≤430px) 초압축 — 테이블 최대 노출 + 안내 최소화 ===================== */
 @media (max-width:300px), (max-height:430px){
   :root{ --tile-w:clamp(17px,7.6vw,24px); --hit:38px; }
