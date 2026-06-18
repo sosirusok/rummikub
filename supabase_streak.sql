@@ -284,7 +284,7 @@ declare
   v_tierkey text; v_base int; v_contrib int; v_kills int; v_saves int; v_hits int; v_survived boolean;
   v_ev4 numeric; v_kc numeric; v_evn numeric; v_p numeric; v_pc numeric;
   -- 확률가중 EV 모델(점수표 v13): EV4=4인 기준, K=티어별 변동폭, pmaf=마피아 진영 승률(인원수별)
-  v_ev jsonb := '{"wood":120,"iron":100,"bronze":80,"silver":80,"gold":70,"platinum":50,"emerald":30,"diamond":10,"master":10,"grandmaster":-10,"challenger":-40}'::jsonb;
+  v_ev jsonb := '{"wood":120,"iron":100,"bronze":90,"silver":80,"gold":70,"platinum":50,"emerald":30,"diamond":10,"master":10,"grandmaster":-10,"challenger":-40}'::jsonb;
   v_kk jsonb := '{"wood":240,"iron":260,"bronze":280,"silver":280,"gold":290,"platinum":310,"emerald":330,"diamond":350,"master":350,"grandmaster":370,"challenger":400}'::jsonb;
   v_pmaf jsonb := '{"4":0.48,"5":0.46,"6":0.44,"7":0.42,"8":0.40,"9":0.38,"10":0.36,"11":0.35,"12":0.33}'::jsonb;
 begin
