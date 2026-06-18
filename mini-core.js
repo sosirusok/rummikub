@@ -81,17 +81,29 @@ function miniStart(room, me, mySeat, amSpectator) {
       <div class="vctl vctl--act" id="vact"><span id="vactLabel">●</span></div>`}
     </section>`;
   MINI.canvas = document.getElementById('miniCanvas');
-  MINI.ctx = MINI.canvas.getContext('2d');
+  MINI.ctx = MINI.canvas ? MINI.canvas.getContext('2d') : null;
+  if (!MINI.ctx) {   // 캔버스/2D 컨텍스트 미지원 기기 → 검은화면 대신 안내(나가기 가능)
+    app().innerHTML = `<section class="screen center" style="justify-content:center;text-align:center;padding:24px">`
+      + `<h2>${esc(GAME_NAME[MINI.game] || '미니게임')}</h2>`
+      + `<p class="muted">이 기기/브라우저에서 화면을 그릴 수 없어요. 크롬 등 다른 브라우저로 접속해 주세요.</p>`
+      + `<button class="btn btn--primary" data-act="leave">← 나가기</button></section>`;
+    return;
+  }
   fitCanvas();
-  MINI._ro = new ResizeObserver(fitCanvas); MINI._ro.observe(MINI.canvas);
-  if (!amSpectator) setupControls();
-  setupKeys();
-  MINI.bc = joinBroadcast(MINI.roomId, onPeerMsg);
+  // ⚠ 아래 셋업이 하나라도 throw 하면 rAF 루프가 안 돌아 '검은화면'이 됐었음 → 전부 가드 + 루프 보장.
+  // ResizeObserver 미지원 기기(구형 사파리 등) 대비: 실패 시 window resize 폴백.
+  try { MINI._ro = new ResizeObserver(fitCanvas); MINI._ro.observe(MINI.canvas); }
+  catch (e) { MINI._ro = null; MINI._resizeFb = function () { fitCanvas(); }; window.addEventListener('resize', MINI._resizeFb); window.addEventListener('orientationchange', MINI._resizeFb); }
+  if (!amSpectator) { try { setupControls(); } catch (e) { console.error('mini controls', e); } }
+  try { setupKeys(); } catch (e) { console.error('mini keys', e); }
+  try { MINI.bc = joinBroadcast(MINI.roomId, onPeerMsg); } catch (e) { console.error('mini bc', e); MINI.bc = null; }
   MINI.local = null;
   try { MINI.mod.init(MINI); } catch (e) { console.error('mini init', e); }
-  if (!amSpectator) { const lbl = document.getElementById('vactLabel'); if (lbl && MINI.mod.actionLabel) lbl.textContent = MINI.mod.actionLabel(MINI); }
+  if (!amSpectator) { try { const lbl = document.getElementById('vactLabel'); if (lbl && MINI.mod.actionLabel) lbl.textContent = MINI.mod.actionLabel(MINI); } catch (e) {} }
   MINI.last = performance.now(); MINI.acc = 0; MINI._netT = 0; MINI._hudT = 0; MINI._frames = [];
   MINI.raf = requestAnimationFrame(miniLoop);
+  // 레이아웃이 늦게 잡히는 기기: 초기 0크기로 캔버스가 비는 것 방지(지연 재적합)
+  setTimeout(fitCanvas, 120); setTimeout(fitCanvas, 450);
 }
 
 // realtime 권위 state 갱신 (페이즈/시드/결과 변경)
@@ -107,6 +119,7 @@ function miniStop() {
   if (MINI.raf) cancelAnimationFrame(MINI.raf), MINI.raf = 0;
   if (MINI.bc) leaveChannel(MINI.bc.ch), MINI.bc = null;
   if (MINI._ro) { try { MINI._ro.disconnect(); } catch (e) {} MINI._ro = null; }
+  if (MINI._resizeFb) { window.removeEventListener('resize', MINI._resizeFb); window.removeEventListener('orientationchange', MINI._resizeFb); MINI._resizeFb = null; }
   if (MINI._keys) { window.removeEventListener('keydown', MINI._keys.d); window.removeEventListener('keyup', MINI._keys.u); MINI._keys = null; }
   MINI.peers = {}; MINI.local = null;
 }
