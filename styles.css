@@ -288,7 +288,7 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .mini-spectate{position:absolute; bottom:16px; left:50%; transform:translateX(-50%); z-index:8;
   background:rgba(0,0,0,.5); color:var(--accent); font-weight:800; padding:8px 14px; border-radius:999px;}
 .vctl{position:fixed; z-index:9; user-select:none; -webkit-user-select:none; touch-action:none;}
-.vctl--pad{left:max(10px,env(safe-area-inset-left)); bottom:max(18px,env(safe-area-inset-bottom));
+.vctl--pad{left:max(30px,env(safe-area-inset-left)); bottom:max(38px,env(safe-area-inset-bottom));
   width:clamp(96px,30vw,150px); height:clamp(96px,30vw,150px);}
 .vctl__base{position:absolute; inset:0; border-radius:50%; background:rgba(255,255,255,.08); border:2px solid rgba(255,255,255,.18);}
 .vctl__knob{position:absolute; left:50%; top:50%; width:44%; height:44%; border-radius:50%;
@@ -326,7 +326,7 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
   .dv-mine{max-height:28vh;}
 }
 @media (max-height:430px){
-  .vctl--pad{width:84px; height:84px; bottom:10px;}
+  .vctl--pad{width:84px; height:84px; left:max(24px,env(safe-area-inset-left)); bottom:max(26px,env(safe-area-inset-bottom));}
   .vctl--act{width:58px; height:58px; bottom:14px;}
   /* 가로/낮은 화면: 루미 보드가 안 깔리게 손패·도크·상단바 축소 */
   :root{--tile-w:clamp(18px,7vw,26px);}
@@ -740,7 +740,7 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 
   /* 미니게임(race/hunt): 세로 짧을 때 가상패드 축소(430행 블록보다 완만, 430px가 cascade상 우선) */
   .vctl--pad{width:clamp(72px,24vw,96px); height:clamp(72px,24vw,96px);
-    bottom:max(8px,env(safe-area-inset-bottom)); opacity:.85;}
+    left:max(28px,env(safe-area-inset-left)); bottom:max(24px,env(safe-area-inset-bottom)); opacity:.85;}
   .vctl--act{width:clamp(54px,16vw,74px); height:clamp(54px,16vw,74px);
     bottom:max(12px,env(safe-area-inset-bottom)); font-size:13px; opacity:.9;}
   .mini-spectate{bottom:8px; padding:5px 12px; font-size:12px;}
