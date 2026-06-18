@@ -282,7 +282,11 @@ declare
   i int; v_seat text; v_uid uuid; v_role text; v_camp text; v_won boolean;
   v_curscore int; v_curstreak int; v_delta int; v_ns int; v_nstreak int; v_w int; v_l int; v_bonus int;
   v_tierkey text; v_base int; v_contrib int; v_kills int; v_saves int; v_hits int; v_survived boolean;
-  v_mbase jsonb := '{"wood":{"mwin":150,"cwin":75,"loss":0},"iron":{"mwin":135,"cwin":67,"loss":-10},"bronze":{"mwin":120,"cwin":58,"loss":-20},"silver":{"mwin":102,"cwin":47,"loss":-33},"gold":{"mwin":84,"cwin":36,"loss":-46},"platinum":{"mwin":74,"cwin":30,"loss":-59},"emerald":{"mwin":64,"cwin":24,"loss":-73},"diamond":{"mwin":54,"cwin":18,"loss":-86},"master":{"mwin":47,"cwin":15,"loss":-96},"grandmaster":{"mwin":41,"cwin":13,"loss":-106},"challenger":{"mwin":34,"cwin":10,"loss":-116}}'::jsonb;
+  v_ev4 numeric; v_kc numeric; v_evn numeric; v_p numeric; v_pc numeric;
+  -- 확률가중 EV 모델(점수표 v13): EV4=4인 기준, K=티어별 변동폭, pmaf=마피아 진영 승률(인원수별)
+  v_ev jsonb := '{"wood":120,"iron":100,"bronze":80,"silver":80,"gold":70,"platinum":50,"emerald":30,"diamond":10,"master":10,"grandmaster":-10,"challenger":-40}'::jsonb;
+  v_kk jsonb := '{"wood":240,"iron":260,"bronze":280,"silver":280,"gold":290,"platinum":310,"emerald":330,"diamond":350,"master":350,"grandmaster":370,"challenger":400}'::jsonb;
+  v_pmaf jsonb := '{"4":0.48,"5":0.46,"6":0.44,"7":0.42,"8":0.40,"9":0.38,"10":0.36,"11":0.35,"12":0.33}'::jsonb;
 begin
   select id into v_user from public.users where token = p_token;
   if v_user is null then raise exception 'BAD_TOKEN'; end if;
@@ -297,6 +301,7 @@ begin
   select array_agg(key) into v_seats from jsonb_object_keys(v_players) key;
   v_n := coalesce(array_length(v_seats,1),0);
   if v_n < 4 or v_n > 12 then raise exception 'BAD_N'; end if;
+  v_p := coalesce((v_pmaf->>v_n::text)::numeric, 0.40);   -- 마피아 진영 승률(인원수별)
 
   for i in 1 .. v_n loop
     v_seat := v_seats[i]; v_uid := (v_players->>v_seat)::uuid;
@@ -315,21 +320,23 @@ begin
     v_tierkey := public.rk_tier_key(v_curscore);
     v_quit := (v_uid is not null and not (v_uid = any(coalesce(v_present, array[]::uuid[]))));
 
-    if v_won and v_camp='mafia' then v_base := (v_mbase->v_tierkey->>'mwin')::int;
-    elsif v_won then v_base := (v_mbase->v_tierkey->>'cwin')::int;
-    else v_base := (v_mbase->v_tierkey->>'loss')::int; end if;
+    -- 확률가중 EV: EV_n=(n/4)·EV4, pc=진영 승률(마피아=p, 시민=1-p), 승=EV_n+K(1-pc)·패=EV_n-K·pc
+    v_ev4 := (v_ev->>v_tierkey)::numeric; v_kc := (v_kk->>v_tierkey)::numeric;
+    v_evn := round( (v_n::numeric / 4.0) * v_ev4 );
+    v_pc  := case when v_camp='mafia' then v_p else 1.0 - v_p end;
 
     if v_quit then
-      v_contrib := 0; v_won := false; v_delta := (v_mbase->v_tierkey->>'loss')::int;
+      v_contrib := 0; v_won := false; v_delta := round( v_evn - v_kc * v_pc )::int;
     else
+      if v_won then v_base := round( v_evn + v_kc * (1.0 - v_pc) )::int;
+      else           v_base := round( v_evn - v_kc * v_pc )::int; end if;
       if v_role='mafia' then v_contrib := v_kills * 8;
       elsif v_role='police' then v_contrib := v_hits * 10;
       elsif v_role='doctor' then v_contrib := v_saves * 12;
       elsif v_survived then v_contrib := 6;
       else v_contrib := 0; end if;
       v_delta := v_base + v_contrib;
-      if v_won then v_delta := greatest(v_delta, 1);
-      else v_delta := least(v_delta, 0); end if;
+      if v_won then v_delta := greatest(v_delta, 1); end if;
     end if;
 
     v_nstreak := case when v_won then v_curstreak + 1 else 0 end;

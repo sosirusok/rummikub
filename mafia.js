@@ -210,6 +210,8 @@ function mfRender() {
   if (s.phase === 'end' || s.results) { return; }   // 종료는 app.js refreshRoom→renderResult 가 처리
   const seats = mfSeats(s);
   const myRole = MF.view && MF.view.role;
+  const mates = (myRole === 'mafia' && MF.view && Array.isArray(MF.view.mates)) ? MF.view.mates : [];
+  const mateSeats = new Set(mates.map(m => m.seat));
   const ph = s.phase, day = s.day || 1;
   const isNight = ph === 'night', isDay = ph === 'day';
   const iAmAlive = MF.mySeat != null && mfAlive(s, MF.mySeat);
@@ -230,14 +232,15 @@ function mfRender() {
     let act = '', target = false;
     if (alive) {
       if (isNight && iAmAlive && myRole && myRole !== 'citizen' && !acted) {
-        const canTarget = (myRole === 'doctor') || !isMe;       // 마피아/경찰은 자신 불가, 의사는 가능
+        let canTarget = (myRole === 'doctor') || !isMe;         // 마피아/경찰은 자신 불가, 의사는 가능
+        if (myRole === 'mafia' && mateSeats.has(seat)) canTarget = false;  // 동료 마피아는 못 죽임
         if (canTarget) { act = 'data-act="mf_night"'; target = true; }
       } else if (isDay && iAmAlive) { act = 'data-act="mf_vote"'; target = true; }
     }
     const sel = (isDay && Number(myVote) === seat) ? 'is-myvote' : '';
     return `<button class="mf-player ${alive ? '' : 'is-dead'} ${isMe ? 'is-me' : ''} ${target ? 'is-target' : ''} ${sel}" data-seat="${seat}" ${act}>
       <span class="mf-player__seat">${seat}</span>
-      <span class="mf-player__name">${decoEmblemHTML((s.players || {})[seat]) || emblemHTML('mafia', 0, 'xs')}${esc(mafiaName(s, seat))}${isMe ? ' (나)' : ''}</span>
+      <span class="mf-player__name">${decoEmblemHTML((s.players || {})[seat]) || emblemHTML('mafia', 0, 'xs')}${esc(mafiaName(s, seat))}${isMe ? ' (나)' : ''}${mateSeats.has(seat) ? ' <span class="mf-mate">🔪동료</span>' : ''}</span>
       ${alive ? (isDay && vc ? `<span class="mf-player__votes">🗳 ${vc}</span>` : '') : '<span class="mf-player__dead">💀</span>'}
     </button>`;
   }).join('');
@@ -248,9 +251,15 @@ function mfRender() {
     roleCard = `<div class="mf-rolecard mf-role--citizen"><div class="mf-rolecard__role">👁 관전 중</div></div>`;
   } else if (myRole) {
     const R = MF_ROLE[myRole];
+    let mateLine = '';
+    if (myRole === 'mafia') {
+      mateLine = mates.length
+        ? `<div class="mf-rolecard__mates">🤝 동료 마피아: <b>${mates.map(m => esc(m.name || ('좌석' + m.seat))).join(', ')}</b></div>`
+        : `<div class="mf-rolecard__mates">🤝 당신은 유일한 마피아입니다.</div>`;
+    }
     roleCard = `<div class="mf-rolecard ${R.cls}">
       <div class="mf-rolecard__role">${R.emoji} 당신은 <b>${R.name}</b>${iAmAlive ? '' : ' <span class="mf-dead-tag">(사망 · 관전)</span>'}</div>
-      <div class="mf-rolecard__desc">${R.desc}</div></div>`;
+      <div class="mf-rolecard__desc">${R.desc}</div>${mateLine}</div>`;
   }
 
   // 액션/안내 바

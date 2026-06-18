@@ -160,35 +160,51 @@ function rankPoints(game, score, n, rank) {
   return arr[idx];
 }
 
-/* ===================== 마피아: 기여도 기반 점수 =====================
-   진영 승패 베이스(티어별) + 역할 기여도(살인/조사정답/세이브/생존).
-   승리 진영은 트롤이어도 무조건 +1 이상. 패배는 기여도로 손실만 줄임(최대 0). */
-const MAFIA_BASE = {
-  wood:        { mwin:240, cwin:240, loss:0 },
-  iron:        { mwin:230, cwin:230, loss:-30 },
-  bronze:      { mwin:220, cwin:220, loss:-60 },
-  silver:      { mwin:220, cwin:220, loss:-60 },
-  gold:        { mwin:215, cwin:215, loss:-75 },
-  platinum:    { mwin:205, cwin:205, loss:-105 },
-  emerald:     { mwin:195, cwin:195, loss:-135 },
-  diamond:     { mwin:185, cwin:185, loss:-165 },
-  master:      { mwin:185, cwin:185, loss:-165 },
-  grandmaster: { mwin:175, cwin:175, loss:-195 },
-  challenger:  { mwin:160, cwin:160, loss:-240 },
+/* ===================== 마피아: 확률가중 EV 점수 =====================
+   ❗평균이 EV가 아니라 "진영 승률로 가중한 기대값"이 EV가 되도록 승/패를 분리한다.
+   - EV_n = (n/4)·EV4  (EV4 = 4인 기준 사용자 제시값. 인원이 많을수록 점수 폭이 커짐.)
+   - 진영 승률 pc: 마피아 진영 = p(n), 시민 진영 = 1-p(n).
+   - 승 = EV_n + K·(1-pc),  패 = EV_n - K·pc   →  pc·승 + (1-pc)·패 = EV_n (정확히 성립).
+     즉 약자(승률 낮음)일수록 이기면 많이 받고 져도 덜 잃는다. p=0.5·n=4면 옛 "평균=EV" 표와 일치.
+   - 여기에 역할 기여도(살인/조사정답/세이브/생존)를 더함. 마피아 인원수도 인원에 비례(mafiaCount).
+   ⚠ 실제 점수는 서버 rk_finish_mafia 가 권위. 이 클라 함수/표는 안내·표시용(동일 공식). */
+const MAFIA_EV4 = {   // 4인 기준 기대값(티어별) — 사용자 제시값
+  wood:120, iron:100, bronze:80, silver:80, gold:70, platinum:50,
+  emerald:30, diamond:10, master:10, grandmaster:-10, challenger:-40,
 };
+const MAFIA_K = {     // 티어별 변동폭(승-패 스프레드) — 티어 오를수록 큼
+  wood:240, iron:260, bronze:280, silver:280, gold:290, platinum:310,
+  emerald:330, diamond:350, master:350, grandmaster:370, challenger:400,
+};
+// 마피아(소수진영) 진영 승률 — 인원 많을수록 상대적 약자(마피아 수 보강분 반영해 완만히 감소)
+const MAFIA_PWIN = { 4:0.48, 5:0.46, 6:0.44, 7:0.42, 8:0.40, 9:0.38, 10:0.36, 11:0.35, 12:0.33 };
 const MAFIA_CONTRIB = { kill:8, invest:10, save:12, survive:6 };  // 살인·정답조사·세이브·시민생존(1회)
-// info: { won, camp:'mafia'|'citizens', role, survived, kills, hits, saves }
+function mafiaCount(n) { n = Math.max(4, Math.min(12, n || 4)); return Math.max(1, Math.floor((n - 1) / 3)); }  // n4~6=1·n7~9=2·n10~12=3
+function mafiaPWin(n)  { n = Math.max(4, Math.min(12, n || 4)); return MAFIA_PWIN[n]; }
+// 진영(camp)·인원(n)·티어(score)별 승/패 베이스
+function mafiaBase(score, n, camp) {
+  const key = tierKeyForScore(score);
+  const ev4 = (MAFIA_EV4[key] != null) ? MAFIA_EV4[key] : MAFIA_EV4.wood;
+  const K   = (MAFIA_K[key]   != null) ? MAFIA_K[key]   : MAFIA_K.wood;
+  n = Math.max(4, Math.min(12, n || 4));
+  const evn = Math.round((n / 4) * ev4);
+  const p   = mafiaPWin(n);
+  const pc  = (camp === 'mafia') ? p : (1 - p);
+  return { win: Math.round(evn + K * (1 - pc)), loss: Math.round(evn - K * pc) };
+}
+// info: { won, camp:'mafia'|'citizens', role, survived, kills, hits, saves, n }
 function mafiaPoints(score, info) {
-  const b = MAFIA_BASE[tierKeyForScore(score)] || MAFIA_BASE.wood;
-  let base = info.won ? (info.camp === 'mafia' ? b.mwin : b.cwin) : b.loss;
+  const n = info.n || 4;
+  const camp = info.camp || (info.role === 'mafia' ? 'mafia' : 'citizens');
+  const b = mafiaBase(score, n, camp);
+  let base = info.won ? b.win : b.loss;
   let contrib = 0;
   if (info.role === 'mafia')       contrib = (info.kills || 0) * MAFIA_CONTRIB.kill;
   else if (info.role === 'police') contrib = (info.hits  || 0) * MAFIA_CONTRIB.invest;
   else if (info.role === 'doctor') contrib = (info.saves || 0) * MAFIA_CONTRIB.save;
   else if (info.survived)          contrib = MAFIA_CONTRIB.survive;
   let delta = base + contrib;
-  if (info.won) delta = Math.max(delta, 1);   // 승리진영 무조건 +1 이상
-  else delta = Math.min(delta, 0);            // 패배는 최대 0(기여도로 손실만 경감)
+  if (info.won) delta = Math.max(delta, 1);   // 승리진영 무조건 +1 이상(패배는 EV 정확성 위해 미클램프)
   return { delta, newScore: Math.max(0, Math.min(15000, (score || 0) + delta)) };
 }
 
@@ -260,14 +276,17 @@ function scoreTableHTML(game) {
       + `<p class="sc-note">동률이면 공동 등수로 같은 점수를 받아요. 1등/승리는 항상 +.</p></div>`;
   }
   if (game === 'mafia') {
-    const head = `<th>티어</th><th>🔪마피아 승</th><th>🙂시민 승</th><th>패배</th>`;
+    const head = `<th>티어</th><th>🔪마피아 승</th><th>🔪마피아 패</th><th>🙂시민 승</th><th>🙂시민 패</th>`;
     const body = TIER_KEY_CUTS.map(([key, min]) => {
-      const info = TIER_INFO[key]; const b = MAFIA_BASE[key];
-      return `<tr><th class="sc-tier" style="--tc:${info.color}">${emblemHTML('mafia', min, 'xs')}<span class="sc-tier__t">${info.name}</span></th>${_scCell(b.mwin)}${_scCell(b.cwin)}${_scCell(b.loss)}</tr>`;
+      const info = TIER_INFO[key];
+      const m = mafiaBase(min, 4, 'mafia'), c = mafiaBase(min, 4, 'citizens');
+      return `<tr><th class="sc-tier" style="--tc:${info.color}">${emblemHTML('mafia', min, 'xs')}<span class="sc-tier__t">${info.name}</span></th>${_scCell(m.win)}${_scCell(m.loss)}${_scCell(c.win)}${_scCell(c.loss)}</tr>`;
     }).join('');
-    return `<div class="sc-wrap"><div class="sc-title">📊 티어별 진영 승패 점수(기본)</div>`
+    return `<div class="sc-wrap"><div class="sc-title">📊 진영·승률 기반 승패 점수 <span class="sc-cap">(4인 기준)</span></div>`
       + `<div class="sc-sub"><table class="sc-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`
-      + `<p class="sc-note">여기에 <b>역할 기여도</b>가 더해져요 — 살인 +${MAFIA_CONTRIB.kill} · 조사 정답 +${MAFIA_CONTRIB.invest} · 세이브 +${MAFIA_CONTRIB.save} · 시민 생존 +${MAFIA_CONTRIB.survive}.<br>승리 진영은 최소 +1, 패배는 기여도로 손실만 줄여 최대 0이에요.</p></div>`;
+      + `<p class="sc-note">위 표는 <b>4인 기준</b>이고, 인원이 n명이면 점수가 <b>×(n/4)</b>로 커져요(8인=2배·12인=3배).<br>`
+      + `승/패는 <b>진영 승률</b>로 갈라요 — 약자(마피아)일수록 이기면 더 많이 받고 져도 덜 잃어요. 마피아 인원은 <b>${mafiaCount(4)}~${mafiaCount(12)}명</b>(인원수 비례).<br>`
+      + `여기에 <b>역할 기여도</b>가 더해져요 — 살인 +${MAFIA_CONTRIB.kill} · 조사 정답 +${MAFIA_CONTRIB.invest} · 세이브 +${MAFIA_CONTRIB.save} · 시민 생존 +${MAFIA_CONTRIB.survive}. 승리 진영은 최소 +1.</p></div>`;
   }
   // race / hunt — 공식 기반(대략치)
   const isRace = game === 'race';

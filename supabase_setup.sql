@@ -960,6 +960,7 @@ create or replace function public.mf_start(p_token uuid, p_room int)
 returns jsonb language plpgsql security definer set search_path = public, extensions as $$
 declare v_user uuid; v_room public.rooms; v_state jsonb; v_players jsonb;
   v_seats int[]; v_n int; v_epoch bigint; i int; v_perm int[]; v_seed bigint; v_log jsonb;
+  v_m int; v_pos int;
 begin
   select id into v_user from public.users where token=p_token;
   if v_user is null then raise exception 'BAD_TOKEN'; end if;
@@ -980,12 +981,15 @@ begin
   perform setseed( ((v_seed % 1000000)::numeric / 1000000.0) );
   select array_agg(s order by random()) into v_perm from unnest(v_seats) s;
   delete from public.mafia_secrets where room_id=p_room;
+  -- 마피아 수 인원수 스케일: floor((n-1)/3), 최소 1 (n4~6=1·n7~9=2·n10~12=3). 경찰·의사는 항상 1명씩.
+  v_m := greatest(1, (v_n - 1) / 3);
   for i in 1 .. v_n loop
+    v_pos := array_position(v_perm, v_seats[i]);   -- 셔플된 순번: 1~m=마피아, m+1=경찰, m+2=의사, 나머지=시민
     insert into public.mafia_secrets(room_id, seat, user_id, role, epoch)
     values (p_room, v_seats[i], (v_players->>(v_seats[i]::text))::uuid,
-      case when v_seats[i]=v_perm[1] then 'mafia'
-           when v_seats[i]=v_perm[2] then 'police'
-           when v_seats[i]=v_perm[3] then 'doctor'
+      case when v_pos <= v_m       then 'mafia'
+           when v_pos =  v_m + 1   then 'police'
+           when v_pos =  v_m + 2   then 'doctor'
            else 'citizen' end, v_epoch);
   end loop;
   v_log := coalesce(v_state->'log','[]'::jsonb) || to_jsonb(array['🌙 1일차 밤 — 마피아·경찰·의사는 행동하세요. 시민은 기다립니다.']);
@@ -999,12 +1003,18 @@ end; $$;
 -- 내 비공개 정보만 반환(내 역할 + 내 조사결과 + 이번밤 행동여부)
 create or replace function public.mf_my_view(p_token uuid, p_room int)
 returns jsonb language plpgsql security definer set search_path = public, extensions as $$
-declare v_user uuid; rec public.mafia_secrets; v_pname text;
+declare v_user uuid; rec public.mafia_secrets; v_pname text; v_mates jsonb; v_names jsonb;
 begin
   select id into v_user from public.users where token=p_token;
   if v_user is null then raise exception 'BAD_TOKEN'; end if;
   select * into rec from public.mafia_secrets where room_id=p_room and user_id=v_user;
   if not found then return jsonb_build_object('role', null); end if;
+  if rec.role='mafia' then   -- 마피아는 동료 마피아를 본다
+    select state->'names' into v_names from public.rooms where id=p_room;
+    select coalesce(jsonb_agg(jsonb_build_object('seat',s.seat,'name',coalesce(v_names->>(s.seat::text),'')) order by s.seat),'[]'::jsonb)
+      into v_mates from public.mafia_secrets s where s.room_id=p_room and s.role='mafia' and s.seat<>rec.seat;
+    return jsonb_build_object('role',rec.role,'acted',(rec.night_kind is not null),'mates',v_mates);
+  end if;
   if rec.role='police' and rec.police_target is not null then
     select coalesce(state->'names'->>(rec.police_target::text),'') into v_pname from public.rooms where id=p_room;
     return jsonb_build_object('role',rec.role,'acted',(rec.night_kind is not null),
@@ -1031,6 +1041,7 @@ begin
   if not coalesce((v_state->'alive'->>(me.seat::text))::boolean,false) then raise exception 'DEAD'; end if;
   if not coalesce((v_state->'alive'->>(p_target::text))::boolean,false) then raise exception 'TARGET_DEAD'; end if;
   if me.role in ('mafia','police') and p_target = me.seat then raise exception 'NO_SELF'; end if;  -- 의사는 자가보호 허용
+  if me.role='mafia' and exists(select 1 from public.mafia_secrets where room_id=p_room and seat=p_target and role='mafia') then raise exception 'NO_MAFIA_TARGET'; end if;  -- 동료 마피아 지목 불가
   v_kind := case me.role when 'mafia' then 'kill' when 'doctor' then 'save' else 'investigate' end;
   update public.mafia_secrets set night_kind=v_kind, night_target=p_target where room_id=p_room and seat=me.seat;
   v_res := jsonb_build_object('ok',true);
@@ -1122,7 +1133,10 @@ begin
   v_log := coalesce(v_state->'log','[]'::jsonb);
 
   if v_phase = 'night' then
-    select night_target into v_kill from public.mafia_secrets where room_id=p_room and role='mafia' and night_kind='kill' limit 1;
+    -- 마피아 여러 명이면 가장 많이 지목된 표적을 처치(동률=낮은 좌석). 미제출 마피아는 무시.
+    select night_target into v_kill from public.mafia_secrets
+      where room_id=p_room and role='mafia' and night_kind='kill' and night_target is not null
+      group by night_target order by count(*) desc, night_target asc limit 1;
     select night_target into v_save from public.mafia_secrets where room_id=p_room and role='doctor' and night_kind='save' limit 1;
     v_killed := null; v_saved := false;
     if v_kill is not null then
@@ -1646,7 +1660,10 @@ begin
   v_log := coalesce(v_state->'log','[]'::jsonb);
 
   if v_phase = 'night' then
-    select night_target into v_kill from public.mafia_secrets where room_id=p_room and role='mafia' and night_kind='kill' limit 1;
+    -- 마피아 여러 명이면 가장 많이 지목된 표적을 처치(동률=낮은 좌석). 미제출 마피아는 무시.
+    select night_target into v_kill from public.mafia_secrets
+      where room_id=p_room and role='mafia' and night_kind='kill' and night_target is not null
+      group by night_target order by count(*) desc, night_target asc limit 1;
     select night_target into v_save from public.mafia_secrets where room_id=p_room and role='doctor' and night_kind='save' limit 1;
     v_killed := null; v_saved := false;
     if v_kill is not null then
@@ -1664,7 +1681,7 @@ begin
     v_state := jsonb_set(v_state, '{lastNight}', jsonb_build_object('killed', coalesce(to_jsonb(v_killed),'null'::jsonb), 'saved', v_saved));
     -- 기여도 누적: 성공한 마피아 살인 / 의사 세이브 / 경찰 정답조사
     if v_killed is not null then
-      update public.mafia_secrets set kills = kills + 1 where room_id=p_room and role='mafia' and night_kind='kill';
+      update public.mafia_secrets set kills = kills + 1 where room_id=p_room and role='mafia' and night_kind='kill' and night_target=v_killed;
     end if;
     if v_saved then
       update public.mafia_secrets set saves = saves + 1 where room_id=p_room and role='doctor' and night_kind='save';
@@ -2825,7 +2842,11 @@ declare
   i int; v_seat text; v_uid uuid; v_role text; v_camp text; v_won boolean;
   v_curscore int; v_curstreak int; v_delta int; v_ns int; v_nstreak int; v_w int; v_l int; v_bonus int;
   v_tierkey text; v_base int; v_contrib int; v_kills int; v_saves int; v_hits int; v_survived boolean;
-  v_mbase jsonb := '{"wood":{"mwin":240,"cwin":240,"loss":0},"iron":{"mwin":230,"cwin":230,"loss":-30},"bronze":{"mwin":220,"cwin":220,"loss":-60},"silver":{"mwin":220,"cwin":220,"loss":-60},"gold":{"mwin":215,"cwin":215,"loss":-75},"platinum":{"mwin":205,"cwin":205,"loss":-105},"emerald":{"mwin":195,"cwin":195,"loss":-135},"diamond":{"mwin":185,"cwin":185,"loss":-165},"master":{"mwin":185,"cwin":185,"loss":-165},"grandmaster":{"mwin":175,"cwin":175,"loss":-195},"challenger":{"mwin":160,"cwin":160,"loss":-240}}'::jsonb;
+  v_ev4 numeric; v_kc numeric; v_evn numeric; v_p numeric; v_pc numeric;
+  -- 확률가중 EV 모델: EV4=4인 기준 기대값, K=티어별 변동폭, pmaf=마피아 진영 승률(인원수별)
+  v_ev jsonb := '{"wood":120,"iron":100,"bronze":80,"silver":80,"gold":70,"platinum":50,"emerald":30,"diamond":10,"master":10,"grandmaster":-10,"challenger":-40}'::jsonb;
+  v_kk jsonb := '{"wood":240,"iron":260,"bronze":280,"silver":280,"gold":290,"platinum":310,"emerald":330,"diamond":350,"master":350,"grandmaster":370,"challenger":400}'::jsonb;
+  v_pmaf jsonb := '{"4":0.48,"5":0.46,"6":0.44,"7":0.42,"8":0.40,"9":0.38,"10":0.36,"11":0.35,"12":0.33}'::jsonb;
 begin
   select id into v_user from public.users where token = p_token;
   if v_user is null then raise exception 'BAD_TOKEN'; end if;
@@ -2840,6 +2861,7 @@ begin
   select array_agg(key) into v_seats from jsonb_object_keys(v_players) key;
   v_n := coalesce(array_length(v_seats,1),0);
   if v_n < 4 or v_n > 12 then raise exception 'BAD_N'; end if;
+  v_p := coalesce((v_pmaf->>v_n::text)::numeric, 0.40);   -- 마피아 진영 승률(인원수별)
   for i in 1 .. v_n loop
     v_seat := v_seats[i]; v_uid := (v_players->>v_seat)::uuid;
     select role, kills, saves, hits into v_role, v_kills, v_saves, v_hits from public.mafia_secrets where room_id=p_room and seat=v_seat::int;
@@ -2851,14 +2873,19 @@ begin
     if v_uid is not null then select coalesce(score,0), coalesce(streak,0) into v_curscore, v_curstreak from public.user_game_stats where user_id=v_uid and game='mafia'; v_curscore:=coalesce(v_curscore,0); v_curstreak:=coalesce(v_curstreak,0); end if;
     v_tierkey := public.rk_tier_key(v_curscore);
     v_quit := (v_uid is not null and not (v_uid = any(coalesce(v_present, array[]::uuid[]))));
-    if v_won and v_camp='mafia' then v_base := (v_mbase->v_tierkey->>'mwin')::int;
-    elsif v_won then v_base := (v_mbase->v_tierkey->>'cwin')::int;
-    else v_base := (v_mbase->v_tierkey->>'loss')::int; end if;
-    if v_quit then v_contrib := 0; v_won := false; v_delta := (v_mbase->v_tierkey->>'loss')::int;
+    -- 확률가중 EV: EV_n=(n/4)·EV4, pc=진영 승률(마피아=p, 시민=1-p), 승=EV_n+K(1-pc)·패=EV_n-K·pc
+    v_ev4 := (v_ev->>v_tierkey)::numeric; v_kc := (v_kk->>v_tierkey)::numeric;
+    v_evn := round( (v_n::numeric / 4.0) * v_ev4 );
+    v_pc  := case when v_camp='mafia' then v_p else 1.0 - v_p end;
+    if v_quit then
+      v_contrib := 0; v_won := false;
+      v_delta := round( v_evn - v_kc * v_pc )::int;          -- 중퇴=진영 패점 처리
     else
+      if v_won then v_base := round( v_evn + v_kc * (1.0 - v_pc) )::int;
+      else           v_base := round( v_evn - v_kc * v_pc )::int; end if;
       if v_role='mafia' then v_contrib := v_kills * 8; elsif v_role='police' then v_contrib := v_hits * 10; elsif v_role='doctor' then v_contrib := v_saves * 12; elsif v_survived then v_contrib := 6; else v_contrib := 0; end if;
       v_delta := v_base + v_contrib;
-      if v_won then v_delta := greatest(v_delta, 1); else v_delta := least(v_delta, 0); end if;
+      if v_won then v_delta := greatest(v_delta, 1); end if;  -- 승리진영 최소 +1(패배는 EV 정확성 위해 미클램프)
     end if;
     v_nstreak := case when v_won then v_curstreak + 1 else 0 end;
     v_bonus := case when v_won then public.rk_win_bonus(v_delta, v_nstreak) else 0 end;
