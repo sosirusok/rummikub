@@ -175,6 +175,7 @@
         prog: 0, bestProg: 0, fin: false, finished: false, finT: 0, _appended: false,
       };
       M._peerProg = {};
+      M._peerFinT = {};                   // 브로드캐스트로 받은 peer 완주시각(DB 전파 지연 우회용)
     },
 
     step(M, dt) {
@@ -316,9 +317,17 @@
 
     netPayload(M) {
       const L = M.local; if (!L) return null;
-      return { x: Math.round(L.x), y: Math.round(L.y), z: Math.round(L.z), prog: Math.round(L.bestProg), fin: !!L.fin };
+      // fin/finT 를 함께 브로드캐스트 → DB(finishOrder) 전파 지연과 무관하게 모든 클라가 완주·완주시각을 즉시 공유.
+      return { x: Math.round(L.x), y: Math.round(L.y), z: Math.round(L.z), prog: Math.round(L.bestProg),
+               fin: !!L.fin, finT: L.fin ? Math.round(L.finT) : null };
     },
-    onPeer(M, seat, msg) { if (msg && msg.prog != null) M._peerProg[seat] = Math.max(M._peerProg[seat] || 0, msg.prog); },
+    onPeer(M, seat, msg) {
+      if (!msg) return;
+      if (msg.prog != null) M._peerProg[seat] = Math.max(M._peerProg[seat] || 0, msg.prog);
+      if (msg.fin && msg.finT != null) {                 // 완주시각은 가장 이른 값을 유지(중복 수신 안정)
+        M._peerFinT[seat] = (M._peerFinT[seat] == null) ? msg.finT : Math.min(M._peerFinT[seat], msg.finT);
+      }
+    },
     actionLabel() { return '점프'; },
 
     hostTick(M) {
@@ -332,9 +341,20 @@
 
     finishPatch(M) {
       const ranks = {};
-      const fin = ((M.state && M.state.finishOrder) || []).slice().sort((a, b) => (a.timeMs - b.timeMs) || (a.seat - b.seat));
-      const seen = new Set(); const finished = [];
-      for (const f of fin) { if (!f || f.seat == null || seen.has(f.seat) || M.seats.indexOf(f.seat) < 0) continue; seen.add(f.seat); finished.push(f.seat); }
+      // 완주시각 수집: 어느 한 정보원이 늦더라도 누락되지 않도록 3중 병합.
+      //  (1) 공유 finishOrder(DB) (2) 브로드캐스트로 받은 peer 완주시각 (3) 내 로컬 완주(아직 CAS 반영 전일 수 있음)
+      // → 모든 클라가 동일한 완주자/순서를 산출(첫 골인=1등 보장, 전파 지연으로 방장이 미완주 처리되던 버그 수정).
+      const times = {};
+      const note = (seat, tm) => {
+        if (seat == null || tm == null || M.seats.indexOf(seat) < 0) return;
+        if (times[seat] == null || tm < times[seat]) times[seat] = tm;
+      };
+      for (const f of ((M.state && M.state.finishOrder) || [])) if (f) note(f.seat, f.timeMs);
+      if (M._peerFinT) for (const s in M._peerFinT) note(Number(s), M._peerFinT[s]);
+      if (M.local && M.local.fin) note(M.mySeat, Math.round(M.local.finT || 0));
+
+      const finished = Object.keys(times).map(Number).sort((a, b) => (times[a] - times[b]) || (a - b));
+      const seen = new Set(finished);
       const progOf = (s) => {
         if (s === M.mySeat && M.local) return M.local.bestProg || 0;
         const p = M.peerAt(s); if (p && p.prog != null) return p.prog;
