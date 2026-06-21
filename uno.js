@@ -545,7 +545,7 @@ async function unoSkipDeparted(){
     let guard=Number(base.n||unoSeats(base).length)+1;
     while(guard-- > 0 && !unoIsLive(base, Number(base.turn))){
       unoLog(base, `🚪 ${base.names[base.turn]} 자리비움 — 턴 넘김`);
-      base.drawnId=null;
+      base.drawnId=null; base.pendingDraw=0;   // 떠난 좌석의 누적 +2 스택 소멸(다음 생존자에게 전가 방지)
       base.turn=unoNextSeat(base, base.turn);
     }
     const liveSeats=unoSeats(base).filter(x=>unoIsLive(base,x));

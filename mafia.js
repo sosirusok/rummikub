@@ -125,6 +125,7 @@ async function mfRefreshView() {
 /* ----------------------------- 1초 틱: 카운트다운 + 시간초과 강제해소 ---------------------------------- */
 function mfTick() {
   if (!MF.on || !MF.state) return;
+  if (typeof serverTimeStale === 'function' && serverTimeStale()) syncServerTime();   // 마피아 페이즈 타이머도 클럭 자가치유
   mfUpdateCountdown();
   const s = MF.state, ph = s.phase;
   if (ph !== 'night' && ph !== 'day') return;

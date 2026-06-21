@@ -9,6 +9,7 @@
 
 let sb = null;
 let SERVER_OFFSET = 0; // serverNow - clientNow (ms)
+let _lastSync = 0, _lastAttempt = 0, _syncing = false;   // 클럭 동기 신선도/중복호출 가드
 // 세션 토큰 접근(app.js 전역 ME). 토큰 인자 없는 래퍼들이 RPC 호출 시 사용.
 function _tok() { return (typeof ME !== 'undefined' && ME) ? ME.token : null; }
 
@@ -22,13 +23,27 @@ function initSupabase() {
   return sb;
 }
 function serverNow() { return Date.now() + SERVER_OFFSET; }
+// 클럭 동기가 한 번도 성공 못 했거나(0) 60초 넘게 오래됐으면 재동기 필요 → 타이머 클럭스큐 자가치유
+function serverTimeStale() { return _lastSync === 0 || (Date.now() - _lastSync) > 60000; }
+// 서버시각 오프셋 측정. 3회 샘플 중 최소 RTT 채택(정확도↑), 실패 시 직전 오프셋 보존(0으로 리셋 안 함).
 async function syncServerTime() {
+  if (_syncing || (Date.now() - _lastAttempt) < 1500) return false;   // 과도호출 억제
+  _syncing = true; _lastAttempt = Date.now();
   try {
-    const t0 = Date.now();
-    const { data } = await sb.rpc('rk_now');
-    const t1 = Date.now();
-    if (data) SERVER_OFFSET = new Date(data).getTime() - (t0 + (t1 - t0) / 2);
-  } catch (e) { /* keep offset 0 */ }
+    let best = null;
+    for (let i = 0; i < 3; i++) {
+      try {
+        const t0 = Date.now();
+        const { data, error } = await sb.rpc('rk_now');
+        const t1 = Date.now();
+        if (error || !data) continue;
+        const rtt = t1 - t0, offset = new Date(data).getTime() - (t0 + rtt / 2);
+        if (!best || rtt < best.rtt) best = { rtt, offset };
+      } catch (e) { /* 다음 샘플 시도 */ }
+    }
+    if (best) { SERVER_OFFSET = best.offset; _lastSync = Date.now(); return true; }
+    return false;                                       // 실패 → 이전 오프셋 유지
+  } finally { _syncing = false; }
 }
 
 /* ----------------------------- 계정 ----------------------------------- */

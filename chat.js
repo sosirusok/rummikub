@@ -123,9 +123,10 @@ function chatBadge() {
 function chatList() {
   const ul = document.querySelector('[data-role="cmsgs"]'); if (!ul) return;
   if (!CHAT.msgs.length) { ul.innerHTML = `<li class="chat-empty">아직 메시지가 없어요.<br>같은 방 사람들과 대화하세요!</li>`; return; }
+  const atBottom = ul.scrollHeight - ul.scrollTop - ul.clientHeight < 40;   // 위로 스크롤해 과거 읽는 중이면 강제 하단이동 안 함
   ul.innerHTML = CHAT.msgs.map(m =>
     `<li class="chat-m ${m.me ? 'is-me' : ''}"><span class="chat-m__n">${esc(m.name)}</span><span class="chat-m__t">${esc(m.text)}</span></li>`).join('');
-  ul.scrollTop = ul.scrollHeight;
+  if (atBottom) ul.scrollTop = ul.scrollHeight;
 }
 function chatDoSend() {
   const i = document.querySelector('[data-role="cin"]'); if (!i) return;

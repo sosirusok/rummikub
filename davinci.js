@@ -373,7 +373,8 @@ async function dvMaybeStartPlay() {
     const sts = dvSeats(base);
     if (!sts.every(seat => (base.ready && base.ready[seat]) || !dvIsLive(base, seat))) return null;
     base.phase = 'play';
-    base.turn = sts[0];
+    const liveSts = sts.filter(seat => dvIsLive(base, seat));   // 첫 턴=살아있는(접속) 최저 좌석(이탈자에게 턴 안 넘김)
+    base.turn = liveSts.length ? liveSts[0] : sts[0];
     dvLog(base, `🎬 모두 준비 완료 — 게임 시작!`);
     return base;
   });

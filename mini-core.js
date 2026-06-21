@@ -39,7 +39,7 @@ const MINI = {
   input: { dx: 0, dy: 0, action: false, actionHeld: false },
   canvas: null, ctx: null, W: 0, H: 0, dpr: 1,
   peers: {}, local: null, bc: null, _netT: 0, _hudT: 0, _hudHTML: '',
-  lowPower: false, _frames: [], _ended: false, _ctl: null, _ro: null, _keys: null,
+  lowPower: false, _frames: [], _ended: false, _ctl: null, _ro: null, _keys: null, _writeQ: null,
 };
 const MINI_STEP = 1000 / 30;
 const MINI_NET_MS = 100;
@@ -57,7 +57,7 @@ function mulberry32(a) {
 /* ----------------------------- 진입/종료 ------------------------------ */
 function miniStart(room, me, mySeat, amSpectator) {
   miniStop();
-  MINI.on = true; MINI._ended = false;
+  MINI.on = true; MINI._ended = false; MINI._writeQ = null; MINI._endRetryAt = 0;   // 새 게임: 이전 쓰기 큐/재시도 게이트 초기화
   MINI.room = room; MINI.roomId = room.id; MINI.state = room.state || {};
   MINI.game = room.game; MINI.mod = (window.MiniGames || {})[room.game];
   MINI.me = me; MINI.mySeat = mySeat; MINI.amSpectator = amSpectator;
@@ -111,6 +111,7 @@ function miniOnRoom(room) {
   if (!MINI.on || room.id !== MINI.roomId) return;
   MINI.room = room; MINI.state = room.state || {};
   MINI.isHost = room.host_id === MINI.me.id;
+  if (room.status === 'finished') MINI._ended = true;   // 결과 도착 → 지각 endGame 발사 차단
   if (room.turn_started_at) MINI._simBase = new Date(room.turn_started_at).getTime();
 }
 
@@ -150,7 +151,7 @@ function miniLoop(ts) {
     try {
       if (!MINI.amSpectator && MINI.mod.step) MINI.mod.step(MINI, MINI_STEP);
       // 종료조건은 모든 클라가 검사(호스트 이탈해도 게임 안 끝나는 문제 방지; finish RPC·CAS 멱등)
-      if (MINI.mod.hostTick && !MINI._ended && MINI.simT() >= (MINI._endRetryAt || 0)) MINI.mod.hostTick(MINI, MINI_STEP);
+      if (MINI.mod.hostTick && !MINI._ended && performance.now() >= (MINI._endRetryAt || 0)) MINI.mod.hostTick(MINI, MINI_STEP);
     } catch (e) { console.error('mini step', e); }
     MINI.input.action = false;                // 엣지 소비
     MINI.acc -= MINI_STEP;
@@ -252,7 +253,7 @@ function setupKeys() {
 }
 
 /* ----------------------------- 호스트 권위 --------------------------- */
-async function _pushStateRetry(patch, mergeArray) {
+async function _pushStateRetryRaw(patch, mergeArray) {
   for (let i = 0; i < 6; i++) {
     let ns = Object.assign({}, MINI.state);
     if (mergeArray) {
@@ -268,6 +269,14 @@ async function _pushStateRetry(patch, mergeArray) {
   }
   return false;
 }
+// 직렬화: 동시 pushPatch/appendFinish/endGame 가 같은 version 으로 CAS 충돌해 patch 가 유실되던 것 차단.
+// 큐로 한 번에 하나씩 실행 → 각 호출이 직전 결과를 본 뒤 진행(순서·결과 보존).
+function _pushStateRetry(patch, mergeArray) {
+  const run = () => _pushStateRetryRaw(patch, mergeArray);
+  const p = (MINI._writeQ || Promise.resolve()).then(run, run);   // 직전이 실패해도 다음은 실행
+  MINI._writeQ = p.catch(() => {});                               // 큐 꼬리는 항상 resolved(미처리 거부 방지)
+  return p;                                                       // 호출자는 실제 결과(boolean/throw) 수신
+}
 MINI.appendFinish = function (item) { return _pushStateRetry(null, { key: 'finishOrder', item }); };
 MINI.pushPatch = function (patch) { return _pushStateRetry(patch, null); };
 MINI.endGame = async function () {
@@ -276,7 +285,7 @@ MINI.endGame = async function () {
     const patch = MINI.mod.finishPatch ? MINI.mod.finishPatch(MINI) : {};
     await _pushStateRetry(patch, null);                 // 권위필드(ranks/alive 등) 먼저 기록
     await finishGame(MINI.roomId, MINI.me.token, MINI.game);  // RPC 가 검증·정산·status=finished
-  } catch (e) { console.error('endGame', e); MINI._ended = false; MINI._endRetryAt = MINI.simT() + 2000; }
+  } catch (e) { console.error('endGame', e); MINI._ended = false; MINI._endRetryAt = performance.now() + 2000; }   // 단조 시계 게이트(시계 점프 무영향)
 };
 
 /* ----------------------------- 그리기 헬퍼 --------------------------- */

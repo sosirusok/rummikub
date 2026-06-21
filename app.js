@@ -50,10 +50,14 @@ function statsOf(uid) { return lbCache[uid] || {}; }
 async function boot() {
   if (!configReady()) { app().innerHTML = `<div class="screen center" style="justify-content:center"><h2>설정 필요</h2><p class="muted">config.js / supabase_setup.sql 을 확인하세요.</p></div>`; return; }
   initSupabase();
-  syncServerTime();
+  await syncServerTime();                                  // 오프셋 확보 후 진행(타이머 15초→45초 클럭스큐 방지)
   bindAppInput(handleAct, () => {}, () => false);
   app().addEventListener('pointerdown', rkPointerDown);   // 루미큐브 타일 드래그
-  if (TOKEN) { ME = await apiMe(TOKEN); if (ME) TOKEN = ME.token; }
+  if (TOKEN) {
+    ME = await apiMe(TOKEN);
+    if (ME) TOKEN = ME.token;
+    else if (ME === null) { localStorage.removeItem('rk_token'); TOKEN = null; }   // null=토큰무효 → 정리(undefined=일시오류는 토큰 보존)
+  }
   if (ME) goHome(); else showLogin();
 }
 
@@ -495,7 +499,7 @@ async function doSit(seat) {
   });
 }
 async function doSpectate() { await netCall(async () => { await spectate(ROOM_ID, ME); await refreshRoom(); }); }
-async function doSetTime(sec) { await netCall(() => setTurnSeconds(ROOM_ID, sec)); }
+async function doSetTime(sec) { await netCall(async () => { await setTurnSeconds(ROOM_ID, sec); await refreshRoom(); }); }   // 낙관적 즉시 반영(칩 지연 제거)
 async function doSetGame(game) {
   if (MEMBERS.length >= 5 && capOf(game) <= 4) { toast('5명 이상은 마피아만 선택할 수 있어요'); return; }
   await netCall(async () => { await setRoomGame(ROOM_ID, game); await refreshRoom(); });
@@ -976,13 +980,14 @@ async function autoTimeout(forSeat) {
   busy = false;
   if (r.ok) { work = null; if (over) await finishGame(ROOM_ID, TOKEN, 'rummikub'); await refreshRoom(); }
 }
-function startTimer() { if (timerIv) return; timerIv = setInterval(tick, 250); }
+function startTimer() { if (serverTimeStale()) syncServerTime(); if (timerIv) return; timerIv = setInterval(tick, 250); }
 function stopTimer() { if (timerIv) { clearInterval(timerIv); timerIv = null; } lastAutoKey = null; }
 function tick() {
   if (!ROOM || ROOM.status !== 'playing' || ROOM.game !== 'rummikub' || !ROOM.turn_started_at || !G) return;
+  if (serverTimeStale()) syncServerTime();                 // 클럭 오래되면 자가 재동기(타이머 ~1RTT 내 보정)
   const startMs = new Date(ROOM.turn_started_at).getTime();
   const lim = ROOM.turn_seconds || 30;
-  const rem = lim - (serverNow() - startMs) / 1000;
+  const rem = Math.min(lim, lim - (serverNow() - startMs) / 1000);   // 표시는 lim 초과 금지(클럭스큐 방어)
   updateTimerUI(rem, lim);
   const key = ROOM.version + '|' + G.turn;
   if (rem <= 0 && isMyTurn() && lastAutoKey !== key) { lastAutoKey = key; autoTimeout(mySeat); }
@@ -991,7 +996,7 @@ function tick() {
 function updateTimerUI(rem, lim) {
   const numEl = $('[data-role="timerNum"]'), tEl = $('[data-role="timer"]'), fill = $('.timer__fill');
   if (!numEl || !tEl) return;
-  if (rem == null) { if (ROOM && ROOM.turn_started_at) { rem = (ROOM.turn_seconds || 30) - (serverNow() - new Date(ROOM.turn_started_at).getTime()) / 1000; lim = ROOM.turn_seconds || 30; } else { numEl.textContent = '–'; return; } }
+  if (rem == null) { if (ROOM && ROOM.turn_started_at) { lim = ROOM.turn_seconds || 30; rem = Math.min(lim, lim - (serverNow() - new Date(ROOM.turn_started_at).getTime()) / 1000); } else { numEl.textContent = '–'; return; } }
   const r = Math.max(0, rem);
   numEl.textContent = Math.ceil(r);
   if (fill) { const C = 100.5; fill.style.strokeDashoffset = (C * (1 - r / lim)).toFixed(1); }

@@ -40,7 +40,6 @@ function bindAppInput(onAct, onTap, tapActive) {
   root.addEventListener('pointerup', (e) => {
     const rec = _act; _act = null;
     if (!rec || e.pointerId !== rec.pid) return;
-    _ptrAt = e.timeStamp;                                    // 펜딩 탭의 포인터업 → 합성 click 폴백 억제(드롭돼도 오작동 X)
     if (Math.hypot(e.clientX - rec.x, e.clientY - rec.y) > TAP_MOVE) return;           // 스크롤 → 무시
     const upEl = document.elementFromPoint(e.clientX, e.clientY);
     if (!upEl) return;
@@ -49,6 +48,7 @@ function bindAppInput(onAct, onTap, tapActive) {
     if (!live) return;
     if (live !== rec.el && !sameAction(live, rec.el)) return;   // 같은 버튼(또는 같은 논리 액션)에서 떼야 발동
     if (live.disabled || live.getAttribute('aria-disabled') === 'true') return;
+    _ptrAt = e.timeStamp;                                    // 발화 확정 시에만 합성 click 억제(탭 기각되면 데스크톱 click 폴백 살림)
     if (rec.kind === 'act') onAct(live.dataset.act, live, e);
     else if (tapActive && tapActive()) onTap(live, e);
   });
