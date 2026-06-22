@@ -270,7 +270,7 @@
       const sx=cx(M.course.startC), sy=cy(M.course.startR);
       M.local = M.amSpectator ? null : {
         x:sx, y:sy, z:0, px0:sx, py0:sy, pz0:0, facing:{dx:0,dy:-1},
-        air:false, jumpAt:0, airUntil:0, dashed:false, dashUntil:0, jumpReadyAt:0,
+        air:false, jumpAt:0, airUntil:0, dashed:false, dashUntil:0, jumpReadyAt:0, iceAir:false, noDash:false,
         stunUntil:0, speedUntil:0, coyoteUntil:0, skillBuf:-1e9,
         ivx:0, ivy:0, bumpUntil:0, bumpVx:0, bumpVy:0, launchUntil:0, launchVx:0, launchVy:0,
         cpRow:M.course.startR, cpX:sx, cpY:sy,
@@ -300,9 +300,8 @@
     onPeer(M,seat,msg){ if(msg&&msg.prog!=null) M._peerProg[seat]=Math.max(M._peerProg[seat]||0,msg.prog); if(msg&&msg.fin) M._peerFin[seat]=true; },
     actionLabel(){ return '점프'; },
     hostTick(M){ if(M._ended) return; const fin=(M.state&&M.state.finishOrder)||[];
-      if(M.simT()>=HARD_LIMIT_MS){ M.endGame(); return; }
-      if(fin.length===0) return; if(new Set(fin.map(f=>f.seat)).size>=M.n){ M.endGame(); return; }
-      const f0=Math.min.apply(null,fin.map(f=>f.timeMs)); if(M.simT()-f0>=CUTOFF_MS) M.endGame(); },
+      if(fin.length>=1){ M.endGame(); return; }      // 첫 골인 즉시 게임 종료
+      if(M.simT()>=HARD_LIMIT_MS) M.endGame(); },
     finishPatch(M){ const ranks={};
       const fin=((M.state&&M.state.finishOrder)||[]).slice().sort((a,b)=>(a.timeMs-b.timeMs)||(a.seat-b.seat));
       const seen=new Set(),finished=[]; for(const f of fin){ if(!f||f.seat==null||seen.has(f.seat)||M.seats.indexOf(f.seat)<0) continue; seen.add(f.seat); finished.push(f.seat); }
@@ -327,8 +326,8 @@
     const onSwamp = tAt(g,L.x,L.y)===SWAMP;
     // 점프(엣지+버퍼) / 공중 대시(점프 후 0.07초 뒤 한 번)
     if(skillBuffered(L,t)){
-      if(!L.air && t>=L.jumpReadyAt && !onSwamp){ L.air=true; L.jumpAt=t; L.airUntil=t+JUMP_MS; L.dashed=false; L.skillBuf=-1e9; if(!M.lowPower)M.vibrate(8); }
-      else if(L.air && !L.dashed && t>=L.jumpAt+DASH_GAP){ L.dashed=true; L.dashUntil=t+DASH_MS; L.airUntil=Math.max(L.airUntil,t+DASH_MS); L.skillBuf=-1e9; if(!M.lowPower)M.vibrate(14); }
+      if(!L.air && t>=L.jumpReadyAt && !onSwamp){ const ice=tAt(g,L.x,L.y)===ICE; L.air=true; L.jumpAt=t; L.airUntil=t+JUMP_MS; L.dashed=false; L.iceAir=ice; L.noDash=ice; L.skillBuf=-1e9; if(!M.lowPower)M.vibrate(8); }   // 얼음서 점프=관성유지·대시금지
+      else if(L.air && !L.dashed && !L.noDash && t>=L.jumpAt+DASH_GAP){ L.dashed=true; L.dashUntil=t+DASH_MS; L.airUntil=Math.max(L.airUntil,t+DASH_MS); L.skillBuf=-1e9; if(!M.lowPower)M.vibrate(14); }
     }
     // 속도 = 걷기(공중=AIR_CONTROL 비율 / 방향없으면 0=제자리) + 대시 가속
     let spd=(t<L.speedUntil?WALK*SPEED_MUL:WALK); if(L.air) spd*=AIR_CONTROL; if(onSwamp&&!L.air) spd*=0.45;
@@ -336,8 +335,9 @@
     if(L.dashed && t<L.dashUntil){ vx+=L.facing.dx*DASH_BOOST; vy+=L.facing.dy*DASH_BOOST; }
     if(t<L.bumpUntil){ vx=L.bumpVx; vy=L.bumpVy; }          // 별범퍼 넉백 우선
     if(t<L.launchUntil){ vx=L.launchVx; vy=L.launchVy; }    // 점프대/손바닥 발사 우선
-    // 얼음 관성: 누르면 가속, 떼면 미끄러져 못 멈춤(저마찰 글라이드)
-    if(tAt(g,L.x,L.y)===ICE && !L.air && t>=L.bumpUntil && t>=L.launchUntil){
+    // 얼음 점프=관성 유지(미세 공중제어만, 멈추지 않음) / 얼음 위 지상=누르면 가속·떼면 미끄럼
+    if(L.iceAir && L.air){ L.ivx+=(vx-L.ivx)*0.04; L.ivy+=(vy-L.ivy)*0.04; vx=L.ivx; vy=L.ivy; }
+    else if(tAt(g,L.x,L.y)===ICE && !L.air && t>=L.bumpUntil && t>=L.launchUntil){
       if(moving){ L.ivx+=(vx-L.ivx)*0.22; L.ivy+=(vy-L.ivy)*0.22; } else { L.ivx*=0.97; L.ivy*=0.97; }
       vx=L.ivx; vy=L.ivy;
     } else { L.ivx=vx; L.ivy=vy; }
@@ -348,10 +348,15 @@
     if(isWall(g,nx,L.y,rows)){ popOrBlock(M,L,t,nx,L.y); nx=L.x; }
     if(isWall(g,L.x,ny,rows)){ popOrBlock(M,L,t,L.x,ny); ny=L.y; }
     L.x=clamp(nx,TILE+PR,(COLS-1)*TILE-PR); L.y=clamp(ny,PR,rows*TILE-PR);
+    // 칸 정렬(격자 레인): 지상에서 주력축 이동 시 직교축을 칸 중앙으로·정지 시 칸 중앙으로(부드럽게)
+    if(!L.air){ const ax=Math.abs(vx),ay=Math.abs(vy);
+      if(ax>ay*1.3){ L.y+=(cy(rowAt(L.y))-L.y)*0.30; }
+      else if(ay>ax*1.3){ L.x+=(cx(colAt(L.x))-L.x)*0.30; }
+      else if(ax<0.02&&ay<0.02){ L.x+=(cx(colAt(L.x))-L.x)*0.30; L.y+=(cy(rowAt(L.y))-L.y)*0.30; } }
     // 점프 호/착지
     if(L.air){ const k=clamp((t-L.jumpAt)/((L.airUntil-L.jumpAt)||1),0,1); L.z=Math.sin(k*Math.PI)*JUMP_H*(L.dashed?1.12:1);
       if(airHazard(M,L,t)) return;
-      if(t>=L.airUntil){ L.air=false; L.dashed=false; L.z=0; L.jumpReadyAt=t+JUMP_CD; resolveGround(M,L,t); } }
+      if(t>=L.airUntil){ L.air=false; L.dashed=false; L.iceAir=false; L.noDash=false; L.z=0; L.jumpReadyAt=t+JUMP_CD; resolveGround(M,L,t); } }
     else { L.z=0; resolveGround(M,L,t); }
     // 체크포인트: y라인 통과(밟지 않고 위로 지나쳐도 적용)
     for(const cp of M.course.cps){ if(cp.r<L.cpRow && L.y<=cy(cp.r)+TILE*0.45){ L.cpRow=cp.r; L.cpX=cx(cp.c); L.cpY=cy(cp.r); } }
@@ -388,7 +393,7 @@
   }
   function doLaunch(L,d,t){ L.launchVx=d[0]*LAUNCH_SPD; L.launchVy=d[1]*LAUNCH_SPD; L.launchUntil=t+LAUNCH_MS; L.coyoteUntil=0;
     L.air=true; L.jumpAt=t; L.airUntil=Math.max(L.airUntil,t+LAUNCH_MS); L.dashed=false; }
-  function die(M,L,t){ L.x=L.cpX; L.y=L.cpY; L.z=0; L.px0=L.x; L.py0=L.y; L.pz0=0; L.air=false; L.dashed=false; L.ivx=L.ivy=0;
+  function die(M,L,t){ L.x=L.cpX; L.y=L.cpY; L.z=0; L.px0=L.x; L.py0=L.y; L.pz0=0; L.air=false; L.dashed=false; L.iceAir=false; L.noDash=false; L.ivx=L.ivy=0;
     L.bumpUntil=0; L.launchUntil=0; L.coyoteUntil=0; L.stunUntil=t+RESPAWN_STUN; L.speedUntil=0; L.skillBuf=-1e9;
     M.flash('💫 추락! 체크포인트로'); if(!M.lowPower) M.vibrate(26); }
   function isFake(M,r,c){ const k=r*COLS+c; if(M._fake[k]==null){ const rng=mulb((M.course.seed^(r*73856093)^(c*19349663))>>>0); M._fake[k]=rng()<0.55; } return M._fake[k]; }
