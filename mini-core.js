@@ -165,7 +165,8 @@ function miniLoop(ts) {
       catch (e) { console.error('mini net', e); }   // 송신 실패해도 루프(rAF 재예약)는 계속
     }
   }
-  // 그리기
+  // 그리기 (30Hz 시뮬 → 가변 fps 렌더 보간용 alpha: 다음 스텝까지 진행률)
+  MINI._alpha = Math.max(0, Math.min(1, MINI.acc / MINI_STEP));
   const ctx = MINI.ctx;
   ctx.setTransform(MINI.dpr, 0, 0, MINI.dpr, 0, 0);
   ctx.clearRect(0, 0, MINI.W, MINI.H);

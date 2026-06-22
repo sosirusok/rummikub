@@ -22,12 +22,17 @@
   const TILE = 32, COLS = 11, C = (COLS - 1) >> 1, PR = 10;
   const START_ROWS = 3, FINISH_ROWS = 4;
 
-  // 칸당 모션 시간(ms) — 스냅하고 빠르게(점프가 걷기보다 느리지 않게)
-  const T_WALK = 140, T_JUMP = 240, T_DASH = 200, T_SLIDE = 95, T_BUMP = 140, T_LAUNCH = 55; // launch=칸당
-  const LAND_STUN = 35, RESPAWN_STUN = 350, INPUT_BUF = 140, DASH_GAP = 45;
-  const JUMP_TILES = 2, DASH_TOTAL = 4;          // 점프 2칸, 대시는 +2칸(합 4)
-  const JUMP_H = TILE * 0.85;
-  const SPEED_MUL = 1.5, SPEED_MS = 2000;
+  // 연속 이동 물리 (실제 좀비고: 걷기=연속, 점프는 공중 체공시간 동안 입력으로 계속 이동=공중제어, 합산)
+  const WALK = 0.20;             // 걷기 px/ms = 6.25칸/초 (지면)
+  const AIR_CONTROL = 0.65;      // 공중 이동속도 비율 → 점프(공중시간×걷기×0.65)≈2칸
+  const JUMP_MS = 460;           // 점프 공중시간 ms (실제 영상 체감 0.4~0.6초)
+  const JUMP_H = TILE * 0.95;    // 점프 시각 높이
+  const DASH_MS = 240, DASH_BOOST = 0.50;   // 대시 추가속도 지속/세기 → 점프+대시 합산 ≈5칸
+  const JUMP_CD = 90, DASH_GAP = 70;         // 점프↔대시 쿨 0.07초(나무위키 명시)
+  const RESPAWN_STUN = 380, INPUT_BUF = 130, COYOTE_MS = 150;   // 가장자리 추락 유예(판정 완화)
+  const BUMP_MS = 200, BUMP_SPD = 0.26, LAUNCH_MS = 300, LAUNCH_SPD = 0.55;
+  const SPEED_MUL = 1.45, SPEED_MS = 2000;
+  const JUMP_TILES = 2, DASH_TOTAL = 5;          // 완주가능성 BFS 사거리(칸)
   const START_MS = 3600, CUTOFF_MS = 25000, HARD_LIMIT_MS = 360000, PROG_MAX = 1000;
 
   // 장애물 주기(ms)
@@ -261,32 +266,29 @@
   const race = {
     label:'운빨 대시',
     init(M){
-      M.course=buildCourse(M); M._peerProg={}; M._peerFin={};
-      M._fake={};
-      const sc=M.course.startC, sr=M.course.startR;
+      M.course=buildCourse(M); M._peerProg={}; M._peerFin={}; M._fake={}; M._trig={};
+      const sx=cx(M.course.startC), sy=cy(M.course.startR);
       M.local = M.amSpectator ? null : {
-        gx:sc, gy:sr, x:cx(sc), y:cy(sr), z:0, state:'idle', mv:null, mvT:0,
-        dirHeld:null, lastDir:'up', skillBuf:-1e9, air:false, dashUsed:false, jumpFromR:sr, jumpFromC:sc,
-        jumpReadyAt:0, stunUntil:0, sliding:false, slideDir:null, speedUntil:0, convT:0,
-        cpR:sr, cpC:sc, prog:0, bestProg:0, fin:false, finished:false, finT:0, _appended:false,
+        x:sx, y:sy, z:0, px0:sx, py0:sy, pz0:0, facing:{dx:0,dy:-1},
+        air:false, jumpAt:0, airUntil:0, dashed:false, dashUntil:0, jumpReadyAt:0,
+        stunUntil:0, speedUntil:0, coyoteUntil:0, skillBuf:-1e9,
+        ivx:0, ivy:0, bumpUntil:0, bumpVx:0, bumpVy:0, launchUntil:0, launchVx:0, launchVy:0,
+        cpRow:M.course.startR, cpX:sx, cpY:sy,
+        prog:0, bestProg:0, fin:false, finished:false, finT:0, _appended:false,
       };
     },
 
     step(M, dt){
       const L=M.local; if(!L||L.finished) return;
       const t=M.simT(); if(t<START_MS){ return; }
-      if(!L.mv && t<L.stunUntil){ L.skillBuf=-1e9; return; }   // 경직(부활/착지) 중: 입력·버퍼 폐기 → 부활 직후 자동점프 차단
+      L.px0=L.x; L.py0=L.y; L.pz0=L.z;                         // 렌더 보간용 직전 상태
+      if(t<L.stunUntil){ L.skillBuf=-1e9; L.ivx=L.ivy=0; return; }   // 부활 경직: 정지·버퍼폐기(자동점프 차단)
       if(M.input.action) L.skillBuf=t;
-      L.dirHeld=readDir(M.input); if(L.dirHeld) L.lastDir=L.dirHeld;
-
-      if(L.mv) advanceTween(M,L,dt,t);
-      else handleResting(M,L,dt,t);
-
-      // 쇠공(체공 무관 즉사) 매 프레임 영역검사
+      stepPhysics(M,L,dt,t);
       ballHit(M,L,t);
-
-      L.prog=progOf(M.course,L.gy); if(L.prog>L.bestProg) L.bestProg=L.prog;
-      if(!L.fin && L.gy<=M.course.goalR && Math.abs(L.gx-M.course.goalC)<=1){
+      const row=rowAt(L.y);
+      L.prog=progOf(M.course,row); if(L.prog>L.bestProg) L.bestProg=L.prog;
+      if(!L.fin && row<=M.course.goalR && Math.abs(colAt(L.x)-M.course.goalC)<=1){
         L.fin=true; L.finished=true; L.finT=t; L.bestProg=PROG_MAX;
         if(!L._appended){ L._appended=true; M.flash('골인! 🍯'); try{M.appendFinish({seat:M.mySeat,timeMs:Math.round(t)});}catch(e){} }
       }
@@ -312,117 +314,87 @@
     _buildCourse:buildCourse, _reachable:reachable, _assemble:assemble, _THEMES:THEMES,
   };
 
-  /* ----------------------------- 이동 상태머신 -------------------------- */
-  function readDir(input){ const ax=input.dx, ay=input.dy;
-    if(Math.abs(ax)<0.35 && Math.abs(ay)<0.35) return null;
-    return Math.abs(ax)>=Math.abs(ay) ? (ax>0?'right':'left') : (ay>0?'down':'up'); }
+  /* ----------------------------- 연속 물리 ----------------------------- */
+  function readVec(input){ let dx=clamp(input.dx,-1,1), dy=clamp(input.dy,-1,1); const m=Math.hypot(dx,dy); if(m>1){dx/=m;dy/=m;} return {dx,dy,m}; }
   function skillBuffered(L,t){ return (t-L.skillBuf)<=INPUT_BUF; }
-  function inBounds(gx,gy,rows){ return gx>=1 && gx<=COLS-2 && gy>=0 && gy<=rows-1; }
-  function blockedTile(g,gx,gy,rows){ if(!inBounds(gx,gy,rows)) return true; return g[gy][gx]===BALLOON; }
+  function tAt(g,x,y){ return gV(g,rowAt(y),colAt(x)); }
+  function isWall(g,x,y,rows){ const c=colAt(x),r=rowAt(y); if(c<1||c>COLS-2||r<0||r>=rows) return true; return gV(g,r,c)===BALLOON; }
 
-  function beginMove(L, tgx, tgy, dur, kind, arc, dir){
-    L.mv={ fx:L.x, fy:L.y, tx:cx(tgx), ty:cy(tgy), tgx, tgy, dur, kind, arc, dir }; L.mvT=0; L.state=kind;
-  }
-  function advanceTween(M,L,dt,t){
-    const mv=L.mv; L.mvT+=dt; const a=clamp(L.mvT/mv.dur,0,1);
-    L.x=mv.fx+(mv.tx-mv.fx)*a; L.y=mv.fy+(mv.ty-mv.fy)*a;
-    L.z = mv.arc ? Math.sin(a*Math.PI)*JUMP_H : 0;
-    // 점프 중 대시 승격
-    if(mv.kind==='jump' && !L.dashUsed && L.mvT>=DASH_GAP && skillBuffered(L,t)){ upgradeDash(M,L,t); return; }
-    // 공중 비점프 사망(분홍구름/전기장 켜짐)은 통과 중에도 — 단 점프판정(jump/dash/arrow)은 안전
-    if(a>=1){ arrive(M,L,t); }
-  }
-  function upgradeDash(M,L,t){ const dir=L.dirHeld||L.lastDir; if(!dir) return;
-    const d=DIRV[dir], g=M.course.grid; let tgx=L.jumpFromC, tgy=L.jumpFromR;
-    for(let k=1;k<=DASH_TOTAL;k++){ const nx=L.jumpFromC+d[0]*k, ny=L.jumpFromR+d[1]*k; if(!inBounds(nx,ny,M.course.rows)) break;
-      if(g[ny][nx]===BALLOON){ g[ny][nx]=SOLID; if(!M.lowPower) M.vibrate(12); break; }   // 풍선=대시로 터뜨리고 앞에서 정지(다음에 통과)
-      tgx=nx; tgy=ny; }
-    L.dashUsed=true; L.skillBuf=-1e9; L.lastDir=dir; beginMove(L,tgx,tgy,T_DASH,'dash',true,dir);
-  }
-  function startJump(M,L,t){
-    const g=M.course.grid;
-    if(g[L.gy][L.gx]===SWAMP) return;                  // 늪=점프 봉인
-    L.air=true; L.dashUsed=false; L.jumpFromR=L.gy; L.jumpFromC=L.gx; L.sliding=false; L.skillBuf=-1e9;
-    const dir=L.dirHeld;
-    if(!dir){ beginMove(L,L.gx,L.gy,T_JUMP,'jump',true,null); return; }   // 방향 없으면 제자리
-    const d=DIRV[dir]; L.lastDir=dir; let tgx=clamp(L.gx+d[0]*JUMP_TILES,1,COLS-2), tgy=clamp(L.gy+d[1]*JUMP_TILES,0,M.course.rows-1);
-    while(blockedTile(g,tgx,tgy,M.course.rows) && (tgx!==L.gx||tgy!==L.gy)){ tgx-=d[0]; tgy-=d[1]; }
-    beginMove(L,tgx,tgy,T_JUMP,'jump',true,dir);
-  }
-  function bounce(M,L){ const g=M.course.grid; L.air=true; L.dashUsed=false; L.jumpFromR=L.gy; L.jumpFromC=L.gx; L.sliding=false;
-    const dir=L.dirHeld;
-    if(!dir){ beginMove(L,L.gx,L.gy,T_JUMP,'jump',true,null); return; }
-    const d=DIRV[dir]; let tgx=clamp(L.gx+d[0]*JUMP_TILES,1,COLS-2), tgy=clamp(L.gy+d[1]*JUMP_TILES,0,M.course.rows-1);
-    while(blockedTile(g,tgx,tgy,M.course.rows)&&(tgx!==L.gx||tgy!==L.gy)){ tgx-=d[0]; tgy-=d[1]; }
-    beginMove(L,tgx,tgy,T_JUMP,'jump',true,dir); }
-  function startWalk(M,L,dir){ const d=DIRV[dir]; const tgx=L.gx+d[0], tgy=L.gy+d[1];
-    if(blockedTile(M.course.grid,tgx,tgy,M.course.rows)) return;       // 벽/풍선/경계=제자리(걸침 없음)
-    const slow = M.course.grid[L.gy][L.gx]===SWAMP ? 1.9 : 1;
-    const fast = M.simT()<L.speedUntil ? 0.7 : 1;
-    beginMove(L,tgx,tgy,T_WALK*slow*fast,'walk',false,dir);
-  }
-
-  function handleResting(M,L,dt,t){
-    const g=M.course.grid, gx=L.gx, gy=L.gy, v=g[gy][gx];
-    // 발밑 주기 사망(마법진 소멸·배출구 열림·전기장 켜짐·구멍·죽는발판)
-    if(tileDeadlyResting(g,gy,gx,t)){ die(M,L,t); return; }
-    // 트램펄린 위=계속 바운스(올라가 있으면 자동 점프)
-    if(v===TRAMP && t>=L.jumpReadyAt){ bounce(M,L); return; }
-    // 스킬(점프) — 슬라이드/일반 모두 점프로 탈출 가능
-    if(skillBuffered(L,t) && t>=L.jumpReadyAt){ startJump(M,L,t); return; }
-    // 얼음 슬라이드: 진입 방향대로 계속(대시 불가)
-    if(L.sliding){ const d=DIRV[L.slideDir]; const tgx=gx+d[0], tgy=gy+d[1];
-      if(blockedTile(g,tgx,tgy,M.course.rows)){ L.sliding=false; }
-      else { beginMove(L,tgx,tgy,T_SLIDE,'slide',false,L.slideDir); return; } }
+  function stepPhysics(M,L,dt,t){
+    const g=M.course.grid, rows=M.course.rows;
+    const inv=readVec(M.input), moving=inv.m>0.2;
+    if(moving) L.facing={dx:inv.dx,dy:inv.dy};
+    const onSwamp = tAt(g,L.x,L.y)===SWAMP;
+    // 점프(엣지+버퍼) / 공중 대시(점프 후 0.07초 뒤 한 번)
+    if(skillBuffered(L,t)){
+      if(!L.air && t>=L.jumpReadyAt && !onSwamp){ L.air=true; L.jumpAt=t; L.airUntil=t+JUMP_MS; L.dashed=false; L.skillBuf=-1e9; if(!M.lowPower)M.vibrate(8); }
+      else if(L.air && !L.dashed && t>=L.jumpAt+DASH_GAP){ L.dashed=true; L.dashUntil=t+DASH_MS; L.airUntil=Math.max(L.airUntil,t+DASH_MS); L.skillBuf=-1e9; if(!M.lowPower)M.vibrate(14); }
+    }
+    // 속도 = 걷기(공중=AIR_CONTROL 비율 / 방향없으면 0=제자리) + 대시 가속
+    let spd=(t<L.speedUntil?WALK*SPEED_MUL:WALK); if(L.air) spd*=AIR_CONTROL; if(onSwamp&&!L.air) spd*=0.45;
+    let vx=moving?inv.dx*spd:0, vy=moving?inv.dy*spd:0;
+    if(L.dashed && t<L.dashUntil){ vx+=L.facing.dx*DASH_BOOST; vy+=L.facing.dy*DASH_BOOST; }
+    if(t<L.bumpUntil){ vx=L.bumpVx; vy=L.bumpVy; }          // 별범퍼 넉백 우선
+    if(t<L.launchUntil){ vx=L.launchVx; vy=L.launchVy; }    // 점프대/손바닥 발사 우선
+    // 얼음 관성: 누르면 가속, 떼면 미끄러져 못 멈춤(저마찰 글라이드)
+    if(tAt(g,L.x,L.y)===ICE && !L.air && t>=L.bumpUntil && t>=L.launchUntil){
+      if(moving){ L.ivx+=(vx-L.ivx)*0.22; L.ivy+=(vy-L.ivy)*0.22; } else { L.ivx*=0.97; L.ivy*=0.97; }
+      vx=L.ivx; vy=L.ivy;
+    } else { L.ivx=vx; L.ivy=vy; }
     // 컨베이어 드리프트
-    if(isConvey(v)){ L.convT+=dt; if(L.convT>=CONV_CYC){ L.convT=0; const cd=ARR_DIR[v]; const d=DIRV[cd]; const tgx=gx+d[0],tgy=gy+d[1];
-        if(!blockedTile(g,tgx,tgy,M.course.rows) && !L.dirHeld){ beginMove(L,tgx,tgy,T_WALK,'walk',false,cd); return; } } }
-    else L.convT=0;
-    // 걷기(방향 입력)
-    if(L.dirHeld) startWalk(M,L,L.dirHeld);
+    const cv=tAt(g,L.x,L.y); if(isConvey(cv)&&!L.air){ const d=DIRV[ARR_DIR[cv]]; vx+=d[0]*0.07; vy+=d[1]*0.07; }
+    // 이동 + 벽(풍선) 충돌(대시면 팝)
+    let nx=L.x+vx*dt, ny=L.y+vy*dt;
+    if(isWall(g,nx,L.y,rows)){ popOrBlock(M,L,t,nx,L.y); nx=L.x; }
+    if(isWall(g,L.x,ny,rows)){ popOrBlock(M,L,t,L.x,ny); ny=L.y; }
+    L.x=clamp(nx,TILE+PR,(COLS-1)*TILE-PR); L.y=clamp(ny,PR,rows*TILE-PR);
+    // 점프 호/착지
+    if(L.air){ const k=clamp((t-L.jumpAt)/((L.airUntil-L.jumpAt)||1),0,1); L.z=Math.sin(k*Math.PI)*JUMP_H*(L.dashed?1.12:1);
+      if(airHazard(M,L,t)) return;
+      if(t>=L.airUntil){ L.air=false; L.dashed=false; L.z=0; L.jumpReadyAt=t+JUMP_CD; resolveGround(M,L,t); } }
+    else { L.z=0; resolveGround(M,L,t); }
+    // 체크포인트: y라인 통과(밟지 않고 위로 지나쳐도 적용)
+    for(const cp of M.course.cps){ if(cp.r<L.cpRow && L.y<=cy(cp.r)+TILE*0.45){ L.cpRow=cp.r; L.cpX=cx(cp.c); L.cpY=cy(cp.r); } }
   }
+  function popOrBlock(M,L,t,x,y){ if(L.dashed&&t<L.dashUntil){ const c=colAt(x),r=rowAt(y),g=M.course.grid; if(g[r]&&g[r][c]===BALLOON){ g[r][c]=SOLID; if(!M.lowPower)M.vibrate(12); } } }
 
-  function arrive(M,L,t){
-    const mv=L.mv; L.gx=mv.tgx; L.gy=mv.tgy; L.x=cx(L.gx); L.y=cy(L.gy); L.z=0; const kind=mv.kind, enterDir=mv.dir; L.mv=null;
-    if(kind==='jump'||kind==='dash'||kind==='launch'){ L.air=false; L.dashUsed=false; L.jumpReadyAt=t+LAND_STUN; L.stunUntil=Math.max(L.stunUntil,t+LAND_STUN); }
-    resolveTile(M,L,t,enterDir,kind);
-  }
+  function airHazard(M,L,t){ const g=M.course.grid, v=tAt(g,L.x,L.y);
+    if(v===CLOUD){ die(M,L,t); return true; }                          // 분홍구름=공중에서도 사망
+    if(v===ELEC && elecOn(t,ph(rowAt(L.y),colAt(L.x)))){ die(M,L,t); return true; }
+    return false; }
 
-  function resolveTile(M,L,t,enterDir,kind){
-    const g=M.course.grid, gx=L.gx, gy=L.gy, v=g[gy][gx];
-    // 사망류
-    if(v===VOID) return die(M,L,t);
-    if(v===FAKE){ if(isFake(M,gy,gx)) return die(M,L,t); }
-    if(v===KILL) return die(M,L,t);                                   // 광대발판: 착지(=닿음)하면 사망(점프로 넘는 건 통과)
-    if(v===CLOUD) return die(M,L,t);
-    if(v===ELEC && elecOn(t,ph(gy,gx))) return die(M,L,t);
-    if(v===MAGIC && !magicSolid(t,ph(gy,gx))) return die(M,L,t);
-    if(v===VENT && !ventSolid(t,ph(gy,gx))) return die(M,L,t);
-    // 효과류
-    if(v===BUMP){ const back=OPP[enterDir||'up']; const d=DIRV[back]; let tgx=clamp(gx+d[0]*2,1,COLS-2),tgy=clamp(gy+d[1]*2,0,M.course.rows-1);
-      while(blockedTile(g,tgx,tgy,M.course.rows)&&(tgx!==gx||tgy!==gy)){tgx-=d[0];tgy-=d[1];} L.sliding=false; if(!M.lowPower)M.vibrate(14); beginMove(L,tgx,tgy,T_BUMP,'bump',false,back); return; }
-    if(v===TRAMP){ bounce(M,L); return; }   // 트램펄린: 착지 시 즉시 재바운스
-    if(isArrow(v)){ launch(M,L, ARR_DIR[v], 4, true); return; }       // 점프대(점프판정)
-    if(v===ROT){ launch(M,L, rotDir(t,ph(gy,gx)), 4, true); return; } // 회전점프대
-    if(isHand(v)){ launch(M,L, ARR_DIR[v], 4, false); return; }       // 손바닥(점프판정 아님)
-    if(v===ICE){ L.sliding=true; L.slideDir=enterDir||L.lastDir||'up'; }
-    else L.sliding=false;
+  function resolveGround(M,L,t){
+    const g=M.course.grid, c=colAt(L.x), r=rowAt(L.y), v=gV(g,r,c);
+    // 효과 발판
+    if(v===TRAMP){ L.air=true; L.jumpAt=t; L.airUntil=t+JUMP_MS; L.dashed=false; L.coyoteUntil=0; return; }    // 트램펄린 재바운스
+    if(v===BUMP){ const fx=L.facing.dx, fy=L.facing.dy; let bx=0,by=0;
+      if(Math.abs(fx)>=Math.abs(fy)) bx=fx>0?-1:fx<0?1:0; else by=fy>0?-1:1; if(bx===0&&by===0) by=1;
+      L.bumpVx=bx*BUMP_SPD; L.bumpVy=by*BUMP_SPD; L.bumpUntil=t+BUMP_MS; L.coyoteUntil=0; if(!M.lowPower)M.vibrate(14); return; }
+    if(isArrow(v)){ doLaunch(L,DIRV[ARR_DIR[v]],t); return; }            // 점프대
+    if(v===ROT){ doLaunch(L,DIRV[rotDir(t,ph(r,c))],t); return; }        // 회전점프대
+    if(isHand(v)){ doLaunch(L,DIRV[ARR_DIR[v]],t); return; }             // 손바닥(발사)
     if(v===SPEED) L.speedUntil=t+SPEED_MS;
-    // 체크포인트/결승
-    if(v===CP||v===START){ for(const cp of M.course.cps) if(gy<=cp.r && cp.r<L.cpR){ L.cpR=cp.r; L.cpC=cp.c; } }
+    // 사망 판정(지면): 즉사류 즉시 / 단순 구멍·가짜는 코요테 유예(판정 완화)
+    let hz=false, instant=false;
+    if(v===VOID) hz=true;
+    else if(v===FAKE){ if(isFake(M,r,c)){ M._trig[r*COLS+c]=true; hz=true; instant=true; } }   // 속임수=밟으면 바로 빠짐(코요테 없음)
+    else if(v===KILL){ hz=true; instant=true; }
+    else if(v===CLOUD){ hz=true; instant=true; }
+    else if(v===ELEC && elecOn(t,ph(r,c))){ hz=true; instant=true; }
+    else if(v===MAGIC && !magicSolid(t,ph(r,c))){ hz=true; instant=true; }
+    else if(v===VENT && !ventSolid(t,ph(r,c))){ hz=true; instant=true; }
+    if(hz){ if(instant){ die(M,L,t); return; } if(!L.coyoteUntil) L.coyoteUntil=t+COYOTE_MS; if(t>=L.coyoteUntil){ die(M,L,t); return; } }
+    else L.coyoteUntil=0;
   }
-  function launch(M,L,dir,cells,air){ const d=DIRV[dir]; let tgx=L.gx,tgy=L.gy;
-    for(let k=1;k<=cells;k++){ const nx=L.gx+d[0]*k, ny=L.gy+d[1]*k; if(!inBounds(nx,ny,M.course.rows)||M.course.grid[ny][nx]===BALLOON) break; tgx=nx; tgy=ny; }
-    L.air=air; L.dashUsed=false; L.jumpFromR=L.gy; L.jumpFromC=L.gx; L.sliding=false;
-    beginMove(L,tgx,tgy,Math.max(140,cells*T_LAUNCH),'launch',air,dir);
-  }
-  function die(M,L,t){ L.gx=L.cpC; L.gy=L.cpR; L.x=cx(L.gx); L.y=cy(L.gy); L.z=0; L.mv=null; L.air=false; L.dashUsed=false;
-    L.sliding=false; L.state='idle'; L.stunUntil=t+RESPAWN_STUN; L.speedUntil=0; L.skillBuf=-1e9;
+  function doLaunch(L,d,t){ L.launchVx=d[0]*LAUNCH_SPD; L.launchVy=d[1]*LAUNCH_SPD; L.launchUntil=t+LAUNCH_MS; L.coyoteUntil=0;
+    L.air=true; L.jumpAt=t; L.airUntil=Math.max(L.airUntil,t+LAUNCH_MS); L.dashed=false; }
+  function die(M,L,t){ L.x=L.cpX; L.y=L.cpY; L.z=0; L.px0=L.x; L.py0=L.y; L.pz0=0; L.air=false; L.dashed=false; L.ivx=L.ivy=0;
+    L.bumpUntil=0; L.launchUntil=0; L.coyoteUntil=0; L.stunUntil=t+RESPAWN_STUN; L.speedUntil=0; L.skillBuf=-1e9;
     M.flash('💫 추락! 체크포인트로'); if(!M.lowPower) M.vibrate(26); }
   function isFake(M,r,c){ const k=r*COLS+c; if(M._fake[k]==null){ const rng=mulb((M.course.seed^(r*73856093)^(c*19349663))>>>0); M._fake[k]=rng()<0.55; } return M._fake[k]; }
-  function ballHit(M,L,t){ const ents=M.course.entities; if(!ents||!ents.length||L.finished) return;
+  function ballHit(M,L,t){ const ents=M.course.entities; if(!ents||!ents.length||L.finished||t<L.stunUntil) return;
     for(const e of ents){ if(e.kind!=='ball') continue; const fr=(Math.sin(2*Math.PI*((t+e.ph)/e.period))+1)/2; const col=e.c0+fr*(e.c1-e.c0);
-      if(Math.abs(L.gy-e.row)<=2 && Math.abs(L.x-cx(col))<TILE*1.6 && t>=L.stunUntil){ die(M,L,t); return; } } }
+      if(Math.abs(rowAt(L.y)-e.row)<=2 && Math.abs(L.x-cx(col))<TILE*1.3){ die(M,L,t); return; } } }
 
   /* ----------------------------- HUD ----------------------------------- */
   function estimateRank(M,myProg){ let ahead=0; const fin=new Set(((M.state&&M.state.finishOrder)||[]).map(f=>f.seat)); const myFin=M.local&&M.local.fin;
@@ -437,7 +409,9 @@
   /* ----------------------------- 그리기 -------------------------------- */
   function drawRace(M){ const ctx=M.ctx,W=M.W,H=M.H; if(!M.course) return;
     const g=M.course.grid,t=M.simT(); const Z=M.lowPower?1.15:1.35; const L=M.local;
-    const camX=L?L.x:cx(M.course.goalC), camY=L?L.y:cy(M.course.goalR+5);
+    const a=(M._alpha==null?1:M._alpha);   // 30Hz 시뮬 → 60fps 렌더 보간(끊김 제거)
+    const lx=L?L.px0+(L.x-L.px0)*a:0, ly=L?L.py0+(L.y-L.py0)*a:0, lz=L?L.pz0+(L.z-L.pz0)*a:0;
+    const camX=L?lx:cx(M.course.goalC), camY=L?ly:cy(M.course.goalR+5);
     const sx=(wx)=>Math.round((wx-camX)*Z+W*0.5), sy=(wy)=>Math.round((wy-camY)*Z+H*0.6); const TZ=TILE*Z;
     ctx.fillStyle='#0a0d14'; ctx.fillRect(0,0,W,H);
     const hw=(W*0.5)/Z+TILE, hu=(H*0.6)/Z+TILE, hd=(H*0.4)/Z+TILE;
@@ -446,7 +420,7 @@
     drawGoal(M,ctx,sx,sy,TZ); drawEntities(M,ctx,sx,sy,TZ,t);
     for(const seat of M.seats){ if(seat===M.mySeat) continue; const p=M.peerAt(seat); if(!p||p.x==null) continue;
       const px=sx(p.x),py=sy(p.y)-(p.z||0)*Z; if(px<-50||px>W+50||py<-50||py>H+50) continue; drawRunner(ctx,sx(p.x),sy(p.y),p.z||0,seat,!!p.fin,false,false,Z); }
-    if(L) drawRunner(ctx,sx(L.x),sy(L.y),L.z,M.mySeat,L.fin,true,t<L.stunUntil&&t>=START_MS,Z);
+    if(L) drawRunner(ctx,sx(lx),sy(ly),lz,M.mySeat,L.fin,true,t<L.stunUntil&&t>=START_MS,Z);
     if(!M.lowPower){ const grd=ctx.createLinearGradient(0,0,0,H); grd.addColorStop(0,'rgba(6,8,14,0.4)'); grd.addColorStop(0.5,'rgba(6,8,14,0)'); grd.addColorStop(1,'rgba(6,8,14,0.3)'); ctx.fillStyle=grd; ctx.fillRect(0,0,W,H); }
     if(t<START_MS) drawCountdown(ctx,W,H,t);
   }
@@ -509,7 +483,7 @@
     const L=M.local; if(!L) return {dir:'up',jump:false}; const g=M.course.grid, t=M.simT();
     const goalR=M.course.goalR, goalC=M.course.goalC, ROWS=M.course.rows;
     const passNow=(r,c)=> r>=0&&r<ROWS&&c>=1&&c<=COLS-2 && BFS_SAFE.has(g[r][c]) && !tileDeadlyResting(g,r,c,t);
-    const start=L.gy*COLS+L.gx, prev=new Map(), seen=new Set([start]), q=[[L.gy,L.gx]]; let goalNode=null;
+    const sR=rowAt(L.y), sC=colAt(L.x); const start=sR*COLS+sC, prev=new Map(), seen=new Set([start]), q=[[sR,sC]]; let goalNode=null;
     while(q.length){ const [r,c]=q.shift(); if(r<=goalR && Math.abs(c-goalC)<=1){ goalNode=r*COLS+c; break; }
       const add=(r2,c2,kind,dir)=>{ if(!passNow(r2,c2)) return; const key=r2*COLS+c2; if(seen.has(key)) return; seen.add(key); prev.set(key,{from:r*COLS+c,kind,dir}); q.push([r2,c2]); };
       const noWall=(rr,cc,s)=>{ for(let k=1;k<=s;k++){ const v2=gV(g,r+(rr-r)/s*k,c+(cc-c)/s*k); if(v2===CLOUD||v2===BALLOON) return false; } return true; };
@@ -523,7 +497,7 @@
     if(goalNode!=null){ let cur=goalNode; while(prev.has(cur)){ const p=prev.get(cur); if(p.from===start){ step=p; break; } cur=p.from; } }
     if(!step){ // 전체 경로 못 찾음 → 허공 진입 금지하는 탐욕 안전수
       for(const [dn,kind] of [['up','jump'],['up','walk'],['left','walk'],['right','walk'],['left','jump'],['right','jump'],['up','dash']]){
-        const d=DIRV[dn], s=kind==='walk'?1:kind==='dash'?DASH_TOTAL:JUMP_TILES; const r2=L.gy+d[1]*s,c2=L.gx+d[0]*s;
+        const d=DIRV[dn], s=kind==='walk'?1:kind==='dash'?DASH_TOTAL:JUMP_TILES; const r2=sR+d[1]*s,c2=sC+d[0]*s;
         if(passNow(r2,c2)){ step={dir:dn,kind}; break; } } }
     if(!step) return {dir:'up',jump:false,dash:false};
     return {dir:step.dir, jump:step.kind==='jump', dash:step.kind==='dash'};
