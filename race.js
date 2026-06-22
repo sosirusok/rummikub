@@ -356,7 +356,9 @@
     // 점프 호/착지
     if(L.air){ const k=clamp((t-L.jumpAt)/((L.airUntil-L.jumpAt)||1),0,1); L.z=Math.sin(k*Math.PI)*JUMP_H*(L.dashed?1.12:1);
       if(airHazard(M,L,t)) return;
-      if(t>=L.airUntil){ L.air=false; L.dashed=false; L.iceAir=false; L.noDash=false; L.z=0; L.jumpReadyAt=t+JUMP_CD; resolveGround(M,L,t); } }
+      if(t>=L.airUntil){ L.air=false; L.dashed=false; L.iceAir=false; L.noDash=false; L.z=0; L.jumpReadyAt=t+JUMP_CD;
+        L.x=cx(clamp(colAt(L.x),1,COLS-2)); L.y=cy(clamp(rowAt(L.y),0,M.course.rows-1));   // 착지=칸 중앙 스냅 → 허공/반칸 점프 제거(판정은 동일 칸)
+        resolveGround(M,L,t); } }
     else { L.z=0; resolveGround(M,L,t); }
     // 체크포인트: y라인 통과(밟지 않고 위로 지나쳐도 적용)
     for(const cp of M.course.cps){ if(cp.r<L.cpRow && L.y<=cy(cp.r)+TILE*0.45){ L.cpRow=cp.r; L.cpX=cx(cp.c); L.cpY=cy(cp.r); } }
