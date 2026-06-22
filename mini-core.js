@@ -246,7 +246,7 @@ function setupKeys() {
     let dy = (down.has('s') || down.has('arrowdown') ? 1 : 0) - (down.has('w') || down.has('arrowup') ? 1 : 0);
     const m = Math.hypot(dx, dy) || 1; MINI.input.dx = dx / m * (dx || dy ? 1 : 0); MINI.input.dy = dy / m * (dx || dy ? 1 : 0);
   };
-  const d = (e) => { const k = e.key.toLowerCase(); if (k === ' ') { MINI.input.action = true; MINI.input.actionHeld = true; return; } if (['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright'].includes(k)) { down.add(k); apply(); } };
+  const d = (e) => { const k = e.key.toLowerCase(); if (k === ' ') { if (e.repeat) return; MINI.input.action = true; MINI.input.actionHeld = true; return; } if (['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright'].includes(k)) { down.add(k); apply(); } };
   const u = (e) => { const k = e.key.toLowerCase(); if (k === ' ') { MINI.input.actionHeld = false; return; } if (down.has(k)) { down.delete(k); apply(); } };
   window.addEventListener('keydown', d); window.addEventListener('keyup', u);
   MINI._keys = { d, u };

@@ -22,10 +22,10 @@
   const TILE = 32, COLS = 11, C = (COLS - 1) >> 1, PR = 10;
   const START_ROWS = 3, FINISH_ROWS = 4;
 
-  // 칸당 모션 시간(ms) — 리서치 권고치
-  const T_WALK = 150, T_JUMP = 420, T_DASH = 520, T_SLIDE = 105, T_BUMP = 150, T_LAUNCH = 70; // launch=칸당
-  const LAND_STUN = 80, RESPAWN_STUN = 480, INPUT_BUF = 130, DASH_GAP = 70;
-  const JUMP_TILES = 2, DASH_TOTAL = 5;          // 점프 2칸, 점프+대시 합 5칸
+  // 칸당 모션 시간(ms) — 스냅하고 빠르게(점프가 걷기보다 느리지 않게)
+  const T_WALK = 140, T_JUMP = 240, T_DASH = 200, T_SLIDE = 95, T_BUMP = 140, T_LAUNCH = 55; // launch=칸당
+  const LAND_STUN = 35, RESPAWN_STUN = 350, INPUT_BUF = 140, DASH_GAP = 45;
+  const JUMP_TILES = 2, DASH_TOTAL = 4;          // 점프 2칸, 대시는 +2칸(합 4)
   const JUMP_H = TILE * 0.85;
   const SPEED_MUL = 1.5, SPEED_MS = 2000;
   const START_MS = 3600, CUTOFF_MS = 25000, HARD_LIMIT_MS = 360000, PROG_MAX = 1000;
@@ -216,7 +216,7 @@
   // BFS 이동: 걷기1·점프2·대시5(4방향) + 점프대/회전점프대/손바닥 발사(최대4칸). 점멸/타이밍 칸=통과가능 취급.
   function bfsExpand(grid, r, c, rMin, rMax, push){
     const blocksJump=(rr,cc)=>{ const v=gV(grid,rr,cc); return v===CLOUD||v===BALLOON; };
-    for(const d of Object.values(DIRV)) for(const s of [1,2,5]){
+    for(const d of Object.values(DIRV)) for(const s of [1,JUMP_TILES,DASH_TOTAL]){
       let ok=true; for(let k=1;k<s;k++){ if(blocksJump(r+d[1]*k,c+d[0]*k)){ ok=false; break; } }
       if(ok) push(r+d[1]*s, c+d[0]*s);
     }
@@ -275,11 +275,12 @@
     step(M, dt){
       const L=M.local; if(!L||L.finished) return;
       const t=M.simT(); if(t<START_MS){ return; }
+      if(!L.mv && t<L.stunUntil){ L.skillBuf=-1e9; return; }   // 경직(부활/착지) 중: 입력·버퍼 폐기 → 부활 직후 자동점프 차단
       if(M.input.action) L.skillBuf=t;
       L.dirHeld=readDir(M.input); if(L.dirHeld) L.lastDir=L.dirHeld;
 
       if(L.mv) advanceTween(M,L,dt,t);
-      if(!L.mv && t>=L.stunUntil) handleResting(M,L,dt,t);
+      else handleResting(M,L,dt,t);
 
       // 쇠공(체공 무관 즉사) 매 프레임 영역검사
       ballHit(M,L,t);
@@ -514,15 +515,15 @@
       const noWall=(rr,cc,s)=>{ for(let k=1;k<=s;k++){ const v2=gV(g,r+(rr-r)/s*k,c+(cc-c)/s*k); if(v2===CLOUD||v2===BALLOON) return false; } return true; };
       for(const dn of ['up','left','right','down']){ const d=DIRV[dn];
         add(r+d[1],c+d[0],'walk',dn);
-        if(noWall(r+d[1]*2,c+d[0]*2,2)) add(r+d[1]*2,c+d[0]*2,'jump',dn);
-        if(noWall(r+d[1]*5,c+d[0]*5,5)) add(r+d[1]*5,c+d[0]*5,'dash',dn); }
+        if(noWall(r+d[1]*JUMP_TILES,c+d[0]*JUMP_TILES,JUMP_TILES)) add(r+d[1]*JUMP_TILES,c+d[0]*JUMP_TILES,'jump',dn);
+        if(noWall(r+d[1]*DASH_TOTAL,c+d[0]*DASH_TOTAL,DASH_TOTAL)) add(r+d[1]*DASH_TOTAL,c+d[0]*DASH_TOTAL,'dash',dn); }
       const v=gV(g,r,c); const ld = isArrow(v)?[ARR_DIR[v]] : v===ROT?['up','down','left','right'] : isHand(v)?[ARR_DIR[v]] : null;
       if(ld) for(const dn of ld){ const d=DIRV[dn]; for(let k=1;k<=4;k++){ const rr=r+d[1]*k,cc=c+d[0]*k; if(rr<0||rr>=ROWS||cc<1||cc>COLS-2||gV(g,rr,cc)===BALLOON) break; add(rr,cc,'launch',dn); } } }
     let step=null;
     if(goalNode!=null){ let cur=goalNode; while(prev.has(cur)){ const p=prev.get(cur); if(p.from===start){ step=p; break; } cur=p.from; } }
     if(!step){ // 전체 경로 못 찾음 → 허공 진입 금지하는 탐욕 안전수
       for(const [dn,kind] of [['up','jump'],['up','walk'],['left','walk'],['right','walk'],['left','jump'],['right','jump'],['up','dash']]){
-        const d=DIRV[dn], s=kind==='walk'?1:kind==='dash'?5:2; const r2=L.gy+d[1]*s,c2=L.gx+d[0]*s;
+        const d=DIRV[dn], s=kind==='walk'?1:kind==='dash'?DASH_TOTAL:JUMP_TILES; const r2=L.gy+d[1]*s,c2=L.gx+d[0]*s;
         if(passNow(r2,c2)){ step={dir:dn,kind}; break; } } }
     if(!step) return {dir:'up',jump:false,dash:false};
     return {dir:step.dir, jump:step.kind==='jump', dash:step.kind==='dash'};
