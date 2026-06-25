@@ -166,13 +166,7 @@ function handleMeRefresh(p) {
 function headerHTML() {
   const dg = ME.display && ME.display.game ? ME.display.game : null;
   const dscore = ME.display ? ME.display.score : 0;
-  const meta = (typeof ENGAGE !== 'undefined' && ENGAGE.meta) ? ENGAGE.meta : null;
-  const title = meta && meta.equipped ? meta.equipped.title : '';
-  const effect = meta && meta.equipped ? meta.equipped.effect : '';
-  const nm = (typeof decoNameHTML === 'function')
-    ? decoNameHTML(ME.real_name, dg ? dscore : null, title, effect)
-    : nameHTML(ME.real_name, dg ? dscore : null);
-  return `<span class="lobby__hello">${nm}
+  return `<span class="lobby__hello">${nameHTML(ME.real_name, dg ? dscore : null)}
     <small>${dg ? decoChipEmbHTML(dg, dscore, 'eqs') : '<span class="muted">티어 숨김</span>'}</small></span>`;
 }
 function goHome() {
@@ -182,7 +176,6 @@ function goHome() {
       <header class="lobby__top">
         ${headerHTML()}<span class="spacer"></span>
         ${typeof engageChipHTML === 'function' ? engageChipHTML() : ''}
-        <button class="btn btn--ghost" data-act="eng_open">🎁 프로필</button>
         <button class="btn btn--ghost" data-act="goRules">규칙</button>
         <button class="btn btn--ghost" data-act="goTiers">티어</button>
         <button class="btn btn--ghost" data-act="goDeco">꾸미기</button>
@@ -204,9 +197,7 @@ function goHome() {
       <p class="muted center" style="padding:10px 14px">로그인 후 게임을 고르세요. 티어·전적·꾸미기는 게임별로 따로 쌓여요.</p>
     </section>`;
   apiMe(TOKEN).then(p => { if (handleMeRefresh(p) && SCREEN === 'home') { const h = document.querySelector('.screen--home .lobby__hello'); if (h) h.outerHTML = headerHTML(); } });
-  if (typeof loadEngage === 'function') loadEngage({ dailyPrompt: true }).then(() => {
-    if (SCREEN === 'home') { const h = document.querySelector('.screen--home .lobby__hello'); if (h) h.outerHTML = headerHTML(); }
-  });
+  if (typeof loadEngage === 'function') loadEngage();
   showAnnouncementIfAny();   // 활성 공지가 있으면 팝업(세션 1회)
   // 직전 방이 아직 진행/대기 중이고 내가 멤버면 '이어서 입장' 칩 표시
   const lr = Number(localStorage.getItem('rk_last_room'));
@@ -309,7 +300,7 @@ async function refreshLbCache(force) {
   _lbAt = Date.now(); lbCacheGame = g;
   const list = await apiLeaderboard(g);
   lbCache = {};
-  list.forEach(u => lbCache[u.id] = { score: u.score, wins: u.wins, losses: u.losses, streak: u.streak, real_name: u.real_name, title: u.title, effect: u.effect });
+  list.forEach(u => lbCache[u.id] = { score: u.score, wins: u.wins, losses: u.losses, streak: u.streak, real_name: u.real_name });
 }
 let _roomT = null, _lobbyT = null;
 function scheduleRoomRefresh() { clearTimeout(_roomT); _roomT = setTimeout(() => refreshRoom(), 140); }
@@ -431,8 +422,6 @@ function waitBody(tab, amHost, g, cap) {
       const st = statsOf(m.user_id);
       const sc = st.score ?? m.score ?? 0, wn = st.wins ?? m.wins ?? 0, ls = st.losses ?? m.losses ?? 0, sk = st.streak ?? m.streak ?? 0;   // lbCache 우선 + 현재게임 멤버 스냅샷 폴백(100위 밖/미플레이 0점·아이언 방지)
       const isMe = m.user_id === ME.id;
-      const myEq = (isMe && typeof ENGAGE !== 'undefined' && ENGAGE.meta && ENGAGE.meta.equipped) ? ENGAGE.meta.equipped : null;
-      const dTitle = myEq ? myEq.title : st.title, dEffect = myEq ? myEq.effect : st.effect;   // 본인은 최신 장착값 우선
       const decoGame = m.display_game;                 // 꾸미기에서 고른 대표 게임
       const decoScore = m.display_score || 0;
       const decoTier = decoGame ? tierForScore(decoScore) : null;
@@ -441,7 +430,7 @@ function waitBody(tab, amHost, g, cap) {
       seats.push(`<li class="seat is-occupied ${isMe ? 'is-me' : ''}" data-seat="${n}">
         <span class="seat__no">${n}</span>
         <div class="seat__main">
-          <div class="seat__name" style="--tc:${curTier.color}">${(typeof decoNameHTML === 'function') ? decoNameHTML(m.name, sc, dTitle, dEffect) : nameHTML(m.name, sc)}${isMe ? ' <small>(나)</small>' : ''}${ROOM.host_id === m.user_id ? ' <span class="seat__badge">방장</span>' : ''}</div>
+          <div class="seat__name" style="--tc:${curTier.color}">${nameHTML(m.name, sc)}${isMe ? ' <small>(나)</small>' : ''}${ROOM.host_id === m.user_id ? ' <span class="seat__badge">방장</span>' : ''}</div>
           ${decoGame
             ? `<div class="seat__rep" style="--tc:${decoTier.color}"><span class="seat__rep-txt">대표 게임: ${GAME_NAME[decoGame]} ${decoTier.fullName} ${decoScore}</span><span class="seat__rep-emb">${emblemHTML(decoGame, decoScore, 'eq')}</span></div>`
             : `<div class="seat__rep seat__rep--none">대표 게임 미설정</div>`}

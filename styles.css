@@ -877,16 +877,13 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
   .mini-hud{ font-size:9.5px; padding:max(3px,env(safe-area-inset-top)) 5px 3px; }
 }
 
-/* ===================== 흥미 요소(코인·레벨·업적·상점·출석) ===================== */
+/* ===================== 계정 레벨 · 프로필 · 통합 랭킹 ===================== */
 .eng-chip{display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px;
-  background:var(--panel2); border:1px solid var(--line); cursor:pointer; position:relative; font-weight:800; font-size:12px; color:var(--ink);}
+  background:var(--panel2); border:1px solid var(--line); cursor:pointer; font-weight:800; font-size:12px; color:var(--ink);}
 .eng-chip:active{transform:scale(.97);}
 .eng-chip__lv{color:var(--accent); font-weight:900;}
 .eng-chip__bar{width:42px; height:6px; border-radius:4px; background:rgba(255,255,255,.1); overflow:hidden;}
 .eng-chip__bar>i{display:block; height:100%; background:linear-gradient(90deg,#5a78ff,#8aa0ff);}
-.eng-chip__coin{color:#ffcf4a;}
-.eng-chip__dot{position:absolute; top:-2px; right:-2px; width:9px; height:9px; border-radius:50%; background:var(--danger); box-shadow:0 0 0 2px var(--bg,#0f1115);}
-.eng-coins{font-weight:900; color:#ffcf4a; font-size:14px;}
 
 .screen--engage{display:flex; flex-direction:column; height:100%;}
 .eng-body{padding-bottom:24px;}
@@ -901,49 +898,29 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .eng-stats b{color:var(--ink); font-size:15px;}
 .eng-card{margin-top:12px; background:var(--panel2); border:1px solid var(--line); border-radius:14px; padding:14px;}
 .eng-card__t{font-weight:900; margin-bottom:8px;}
-.daily-card{display:flex; justify-content:space-between; align-items:center; padding:10px 12px; border-radius:10px;
-  background:linear-gradient(90deg, rgba(90,120,255,.16), rgba(255,207,74,.12)); margin-bottom:10px;}
-.daily-card__streak b{color:#ff8a4a; font-size:18px;}
-.daily-card__reward b{color:#ffcf4a; font-size:18px;}
+/* 프로필 게임별 티어 목록 */
+.prof-grows{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px;}
+.prof-grow{display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:10px; background:rgba(255,255,255,.04);}
+.prof-grow__name{font-weight:800; font-size:13px; min-width:78px;}
+.prof-grow__tier{color:var(--tc,var(--ink)); font-weight:800; font-size:12px;}
+.prof-grow__rec{margin-left:auto; font-size:11px; white-space:nowrap;}
 
-.ach-list{list-style:none; margin:0; padding:10px 12px; display:flex; flex-direction:column; gap:8px;}
-.ach-row{display:flex; gap:10px; align-items:center; padding:10px; border-radius:12px; background:var(--panel2); border:1px solid var(--line); opacity:.7;}
-.ach-row.is-on{opacity:1; border-color:#caa53a; box-shadow:inset 0 0 0 1px rgba(202,165,58,.4);}
-.ach-row__ic{font-size:26px; flex:0 0 auto;}
-.ach-row__main{flex:1; min-width:0;}
-.ach-row__name{font-weight:800; font-size:14px;}
-.ach-done{color:#7ee0a4; font-size:11px; font-weight:900;}
-.ach-row__desc{font-size:11px; margin:2px 0 5px;}
-.ach-row__bar{height:7px; border-radius:5px; background:rgba(255,255,255,.08); overflow:hidden;}
-.ach-row__bar>i{display:block; height:100%; background:linear-gradient(90deg,#1fb15e,#5ad08a);}
-.ach-row.is-on .ach-row__bar>i{background:linear-gradient(90deg,#caa53a,#ffd86a);}
-.ach-row__num{font-size:10px; text-align:right; margin-top:2px;}
-
-.shop-grid{list-style:none; margin:0; padding:10px 12px; display:grid; grid-template-columns:repeat(2,1fr); gap:10px;}
-.shop-card{background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:10px; display:flex; flex-direction:column; gap:6px;}
-.shop-card.is-owned{border-color:#3a6ad0;}
-.shop-card__top{display:flex; justify-content:space-between; align-items:center;}
-.shop-card__name{font-weight:800; font-size:13px;}
-.shop-card__own{font-size:10px; color:#7eaaff; font-weight:900;}
-.shop-card__prev{min-height:24px; display:flex; align-items:center; font-size:15px; font-weight:900;}
-.shop-card__desc{font-size:11px; line-height:1.4;}
-.shop-card .btn{min-height:36px; font-size:13px; font-weight:800;}
-.shop-buy{background:#caa53a; color:#1a1400; border:none;}
-.shop-eq.is-on{opacity:.8;}
-@media (max-width:360px){ .shop-grid{grid-template-columns:1fr;} }
-
-.utitle{display:inline-block; padding:1px 7px; border-radius:999px; font-size:.78em; font-weight:800;
-  background:rgba(255,207,74,.16); color:#ffcf4a; border:1px solid rgba(255,207,74,.4); vertical-align:middle;}
 .rank-me{margin:8px 12px 0; padding:8px 12px; border-radius:10px; background:var(--panel2); border:1px solid var(--accent); font-size:13px;}
 .rank-me b{color:var(--accent);}
 .pos--top{font-size:18px;}
 .eng-total b{color:#ffcf4a; font-size:15px;}
 
-/* 이름 이펙트(상점 구매) — 이름 텍스트에 적용 */
-.name-fx{font-weight:900;}
-.name-fx--silver{background:linear-gradient(90deg,#e8edf5,#aab6c8,#e8edf5); -webkit-background-clip:text; background-clip:text; color:transparent;}
-.name-fx--gold{background:linear-gradient(90deg,#ffe9a8,#e6b32e,#fff3c4); -webkit-background-clip:text; background-clip:text; color:transparent; filter:drop-shadow(0 0 4px rgba(230,179,46,.35));}
-.name-fx--neon{color:#7ef9ff !important; text-shadow:0 0 6px rgba(126,249,255,.9),0 0 12px rgba(126,249,255,.5);}
-.name-fx--fire{background:linear-gradient(90deg,#ffd24a,#ff7a2a,#ff3b3b); -webkit-background-clip:text; background-clip:text; color:transparent; filter:drop-shadow(0 0 4px rgba(255,90,40,.4));}
-.name-fx--rainbow{background:linear-gradient(90deg,#ff5a5a,#ffcf4a,#5ad08a,#5a9aff,#b07aff); background-size:300% 100%; -webkit-background-clip:text; background-clip:text; color:transparent; animation:rainbowFlow 4s linear infinite;}
-@keyframes rainbowFlow{0%{background-position:0% 50%;}100%{background-position:300% 50%;}}
+/* ===================== 폴더폰/초소형 화면 최적화(헤더 잘림 방지) ===================== */
+@media (max-width:380px){
+  .lobby__top{gap:6px; padding:9px 10px; padding-top:max(9px,env(safe-area-inset-top));}
+  .lobby__hello{font-size:14px;}
+  .lobby__hello small{margin-left:4px;}
+  .lobby__top .btn{padding:0 8px; font-size:12px; min-height:34px;}
+  .eng-chip{padding:3px 8px; font-size:11px;} .eng-chip__bar{width:30px;}
+}
+@media (max-width:330px){
+  .lobby__hello{font-size:13px; flex:1 1 100%;}
+  .lobby__top .btn{padding:0 7px; font-size:11px; min-height:32px;}
+  .eng-chip{order:5;}
+  .home-card__title{font-size:17px;} .home-card__sub{font-size:11px;}
+}
