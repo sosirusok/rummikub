@@ -33,6 +33,7 @@ function mafiaEnter(room, me, mySeat, amSpectator) {
   MF.on = true; MF.room = room; MF.roomId = room.id; MF.state = room.state || {};
   MF.version = room.version; MF.me = me; MF.mySeat = mySeat; MF.amSpectator = amSpectator;
   MF.finishing = false; MF.view = null; MF.viewKey = '';
+  _mfOverlayKey = '';
   setScreen('mafia');
   if (!MF.tickIv) MF.tickIv = setInterval(mfTick, 1000);
   mfSelfHealStart();
@@ -44,11 +45,49 @@ function mafiaOnRoom(room) {
   const prev = MF.state || {};
   MF.room = room; MF.state = room.state || {}; MF.version = room.version;
   mfSelfHealStart();
-  // 낮 투표만 바뀐 경우(같은 day·생존자 동일) 부분 렌더 — 매 표마다 전체 재구축(O(N^2)) 회피
   const cur = MF.state;
+  // 페이즈 전환(밤↔낮) → 전체화면 발표 연출로 "지금 무슨 일이 일어났는지" 확실히 전달
+  if (SCREEN === 'mafia' && prev.phase && cur.phase
+      && (prev.phase !== cur.phase || (cur.day || 0) !== (prev.day || 0))) {
+    mfPhaseOverlay(prev, cur);
+  }
+  // 낮 투표만 바뀐 경우(같은 day·생존자 동일) 부분 렌더 — 매 표마다 전체 재구축(O(N^2)) 회피
   if (SCREEN === 'mafia' && cur.phase === 'day' && prev.phase === 'day' && cur.day === prev.day
       && mfAliveSig(cur) === mfAliveSig(prev)) { mfUpdateVotes(); return; }
   mfRefreshView();
+}
+// 밤↔낮 전환 시 전체화면 연출(2.4초, 탭하면 즉시 닫힘). 아침엔 간밤 사건(직업 공개)까지 발표.
+let _mfOverlayKey = '';
+function mfPhaseOverlay(prev, cur) {
+  if (cur.phase !== 'night' && cur.phase !== 'day') return;   // 밤/낮 전환만 연출(키 소모 안 함)
+  const key = cur.phase + '|' + (cur.day || 0);
+  if (key === _mfOverlayKey) return;          // 같은 전환 중복 방지(다중 realtime 이벤트)
+  _mfOverlayKey = key;
+  let icon, title, sub, cls;
+  if (cur.phase === 'night') {
+    cls = 'mf-ovl--night'; icon = '🌙';
+    title = (cur.day || 1) + '일차 밤';
+    sub = '모두 눈을 감으세요. 마피아 · 경찰 · 의사가 움직입니다…';
+  } else if (cur.phase === 'day') {
+    cls = 'mf-ovl--day'; icon = '☀️';
+    title = (cur.day || 1) + '일차 아침';
+    const ln = cur.lastNight || {};
+    if (ln.killed != null && ln.name) {
+      const rk = { mafia: '🔪마피아', police: '🚓경찰', doctor: '🚑의사', citizen: '🙂시민' }[ln.role] || '';
+      icon = '💀'; sub = `${esc(ln.name)} 님이 살해당했습니다. 정체는 <b>${rk}</b>!`;
+    } else if (ln.saved) { icon = '🚑'; sub = '의사가 누군가를 살렸습니다! 사망자는 없습니다.'; }
+    else sub = '평화로운 밤이었습니다. 아무도 죽지 않았습니다.';
+  } else return;
+  let el = document.querySelector('.mf-overlay');
+  if (el) el.remove();
+  el = document.createElement('div');
+  el.className = 'mf-overlay ' + cls;
+  el.innerHTML = `<div class="mf-overlay__in"><div class="mf-overlay__ic">${icon}</div>
+    <div class="mf-overlay__t">${esc(title)}</div><div class="mf-overlay__s">${sub}</div></div>`;
+  el.addEventListener('pointerdown', () => el.remove(), { once: true });
+  document.body.appendChild(el);
+  if (navigator.vibrate) navigator.vibrate(cur.phase === 'night' ? 30 : 50);
+  setTimeout(() => { if (el && el.parentNode) el.remove(); }, 2400);
 }
 function mfAliveSig(s) { return mfAliveSeats(s || {}).join(','); }
 // 낮 투표 부분 갱신: 각 카드 표 배지/내표 강조만, 투표자 푸터만 갱신(전체 innerHTML 재구축 X)
@@ -65,6 +104,7 @@ function mfUpdateVotes() {
     } else if (badge) { badge.remove(); }
     el.classList.toggle('is-myvote', Number(myVote) === seat);
   });
+  const vb = document.querySelector('.mf-voteboard'); if (vb) vb.outerHTML = mfVoteBoardHTML(s);
   const iAmAlive = MF.mySeat != null && mfAlive(s, MF.mySeat);
   if (!MF.amSpectator && iAmAlive && MF.view && MF.view.role) {
     const foot = document.querySelector('.dv-foot'); if (foot) foot.innerHTML = mfDayAction(s, myVote);
@@ -81,6 +121,8 @@ function mafiaStop() {
   MF.on = false;
   if (MF.tickIv) { clearInterval(MF.tickIv); MF.tickIv = null; }
   MF.room = MF.state = null; MF.roomId = null; MF.view = null;
+  _mfOverlayKey = '';
+  const ov = document.querySelector('.mf-overlay'); if (ov) ov.remove();
 }
 
 /* 방장이 게임을 막 시작해 phase 가 lobby_assign 이면 역할 배정을 트리거(멱등) */
@@ -206,6 +248,39 @@ function mfErr(m) {
 
 /* ----------------------------- 렌더 ---------------------------------- */
 function mafiaName(s, seat) { return (s.names && s.names[seat]) || ('좌석' + seat); }
+// 상단 현황: 생존 인원 + 이 판의 구성(마피아 N·경찰1·의사1·시민M) — 실제 마피아처럼 추리 근거 제공
+function mfStatusHTML(s) {
+  const rc = s.roleCounts || {};
+  const total = mfSeats(s).length;
+  const comp = [];
+  if (rc.mafia) comp.push(`🔪${rc.mafia}`);
+  if (rc.police) comp.push(`🚓${rc.police}`);
+  if (rc.doctor) comp.push(`🚑${rc.doctor}`);
+  if (rc.citizen) comp.push(`🙂${rc.citizen}`);
+  return `<div class="mf-status">
+    <span class="mf-status__alive">🫀 생존 <b>${mfAliveSeats(s).length}</b>/${total}</span>
+    ${comp.length ? `<span class="mf-status__comp">구성 ${comp.join(' · ')}</span>` : ''}
+  </div>`;
+}
+// 낮 투표 현황판: 생존자별 득표 막대 + 최다 득표 강조(투표 압박/긴장감)
+function mfVoteBoardHTML(s) {
+  const alive = mfAliveSeats(s);
+  const vc = s.voteCount || {};
+  let maxv = 0;
+  alive.forEach(seat => { const n = vc[seat] || 0; if (n > maxv) maxv = n; });
+  // 투표 완료 인원 = 표를 던진 생존자 수(기권 포함). voteCount 는 기권(0)을 제외하므로 votes 로 집계.
+  const cast = s.votes ? Object.keys(s.votes).filter(seat => alive.indexOf(Number(seat)) >= 0).length : 0;
+  const rows = alive.map(seat => {
+    const n = vc[seat] || 0;
+    const lead = n > 0 && n === maxv;
+    const w = maxv ? Math.round((n / maxv) * 100) : 0;
+    return `<div class="mf-vb__row ${lead ? 'is-lead' : ''}">
+      <span class="mf-vb__name">${esc(mafiaName(s, seat))}</span>
+      <span class="mf-vb__bar"><i style="width:${w}%"></i></span>
+      <span class="mf-vb__n">${n ? '🗳 ' + n : '—'}</span></div>`;
+  }).join('');
+  return `<div class="mf-voteboard"><div class="mf-vb__head">🗳️ 처형 투표 현황 <small>${cast}/${alive.length}표</small></div>${rows}</div>`;
+}
 function mfRender() {
   const s = MF.state; if (!s) return;
   if (s.phase === 'end' || s.results) { return; }   // 종료는 app.js refreshRoom→renderResult 가 처리
@@ -297,8 +372,10 @@ function mfRender() {
         <span class="dv-alive">생존 ${mfAliveSeats(s).length}/${s.n}</span>
         <button class="btn btn--ghost" data-act="leave" style="margin-left:6px">나가기</button>
       </header>
+      ${mfStatusHTML(s)}
       ${roleCard}
       <div class="mf-grid grow scrollable">${grid}</div>
+      ${isDay ? mfVoteBoardHTML(s) : ''}
       ${logHTML ? `<ul class="dv-log mf-log">${logHTML}</ul>` : ''}
       <footer class="dv-foot">${action}</footer>
     </section>`;

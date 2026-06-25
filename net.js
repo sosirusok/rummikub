@@ -83,6 +83,33 @@ async function apiSetDisplay(token, game) {
   return { display: data };   // {game, score}
 }
 
+/* ----------------------------- 흥미요소(코인·레벨·업적·상점·출석) -------------------------------- */
+async function apiMeta(token) {
+  if (!token) return null;
+  const { data, error } = await sb.rpc('rk_meta', { p_token: token });
+  if (error) { console.warn('meta', error); return undefined; }   // 일시오류 → 기존 캐시 유지
+  return data;   // null=토큰무효 / obj=정상
+}
+async function apiBuyItem(token, key) {
+  const { data, error } = await sb.rpc('rk_buy_item', { p_token: token, p_key: key });
+  if (error) return { ok: false, error: String((error && error.message) || error) };
+  return data;
+}
+async function apiEquip(token, kind, key) {
+  const { data, error } = await sb.rpc('rk_equip', { p_token: token, p_kind: kind, p_key: key || '' });
+  if (error) return { ok: false, error: String((error && error.message) || error) };
+  return data;
+}
+async function apiClaimDaily(token) {
+  const { data, error } = await sb.rpc('rk_claim_daily', { p_token: token });
+  if (error) return { ok: false, error: String((error && error.message) || error) };
+  return data;
+}
+async function apiLeaderboardTotal() {
+  const { data } = await sb.rpc('rk_leaderboard_total');
+  return data || [];
+}
+
 /* ----------------------------- 방/멤버 -------------------------------- */
 async function fetchRooms() {
   const { data } = await sb.from('rooms').select('*').order('id');
