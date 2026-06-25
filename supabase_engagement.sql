@@ -2,7 +2,7 @@
 -- 흥미 요소 패치 (engagement) — 코인 · 계정레벨 · 업적 · 상점 · 출석 · 통합랭킹
 --  설계 원칙: 기존 점수 로직(rk_bump_stats / rk_finish_*)은 절대 건드리지 않는다.
 --  코인/XP 는 누적 전적(user_game_stats)에서 "파생"되고, 보너스/소비만 user_meta 에 누적.
---    coins  = 전적기반획득(승*120 + 패*40) + bonus_total - spent_total
+--    coins  = 전적기반획득(게임별 가중, rk_coin_earned) + bonus_total - spent_total
 --    xp     = 전적기반획득 + bonus_total            (소비해도 줄지 않는 평생 경험치)
 --  → 게임 정산에 손대지 않으므로 점수/연승/티어에 어떤 부작용도 없음(안전).
 -- Supabase SQL Editor 에 전체 붙여넣고 RUN. 멱등(재실행 안전).
