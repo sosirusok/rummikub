@@ -24,6 +24,31 @@ create table if not exists public.user_meta (
 alter table public.user_meta enable row level security;   -- 정책 없음 = RPC(SECURITY DEFINER)로만 접근
 
 -- ---------------------------------------------------------------------
+-- rk_coin_earned: 평생 획득 코인(전적 파생). 게임별 1판 평균 플레이타임·난이도로 가중.
+--   기준(실제 보드게임 플레이타임/몰입도):
+--     스플랜더 ~30분·순수전략   → 승180 패60   (가장 무겁고 긺)
+--     마피아   15~45분·다인추리 → 승150 패55   (길고 사회적 몰입)
+--     루미큐브 길고 전략+운      → 승150 패50
+--     다빈치   15~30분·빠른추리  → 승110 패40
+--     우노     10~30분·운 위주   → 승100 패38
+--     나도사람 미니·짧음          → 승 75 패30
+--     운빨대시 미니·운·가장 짧음 → 승 70 패28
+--   패배도 참가 보상(승의 ~1/3)으로 양(+) — 플레이 자체를 장려하되 승리를 우대.
+--   → 코인/시간이 게임 간 대체로 균형 잡혀 특정 게임 '코인 파밍' 쏠림을 방지.
+--   rk_meta·rk_buy_item 이 공용으로 호출해 항상 동일 공식 보장(드리프트 방지).
+-- ---------------------------------------------------------------------
+create or replace function public.rk_coin_earned(p_uid uuid)
+returns bigint language sql stable security definer set search_path = public, extensions as $$
+  select coalesce(sum(
+      wins   * case game when 'splendor' then 180 when 'mafia' then 150 when 'rummikub' then 150
+                         when 'davinci' then 110 when 'uno' then 100 when 'hunt' then 75 when 'race' then 70 else 110 end
+    + losses * case game when 'splendor' then 60  when 'mafia' then 55  when 'rummikub' then 50
+                         when 'davinci' then 40  when 'uno' then 38  when 'hunt' then 30 when 'race' then 28 else 40 end
+  ), 0)::bigint
+  from public.user_game_stats where user_id = p_uid;
+$$;
+
+-- ---------------------------------------------------------------------
 -- rk_meta: 지갑/레벨/업적/상점/출석을 한 번에. 호출 시 업적 자동 해금(멱등).
 -- ---------------------------------------------------------------------
 create or replace function public.rk_meta(p_token uuid)
@@ -79,7 +104,7 @@ begin
     into v_wins, v_losses, v_totscore, v_maxscore, v_maxstreak, v_distinct
     from public.user_game_stats where user_id = v_uid;
   v_games := v_wins + v_losses;
-  v_earned := v_wins::bigint*120 + v_losses::bigint*40;
+  v_earned := public.rk_coin_earned(v_uid);   -- 게임별 플레이타임·난이도 가중(공용 공식)
 
   select coalesce(bonus_total,0), coalesce(spent_total,0), coalesce(inventory,'[]'::jsonb),
          coalesce(achievements,'[]'::jsonb), equipped_title, equipped_effect, login_date, coalesce(login_streak,0)
@@ -148,7 +173,7 @@ end; $$;
 -- ---------------------------------------------------------------------
 create or replace function public.rk_buy_item(p_token uuid, p_key text)
 returns jsonb language plpgsql security definer set search_path = public, extensions as $$
-declare v_uid uuid; v_item jsonb; v_price int; v_bonus bigint; v_spent bigint; v_coins bigint; v_wins int; v_losses int; v_inv jsonb;
+declare v_uid uuid; v_item jsonb; v_price int; v_bonus bigint; v_spent bigint; v_coins bigint; v_inv jsonb;
   v_shop jsonb := '[
     {"key":"t_rookie","price":300},{"key":"t_gamer","price":900},{"key":"t_brain","price":1800},
     {"key":"t_lucky","price":1800},{"key":"t_king","price":4500},{"key":"t_legend","price":9000},
@@ -165,8 +190,7 @@ begin
   select coalesce(inventory,'[]'::jsonb), coalesce(bonus_total,0), coalesce(spent_total,0)
     into v_inv, v_bonus, v_spent from public.user_meta where user_id = v_uid;
   if v_inv ? p_key then return jsonb_build_object('ok',true,'already',true); end if;
-  select coalesce(sum(wins),0), coalesce(sum(losses),0) into v_wins, v_losses from public.user_game_stats where user_id = v_uid;
-  v_coins := v_wins::bigint*120 + v_losses::bigint*40 + v_bonus - v_spent;
+  v_coins := public.rk_coin_earned(v_uid) + v_bonus - v_spent;   -- 공용 공식(rk_meta 와 동일)
   if v_coins < v_price then return jsonb_build_object('ok',false,'reason','no_coins'); end if;
   update public.user_meta
     set inventory = coalesce(inventory,'[]'::jsonb) || to_jsonb(array[p_key]),
@@ -260,6 +284,7 @@ language sql security definer set search_path = public, extensions as $$
   order by s.score desc, s.wins desc, u.real_name asc limit 100;
 $$;
 
+grant execute on function public.rk_coin_earned(uuid)                to anon, authenticated;
 grant execute on function public.rk_meta(uuid)                       to anon, authenticated;
 grant execute on function public.rk_buy_item(uuid,text)              to anon, authenticated;
 grant execute on function public.rk_equip(uuid,text,text)            to anon, authenticated;
