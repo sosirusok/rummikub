@@ -64,6 +64,7 @@ async function boot() {
 /* ----------------------------- 액션 위임 ------------------------------- */
 function handleAct(act, el) {
   if (typeof chatOnAct === 'function' && chatOnAct(act)) return;   // 채팅 위임(모든 화면 공통)
+  if (act.indexOf('eng_') === 0) { if (typeof engageAct === 'function' && engageAct(act, el)) return; }   // 흥미요소(코인/업적/상점/출석)
   if (act.indexOf('dv_') === 0) { davinciAct(act, el); return; }   // 다빈치 코드 액션 위임
   if (act.indexOf('mf_') === 0) { mafiaAct(act, el); return; }     // 마피아 액션 위임
   if (act.indexOf('sp_') === 0) { splendorAct(act, el); return; }  // 스플랜더 액션 위임
@@ -93,10 +94,10 @@ function handleAct(act, el) {
     case 'goTiers': showTiers(); break;
     case 'goDeco': showDeco(); break;
     case 'goRules': showRules(RULES_GAME); break;
-    case 'rulesGame': RULES_GAME = el.dataset.game; if (SCREEN === 'room') renderWaiting(); else showRules(RULES_GAME); break;
+    case 'rulesGame': RULES_GAME = el.dataset.game; if (SCREEN === 'room') renderWaiting(true); else showRules(RULES_GAME); break;
     case 'rankGame': RANK_GAME = el.dataset.game; showRank(RANK_GAME); break;
     case 'enterRoom': enterRoomFlow(Number(el.dataset.room)); break;
-    case 'waitTab': WAIT_TAB = el.dataset.tab; renderWaiting(); break;
+    case 'waitTab': WAIT_TAB = el.dataset.tab; renderWaiting(true); break;
     case 'setDisplay': doSetDisplay(el.dataset.dg || null); break;
     case 'sit': doSit(Number(el.dataset.seat)); break;
     case 'spectate': doSpectate(); break;
@@ -165,7 +166,13 @@ function handleMeRefresh(p) {
 function headerHTML() {
   const dg = ME.display && ME.display.game ? ME.display.game : null;
   const dscore = ME.display ? ME.display.score : 0;
-  return `<span class="lobby__hello">${nameHTML(ME.real_name, dg ? dscore : null)}
+  const meta = (typeof ENGAGE !== 'undefined' && ENGAGE.meta) ? ENGAGE.meta : null;
+  const title = meta && meta.equipped ? meta.equipped.title : '';
+  const effect = meta && meta.equipped ? meta.equipped.effect : '';
+  const nm = (typeof decoNameHTML === 'function')
+    ? decoNameHTML(ME.real_name, dg ? dscore : null, title, effect)
+    : nameHTML(ME.real_name, dg ? dscore : null);
+  return `<span class="lobby__hello">${nm}
     <small>${dg ? decoChipEmbHTML(dg, dscore, 'eqs') : '<span class="muted">티어 숨김</span>'}</small></span>`;
 }
 function goHome() {
@@ -174,6 +181,8 @@ function goHome() {
     <section class="screen screen--home">
       <header class="lobby__top">
         ${headerHTML()}<span class="spacer"></span>
+        ${typeof engageChipHTML === 'function' ? engageChipHTML() : ''}
+        <button class="btn btn--ghost" data-act="eng_open">🎁 프로필</button>
         <button class="btn btn--ghost" data-act="goRules">규칙</button>
         <button class="btn btn--ghost" data-act="goTiers">티어</button>
         <button class="btn btn--ghost" data-act="goDeco">꾸미기</button>
@@ -195,6 +204,9 @@ function goHome() {
       <p class="muted center" style="padding:10px 14px">로그인 후 게임을 고르세요. 티어·전적·꾸미기는 게임별로 따로 쌓여요.</p>
     </section>`;
   apiMe(TOKEN).then(p => { if (handleMeRefresh(p) && SCREEN === 'home') { const h = document.querySelector('.screen--home .lobby__hello'); if (h) h.outerHTML = headerHTML(); } });
+  if (typeof loadEngage === 'function') loadEngage({ dailyPrompt: true }).then(() => {
+    if (SCREEN === 'home') { const h = document.querySelector('.screen--home .lobby__hello'); if (h) h.outerHTML = headerHTML(); }
+  });
   showAnnouncementIfAny();   // 활성 공지가 있으면 팝업(세션 1회)
   // 직전 방이 아직 진행/대기 중이고 내가 멤버면 '이어서 입장' 칩 표시
   const lr = Number(localStorage.getItem('rk_last_room'));
@@ -297,7 +309,7 @@ async function refreshLbCache(force) {
   _lbAt = Date.now(); lbCacheGame = g;
   const list = await apiLeaderboard(g);
   lbCache = {};
-  list.forEach(u => lbCache[u.id] = { score: u.score, wins: u.wins, losses: u.losses, streak: u.streak, real_name: u.real_name });
+  list.forEach(u => lbCache[u.id] = { score: u.score, wins: u.wins, losses: u.losses, streak: u.streak, real_name: u.real_name, title: u.title, effect: u.effect });
 }
 let _roomT = null, _lobbyT = null;
 function scheduleRoomRefresh() { clearTimeout(_roomT); _roomT = setTimeout(() => refreshRoom(), 140); }
@@ -365,22 +377,40 @@ function timeoutActorId() {
 }
 
 /* ----------------------------- 대기실(탭) ----------------------------- */
-function renderWaiting() {
+// scrollReset=true 면 본문을 최상단으로(탭 전환 등). 기본은 스크롤 위치 보존
+// — 실시간 갱신(착석/이탈/방장 게임변경)마다 전체 innerHTML 재구축으로 스크롤이 튕기던 문제 해결.
+function renderWaiting(scrollReset) {
   const amHost = ROOM.host_id === ME.id;
   const g = curGame();
   const cap = g ? capOf(g) : (ROOM_ID <= 5 ? 4 : 8);   // 게임 미선택 보드룸=4(서버 일치)
-  setScreen('room');
+  const seated = MEMBERS.filter(m => m.seat != null).length;
   const tabBtn = (k, label) => `<button class="tab ${WAIT_TAB === k ? 'is-active' : ''}" data-act="waitTab" data-tab="${k}">${label}</button>`;
+  const navHTML = `${tabBtn('seat', '좌석')}${tabBtn('tier', '티어표')}${tabBtn('deco', '꾸미기')}${tabBtn('rules', '규칙')}`;
+  // 이미 대기실이 떠 있으면 부분 갱신(헤더 텍스트·탭·본문만 교체) → 스크롤 보존
+  const sec = (SCREEN === 'room') ? document.querySelector('.screen--room') : null;
+  if (sec) {
+    const gn = sec.querySelector('.room__gname'); if (gn) gn.textContent = ' · ' + (g ? GAME_NAME[g] : '게임 선택 전');
+    const cnt = sec.querySelector('.room__count'); if (cnt) cnt.textContent = `${seated}/${cap}`;
+    const nav = sec.querySelector('.tabbar'); if (nav && nav.innerHTML !== navHTML) nav.innerHTML = navHTML;
+    const body = sec.querySelector('.wait-body');
+    if (body) {
+      const keep = scrollReset ? 0 : body.scrollTop;
+      body.innerHTML = waitBody(WAIT_TAB, amHost, g, cap);
+      body.scrollTop = keep;
+    }
+    return;
+  }
+  setScreen('room');
   app().innerHTML = `
     <section class="screen screen--room">
       <header class="room__top">
         <button class="btn btn--ghost" data-act="leave">← 나가기</button>
         <b style="margin-left:6px">방 ${ROOM_ID}</b>
-        <span class="muted"> · ${g ? GAME_NAME[g] : '게임 선택 전'}</span>
+        <span class="muted room__gname"> · ${g ? GAME_NAME[g] : '게임 선택 전'}</span>
         <span class="spacer"></span>
-        <span class="muted">${MEMBERS.filter(m => m.seat != null).length}/${cap}</span>
+        <span class="muted room__count">${seated}/${cap}</span>
       </header>
-      <nav class="tabbar">${tabBtn('seat', '좌석')}${tabBtn('tier', '티어표')}${tabBtn('deco', '꾸미기')}${tabBtn('rules', '규칙')}</nav>
+      <nav class="tabbar">${navHTML}</nav>
       <div class="wait-body grow scrollable">${waitBody(WAIT_TAB, amHost, g, cap)}</div>
     </section>`;
 }
@@ -401,6 +431,8 @@ function waitBody(tab, amHost, g, cap) {
       const st = statsOf(m.user_id);
       const sc = st.score ?? m.score ?? 0, wn = st.wins ?? m.wins ?? 0, ls = st.losses ?? m.losses ?? 0, sk = st.streak ?? m.streak ?? 0;   // lbCache 우선 + 현재게임 멤버 스냅샷 폴백(100위 밖/미플레이 0점·아이언 방지)
       const isMe = m.user_id === ME.id;
+      const myEq = (isMe && typeof ENGAGE !== 'undefined' && ENGAGE.meta && ENGAGE.meta.equipped) ? ENGAGE.meta.equipped : null;
+      const dTitle = myEq ? myEq.title : st.title, dEffect = myEq ? myEq.effect : st.effect;   // 본인은 최신 장착값 우선
       const decoGame = m.display_game;                 // 꾸미기에서 고른 대표 게임
       const decoScore = m.display_score || 0;
       const decoTier = decoGame ? tierForScore(decoScore) : null;
@@ -409,7 +441,7 @@ function waitBody(tab, amHost, g, cap) {
       seats.push(`<li class="seat is-occupied ${isMe ? 'is-me' : ''}" data-seat="${n}">
         <span class="seat__no">${n}</span>
         <div class="seat__main">
-          <div class="seat__name" style="--tc:${curTier.color}">${nameHTML(m.name, sc)}${isMe ? ' <small>(나)</small>' : ''}${ROOM.host_id === m.user_id ? ' <span class="seat__badge">방장</span>' : ''}</div>
+          <div class="seat__name" style="--tc:${curTier.color}">${(typeof decoNameHTML === 'function') ? decoNameHTML(m.name, sc, dTitle, dEffect) : nameHTML(m.name, sc)}${isMe ? ' <small>(나)</small>' : ''}${ROOM.host_id === m.user_id ? ' <span class="seat__badge">방장</span>' : ''}</div>
           ${decoGame
             ? `<div class="seat__rep" style="--tc:${decoTier.color}"><span class="seat__rep-txt">대표 게임: ${GAME_NAME[decoGame]} ${decoTier.fullName} ${decoScore}</span><span class="seat__rep-emb">${emblemHTML(decoGame, decoScore, 'eq')}</span></div>`
             : `<div class="seat__rep seat__rep--none">대표 게임 미설정</div>`}
@@ -1086,19 +1118,31 @@ async function doResultAutoLeave() {
 /* ============================ 랭킹 (게임별) ========================== */
 async function showRank(game) {
   RANK_GAME = game || 'rummikub'; setScreen('rank');
-  const list = await apiLeaderboard(RANK_GAME);
   const tab = (g, label) => `<button class="chip ${RANK_GAME === g ? 'is-active' : ''}" data-act="rankGame" data-game="${g}">${label}</button>`;
+  const dn = (name, score, title, effect) => (typeof decoNameHTML === 'function') ? decoNameHTML(name, score, title, effect) : nameHTML(name, score);
+  const medal = i => i < 3 ? ['🥇', '🥈', '🥉'][i] : (i + 1);
+  let rowsHTML = '', myLine = '';
+  if (RANK_GAME === 'total') {
+    rowsHTML = (typeof totalRankHTML === 'function') ? await totalRankHTML() : '';
+  } else {
+    const list = await apiLeaderboard(RANK_GAME);
+    const myIdx = list.findIndex(u => u.id === ME.id);
+    if (myIdx >= 0) {
+      const pct = Math.max(1, Math.round(((myIdx + 1) / list.length) * 100));
+      myLine = `<div class="rank-me">📍 내 순위 <b>#${myIdx + 1}</b> · 상위 <b>${pct}%</b></div>`;
+    }
+    rowsHTML = list.map((u, i) => `<li class="board-rank__row ${u.id === ME.id ? 'is-me' : ''}">
+          <span class="pos ${i < 3 ? 'pos--top' : ''}">${medal(i)}</span>
+          <span>${dn(u.real_name, u.score, u.title, u.effect)}<small class="muted"> ${tierForScore(u.score).fullName}${u.streak >= 1 ? ' · 🔥' + u.streak : ''}</small></span>
+          <span>${u.wins}승${u.losses}패</span>
+          <span>${scoreTierHTML(RANK_GAME, u.score)}</span></li>`).join('') || '<li class="muted center" style="padding:20px">아직 기록이 없어요</li>';
+  }
   app().innerHTML = `
     <section class="screen screen--rank">
       <header class="room__top"><button class="btn btn--ghost" data-act="backHome">← 홈</button><b style="margin-left:6px">🏆 랭킹</b><span class="spacer"></span></header>
-      <nav class="game-select game-select--wrap">${tab('rummikub', '루미큐브')}${tab('davinci', '다빈치 코드')}${tab('splendor', '스플랜더')}${tab('uno', '우노')}${tab('mafia', '마피아')}${tab('race', '운빨 대시')}${tab('hunt', '나도 사람이야')}</nav>
-      <ol class="board-rank grow scrollable">
-        ${list.map((u, i) => `<li class="board-rank__row ${u.id === ME.id ? 'is-me' : ''}">
-          <span class="pos">${i + 1}</span>
-          <span>${nameHTML(u.real_name, u.score)}<small class="muted"> ${tierForScore(u.score).fullName}${u.streak >= 1 ? ' · 🔥' + u.streak : ''}</small></span>
-          <span>${u.wins}승${u.losses}패</span>
-          <span>${scoreTierHTML(RANK_GAME, u.score)}</span></li>`).join('') || '<li class="muted center" style="padding:20px">아직 기록이 없어요</li>'}
-      </ol>
+      <nav class="game-select game-select--wrap">${tab('total', '🌐 통합')}${tab('rummikub', '루미큐브')}${tab('davinci', '다빈치 코드')}${tab('splendor', '스플랜더')}${tab('uno', '우노')}${tab('mafia', '마피아')}${tab('race', '운빨 대시')}${tab('hunt', '나도 사람이야')}</nav>
+      ${myLine}
+      <ol class="board-rank grow scrollable">${rowsHTML}</ol>
     </section>`;
 }
 function showTiers() {
