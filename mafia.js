@@ -94,6 +94,9 @@ function mfAliveSig(s) { return mfAliveSeats(s || {}).join(','); }
 function mfUpdateVotes() {
   const s = MF.state; if (!s) return;
   const myVote = (s.votes && MF.mySeat != null) ? s.votes[MF.mySeat] : undefined;
+  const isDay = s.phase === 'day';
+  let maxVc = 0;   // 최다 득표(생존자 한정) — 처형 임박 후보 강조용
+  if (isDay && s.voteCount) for (const k in s.voteCount) { const seat = Number(k); if (mfAlive(s, seat)) maxVc = Math.max(maxVc, s.voteCount[k] || 0); }
   document.querySelectorAll('.mf-player').forEach(el => {
     const seat = Number(el.dataset.seat); if (isNaN(seat)) return;   // 좌석0(falsy)도 처리
     const vc = (s.voteCount && s.voteCount[seat]) || 0;
@@ -103,6 +106,7 @@ function mfUpdateVotes() {
       badge.textContent = '🗳 ' + vc;
     } else if (badge) { badge.remove(); }
     el.classList.toggle('is-myvote', Number(myVote) === seat);
+    el.classList.toggle('is-leading', isDay && maxVc > 0 && mfAlive(s, seat) && vc === maxVc);
   });
   const vb = document.querySelector('.mf-voteboard'); if (vb) vb.outerHTML = mfVoteBoardHTML(s);
   const iAmAlive = MF.mySeat != null && mfAlive(s, MF.mySeat);
@@ -364,7 +368,7 @@ function mfRender() {
   const logHTML = (s.log || []).slice(-6).reverse().map(l => `<li>${esc(l)}</li>`).join('');
 
   app().innerHTML = `
-    <section class="screen screen--mafia">
+    <section class="screen screen--mafia ${isNight ? 'is-night' : isDay ? 'is-day' : ''}">
       <header class="topbar">
         <div class="turn-pill ${isNight ? 'mf-pill-night' : isDay ? 'mf-pill-day' : ''}">${phaseLabel}</div>
         <span class="mf-timer" data-role="mfTimer"></span>

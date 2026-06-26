@@ -580,33 +580,34 @@ function unoInjectStyles(){
   const st=document.createElement('style'); st.id='unoCSS';
   st.textContent=`
   .screen--uno{display:flex;flex-direction:column;height:100%;gap:6px;padding:6px}
-  .uno-dir{font-size:20px;color:#ffd54a;margin-left:6px}
+  .uno-dir{font-size:20px;color:var(--select);margin-left:6px}
   .uno-center{display:flex;flex-direction:column;gap:8px;align-items:center}
   .uno-pile{display:flex;flex-direction:column;align-items:center;gap:4px;margin-top:4px}
   .uno-discard{transform:scale(1.05)}
   .uno-cur{font-size:13px;color:#cdd9ec;display:flex;gap:6px;align-items:center}
   .uno-colchip{display:inline-flex;align-items:center;padding:1px 8px;border-radius:10px;background:var(--cc);color:#fff;font-weight:800;font-size:12px}
-  .uno-cf{display:inline-flex;align-items:center;justify-content:center;width:40px;height:58px;border-radius:8px;background:var(--cc);color:#fff;font-weight:900;font-size:20px;border:2px solid rgba(255,255,255,.5);box-shadow:0 2px 5px rgba(0,0,0,.35)}
+  .uno-cf{display:inline-flex;align-items:center;justify-content:center;width:40px;height:58px;border-radius:8px;background:var(--cc);color:#fff;font-weight:900;font-size:20px;border:2px solid rgba(255,255,255,.5);box-shadow:var(--sh-inset),0 2px 6px rgba(0,0,0,.4)}
   .uno-cf--lg{width:60px;height:86px;font-size:30px;border-width:3px}
   .uno-cf.is-wild{background:conic-gradient(#d8443f 0 25%,#e6b32e 0 50%,#2faa55 0 75%,#3b7dd8 0);color:#fff;text-shadow:0 1px 3px #000}
   .uno-oppos{display:flex;flex-wrap:wrap;gap:6px;width:100%;justify-content:center}
-  .uno-omini{flex:1 1 44%;background:#141a24;border:1px solid #2a3550;border-radius:8px;padding:5px 7px;font-size:12px;min-width:120px}
-  .uno-omini.is-turn{border-color:#ffd54a}
+  .uno-omini{flex:1 1 44%;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:5px 7px;font-size:12px;min-width:120px}
+  .uno-omini.is-turn{border-color:var(--accent);box-shadow:0 0 10px var(--accent-glow)}
   .uno-omini__hd{display:flex;justify-content:space-between;align-items:center;gap:4px}
   .uno-omini__b{margin-top:4px;display:flex;gap:2px;flex-wrap:wrap;align-items:center}
   .uno-back{width:11px;height:16px;border-radius:3px;background:linear-gradient(135deg,#2b3550,#161c2b);border:1px solid #3a4660}
   .uno-uno{font-size:10px;font-weight:800;padding:0 5px;border-radius:8px}
-  .uno-uno.said{background:#2faa55;color:#fff}
-  .uno-uno.miss{background:#d8443f;color:#fff}
+  .uno-uno.said{background:var(--ok);color:#fff}
+  .uno-uno.miss{background:var(--danger);color:#fff}
   .uno-catch{font-size:12px;padding:3px 10px;margin-left:4px}   /* 1장 본인이 보는 'UNO 선언'(uno-sayuno)과 동일 크기 — 작아서 탭 빗나가던 문제 해결 */
   .uno-log{margin:4px 0;width:100%}
-  .uno-me{background:#10141d;border-top:1px solid #2a3550;padding:6px;font-size:12px}
+  .uno-me{background:var(--well);border-top:1px solid var(--line);padding:6px;font-size:12px}
   .uno-me__row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   .uno-sayuno{padding:3px 10px;font-size:12px}
   .uno-hand{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px;max-height:30vh;overflow-y:auto}
-  .uno-card{padding:0;background:transparent;border:none;cursor:pointer}
+  .uno-card{padding:0;background:transparent;border:none;cursor:pointer;transition:transform var(--t-fast) var(--ease-spring)}
+  .uno-card:active{transform:scale(.96)}
   .uno-card[disabled]{opacity:.45;cursor:default}
-  .uno-card:not([disabled]) .uno-cf{outline:2px solid #ffd54a;outline-offset:1px}
+  .uno-card:not([disabled]) .uno-cf{outline:2px solid var(--select);outline-offset:1px}
   .uno-actbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
   .uno-step{font-size:12px;color:#cdd9ec;flex:1 1 100%}
   .uno-note{color:#9fb0c3;font-size:13px;text-align:center;padding:4px}

@@ -146,8 +146,13 @@ async function doAuth() {
   const p = $('#f_pw').value || '';
   const nm = $('#f_name') ? ($('#f_name').value || '').trim() : '';
   const err = $('#f_err');
-  if (!u || !p || (authTab === 'signup' && !nm)) { err.textContent = '모든 칸을 채워주세요.'; return; }
-  if (authTab === 'signup' && !/^[가-힣]{1,10}$/.test(nm)) { err.textContent = '본명은 한글로 1~10자 입력하세요.'; return; }
+  const mark = (sel, bad) => { const el = $(sel); if (el) el.classList.toggle('is-invalid', bad); };
+  mark('#f_user', false); mark('#f_pw', false); mark('#f_name', false);
+  if (!u || !p || (authTab === 'signup' && !nm)) {
+    mark('#f_user', !u); mark('#f_pw', !p); mark('#f_name', authTab === 'signup' && !nm);
+    err.textContent = '모든 칸을 채워주세요.'; return;
+  }
+  if (authTab === 'signup' && !/^[가-힣]{1,10}$/.test(nm)) { mark('#f_name', true); err.textContent = '본명은 한글로 1~10자 입력하세요.'; return; }
   err.textContent = '처리 중…';
   const res = authTab === 'login' ? await apiLogin(u, p) : await apiSignup(u, p, nm);
   if (res.error) { err.textContent = res.error; return; }
@@ -185,13 +190,13 @@ function goHome() {
       <div id="resumeChip"></div>
       <div class="home-cards grow">
         <button class="home-card home-card--rk" data-act="goBoard">
-          <span class="home-card__emoji">🎲</span><span class="home-card__title">보드게임</span>
+          <span class="home-card__badge"><span class="home-card__emoji">🎲</span></span><span class="home-card__title">보드게임</span>
           <span class="home-card__sub">방 1~5 · 루미큐브 / 다빈치 코드 / 스플랜더 / 우노 / 마피아</span></button>
         <button class="home-card home-card--mini" data-act="goMini">
-          <span class="home-card__emoji">🎮</span><span class="home-card__title">미니게임</span>
+          <span class="home-card__badge"><span class="home-card__emoji">🎮</span></span><span class="home-card__title">미니게임</span>
           <span class="home-card__sub">방 6~10 · 운빨 대시 / 나도 사람이야</span></button>
         <button class="home-card home-card--dev" data-act="goDev">
-          <span class="home-card__emoji">🛠</span><span class="home-card__title">개발자 모드</span>
+          <span class="home-card__badge"><span class="home-card__emoji">🛠</span></span><span class="home-card__title">개발자 모드</span>
           <span class="home-card__sub">방 초기화 · 유저 스탯 · 게임 로그 · 공지 (관리자)</span></button>
       </div>
       <p class="muted center" style="padding:10px 14px">로그인 후 게임을 고르세요. 티어·전적·꾸미기는 게임별로 따로 쌓여요.</p>
@@ -259,7 +264,7 @@ async function refreshLobby() {
           const playing = r.status !== 'waiting';
           const cap = r.game ? capOf(r.game) : (r.id <= 5 ? 4 : 8);   // 게임 미선택 보드룸=4(서버 일치)
           const gname = r.game ? GAME_NAME[r.game] : '게임 선택 전';
-          return `<li class="room-card ${playing ? 'is-playing' : ''}" data-act="enterRoom" data-room="${r.id}">
+          return `<li class="room-card ${playing ? 'is-playing' : ''}" data-act="enterRoom" data-room="${r.id}" data-game="${r.game || ''}">
             <span class="room-card__id">방 ${r.id}</span>
             <span class="room-card__game">${esc(gname)}</span>
             <span class="room-card__count ${c >= cap ? 'is-full' : ''}">${c}/${cap}</span>
@@ -724,7 +729,7 @@ function renderGame() {
       <header class="topbar">
         <div class="turn-pill ${mine ? 'is-mine' : ''}">${mine ? '내 차례' : esc(turnName) + ' 차례'}${editingLive ? ' ✏️' : ''}</div>
         <div class="timer" data-role="timer" data-state="normal">
-          <svg class="timer__ring" viewBox="0 0 36 36"><circle cx="18" cy="18" r="16" fill="none" stroke="#2a3140" stroke-width="3"/><circle class="timer__fill" cx="18" cy="18" r="16" fill="none" stroke="#3b82f6" stroke-width="3" stroke-linecap="round" stroke-dasharray="100.5" stroke-dashoffset="0"/></svg>
+          <svg class="timer__ring" viewBox="0 0 36 36"><circle cx="18" cy="18" r="16" fill="none" stroke="var(--line)" stroke-width="3"/><circle class="timer__fill" cx="18" cy="18" r="16" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" stroke-dasharray="100.5" stroke-dashoffset="0"/></svg>
           <span class="timer__num" data-role="timerNum">–</span>
         </div>
         <span class="room-tag">방${ROOM_ID}·🂠${G.pool.length}</span>
@@ -1020,8 +1025,9 @@ function updateTimerUI(rem, lim) {
   if (rem == null) { if (ROOM && ROOM.turn_started_at) { lim = ROOM.turn_seconds || 30; rem = Math.min(lim, lim - (serverNow() - new Date(ROOM.turn_started_at).getTime()) / 1000); } else { numEl.textContent = '–'; return; } }
   const r = Math.max(0, rem);
   numEl.textContent = Math.ceil(r);
-  if (fill) { const C = 100.5; fill.style.strokeDashoffset = (C * (1 - r / lim)).toFixed(1); }
   const state = r > 10 ? 'normal' : r > 5 ? 'warn' : 'danger';
+  if (fill) { const C = 100.5; fill.style.strokeDashoffset = (C * (1 - r / lim)).toFixed(1);
+    fill.style.stroke = state === 'danger' ? 'var(--danger)' : state === 'warn' ? 'var(--warn)' : 'var(--accent)'; }
   tEl.dataset.state = state;
   if (state === 'danger' && !lastDanger) { lastDanger = true; if (navigator.vibrate) navigator.vibrate(60); }
   if (state !== 'danger') lastDanger = false;
@@ -1078,7 +1084,13 @@ function renderResult() {
         <button class="btn btn--primary btn--lg" data-act="leaveNow">지금 홈으로</button>
       </div>
     </section>`;
-  if (anyWin) { const w = document.createElement('div'); w.className = 'win-burst'; w.textContent = '🎉'; document.body.appendChild(w); setTimeout(() => w.remove(), 1500); }
+  if (anyWin) {
+    const w = document.createElement('div'); w.className = 'win-burst';
+    const cols = ['var(--accent)', 'var(--ok)', 'var(--warn)', 'var(--joker)'];
+    w.innerHTML = '<span class="win-emoji">🎉</span>' +
+      Array.from({ length: 12 }, (_, i) => `<i class="confetti" style="left:${(i * 9) - 50}px; background:${cols[i % cols.length]}; animation-delay:${(i % 5) * 40}ms"></i>`).join('');
+    document.body.appendChild(w); setTimeout(() => w.remove(), 1500);
+  }
   armResultLeave();
   apiMe(TOKEN).then(handleMeRefresh);
 }
