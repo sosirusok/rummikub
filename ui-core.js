@@ -105,3 +105,18 @@ function flashBanner(text) {
   if (navigator.vibrate) navigator.vibrate(40);
   clearTimeout(_oneT); _oneT = setTimeout(() => b.remove(), 1000);
 }
+
+/* ----------------------------- 테마(라이트/다크) ----------------------------- */
+// 다크가 기본. html[data-theme] 로 토큰 전환(재렌더 불필요·즉시 반영). localStorage 영속.
+function currentTheme() { return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark'; }
+function themeIcon() { return currentTheme() === 'light' ? '🌙' : '☀️'; }   // 누르면 바뀔 모드 아이콘
+function applyTheme(t) {
+  document.documentElement.setAttribute('data-theme', t === 'light' ? 'light' : 'dark');
+  document.querySelectorAll('[data-act="toggleTheme"]').forEach(b => { b.textContent = themeIcon(); });
+}
+function toggleTheme() {
+  const t = currentTheme() === 'light' ? 'dark' : 'light';
+  try { localStorage.setItem('rk_theme', t); } catch (e) {}
+  applyTheme(t);
+}
+try { applyTheme(localStorage.getItem('rk_theme') || 'dark'); } catch (e) { applyTheme('dark'); }

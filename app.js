@@ -73,6 +73,7 @@ function handleAct(act, el) {
     case 'authTab': switchAuthTab(el.dataset.tab); break;
     case 'authSubmit': doAuth(); break;
     case 'logout': doLogout(); break;
+    case 'toggleTheme': toggleTheme(); break;
     case 'goBoard': goLobby('board'); break;
     case 'goMini': goLobby('mini'); break;
     case 'goDev': showDev(); break;
@@ -181,6 +182,7 @@ function goHome() {
       <header class="lobby__top">
         ${headerHTML()}<span class="spacer"></span>
         ${typeof engageChipHTML === 'function' ? engageChipHTML() : ''}
+        <button class="btn btn--ghost btn--icon" data-act="toggleTheme" aria-label="테마 전환">${themeIcon()}</button>
         <button class="btn btn--ghost" data-act="goRules">규칙</button>
         <button class="btn btn--ghost" data-act="goTiers">티어</button>
         <button class="btn btn--ghost" data-act="goDeco">꾸미기</button>
@@ -190,13 +192,13 @@ function goHome() {
       <div id="resumeChip"></div>
       <div class="home-cards grow">
         <button class="home-card home-card--rk" data-act="goBoard">
-          <span class="home-card__badge"><span class="home-card__emoji">🎲</span></span><span class="home-card__title">보드게임</span>
+          <span class="home-card__emoji">🎲</span><span class="home-card__title">보드게임</span>
           <span class="home-card__sub">방 1~5 · 루미큐브 / 다빈치 코드 / 스플랜더 / 우노 / 마피아</span></button>
         <button class="home-card home-card--mini" data-act="goMini">
-          <span class="home-card__badge"><span class="home-card__emoji">🎮</span></span><span class="home-card__title">미니게임</span>
+          <span class="home-card__emoji">🎮</span><span class="home-card__title">미니게임</span>
           <span class="home-card__sub">방 6~10 · 운빨 대시 / 나도 사람이야</span></button>
         <button class="home-card home-card--dev" data-act="goDev">
-          <span class="home-card__badge"><span class="home-card__emoji">🛠</span></span><span class="home-card__title">개발자 모드</span>
+          <span class="home-card__emoji">🛠</span><span class="home-card__title">개발자 모드</span>
           <span class="home-card__sub">방 초기화 · 유저 스탯 · 게임 로그 · 공지 (관리자)</span></button>
       </div>
       <p class="muted center" style="padding:10px 14px">로그인 후 게임을 고르세요. 티어·전적·꾸미기는 게임별로 따로 쌓여요.</p>
@@ -1084,13 +1086,7 @@ function renderResult() {
         <button class="btn btn--primary btn--lg" data-act="leaveNow">지금 홈으로</button>
       </div>
     </section>`;
-  if (anyWin) {
-    const w = document.createElement('div'); w.className = 'win-burst';
-    const cols = ['var(--accent)', 'var(--ok)', 'var(--warn)', 'var(--joker)'];
-    w.innerHTML = '<span class="win-emoji">🎉</span>' +
-      Array.from({ length: 12 }, (_, i) => `<i class="confetti" style="left:calc(50% + ${(i * 9) - 50}px); background:${cols[i % cols.length]}; animation-delay:${(i % 5) * 40}ms"></i>`).join('');
-    document.body.appendChild(w); setTimeout(() => w.remove(), 1500);
-  }
+  if (anyWin) { const w = document.createElement('div'); w.className = 'win-burst'; w.textContent = '🎉'; document.body.appendChild(w); setTimeout(() => w.remove(), 1500); }
   armResultLeave();
   apiMe(TOKEN).then(handleMeRefresh);
 }
