@@ -1088,7 +1088,7 @@ function renderResult() {
     const w = document.createElement('div'); w.className = 'win-burst';
     const cols = ['var(--accent)', 'var(--ok)', 'var(--warn)', 'var(--joker)'];
     w.innerHTML = '<span class="win-emoji">🎉</span>' +
-      Array.from({ length: 12 }, (_, i) => `<i class="confetti" style="left:${(i * 9) - 50}px; background:${cols[i % cols.length]}; animation-delay:${(i % 5) * 40}ms"></i>`).join('');
+      Array.from({ length: 12 }, (_, i) => `<i class="confetti" style="left:calc(50% + ${(i * 9) - 50}px); background:${cols[i % cols.length]}; animation-delay:${(i % 5) * 40}ms"></i>`).join('');
     document.body.appendChild(w); setTimeout(() => w.remove(), 1500);
   }
   armResultLeave();

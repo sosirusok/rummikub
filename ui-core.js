@@ -65,7 +65,7 @@ let _toastT = null;
 function toast(msg, ok) {
   let t = document.querySelector('.toast');
   if (!t) { t = document.createElement('div'); document.body.appendChild(t); }
-  t.className = 'toast' + (ok ? ' toast--ok' : '');
+  t.className = 'toast' + (ok ? ' toast--ok' : ' toast--err');
   t.textContent = msg;
   clearTimeout(_toastT); _toastT = setTimeout(() => { t.remove(); }, 2200);
 }

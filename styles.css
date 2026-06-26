@@ -20,7 +20,7 @@
   --accent-soft:rgba(77,141,255,.16);
   --accent-glow:rgba(77,141,255,.45);
   --accent-ink:#ffffff;
-  --accent-grad:linear-gradient(180deg,#5a97ff,#3f7ef0);
+  --accent-grad:linear-gradient(180deg,#3f7ef0,#2f6fe0);
 
   /* ---- warmth graft (Mafia-day wash + home --dev ONLY) ---- */
   --amber:#e0a23c;
@@ -264,7 +264,8 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
   box-shadow:var(--sh-well) inset;}
 .action-bar{display:flex; gap:6px; flex-wrap:wrap;}
 .action-bar--primary{margin-top:2px; flex-wrap:nowrap;}
-.spectate-dock{padding:10px; text-align:center; color:var(--accent); font-weight:800; background:var(--panel); border-top:1px solid var(--line);}
+.spectate-dock{padding:10px; text-align:center; color:var(--accent); font-weight:800; background:var(--panel); border-top:1px solid var(--line);
+  box-shadow:0 -1px 0 var(--line),0 -6px 16px -10px rgba(0,0,0,.6);}
 
 /* 토스트 / 1장 / 콤보 배너 */
 .toast{position:fixed; left:50%; bottom:120px; transform:translateX(-50%);
@@ -567,7 +568,8 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .dv-mine__label{font-size:12px; color:var(--ink-dim); margin-bottom:6px;}
 .dv-hand--mine .dvt{width:38px; height:52px; font-size:20px;}
 .dv-log{list-style:none; margin:0; padding:4px 12px; font-size:12px; color:var(--ink-dim); display:flex; flex-direction:column; gap:2px;}
-.dv-foot{padding:10px 12px max(12px,env(safe-area-inset-bottom)); border-top:1px solid var(--line); background:var(--panel);}
+.dv-foot{padding:10px 12px max(12px,env(safe-area-inset-bottom)); border-top:1px solid var(--line); background:var(--panel);
+  box-shadow:0 -1px 0 var(--line),0 -6px 16px -10px rgba(0,0,0,.6);}
 .dv-note{text-align:center; color:var(--ink-dim); padding:6px;}
 .dv-actbar{display:flex; flex-direction:column; gap:8px;}
 .dv-step{font-weight:700; font-size:14px; display:flex; flex-wrap:wrap; align-items:center; gap:8px;}
@@ -839,7 +841,7 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .sc-tier{text-align:left !important; color:var(--tc); font-weight:800; text-shadow:0 0 5px var(--tc);}
 .sc-tier{display:flex; align-items:center; gap:4px;} .sc-tier__t{line-height:1;}
 .sc-c{font-weight:800;}
-.sc-pos{color:var(--ok);} .sc-neg{color:var(--danger);} .sc-zero{color:var(--ink-mute);}
+.sc-pos{color:var(--ok);} .sc-neg{color:var(--danger);} .sc-zero{color:#8a95a4;}
 .sc-note{font-size:11.5px; color:var(--ink-dim); line-height:1.6; padding:4px 2px;}
 
 

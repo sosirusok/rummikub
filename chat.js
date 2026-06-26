@@ -30,7 +30,7 @@ function chatInjectStyles() {
   .chat-form{display:flex;gap:6px;padding:8px;border-top:1px solid var(--line);background:var(--well)}
   .chat-in{flex:1;min-width:0;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:#fff;padding:9px 10px;font-size:15px;outline:none}
   .chat-in:focus{border-color:var(--accent)}
-  .chat-snd{background:var(--accent);border:none;color:#fff;border-radius:9px;padding:0 14px;font-weight:700;cursor:pointer}
+  .chat-snd{background:var(--accent-press);border:none;color:#fff;border-radius:9px;padding:0 14px;font-weight:700;cursor:pointer}
   @media(max-width:380px){.chat-box{width:94vw;height:min(54vh,400px)}}`;
   document.head.appendChild(s);
 }
