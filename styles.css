@@ -1235,3 +1235,8 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .adv3-hand{position:absolute; right:18%; bottom:0; width:120px; height:120px; image-rendering:pixelated; pointer-events:none; z-index:4; display:none; filter:drop-shadow(-3px 0 4px rgba(0,0,0,.4)); transform:translate(0,-10px);}
 .adv3-craftgrid.g2{grid-template-columns:repeat(2,44px); grid-template-rows:repeat(2,44px);}
 .adv3-craftgrid.g3{grid-template-columns:repeat(3,44px); grid-template-rows:repeat(3,44px);}
+
+/* 모험 3D — CSS 하늘(WebGL 캔버스 뒤, 항상 안정적으로 렌더) */
+.adv3-sky{position:absolute; inset:0; z-index:0; background:linear-gradient(#3f7fc8,#76adde 55%,#bfe0f5);}
+.adv3-screen #adv3canvas{z-index:1; background:transparent;}
+.adv3-screen .adv3-cross,.adv3-screen .adv3-top,.adv3-screen .adv3-hint,.adv3-screen .adv3-jump,.adv3-screen .adv3-hand,.adv3-screen .adv-hotbar{z-index:5;}

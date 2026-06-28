@@ -91,6 +91,8 @@
     return sy;
   }
   function isTreeAt(x, z) { return h2(x * 7 + 1, z * 13 + 3) < 0.02 && biome(x, z) !== 'desert'; }
+  // 바이옴별 잔디/잎 색조(마크의 biome coloring)
+  function biomeTint(x, z) { const b = biome(x, z); if (b === 'desert') return [0.74, 0.72, 0.34]; if (b === 'snow') return [0.50, 0.71, 0.59]; const n = vnoise(x + 50, z + 50, 0.02); return [0.45 + n * 0.18, 0.74 - n * 0.05, 0.32 + n * 0.12]; }
   function genBlock(x, y, z) {
     if (y <= 0) return ID.bedrock;
     if (y <= 2 && hash3(x, y, z) < 0.5) return ID.bedrock;
@@ -222,6 +224,9 @@
         const uvco = [[u.x0, u.y1], [u.x0, u.y0], [u.x1, u.y0], [u.x1, u.y1]];
         const a = f.ax[0], b = f.ax[1];
         const bx = wx + f.dir[0], by = y + f.dir[1], bz = wz + f.dir[2];   // 면 바깥(공기) 칸
+        // 바이옴 색조: 잔디 윗면 / 잎 전체
+        let tr = 1, tg = 1, tb = 1;
+        if ((b.key === 'grass' && f.n === 'top') || b.key === 'oak_leaves') { const tt = biomeTint(wx, wz); tr = tt[0]; tg = tt[1]; tb = tt[2]; }
         for (let k = 0; k < 4; k++) {
           const cc = f.corners[k];
           // 코너 음영(AO): 면내 두 인접 + 대각
@@ -233,7 +238,7 @@
           const aol = (s1 && s2) ? 0 : (3 - (s1 + s2 + sd));
           const v = sh * AO_MUL[aol];
           target.pos.push(wx + cc[0], y + cc[1] - (isWater && f.n === 'top' ? 0.12 : 0), wz + cc[2]);
-          target.col.push(v, v, v);
+          target.col.push(v * tr, v * tg, v * tb);
           target.uv.push(uvco[k][0], uvco[k][1]);
         }
         target.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
@@ -274,6 +279,7 @@
     }
     crackMesh = new THREE.Mesh(new THREE.BoxGeometry(1.003, 1.003, 1.003), crackMats[0]); crackMesh.visible = false; scene.add(crackMesh);
   }
+  let skyDome = null, sunMesh = null;   // (CSS 하늘로 대체 — WebGL 돔 미사용)
   function updateOverlays(t) {
     if (!outlineMesh) return;
     if (t) { outlineMesh.visible = true; outlineMesh.position.set(t.x + 0.5, t.y + 0.5, t.z + 0.5); }
@@ -294,10 +300,10 @@
     function fillNoise(p0, p1, p2) { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.33 ? p1 : t < 0.66 ? p0 : p2); } }
     const P3 = (k) => (A[k] && A[k].pal) || ['#888', '#666', '#aaa'];
     switch (name) {
-      case 'stone': fillNoise('#7e7e7e', '#727272', '#8a8a8a'); break;
-      case 'dirt': fillNoise('#866043', '#75543b', '#946a4a'); break;
-      case 'grass_top': fillNoise('#6aa84f', '#5b9142', '#7bbf5c'); break;
-      case 'grass_side': { fillNoise('#866043', '#75543b', '#946a4a'); for (let y = 0; y < 5; y++) for (let x = 0; x < 16; x++) { const t = r(); if (y < 3 || t < 0.5) f(x, y, t < 0.5 ? '#5b9142' : '#6aa84f'); } break; }
+      case 'stone': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.25 ? '#6f6f6f' : t < 0.5 ? '#787878' : t < 0.78 ? '#828282' : '#8c8c8c'); if (t > 0.96) f(x, y, '#5e5e5e'); } break;
+      case 'dirt': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.25 ? '#6e4c34' : t < 0.55 ? '#7d573c' : t < 0.82 ? '#8a6044' : '#976b4d'); if (t > 0.95) f(x, y, '#5a3d28'); } break;
+      case 'grass_top': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.3 ? '#c4c4c4' : t < 0.7 ? '#d6d6d6' : '#e6e6e6'); if (t > 0.95) f(x, y, '#a8a8a8'); } break;
+      case 'grass_side': { fillNoise('#866043', '#75543b', '#946a4a'); for (let y = 0; y < 5; y++) for (let x = 0; x < 16; x++) { const t = r(); if (y < 3 || t < 0.5) f(x, y, t < 0.5 ? '#5b9142' : '#6aa84f'); } for (let x = 0; x < 16; x++) if (r() < 0.5) f(x, 4 + ((r() * 2) | 0), '#5b9142'); break; }
       case 'sand': fillNoise('#e0d6a0', '#d4c98e', '#ece2b0'); break;
       case 'sandstone': { fillNoise('#d9cda0', '#cabf90', '#e6dab0'); for (let y = 3; y < 16; y += 4) for (let x = 0; x < 16; x++) f(x, y, '#bcb080'); break; }
       case 'gravel': fillNoise('#867f7e', '#76706f', '#999190'); break;
@@ -307,7 +313,7 @@
       case 'log_top': { fillNoise('#b59b6a', '#a78c5b', '#c4aa79'); for (let i = 2; i <= 7; i += 2) { c.strokeStyle = '#8a724a'; c.strokeRect(ox + 8 - i + .5, oy + 8 - i + .5, i * 2 - 1, i * 2 - 1); } break; }
       case 'log_side': { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) f(x, y, ((x + (r() < .3 ? 1 : 0)) % 5 === 0) ? '#5b472d' : (r() < 0.5 ? '#6b5436' : '#7c6342')); break; }
       case 'planks': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { f(x, y, ((y >> 2) % 2) ? '#9c7a44' : '#b08a4f'); if (y % 4 === 0) f(x, y, '#7a5f34'); } break;
-      case 'leaves': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.4 ? '#356a26' : t < 0.75 ? '#3f7a2e' : '#4c8f38'); if (t > 0.93) f(x, y, '#2a541d'); } break;
+      case 'leaves': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.4 ? '#9a9a9a' : t < 0.75 ? '#b6b6b6' : '#cccccc'); if (t > 0.9) f(x, y, '#6e6e6e'); if (t < 0.08) f(x, y, '#5a5a5a'); } break;
       case 'coal_ore': oreTex(c, ox, oy, '#1c1c1c'); break;
       case 'iron_ore': oreTex(c, ox, oy, '#d2a282'); break;
       case 'gold_ore': oreTex(c, ox, oy, '#f7d75c'); break;
@@ -547,13 +553,28 @@
 
   /* ---------------- 낮밤 ---------------- */
   function dayFactor() { const f = (world.time % cfg.dayLen) / cfg.dayLen; if (f < 0.5) { let b = 1 - Math.abs(f - 0.25) / 0.25 * 0.15; if (f < 0.06) b = 0.3 + f / 0.06 * 0.7; else if (f > 0.44) b = 0.3 + (0.5 - f) / 0.06 * 0.7; return Math.max(0.3, b); } return 0.28; }
+  let _lastSkyD = -1;
   function updateSky() {
-    const d = dayFactor(); const day = (world.time % cfg.dayLen) / cfg.dayLen < 0.5;
-    const sky = day ? new THREE.Color(0x7fb2e0).multiplyScalar(d) : new THREE.Color(0x0a0e1a);
-    scene.background = sky; if (scene.fog) scene.fog.color = sky;
-    if (renderer) renderer.setClearColor(sky, 1);
+    const d = dayFactor(); const f = (world.time % cfg.dayLen) / cfg.dayLen; const day = f < 0.5;
+    // 지평선 색(안개/캔버스 가장자리) — CSS 하늘과 맞춤
+    const hc = day ? mixHex('#9fc6ea', '#05070d', 1 - Math.max(0.35, d)) : '#0a0e18';
+    if (scene.fog) scene.fog.color.set(hc);
+    // CSS 하늘 갱신(밝기 0.02 이상 변할 때만)
+    if (Math.abs(d - _lastSkyD) > 0.02) {
+      _lastSkyD = d; const el = document.getElementById('adv3sky'); if (el) el.style.background = skyGradient(day, d, f);
+    }
     if (blockMat) blockMat.color.setScalar(d); if (waterMat) waterMat.color.setScalar(d);
   }
+  function skyGradient(day, d, f) {
+    if (!day) return 'linear-gradient(#04060c 0%, #070b14 55%, #0c1320 100%)';
+    const top = mixHex('#3f7fc8', '#0a1424', 1 - d), mid = mixHex('#76adde', '#0c1a2e', 1 - d), hor = mixHex('#bfe0f5', '#16283e', 1 - d);
+    // 일출/일몰 노을
+    const dusk = (f < 0.08 || f > 0.42);
+    const horC = dusk ? mixHex('#f4a25a', hor, 0.5) : hor;
+    return `linear-gradient(${top} 0%, ${mid} 55%, ${horC} 100%)`;
+  }
+  function mixHex(a, b, t) { t = Math.max(0, Math.min(1, t)); const ca = hx(a), cb = hx(b); const r = Math.round(ca[0] + (cb[0] - ca[0]) * t), g = Math.round(ca[1] + (cb[1] - ca[1]) * t), bl = Math.round(ca[2] + (cb[2] - ca[2]) * t); return 'rgb(' + r + ',' + g + ',' + bl + ')'; }
+  function hx(c) { c = c.replace('#', ''); return [parseInt(c.slice(0, 2), 16), parseInt(c.slice(2, 4), 16), parseInt(c.slice(4, 6), 16)]; }
 
   /* ---------------- 루프 ---------------- */
   let lastT = 0;
@@ -567,6 +588,7 @@
       camera.position.set(P.x, P.y + P.eye, P.z);
       const d = lookDir(); camera.lookAt(P.x + d.x, P.y + P.eye + d.y, P.z + d.z);
       const fovTarget = P.sprinting ? 80 : 72; camera.fov += (fovTarget - camera.fov) * Math.min(1, dt * 8); camera.updateProjectionMatrix();
+      if (skyDome) skyDome.position.copy(camera.position);
       updateSky();
       updateOverlays(mining ? breakTarget : raycast());
       if (swingT > 0) { swingT -= dt; updateHand(); }
@@ -578,6 +600,7 @@
   /* ---------------- HUD/DOM ---------------- */
   function screenHTML() {
     return `<section class="screen adv3-screen" data-adv3="1">
+      <div class="adv3-sky" id="adv3sky"></div>
       <canvas id="adv3canvas"></canvas>
       <div class="adv3-cross">+</div>
       <div class="adv3-top">
@@ -717,10 +740,11 @@
     if (typeof THREE === 'undefined') { app().innerHTML = serverErr('3D 라이브러리를 불러오지 못했어요(네트워크 확인).'); return; }
     setScreen('adventure'); app().innerHTML = screenHTML();
     canvas = document.getElementById('adv3canvas');
-    try { renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'low-power' }); }
+    try { renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: true, powerPreference: 'low-power' }); }
     catch (e) { app().innerHTML = serverErr('이 기기/브라우저가 3D(WebGL)를 지원하지 않아요.'); return; }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
-    scene = new THREE.Scene(); scene.fog = new THREE.Fog(0x7fb2e0, CHUNK * (RENDER - 1), CHUNK * (RENDER + 1));
+    renderer.setClearColor(0x000000, 0);   // 캔버스 투명 → 뒤의 CSS 하늘이 보임(소프트웨어GL에서도 안정적)
+    scene = new THREE.Scene(); scene.background = null; scene.fog = new THREE.Fog(0x9fc6ea, CHUNK * (RENDER - 1), CHUNK * (RENDER + 1.5));
     camera = new THREE.PerspectiveCamera(72, 1, 0.1, 1000);
     cfg = loadCfg(); seed = WORLD_SEED;
     try { world.time = (typeof serverNow === 'function' ? serverNow() : Date.now()) / 1000 % cfg.dayLen; } catch (e) { world.time = cfg.dayLen * 0.25; }
