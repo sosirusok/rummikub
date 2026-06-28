@@ -243,13 +243,18 @@
   function itemIcon(key, size) {
     size = size || 40; const ck = key + '#' + size; if (iconCache.has(ck)) return iconCache.get(ck);
     const cv = document.createElement('canvas'); cv.width = size; cv.height = size; const c = cv.getContext('2d'); c.imageSmoothingEnabled = false;
-    if (window.ADV_BLOCKS[key]) { c.drawImage(makeTile(key), 0, 0, size, size); }
+    const special = { torch: 1, sapling: 1, wheat_crop: 1 };
+    if (window.ADV_BLOCKS[key] && !special[key]) { c.drawImage(makeTile(key), 0, 0, size, size); }
     else { drawItemIcon(c, key, size); }
     const url = cv.toDataURL(); iconCache.set(ck, url); return url;
   }
   function drawItemIcon(c, key, s) {
     const d = window.ADV_ITEMS[key] || {}; const u = s / 16;
     c.clearRect(0, 0, s, s);
+    // 블록형 특수 아이콘(횃불/묘목/밀)
+    if (key === 'torch') { c.fillStyle = '#6b4f2a'; c.fillRect(s * 0.44, s * 0.45, s * 0.12, s * 0.45); c.fillStyle = '#ffcf5a'; c.fillRect(s * 0.38, s * 0.28, s * 0.24, s * 0.22); c.fillStyle = '#fff7cc'; c.fillRect(s * 0.45, s * 0.32, s * 0.1, s * 0.1); return; }
+    if (key === 'sapling') { c.fillStyle = '#6b4f2a'; c.fillRect(s * 0.46, s * 0.55, s * 0.08, s * 0.35); c.fillStyle = '#4c8f38'; c.fillRect(s * 0.28, s * 0.3, s * 0.44, s * 0.32); return; }
+    if (key === 'wheat_crop') { c.fillStyle = '#cdb24a'; for (let i = 0; i < 3; i++) c.fillRect(s * (0.28 + i * 0.22), s * 0.3, s * 0.08, s * 0.55); return; }
     const matCol = { wood: '#9c7a44', stone: '#9a9a9a', iron: '#dcdcdc', gold: '#f7d75c', diamond: '#5decd5' };
     function rect(x, y, w, h, col) { c.fillStyle = col; c.fillRect(x * u, y * u, w * u, h * u); }
     if (d.tool) {
