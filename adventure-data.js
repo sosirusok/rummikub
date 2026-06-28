@@ -32,7 +32,7 @@
   def('clay',       { kor: '점토', hard: 0.7, tool: SHOVEL, level: 0, drops: [{ i: 'clay_ball', c: 4 }], pal: ['#a4a8b6', '#9498a6', '#b4b8c6'], tex: 'noise' });
   def('snow_block', { kor: '눈 블록', hard: 0.3, tool: SHOVEL, level: 0, pal: ['#f0f4f7', '#e2e8ec', '#ffffff'], tex: 'noise' });
   def('ice',        { kor: '얼음', hard: 0.5, tool: PICK, level: 0, transparent: true, drops: [], pal: ['#83a0f0', '#7390e0', '#a0bcff'], tex: 'noise' });
-  def('obsidian',   { kor: '흑요석', hard: 9.0, tool: PICK, level: 3, pal: ['#1a1326', '#120d1c', '#2a2040'], tex: 'noise' });
+  def('obsidian',   { kor: '흑요석', hard: 50, tool: PICK, level: 3, pal: ['#1a1326', '#120d1c', '#2a2040'], tex: 'noise' });
 
   // ---- 광물 ----
   def('coal_ore',     { kor: '석탄 광석', hard: 3.0, tool: PICK, level: 0, drops: [{ i: 'coal', c: 1 }], xp: 1, pal: ['#7e7e7e', '#727272', '#8a8a8a'], ore: '#1c1c1c', tex: 'ore' });
@@ -51,7 +51,14 @@
   def('oak_leaves', { kor: '참나무 잎', hard: 0.3, tool: SHEARS, level: 0, transparent: true, drops: [{ i: 'sapling', c: 1, chance: 0.06 }, { i: 'apple', c: 1, chance: 0.04 }], pal: ['#3f7a2e', '#356a26', '#4c8f38'], tex: 'leaves' });
   def('sapling',    { kor: '묘목', solid: false, transparent: true, hard: 0, plant: true, pal: ['#4c8f38'], tex: 'cross' });
   def('cactus',     { kor: '선인장', hard: 0.4, tool: AXE, level: 0, transparent: true, hurt: 1, pal: ['#3f7d3a', '#356a31', '#4c8f46'], tex: 'noise' });
-  def('wheat_crop', { kor: '밀', solid: false, transparent: true, hard: 0, plant: true, pal: ['#cdb24a'], tex: 'cross' });
+  def('wheat_crop', { kor: '밀(어림)', solid: false, transparent: true, hard: 0, plant: true, crop: 'wheat_ripe', drops: [{ i: 'seeds', c: 1 }], pal: ['#6a8c3a'], tex: 'cross' });
+  def('wheat_ripe', { kor: '밀(익음)', solid: false, transparent: true, hard: 0, plant: true, ripe: true, drops: [{ i: 'wheat', c: 1 }, { i: 'seeds', c: 1, max: 3 }], pal: ['#cdb24a'], tex: 'cross' });
+  def('carrot_crop', { kor: '당근(어림)', solid: false, transparent: true, hard: 0, plant: true, crop: 'carrot_ripe', drops: [{ i: 'carrot', c: 1 }], pal: ['#3f7d3a'], tex: 'cross' });
+  def('carrot_ripe', { kor: '당근(익음)', solid: false, transparent: true, hard: 0, plant: true, ripe: true, drops: [{ i: 'carrot', c: 1, max: 3 }], pal: ['#e07b1f'], tex: 'cross' });
+  def('potato_crop', { kor: '감자(어림)', solid: false, transparent: true, hard: 0, plant: true, crop: 'potato_ripe', drops: [{ i: 'potato', c: 1 }], pal: ['#3f7d3a'], tex: 'cross' });
+  def('potato_ripe', { kor: '감자(익음)', solid: false, transparent: true, hard: 0, plant: true, ripe: true, drops: [{ i: 'potato', c: 1, max: 3 }], pal: ['#c8a25a'], tex: 'cross' });
+  def('farmland',   { kor: '경작지', hard: 0.6, tool: SHOVEL, level: 0, drops: [{ i: 'dirt', c: 1 }], pal: ['#5a3f28', '#4a3320', '#6a4d34'], tex: 'noise' });
+  def('bed',        { kor: '침대', solid: false, transparent: true, hard: 0.2, station: 'bed', drops: [{ i: 'bed', c: 1 }], pal: ['#c0392b', '#a93226', '#e74c3c'], tex: 'wool' });
 
   // ---- 가공/건축 ----
   def('glass',      { kor: '유리', hard: 0.4, tool: null, level: 0, transparent: true, drops: [], pal: ['#aee3f0', '#9bd0e0'], tex: 'glass' });
@@ -99,6 +106,17 @@
   item('bucket', { kor: '양동이', stack: 16 });
   item('water_bucket', { kor: '물 양동이', stack: 1, places: 'water' });
   item('lava_bucket', { kor: '용암 양동이', stack: 1, places: 'lava' });
+  item('fishing_rod', { kor: '낚싯대', stack: 1, dur: 65, fishing: true });
+
+  // 방어구: 마인크래프트 방어 포인트(1.5.2). 1포인트 = 피해 4% 감소(최대 80%).
+  const ARMOR_PTS = { leather: { head: 1, chest: 3, legs: 2, feet: 1 }, gold: { head: 2, chest: 5, legs: 3, feet: 1 }, iron: { head: 2, chest: 6, legs: 5, feet: 2 }, diamond: { head: 3, chest: 8, legs: 6, feet: 3 } };
+  const ARMOR_DUR = { leather: { head: 55, chest: 80, legs: 75, feet: 65 }, gold: { head: 77, chest: 112, legs: 105, feet: 91 }, iron: { head: 165, chest: 240, legs: 225, feet: 195 }, diamond: { head: 363, chest: 528, legs: 495, feet: 429 } };
+  const ARM_M = { leather: '가죽', gold: '황금', iron: '철', diamond: '다이아' };
+  const ARM_S = { head: '투구', chest: '갑옷', legs: '바지', feet: '부츠' };
+  const ARM_PIECE = { head: 'helmet', chest: 'chestplate', legs: 'leggings', feet: 'boots' };
+  ['leather', 'gold', 'iron', 'diamond'].forEach(m => { ['head', 'chest', 'legs', 'feet'].forEach(s => {
+    item(m + '_' + ARM_PIECE[s], { armor: ARMOR_PTS[m][s], slot: s, mat: m, dur: ARMOR_DUR[m][s], kor: ARM_M[m] + ' ' + ARM_S[s], stack: 1 });
+  }); });
 
   // 재료
   const mat = (key, kor, extra) => item(key, Object.assign({ kor }, extra || {}));
@@ -121,8 +139,9 @@
   food('raw_porkchop', '날 돼지고기', 3); food('cooked_porkchop', '익힌 돼지고기', 8);
   food('raw_beef', '날 소고기', 3); food('cooked_beef', '스테이크', 8);
   food('raw_chicken', '날 닭고기', 2, { poison: 0.3 }); food('cooked_chicken', '익힌 닭고기', 6);
-  food('melon_slice', '수박 조각', 2); food('carrot', '당근', 3); food('potato', '감자', 1);
+  food('melon_slice', '수박 조각', 2); food('carrot', '당근', 3, { plant: 'carrot_crop' }); food('potato', '감자', 1, { plant: 'potato_crop' });
   food('baked_potato', '구운 감자', 5); food('pumpkin_pie', '호박 파이', 8);
+  food('raw_fish', '날 물고기', 2); food('cooked_fish', '익힌 물고기', 5);
 
   // ---------------- 조합법 ----------------
   // {out:[item,count], grid:[...9], table:bool}  또는 shapeless {out, need:[[item,count]...]}
@@ -153,6 +172,16 @@
   recipe('shears', 1, [['iron_ingot', 2]], true);
   recipe('flint_and_steel', 1, [['iron_ingot', 1], ['flint', 1]], false);
   recipe('glowstone', 1, [['glowstone_dust', 4]], true);
+  recipe('fishing_rod', 1, [['stick', 3], ['string', 2]], true);
+  recipe('bed', 1, [['wool', 3], ['oak_planks', 3]], true);
+  // 방어구 조합(투구5·갑옷8·바지7·부츠4)
+  const ARMOR_MAT = { leather: 'leather', gold: 'gold_ingot', iron: 'iron_ingot', diamond: 'diamond' };
+  ['leather', 'gold', 'iron', 'diamond'].forEach(m => { const h = ARMOR_MAT[m];
+    recipe(m + '_helmet', 1, [[h, 5]], true);
+    recipe(m + '_chestplate', 1, [[h, 8]], true);
+    recipe(m + '_leggings', 1, [[h, 7]], true);
+    recipe(m + '_boots', 1, [[h, 4]], true);
+  });
   // 도구 조합(나무/돌/철/금/다이아)
   const TMAT = { wood: 'oak_planks', stone: 'cobblestone', iron: 'iron_ingot', gold: 'gold_ingot', diamond: 'diamond' };
   Object.keys(TMAT).forEach(m => {
@@ -171,6 +200,7 @@
     cobblestone: 'stone', clay_ball: 'brick_item', raw_porkchop: 'cooked_porkchop',
     raw_beef: 'cooked_beef', raw_chicken: 'cooked_chicken', potato: 'baked_potato',
     oak_log: 'charcoal', birch_log: 'charcoal', iron_ore: 'iron_ingot', gold_ore: 'gold_ingot',
+    raw_fish: 'cooked_fish',
   };
   const FUEL = { coal: 8, charcoal: 8, oak_planks: 1.5, oak_log: 1.5, stick: 0.5, lava_bucket: 100, crafting_table: 1.5, chest: 1.5, bookshelf: 1.5, bowl: 1 };
 

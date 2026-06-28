@@ -61,6 +61,7 @@
     x: 5000.5, y: 40, vx: 0, vy: 0, w: 0.6, h: 1.8, onGround: false, face: 1,
     hp: 20, hunger: 20, sat: 5, air: 10, xp: 0, lvl: 0,
     hurtT: 0, regenT: 0, starveT: 0, inWater: false, onLadder: false, name: 'Steve',
+    spawnX: 5000.5, spawnY: 40, armor: { head: null, chest: null, legs: null, feet: null },
   };
   // 인벤토리: 36칸(0~8 핫바). slot={k,n} 또는 null
   let inv = new Array(36).fill(null);
@@ -132,6 +133,8 @@
     }
     const depth = y - sy;
     if (depth <= (b === 'desert' ? 4 : 3)) return b === 'desert' ? 'sandstone' : 'dirt';
+    // 구조물(지하 던전)
+    const dn = dungeonBlock(x, y); if (dn) return dn;
     // 동굴
     const cave = noise2(x, y * 1.4, 0.07);
     if (cave > 0.72 && y < WORLD_H - 6) return (y > 110 && hash2(x, y) < 0.4) ? 'lava' : 'air';
@@ -158,8 +161,7 @@
   }
   function setBlock(x, y, k, broadcast) {
     edits.set(ikey(x, y), k);
-    if (broadcast !== false) netSend({ t: 'b', x, y, k });
-    scheduleSave();
+    if (broadcast !== false) { netSend({ t: 'b', x, y, k }); queueWorldEdit(x, y, k); }   // 서버 영속 + 실시간
   }
   function blockDef(k) { return window.ADV_BLOCKS[k] || null; }
   function isSolid(k) { const d = blockDef(k); return d && d.solid !== false && !d.liquid && !d.air && d.key !== 'air' && !(d.plant) && d.key !== 'torch' && d.key !== 'sapling' && d.key !== 'wheat_crop'; }
@@ -338,8 +340,10 @@
     if (heldSlot() && window.ADV_ITEMS[heldSlot().k] && window.ADV_ITEMS[heldSlot().k].tool) damageTool(hotbar);
     setBlock(x, y, 'air');
     spawnParticles(x + 0.5, y + 0.5, bd.pal ? bd.pal[0] : '#999');
+    activeCrops.delete(ikey(x, y));
     // 위 식물/모래 낙하 처리
     afterEditPhysics(x, y);
+    neighborsMark(x, y);   // 인접 액체가 흘러들도록
     addHungerExert(0.02);
   }
   function afterEditPhysics(x, y) {
@@ -374,6 +378,7 @@
     if (bd.station === 'craft') { openCrafting(true); return true; }
     if (bd.station === 'furnace') { openFurnace(x, y); return true; }
     if (bd.station === 'chest') { openChest(x, y); return true; }
+    if (bd.station === 'bed') { doSleep(); return true; }
     return false;
   }
 
@@ -476,7 +481,12 @@
   function hurtPlayer(dmg, cause) {
     if (P.hurtT > 0.0 && cause !== '굶주림' && cause !== '낙하' && cause !== '용암' && cause !== '용암/선인장') return;
     if (P.hp <= 0) return;
-    P.hp = Math.max(0, P.hp - dmg); P.hurtT = 0.5; if (navigator.vibrate) navigator.vibrate(30);
+    // 방어구 감소(굶주림·심연·식중독은 무시)
+    let real = dmg;
+    if (cause !== '굶주림' && cause !== '심연' && cause !== '식중독' && armorPoints() > 0) {
+      real = dmg * (1 - damageReduction()); if (dmg >= 1) real = Math.max(1, Math.round(real)); wearArmorDamage();
+    }
+    P.hp = Math.max(0, P.hp - real); P.hurtT = 0.5; if (navigator.vibrate) navigator.vibrate(30);
     if (P.hp <= 0) onDeath(cause);
     updateHUD();
   }
@@ -485,7 +495,7 @@
     toast('사망: ' + (cause || '') + ' — 부활합니다', false);
     respawn();
   }
-  function respawn() { P.hp = cfg.startHp; P.hunger = 20; P.sat = 5; P.x = 5000.5; P.y = surfaceY(5000) - 0.1; P.vx = P.vy = 0; updateHUD(); scheduleSave(); }
+  function respawn() { P.hp = cfg.startHp; P.hunger = 20; P.sat = 5; P.x = P.spawnX || 5000.5; P.y = (P.spawnY != null ? P.spawnY : surfaceY(5000) - 0.1); P.vx = P.vy = 0; updateHUD(); scheduleSave(); }
 
   /* ============================ 몹 ============================ */
   function spawnMobs() {
@@ -531,6 +541,8 @@
         // 수동: 랜덤 배회
         m.wT = (m.wT || 0) - dt; if (m.wT <= 0) { m.wT = 1 + Math.random() * 2; m.wdir = [-1, 0, 1][Math.floor(Math.random() * 3)]; }
         m.vx = (m.wdir || 0) * md.speed * 0.5; dir = m.wdir;
+        if (m.loveT > 0) m.loveT -= dt;                          // 번식 사랑 상태
+        if (m.baby) { m.ageT = (m.ageT || 0) + dt; if (m.ageT > 40) m.baby = 0; }   // 새끼 성장
       }
       if (dir) m.face = dir;
       // 턱 점프
@@ -627,6 +639,125 @@
     // 폴백: 컬럼 하늘빛
     let open = true; for (let y = 0; y <= wy; y++) { if (isOpaque(getBlock(wx, y))) { open = false; break; } if (y === wy) break; }
     return open ? skyLevel() : 0;
+  }
+
+  /* ============================ 농사 ============================ */
+  const activeCrops = new Set();   // "x,y" 자라는 중인 작물
+  let _farmT = 0;
+  function registerCropsFromEdits() { activeCrops.clear(); edits.forEach((v, k) => { const d = blockDef(v); if (d && d.crop) activeCrops.add(k); }); }
+  function tillSoil(x, y) {
+    const k = getBlock(x, y);
+    if ((k === 'grass' || k === 'dirt') && getBlock(x, y - 1) === 'air') { setBlock(x, y, 'farmland'); damageTool(hotbar); return true; }
+    return false;
+  }
+  function plantCrop(x, y, plantKey) {
+    if (getBlock(x, y) !== 'air') return false;
+    if (getBlock(x, y + 1) !== 'farmland') { toast('경작지 위에만 심어요'); return false; }
+    setBlock(x, y, plantKey); activeCrops.add(ikey(x, y)); consumeHeld(1); return true;
+  }
+  function updateFarming(dt) {
+    _farmT += dt; if (_farmT < 2.5) return; _farmT = 0;
+    for (const key of Array.from(activeCrops)) {
+      const cur = edits.get(key); const d = blockDef(cur);
+      if (!d || !d.crop) { activeCrops.delete(key); continue; }
+      const p = key.split(','); const x = p[0] | 0, y = p[1] | 0;
+      if (Math.abs(x - P.x) > 48) continue;                       // 근처만 성장(부하 억제)
+      if (getBlock(x, y + 1) !== 'farmland') { continue; }
+      const light = lightAt(x, y);
+      if (light >= 7 && Math.random() < 0.35) { setBlock(x, y, d.crop); activeCrops.delete(key); }   // 익음(영속)
+    }
+  }
+
+  /* ============================ 액체 흐름(물/용암) ============================ */
+  const activeFluids = new Set();   // "x,y" 흐름 갱신 대상
+  let _fluidT = 0;
+  function markFluid(x, y) { activeFluids.add(ikey(x, y)); }
+  function neighborsMark(x, y) { markFluid(x, y); markFluid(x - 1, y); markFluid(x + 1, y); markFluid(x, y - 1); markFluid(x, y + 1); }
+  function updateFluids(dt) {
+    _fluidT += dt; if (_fluidT < 0.28) return; _fluidT = 0;
+    if (activeFluids.size > 4000) activeFluids.clear();
+    const todo = Array.from(activeFluids); activeFluids.clear();
+    for (const key of todo) {
+      const p = key.split(','); const x = p[0] | 0, y = p[1] | 0;
+      if (Math.abs(x - P.x) > 60) continue;
+      const k = getBlock(x, y); const d = blockDef(k);
+      if (!d || !d.liquid) continue;
+      const lvl = fluidLevel.get(key) != null ? fluidLevel.get(key) : 7;
+      const below = getBlock(x, y + 1);
+      if (below === 'air') { setFluid(x, y + 1, k, k === 'water' ? 7 : 6); continue; }   // 아래로 낙하(소스 유지)
+      if (lvl <= 0) continue;
+      // 좌우 확산(레벨 감소)
+      [[x - 1, y], [x + 1, y]].forEach(([nx, ny]) => {
+        if (getBlock(nx, ny) === 'air') { const nl = lvl - (k === 'water' ? 1 : 2); if (nl > 0) setFluid(nx, ny, k, nl); }
+      });
+    }
+  }
+  const fluidLevel = new Map();
+  function setFluid(x, y, k, lvl) { setBlock(x, y, k); fluidLevel.set(ikey(x, y), lvl); markFluid(x, y); }
+
+  /* ============================ 방어구 ============================ */
+  function armorPoints() { let t = 0; for (const s in P.armor) { const a = P.armor[s]; if (a) { const d = window.ADV_ITEMS[a.k]; if (d && d.armor) t += d.armor; } } return t; }
+  function damageReduction() { return Math.min(0.8, armorPoints() * 0.04); }
+  function equipFromInv(i) {
+    const s = inv[i]; if (!s) return; const d = window.ADV_ITEMS[s.k]; if (!d || !d.slot) { toast('방어구가 아니에요'); return; }
+    const prev = P.armor[d.slot]; P.armor[d.slot] = { k: s.k, dmg: s.dmg || 0 };
+    inv[i] = prev ? { k: prev.k, n: 1, dmg: prev.dmg } : null;
+    toast(d.kor + ' 착용', true); refreshHotbar(); scheduleSave();
+    if (SCREEN === 'adventure') openInventory();
+  }
+  function wearArmorDamage() { for (const s in P.armor) { const a = P.armor[s]; if (a) { const d = window.ADV_ITEMS[a.k]; if (d && d.dur && Math.random() < 0.4) { a.dmg = (a.dmg || 0) + 1; if (a.dmg >= d.dur) { P.armor[s] = null; toast('방어구가 부서졌어요'); } } } } }
+
+  /* ============================ 침대/수면 ============================ */
+  function doSleep() {
+    if (isDay()) { toast('밤에만 잘 수 있어요'); return; }
+    world.time = Math.ceil(world.time / cfg.dayLen) * cfg.dayLen + cfg.dayLen * 0.02;   // 아침으로
+    P.spawnX = P.x; P.spawnY = P.y;                                                     // 리스폰 지점 설정
+    P.hp = Math.min(20, P.hp + 2); toast('잘 잤다! 아침이 되었고 리스폰 지점을 설정했어요', true); scheduleSave();
+  }
+
+  /* ============================ 낚시 ============================ */
+  let fishing = null;   // {x,y,t,wait}
+  function castFishing() {
+    // 앞쪽 물 칸 찾기
+    for (let dx = 1; dx <= 4; dx++) { const fx = Math.floor(P.x + P.face * dx), fy = Math.floor(P.y - 0.5); if (getBlock(fx, fy) === 'water') { fishing = { x: fx, y: fy, t: 0, wait: 2 + Math.random() * 6 }; toast('낚시 시작…'); return true; } }
+    toast('앞에 물이 없어요'); return false;
+  }
+  function updateFishing(dt) {
+    if (!fishing) return;
+    if (getBlock(fishing.x, fishing.y) !== 'water' || Math.hypot(fishing.x - P.x, fishing.y - P.y) > 6) { fishing = null; return; }
+    fishing.t += dt;
+    if (fishing.t >= fishing.wait) {
+      const r = Math.random(); const catchK = r < 0.85 ? 'raw_fish' : r < 0.95 ? 'string' : 'bone';
+      spawnDrop(fishing.x + 0.5, fishing.y - 0.5, catchK, 1); damageTool(hotbar); P.xp += 1;
+      fishing = null; toast('잡았다!', true);
+    }
+  }
+
+  /* ============================ 구조물(지하 던전) ============================ */
+  function dungeonBlock(x, y) {
+    if (y < 80 || y > 150) return null;
+    const cellX = Math.floor(x / 64);
+    if (hash2(cellX, 555) >= 0.4) return null;                  // 셀의 60%만 던전
+    const rx0 = cellX * 64 + 8 + Math.floor(hash2(cellX, 1) * 36);
+    const ry0 = 86 + Math.floor(hash2(cellX, 2) * 50);
+    const w = 7, h = 5;
+    if (x < rx0 || x > rx0 + w || y < ry0 || y > ry0 + h) return null;
+    const border = (x === rx0 || x === rx0 + w || y === ry0 || y === ry0 + h);
+    if (border) return hash2(x, y) < 0.3 ? 'mossy_cobblestone' : 'cobblestone';
+    if (x === rx0 + 3 && y === ry0 + h - 1) return 'chest';     // 던전 보물상자
+    return 'air';
+  }
+  function isDungeonChestPos(x, y) {
+    const cellX = Math.floor(x / 64); if (hash2(cellX, 555) >= 0.4) return false;
+    const rx0 = cellX * 64 + 8 + Math.floor(hash2(cellX, 1) * 36); const ry0 = 86 + Math.floor(hash2(cellX, 2) * 50);
+    return x === rx0 + 3 && y === ry0 + 4;
+  }
+  function dungeonLoot(x, y) {                                  // 위치 결정적 전리품(공유 일관성)
+    const out = new Array(18).fill(null); const r = rngFrom((x * 92837 + y * 689287 + seed) >>> 0);
+    const pool = [['iron_ingot', 4], ['gold_ingot', 3], ['diamond', 2], ['bread', 4], ['coal', 6], ['apple', 3], ['iron_pickaxe', 1], ['bone', 5], ['gunpowder', 4], ['redstone', 6], ['golden_apple', 1], ['emerald', 2]];
+    const n = 3 + Math.floor(r() * 4);
+    for (let i = 0; i < n; i++) { const pick = pool[Math.floor(r() * pool.length)]; const cnt = 1 + Math.floor(r() * pick[1]); out[i] = { k: pick[0], n: cnt }; }
+    return out;
   }
 
   /* ============================ 렌더 ============================ */
@@ -797,13 +928,36 @@
   }
   function tapAction() {
     const tx = aim.tx, ty = aim.ty; if (!inReach(tx, ty)) return;
-    // 몹 공격
-    for (const m of mobs) { if (rectsOverlap(tx, ty, 1, 1, m.x - m.w / 2, m.y - m.h, m.w, m.h)) { hitMob(m); return; } }
-    // 작업대/화로/상자
+    const held = heldSlot(); const hd = held && window.ADV_ITEMS[held.k];
+    // 몹: 밀을 들고 있고 수동몹이면 먹이(번식), 아니면 공격
+    for (const m of mobs) {
+      if (rectsOverlap(tx, ty, 1, 1, m.x - m.w / 2, m.y - m.h, m.w, m.h)) {
+        if (held && held.k === 'wheat' && !window.ADV_MOBS[m.type].hostile) { feedMob(m); return; }
+        hitMob(m); return;
+      }
+    }
+    // 낚싯대
+    if (hd && hd.fishing) { if (fishing) fishing = null; else castFishing(); return; }
+    // 괭이 → 경작지
+    if (hd && hd.tool === 'hoe') { if (tillSoil(tx, ty)) return; }
+    // 작물 심기(씨앗/당근/감자)
+    if (hd && hd.plant) { if (plantCrop(tx, ty, hd.plant)) return; }
+    // 작업대/화로/상자/침대
     if (interactStation(tx, ty)) return;
     // 설치
-    const k = getBlock(tx, ty); if (k === 'air' || blockDef(k).liquid) { placeTile(tx, ty); return; }
-    // 음식 먹기(빈손 탭 시 무시) — 핫바 음식이면 먹기 버튼으로 처리
+    const k = getBlock(tx, ty);
+    if (k === 'air' || blockDef(k).liquid) {
+      if (placeTile(tx, ty)) { const pk = getBlock(tx, ty); if (blockDef(pk) && blockDef(pk).liquid) neighborsMark(tx, ty); }
+    }
+  }
+  function feedMob(m) {
+    consumeHeld(1); m.loveT = 20; spawnParticles(m.x, m.y - m.h / 2, '#e8a0c0');
+    for (const o of mobs) { if (o !== m && o.type === m.type && (o.loveT || 0) > 0 && Math.abs(o.x - m.x) < 6) { spawnBaby(m); m.loveT = 0; o.loveT = 0; break; } }
+  }
+  function spawnBaby(parent) {
+    const md = window.ADV_MOBS[parent.type];
+    mobs.push({ type: parent.type, x: parent.x + 0.5, y: parent.y, vx: 0, vy: 0, w: md.w, h: md.h, hp: Math.round(md.hp * cfg.mobHpMul), face: 1, hurtT: 0, atkT: 0, fuse: 0, baby: 1, ageT: 0 });
+    toast('새끼가 태어났어요!', true);
   }
   function updateMining(dt) {
     if (!aim.holding || !aim.active) { aim.progress = 0; return; }
@@ -915,16 +1069,24 @@
   }
 
   /* ============================ 상자 UI ============================ */
-  function openChest(x, y) {
-    const key = ikey(x, y); _chestKey = key; let store = chestStore.get(key); if (!store) { store = new Array(18).fill(null); chestStore.set(key, store); }
+  async function openChest(x, y) {
+    const key = ikey(x, y); _chestKey = key; let store = chestStore.get(key);
+    if (!store) {
+      const remote = await cloudChestGet(x, y);
+      if (remote && remote.length) store = remote;
+      else if (isDungeonChestPos(x, y)) { store = dungeonLoot(x, y); cloudChestSet(x, y, store); }   // 던전 전리품(최초 1회, 서버 영속)
+      else store = new Array(18).fill(null);
+      chestStore.set(key, store);
+    }
     const cells = store.map((s, i) => `<button class="adv-slot" data-act="adv_chest_take" data-i="${i}">${s ? `<img src="${itemIcon(s.k, 36)}"><span class="adv-cnt">${s.n > 1 ? s.n : ''}</span>` : ''}</button>`).join('');
     const myCells = inv.map((s, i) => `<button class="adv-slot" data-act="adv_chest_put" data-i="${i}">${s ? `<img src="${itemIcon(s.k, 36)}"><span class="adv-cnt">${s.n > 1 ? s.n : ''}</span>` : ''}</button>`).join('');
     openSheet(`<h3 class="sheet__title">📦 상자</h3><div class="adv-invgrid adv-chestgrid">${cells}</div>
       <p class="muted" style="font-size:12px;margin:6px 2px">내 가방 (탭→상자로)</p><div class="adv-invgrid">${myCells}</div>
       <button class="btn btn--ghost btn--lg" data-act="closeSheet">닫기</button>`);
   }
-  function chestTake(i) { const s = chestStore.get(_openChestKey()); if (!s || !s[i]) return; const it = s[i]; const left = addItem(it.k, it.n); if (left) it.n = left; else s[i] = null; scheduleSave(); openChestRefresh(); }
-  function chestPut(i) { if (!inv[i]) return; const s = chestStore.get(_openChestKey()); if (!s) return; const it = inv[i]; for (let j = 0; j < s.length; j++) { if (!s[j]) { s[j] = it; inv[i] = null; break; } else if (s[j].k === it.k && s[j].n < window.advStack(it.k)) { s[j].n += it.n; inv[i] = null; break; } } refreshHotbar(); scheduleSave(); openChestRefresh(); }
+  function chestTake(i) { const s = chestStore.get(_openChestKey()); if (!s || !s[i]) return; const it = s[i]; const left = addItem(it.k, it.n); if (left) it.n = left; else s[i] = null; persistChest(); openChestRefresh(); }
+  function chestPut(i) { if (!inv[i]) return; const s = chestStore.get(_openChestKey()); if (!s) return; const it = inv[i]; for (let j = 0; j < s.length; j++) { if (!s[j]) { s[j] = it; inv[i] = null; break; } else if (s[j].k === it.k && s[j].n < window.advStack(it.k)) { s[j].n += it.n; inv[i] = null; break; } } refreshHotbar(); persistChest(); openChestRefresh(); }
+  function persistChest() { if (!_chestKey) return; const s = chestStore.get(_chestKey); const p = _chestKey.split(','); if (s) cloudChestSet(p[0] | 0, p[1] | 0, s); }
   function _openChestKey() { return _chestKey; }
   let _chestKey = null;
   function openChestRefresh() { if (_chestKey) { const p = _chestKey.split(','); openChest(p[0] | 0, p[1] | 0); } }
@@ -936,8 +1098,11 @@
       const eat = s && window.ADV_ITEMS[s.k] && window.ADV_ITEMS[s.k].food ? ' adv-eatable' : '';
       return `<button class="adv-slot${i < 9 ? ' hot' : ''}${eat}" data-act="adv_islot" data-i="${i}">${s ? `<img src="${itemIcon(s.k, 38)}"><span class="adv-cnt">${s.n > 1 ? s.n : ''}</span>${dur}` : ''}</button>`;
     }).join('');
+    const armorSlots = ['head', 'chest', 'legs', 'feet'].map(s => { const a = P.armor[s]; const lab = { head: '투구', chest: '갑옷', legs: '바지', feet: '부츠' }[s]; return `<div class="adv-armorslot">${a ? `<img src="${itemIcon(a.k, 34)}">` : `<span class="adv-armorlab">${lab}</span>`}</div>`; }).join('');
+    const ap = armorPoints();
     openSheet(`<h3 class="sheet__title">🎒 가방</h3>
-      <p class="muted" style="font-size:12px">아이템 탭 → 핫바(1번칸)로 이동 · 음식은 먹기. 아래 줄이 핫바.</p>
+      <div class="adv-armorrow">${armorSlots}<span class="adv-armorpts">🛡 ${ap} (${Math.round(damageReduction() * 100)}%↓)</span></div>
+      <p class="muted" style="font-size:12px">아이템 탭 → 핫바 이동 · 음식=먹기 · 방어구=착용. 아래 줄이 핫바.</p>
       <div class="adv-invgrid">${cells}</div>
       <div class="adv-invrow"><button class="btn btn--primary btn--lg" data-act="adv_craft2">🛠 조합(2×2)</button></div>
       <button class="btn btn--ghost btn--lg" data-act="closeSheet">닫기</button>`);
@@ -945,6 +1110,7 @@
   function invSlotTap(i) {
     const s = inv[i]; if (!s) return;
     const it = window.ADV_ITEMS[s.k];
+    if (it && it.slot) { equipFromInv(i); return; }   // 방어구 착용
     if (it && it.food) { eatFood(i); return; }
     // 핫바로 스왑(빈 핫바칸 우선, 없으면 0번과 스왑)
     if (i >= 9) { let dst = -1; for (let j = 0; j < 9; j++) if (!inv[j]) { dst = j; break; } if (dst === -1) dst = hotbar; const tmp = inv[dst]; inv[dst] = s; inv[i] = tmp; }
@@ -963,29 +1129,14 @@
   /* ============================ 세이브/로드 ============================ */
   let saveT = 0, dirty = false;
   function scheduleSave() { dirty = true; }
-  function serialize() {
-    const e = {}; edits.forEach((v, k) => { e[k] = v; }); const ch = {}; chestStore.forEach((v, k) => { ch[k] = v; });
-    return { v: 1, p: { x: P.x, y: P.y, hp: P.hp, hunger: P.hunger, sat: P.sat, xp: P.xp, lvl: P.lvl }, inv, hotbar, time: world.time, edits: e, chests: ch, seed };
+  function serialize() {   // 플레이어 상태만(월드는 서버 권위)
+    return { v: 2, p: { x: P.x, y: P.y, hp: P.hp, hunger: P.hunger, sat: P.sat, xp: P.xp, lvl: P.lvl, spawnX: P.spawnX, spawnY: P.spawnY, armor: P.armor }, inv, hotbar };
   }
   function saveNow() {
     if (!cfg.invSave) return;
-    try { localStorage.setItem(SAVE_KEY, JSON.stringify(serialize())); } catch (e) { /* 용량초과 등 */ }
-    if (cfg.cloud) cloudSavePlayer();
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(serialize())); } catch (e) {}
+    cloudSavePlayer();
     dirty = false;
-  }
-  function loadSave(data) {
-    try {
-      if (!data) return false;
-      seed = WORLD_SEED;   // 항상 공유 맵 시드 사용(유저별 편집은 edits 로 덮어씀)
-      surfCache.clear();
-      if (data.p) { P.x = data.p.x; P.y = data.p.y; P.hp = data.p.hp; P.hunger = data.p.hunger; P.sat = data.p.sat || 5; P.xp = data.p.xp || 0; P.lvl = data.p.lvl || 0; }
-      if (data.inv) inv = data.inv.map(s => s ? { k: s.k, n: s.n, dmg: s.dmg } : null);
-      if (data.hotbar != null) hotbar = data.hotbar;
-      if (data.time != null) world.time = data.time;
-      edits = new Map(); if (data.edits) for (const k in data.edits) edits.set(k, data.edits[k]);
-      chestStore = new Map(); if (data.chests) for (const k in data.chests) chestStore.set(k, data.chests[k]);
-      return true;
-    } catch (e) { console.warn('adv load', e); return false; }
   }
   function loadLocal() { try { return JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch (e) { return null; } }
 
@@ -996,6 +1147,26 @@
   let _cloudSaveAt = 0;
   async function cloudSavePlayer() { if (!cloudReady()) return; if (Date.now() - _cloudSaveAt < 4000) return; _cloudSaveAt = Date.now(); try { await sb.rpc('adv_save_player', { p_token: ME.token, p_state: serialize() }); } catch (e) {} }
   async function cloudLoadPlayer() { if (!cloudReady()) return null; try { const { data } = await sb.rpc('adv_load_player', { p_token: ME.token }); return data; } catch (e) { return null; } }
+
+  /* ----- 서버 권위 공유 월드 ----- */
+  let _worldFlushAt = 0, pendingWorld = new Map(), _worldOk = false;
+  async function cloudWorldLoadAll() {
+    if (!cloudReady()) return null;
+    try { const { data, error } = await sb.rpc('adv_world_get_all'); if (error) return null; _worldOk = true; return data || {}; }
+    catch (e) { return null; }
+  }
+  function queueWorldEdit(x, y, k) { pendingWorld.set(ikey(x, y), k); }
+  async function cloudWorldFlush(force) {
+    if (!cloudReady() || !pendingWorld.size) return;
+    if (!force && Date.now() - _worldFlushAt < 1200) return;
+    _worldFlushAt = Date.now();
+    const batch = {}; pendingWorld.forEach((v, kk) => { batch[kk] = v; }); pendingWorld = new Map();
+    try { await sb.rpc('adv_world_set_batch', { p_token: ME.token, p_edits: batch }); }
+    catch (e) { for (const kk in batch) if (!pendingWorld.has(kk)) pendingWorld.set(kk, batch[kk]); }   // 실패분 재큐잉
+  }
+  async function cloudChestGet(x, y) { if (!cloudReady()) return null; try { const { data } = await sb.rpc('adv_chest_get', { p_x: x, p_y: y }); return data; } catch (e) { return null; } }
+  async function cloudChestSet(x, y, items) { if (!cloudReady()) return; try { await sb.rpc('adv_chest_set', { p_token: ME.token, p_x: x, p_y: y, p_items: items }); } catch (e) {} }
+  async function cloudWorldReset() { if (!cloudReady()) return { ok: false }; try { const { data } = await sb.rpc('adv_world_reset', { p_token: ME.token }); return data; } catch (e) { return { ok: false }; } }
 
   /* ============================ 멀티(브로드캐스트) ============================ */
   let netCh = null, netSendFn = null, _posT = 0;
@@ -1032,11 +1203,13 @@
       while (acc >= STEP && steps < 5) { stepPhysics(STEP); acc -= STEP; steps++; }
       world.time += dt;
       updateMining(dt); updateDrops(dt); updateMobs(dt); netTick(dt);
+      updateFarming(dt); updateFluids(dt); updateFishing(dt);
       updatePickup(dt);
       render(); drawJoy();
       // HUD 갱신(저빈도)
       _hudT = (_hudT || 0) + dt; if (_hudT > 0.25) { _hudT = 0; updateHUD(); }
       saveT += dt; if (saveT > 8 && dirty) { saveT = 0; saveNow(); }
+      cloudWorldFlush();   // 서버 월드 영속(배치)
     } catch (e) { console.error('adv loop', e); }
   }
   let _hudT = 0;
@@ -1052,27 +1225,52 @@
     resize(); window.addEventListener('resize', resize);
     bindInput();
     running = true; started = true; lastT = 0; acc = 0;
-    // 로드: 클라우드 우선, 없으면 로컬, 없으면 신규
+    showLoading('서버 월드 불러오는 중…');
+    // 서버 권위: 반드시 서버에서만 플레이. 서버 연결/SQL 필수.
     (async () => {
-      let data = null;
-      if (cfg.cloud) { const cs = await cloudGetSettings(); if (cs) applyCloudSettings(cs); data = await cloudLoadPlayer(); }
-      if (!data) data = loadLocal();
-      if (!data || !loadSave(data)) { newWorld(); }
+      if (!cloudReady()) { showServerError('서버 연결이 필요합니다. (개발자 모드에서 클라우드/멀티를 켜고 로그인하세요)'); return; }
+      const cs = await cloudGetSettings(); if (cs) applyCloudSettings(cs);
+      // 공유 월드 로드(없으면 = 서버 미설정)
+      const w = await cloudWorldLoadAll();
+      if (w === null) { showServerError('서버 월드가 아직 설정되지 않았어요.\nSupabase에 supabase_adventure.sql 을 실행해 주세요.'); return; }
+      seed = WORLD_SEED; surfCache.clear();
+      edits = new Map(); for (const kk in w) edits.set(kk, w[kk]);
+      chestStore = new Map(); registerCropsFromEdits();
+      // 플레이어 상태(위치·인벤·체력·허기) — 서버 우선, 없으면 신규 캐릭터
+      const data = await cloudLoadPlayer() || loadLocal();
+      if (data && data.p) loadPlayerState(data); else newPlayer();
+      syncWorldTime();
+      hideLoading();
       refreshHotbar(); updateHUD();
       netStart();
     })();
     rafId = requestAnimationFrame(loop);
   }
+  function showLoading(msg) { const c = document.getElementById('advCanvas'); if (ctx && c) { ctx.fillStyle = '#0a0e1a'; ctx.fillRect(0, 0, W, H); ctx.fillStyle = '#cdd6e6'; ctx.font = '16px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(msg, W / 2, H / 2); ctx.textAlign = 'left'; } }
+  function hideLoading() {}
+  function showServerError(msg) {
+    running = false; if (rafId) cancelAnimationFrame(rafId); rafId = 0;
+    app().innerHTML = `<section class="screen"><header class="room__top"><button class="btn btn--ghost" data-act="adv_exit">← 홈</button><b style="margin-left:6px">🗺️ 모험</b></header>
+      <div class="grow center" style="justify-content:center;text-align:center;padding:20px"><p style="white-space:pre-wrap;line-height:1.7">${esc(msg)}</p>
+      <button class="btn btn--primary btn--lg" data-act="adv_retry" style="margin-top:14px">다시 시도</button></div></section>`;
+  }
   function applyCloudSettings(cs) {
     try { if (cs.cfg) cfg = Object.assign(cfg, cs.cfg); if (cs.pw != null) localStorage.setItem(PW_KEY, cs.pw); } catch (e) {}
   }
-  function newWorld() {
-    seed = WORLD_SEED; surfCache.clear(); edits = new Map(); chestStore = new Map();   // 공유 맵(고정 시드)
+  function syncWorldTime() { try { world.time = (typeof serverNow === 'function' ? serverNow() : Date.now()) / 1000 % cfg.dayLen; } catch (e) { world.time = cfg.dayLen * 0.18; } }
+  function newPlayer() {
     inv = new Array(36).fill(null);
-    // 시작 지급(편의)
     inv[0] = { k: 'wood_pickaxe', n: 1 }; inv[1] = { k: 'wood_axe', n: 1 }; inv[2] = { k: 'oak_planks', n: 16 }; inv[3] = { k: 'torch', n: 8 }; inv[4] = { k: 'bread', n: 3 };
-    P.x = 5000.5; P.y = surfaceY(5000) - 0.1; P.vx = P.vy = 0; P.hp = cfg.startHp; P.hunger = 20; P.sat = 5; P.xp = 0; P.lvl = 0;
-    world.time = cfg.dayLen * 0.18;   // 환한 아침에 시작
+    P.x = 5000.5; P.y = surfaceY(5000) - 2; P.vx = P.vy = 0; P.hp = cfg.startHp; P.hunger = 20; P.sat = 5; P.xp = 0; P.lvl = 0;
+    P.spawnX = 5000.5; P.spawnY = surfaceY(5000) - 2;
+  }
+  function loadPlayerState(data) {
+    const p = data.p; P.x = p.x; P.y = p.y; P.hp = p.hp; P.hunger = p.hunger; P.sat = p.sat || 5; P.xp = p.xp || 0; P.lvl = p.lvl || 0;
+    P.spawnX = p.spawnX || 5000.5; P.spawnY = p.spawnY || (surfaceY(5000) - 2);
+    P.armor = p.armor || { head: null, chest: null, legs: null, feet: null };
+    inv = (data.inv || new Array(36).fill(null)).map(s => s ? { k: s.k, n: s.n, dmg: s.dmg } : null);
+    if (data.hotbar != null) hotbar = data.hotbar;
+    P.vx = P.vy = 0;
   }
   function stop() {
     if (!running && !canvas) return;   // 이미 정지(중복 호출 안전)
@@ -1097,6 +1295,9 @@
       case 'adv_chest_take': chestTake(Number(el.dataset.i)); return true;
       case 'adv_chest_put': chestPut(Number(el.dataset.i)); return true;
       case 'adv_jumpdown': jumpQueued = true; return true;
+      case 'adv_retry': stop(); start(); return true;
+      case 'adv_equip': equipFromInv(Number(el.dataset.i)); return true;
+      case 'adv_sleep': doSleep(); return true;
     }
     return false;
   }
@@ -1156,7 +1357,7 @@
         <button class="btn btn--primary btn--lg" data-act="adv_devsave">설정 저장</button>
         <button class="btn btn--ghost btn--lg" data-act="adv_devreset">월드 초기화</button>
       </div>
-      <p class="muted" style="font-size:12px">월드 초기화: 내 진행/월드 편집을 지우고 새 월드를 만듭니다(점수와 무관).</p>`;
+      <p class="muted" style="font-size:12px">월드 초기화(관리자): <b>서버 공유 월드 전체</b>를 비우고 모두에게 새 월드를 만듭니다.</p>`;
   }
   function devSave() {
     const num = (k) => { const el = document.getElementById('advc_' + k); if (el) cfg[k] = Number(el.value); };
@@ -1167,11 +1368,13 @@
     saveCfg();
     if (typeof toast === 'function') toast('모험 설정 저장됨', true);
   }
-  function devResetWorld() {
-    try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
-    edits = new Map(); chestStore = new Map(); surfCache.clear();
-    if (cloudReady()) { try { sb.rpc('adv_reset_player', { p_token: ME.token }); } catch (e) {} }
-    if (typeof toast === 'function') toast('모험 월드 초기화됨', true);
+  async function devResetWorld() {
+    const r = await cloudWorldReset();
+    if (r && r.ok) {
+      try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
+      edits = new Map(); chestStore = new Map(); surfCache.clear(); activeCrops.clear();
+      if (typeof toast === 'function') toast('서버 공유 월드 초기화됨', true);
+    } else { if (typeof toast === 'function') toast('초기화 실패(관리자 계정 필요)'); }
   }
   function devAct(a, el) {
     switch (a) {
@@ -1195,6 +1398,11 @@
 
   // 테스트 전용 훅(브라우저 미사용; window.__ADV_TEST 일 때만 노출)
   if (typeof window !== 'undefined' && window.__ADV_TEST) {
-    window.__adv = { procBlock, getBlock, setBlock, surfaceY, biomeAt, breakTime, mineTile, addItem, countItem, removeItem, recipeAvailable, doCraft, buildLight, lightAt, makeTile, itemIcon, newWorld, serialize, loadSave, spawnDrop, updateDrops, P, getInv: () => inv };
+    window.__adv = {
+      procBlock, getBlock, setBlock, surfaceY, biomeAt, breakTime, mineTile, addItem, countItem, removeItem, recipeAvailable, doCraft,
+      buildLight, lightAt, makeTile, itemIcon, newPlayer, serialize, spawnDrop, updateDrops, P, getInv: () => inv,
+      dungeonBlock, isDungeonChestPos, dungeonLoot, tillSoil, plantCrop, updateFarming, registerCropsFromEdits, getCrops: () => activeCrops,
+      armorPoints, damageReduction, equipFromInv, hurtPlayer, setFluid, updateFluids, getEdits: () => edits, WORLD_SEED,
+    };
   }
 })();

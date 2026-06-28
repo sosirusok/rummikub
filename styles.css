@@ -1204,3 +1204,10 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .adv-invgrid .adv-slot.adv-eatable{border-color:rgba(120,220,140,.5);}
 .adv-chestgrid{grid-template-columns:repeat(6,1fr);}
 .adv-invrow{display:flex; gap:8px; margin:8px 0;}
+
+/* 모험 — 방어구/시스템 UI */
+.adv-armorrow{display:flex; align-items:center; gap:6px; margin:4px 0 8px;}
+.adv-armorslot{width:44px; height:44px; border-radius:8px; border:2px solid rgba(255,255,255,.14); background:rgba(20,24,34,.85); display:flex; align-items:center; justify-content:center; position:relative;}
+.adv-armorslot img{width:36px; height:36px; image-rendering:pixelated;}
+.adv-armorlab{font-size:10px; color:var(--ink-dim);}
+.adv-armorpts{margin-left:auto; font-size:13px; font-weight:800; color:#9fd6ff;}

@@ -90,3 +90,84 @@ grant execute on function public.adv_reset_player(uuid)                to anon, 
 -- 초기 비밀번호 (관리자 설정 전 기본값은 클라이언트 '1234qwer'. 여기 넣으면 전역 동기.)
 insert into public.adv_settings(key, value) values ('pw', '"1234qwer"'::jsonb)
   on conflict (key) do nothing;
+
+-- =========================================================================
+-- 서버 권위 공유 월드 (모든 유저가 '하나의 서버 월드'에서만 플레이)
+--   · adv_world  : 블록 편집 전역 영속(좌표 PK). 누구나 RPC 로 변경, 모두 같은 결과를 봄.
+--   · adv_chests : 상자 내용물 전역 영속.
+-- 클라는 입장 시 전체 편집을 로드하고, 변경을 서버에 영속(+실시간 브로드캐스트로 즉시 동기).
+-- =========================================================================
+create table if not exists public.adv_world (
+  x          int  not null,
+  y          int  not null,
+  block      text not null,
+  updated_at timestamptz not null default now(),
+  primary key (x, y)
+);
+create table if not exists public.adv_chests (
+  x          int  not null,
+  y          int  not null,
+  items      jsonb not null,
+  updated_at timestamptz not null default now(),
+  primary key (x, y)
+);
+alter table public.adv_world  enable row level security;
+alter table public.adv_chests enable row level security;
+
+-- 전체 월드 편집 로드(입장 시 1회). { "x,y": "block", ... }
+create or replace function public.adv_world_get_all()
+returns jsonb language sql security definer set search_path = public as $$
+  select coalesce(jsonb_object_agg(x || ',' || y, block), '{}'::jsonb) from public.adv_world;
+$$;
+
+-- 블록 편집 일괄 영속. p_edits = { "x,y": "block" }. 'air' 도 블록값으로 저장(부순 상태 영속).
+create or replace function public.adv_world_set_batch(p_token uuid, p_edits jsonb)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_user uuid; k text; v text; px int; py int; n int := 0;
+begin
+  select id into v_user from public.users where token = p_token;
+  if v_user is null then return jsonb_build_object('ok', false, 'error', 'NO_AUTH'); end if;
+  for k, v in select key, value::text from jsonb_each_text(p_edits) loop
+    px := split_part(k, ',', 1)::int; py := split_part(k, ',', 2)::int;
+    insert into public.adv_world(x, y, block, updated_at) values (px, py, btrim(v, '"'), now())
+      on conflict (x, y) do update set block = excluded.block, updated_at = now();
+    n := n + 1;
+  end loop;
+  return jsonb_build_object('ok', true, 'n', n);
+end;
+$$;
+
+-- 상자 읽기/쓰기
+create or replace function public.adv_chest_get(p_x int, p_y int)
+returns jsonb language sql security definer set search_path = public as $$
+  select items from public.adv_chests where x = p_x and y = p_y;
+$$;
+create or replace function public.adv_chest_set(p_token uuid, p_x int, p_y int, p_items jsonb)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_user uuid;
+begin
+  select id into v_user from public.users where token = p_token;
+  if v_user is null then return jsonb_build_object('ok', false, 'error', 'NO_AUTH'); end if;
+  insert into public.adv_chests(x, y, items, updated_at) values (p_x, p_y, p_items, now())
+    on conflict (x, y) do update set items = excluded.items, updated_at = now();
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+-- 관리자: 서버 월드 전체 초기화
+create or replace function public.adv_world_reset(p_token uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_admin boolean;
+begin
+  select is_admin into v_admin from public.users where token = p_token;
+  if v_admin is distinct from true then return jsonb_build_object('ok', false, 'error', 'NOT_ADMIN'); end if;
+  delete from public.adv_world; delete from public.adv_chests;
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+grant execute on function public.adv_world_get_all()                   to anon, authenticated;
+grant execute on function public.adv_world_set_batch(uuid, jsonb)      to anon, authenticated;
+grant execute on function public.adv_chest_get(int, int)              to anon, authenticated;
+grant execute on function public.adv_chest_set(uuid, int, int, jsonb) to anon, authenticated;
+grant execute on function public.adv_world_reset(uuid)                to anon, authenticated;
