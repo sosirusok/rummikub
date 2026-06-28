@@ -1211,3 +1211,22 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .adv-armorslot img{width:36px; height:36px; image-rendering:pixelated;}
 .adv-armorlab{font-size:10px; color:var(--ink-dim);}
 .adv-armorpts{margin-left:auto; font-size:13px; font-weight:800; color:#9fd6ff;}
+
+/* ============================ 모험 3D ============================ */
+.adv3-screen{position:fixed; inset:0; overflow:hidden; background:#0a0e1a; touch-action:none; user-select:none; -webkit-user-select:none;}
+#adv3canvas{position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:none;}
+.adv3-cross{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); color:#fff; font-size:22px; opacity:.6; pointer-events:none; text-shadow:0 0 2px #000; z-index:3;}
+.adv3-top{position:absolute; top:0; left:0; right:0; display:flex; justify-content:space-between; align-items:flex-start; padding:6px 8px; z-index:5; pointer-events:none;}
+.adv3-hp{font-size:13px; filter:drop-shadow(0 1px 1px #000); letter-spacing:-1px;}
+.adv3-topbtns{display:flex; gap:6px; pointer-events:auto;}
+.adv3-hint{position:absolute; left:50%; bottom:64px; transform:translateX(-50%); background:rgba(0,0,0,.45); color:#dfe7f3; font-size:12px; padding:4px 12px; border-radius:12px; z-index:5; pointer-events:none;}
+.adv3-jump{position:absolute; right:16px; bottom:90px; width:72px; height:72px; border-radius:50%; border:none; background:rgba(46,143,79,.78); color:#fff; font-size:30px; font-weight:900; display:flex; align-items:center; justify-content:center; z-index:5;}
+.adv3-jump:active{transform:scale(.92);}
+/* 조합 3x3 */
+.adv3-crafttop{display:flex; align-items:center; justify-content:center; gap:12px; margin:8px 0;}
+.adv3-craftgrid{display:grid; grid-template-columns:repeat(3,44px); grid-template-rows:repeat(3,44px); gap:4px;}
+.adv3-craftgrid .adv-slot{width:44px; height:44px;}
+.adv3-arrow{font-size:20px; color:var(--ink-dim);}
+.adv3-craftout .adv-slot{width:54px; height:54px; border-color:rgba(120,180,255,.5);}
+.adv3-carry{font-size:13px; margin:6px 0; display:flex; gap:8px; align-items:center; justify-content:center;}
+.adv3-invlabel{font-size:12px; margin:8px 2px 2px;}

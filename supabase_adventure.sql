@@ -171,3 +171,49 @@ grant execute on function public.adv_world_set_batch(uuid, jsonb)      to anon, 
 grant execute on function public.adv_chest_get(int, int)              to anon, authenticated;
 grant execute on function public.adv_chest_set(uuid, int, int, jsonb) to anon, authenticated;
 grant execute on function public.adv_world_reset(uuid)                to anon, authenticated;
+
+-- =========================================================================
+-- 3D 모험(복셀) 서버 월드 — adventure3d.js 용. (x,y,z) 좌표 PK, block=숫자 id.
+-- =========================================================================
+create table if not exists public.adv3_world (
+  x int not null, y int not null, z int not null,
+  block smallint not null, updated_at timestamptz not null default now(),
+  primary key (x, y, z)
+);
+alter table public.adv3_world enable row level security;
+
+create or replace function public.adv3_world_get()
+returns jsonb language sql security definer set search_path = public as $$
+  select coalesce(jsonb_object_agg(x || ',' || y || ',' || z, block), '{}'::jsonb) from public.adv3_world;
+$$;
+
+create or replace function public.adv3_world_set(p_token uuid, p_edits jsonb)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_user uuid; k text; v text; px int; py int; pz int; n int := 0;
+begin
+  select id into v_user from public.users where token = p_token;
+  if v_user is null then return jsonb_build_object('ok', false, 'error', 'NO_AUTH'); end if;
+  for k, v in select key, value::text from jsonb_each_text(p_edits) loop
+    px := split_part(k, ',', 1)::int; py := split_part(k, ',', 2)::int; pz := split_part(k, ',', 3)::int;
+    insert into public.adv3_world(x, y, z, block, updated_at) values (px, py, pz, btrim(v,'"')::smallint, now())
+      on conflict (x, y, z) do update set block = excluded.block, updated_at = now();
+    n := n + 1;
+  end loop;
+  return jsonb_build_object('ok', true, 'n', n);
+end;
+$$;
+
+create or replace function public.adv3_world_reset(p_token uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_admin boolean;
+begin
+  select is_admin into v_admin from public.users where token = p_token;
+  if v_admin is distinct from true then return jsonb_build_object('ok', false, 'error', 'NOT_ADMIN'); end if;
+  delete from public.adv3_world;
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+grant execute on function public.adv3_world_get()              to anon, authenticated;
+grant execute on function public.adv3_world_set(uuid, jsonb)   to anon, authenticated;
+grant execute on function public.adv3_world_reset(uuid)        to anon, authenticated;

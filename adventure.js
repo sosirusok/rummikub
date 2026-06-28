@@ -1273,6 +1273,7 @@
     P.vx = P.vy = 0;
   }
   function stop() {
+    if (typeof window.adventure3dStop === 'function' && window.adventure3dRunning && window.adventure3dRunning()) { window.adventure3dStop(); return; }
     if (!running && !canvas) return;   // 이미 정지(중복 호출 안전)
     running = false; if (rafId) cancelAnimationFrame(rafId); rafId = 0;
     window.removeEventListener('resize', resize);
@@ -1331,7 +1332,7 @@
     if (!getPasswordEnabled() || v === getPassword()) { enterAdventure(); }
     else { const e = document.getElementById('adv_pw_err'); if (e) e.textContent = '비밀번호가 틀렸어요.'; }
   }
-  function enterAdventure() { start(); }
+  function enterAdventure() { if (typeof window.adventure3dStart === 'function') { window.adventure3dStart(); } else { start(); } }
 
   /* ============================ 개발자 모드 패널 ============================ */
   function devPaneHTML() {
