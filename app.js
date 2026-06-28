@@ -63,6 +63,7 @@ async function boot() {
 
 /* ----------------------------- 액션 위임 ------------------------------- */
 function handleAct(act, el) {
+  if (act.indexOf('adv_') === 0) { if (typeof adventureAct === 'function' && adventureAct(act, el)) return; }   // 모험 탭 위임
   if (typeof chatOnAct === 'function' && chatOnAct(act)) return;   // 채팅 위임(모든 화면 공통)
   if (act.indexOf('eng_') === 0) { if (typeof engageAct === 'function' && engageAct(act, el)) return; }   // 흥미요소(코인/업적/상점/출석)
   if (act.indexOf('dv_') === 0) { davinciAct(act, el); return; }   // 다빈치 코드 액션 위임
@@ -76,6 +77,7 @@ function handleAct(act, el) {
     case 'toggleTheme': toggleTheme(); break;
     case 'goBoard': goLobby('board'); break;
     case 'goMini': goLobby('mini'); break;
+    case 'goAdventure': if (typeof adventureOpen === 'function') adventureOpen(); break;
     case 'goDev': showDev(); break;
     case 'devUnlock': doDevUnlock(); break;
     case 'devToggle': { const n = Number(el.dataset.room); DEV_SEL.has(n) ? DEV_SEL.delete(n) : DEV_SEL.add(n); showDev(); break; }
@@ -176,6 +178,7 @@ function headerHTML() {
     <small>${dg ? decoChipEmbHTML(dg, dscore, 'eqs') : '<span class="muted">티어 숨김</span>'}</small></span>`;
 }
 function goHome() {
+  if (typeof adventureStop === 'function') adventureStop();
   cleanupRoom(); cleanupLobby(); ROOM_ID = null; setScreen('home');
   app().innerHTML = `
     <section class="screen screen--home">
@@ -197,6 +200,9 @@ function goHome() {
         <button class="home-card home-card--mini" data-act="goMini">
           <span class="home-card__emoji">🎮</span><span class="home-card__title">미니게임</span>
           <span class="home-card__sub">방 6~10 · 운빨 대시 / 나도 사람이야</span></button>
+        <button class="home-card home-card--adv" data-act="goAdventure">
+          <span class="home-card__emoji">🗺️</span><span class="home-card__title">모험</span>
+          <span class="home-card__sub">2D 마인크래프트 서바이벌 · 비밀번호 입장 · 멀티</span></button>
         <button class="home-card home-card--dev" data-act="goDev">
           <span class="home-card__emoji">🛠</span><span class="home-card__title">개발자 모드</span>
           <span class="home-card__sub">방 초기화 · 유저 스탯 · 게임 로그 · 공지 (관리자)</span></button>
@@ -1175,8 +1181,9 @@ function showDev() {
     </div>`;
   } else {
     const tab = (k, l) => `<button class="chip ${DEV_TAB === k ? 'is-active' : ''}" data-act="devTab" data-tab="${k}">${l}</button>`;
-    const tabs = `<div class="dev-tabs">${tab('rooms', '방 초기화')}${tab('users', '유저 스탯')}${tab('logs', '게임 로그')}${tab('notice', '공지')}</div>`;
-    let pane = DEV_TAB === 'users' ? devUsersPane() : DEV_TAB === 'logs' ? devLogsPane() : DEV_TAB === 'notice' ? devNoticePane() : devRoomsPane();
+    const tabs = `<div class="dev-tabs">${tab('rooms', '방 초기화')}${tab('users', '유저 스탯')}${tab('logs', '게임 로그')}${tab('notice', '공지')}${tab('adv', '모험')}</div>`;
+    let pane = DEV_TAB === 'users' ? devUsersPane() : DEV_TAB === 'logs' ? devLogsPane() : DEV_TAB === 'notice' ? devNoticePane()
+      : DEV_TAB === 'adv' ? (typeof adventureDevPaneHTML === 'function' ? adventureDevPaneHTML() : '<p class="muted">모험 모듈 미로드</p>') : devRoomsPane();
     body = tabs + `<div class="dev-pane">${pane}</div>`;
   }
   app().innerHTML = `

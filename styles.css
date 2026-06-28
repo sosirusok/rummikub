@@ -435,6 +435,7 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .home-card:active{transform:scale(.98);}
 .home-card--rk{background:linear-gradient(150deg,#1c2940,#151922); border-top-color:var(--accent-soft);}
 .home-card--mini{background:linear-gradient(150deg,#2a1f40,#151922); border-top-color:rgba(139,92,246,.3);}
+.home-card--adv{background:linear-gradient(150deg,#14301f,#151922); border-top-color:rgba(52,168,83,.4);}
 .home-card__emoji{font-size:46px;}
 .home-card__title{font-size:22px; font-weight:900; letter-spacing:-.02em;}
 .home-card__sub{font-size:13px; color:var(--ink-dim);}
@@ -1161,3 +1162,45 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
   .eng-chip{order:5;}
   .home-card__title{font-size:17px;} .home-card__sub{font-size:11px;}
 }
+
+/* ============================ 모험 탭 (2D 마인크래프트) ============================ */
+.adv-screen{position:fixed; inset:0; overflow:hidden; background:#0a0e1a; touch-action:none; user-select:none; -webkit-user-select:none;}
+#advCanvas{position:absolute; inset:0; width:100%; height:100%; display:block; image-rendering:pixelated; image-rendering:crisp-edges; touch-action:none;}
+.adv-top{position:absolute; top:0; left:0; right:0; display:flex; justify-content:space-between; align-items:flex-start; padding:6px 8px; pointer-events:none; z-index:5;}
+.adv-stats{display:flex; flex-direction:column; gap:2px; text-shadow:0 1px 2px #000;}
+.adv-bar{display:flex; gap:0; line-height:1; font-size:14px; filter:drop-shadow(0 1px 1px #000);}
+.adv-heart,.adv-food{font-size:13px; width:14px; text-align:center;}
+.adv-xp{font-size:11px; color:#aef; font-weight:800; text-shadow:0 1px 2px #000;}
+.adv-topbtns{display:flex; gap:6px; pointer-events:auto;}
+.adv-ibtn{width:42px; height:42px; border-radius:10px; border:none; background:rgba(0,0,0,.45); color:#fff; font-size:20px; backdrop-filter:blur(2px);}
+.adv-ibtn:active{transform:scale(.92); background:rgba(0,0,0,.6);}
+.adv-pickup{position:absolute; top:54px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,.55); color:#fff; padding:4px 12px; border-radius:14px; font-size:13px; font-weight:700; opacity:0; transition:opacity .2s; pointer-events:none; z-index:6;}
+.adv-joy{position:absolute; display:none; border-radius:50%; background:rgba(255,255,255,.10); border:2px solid rgba(255,255,255,.25); pointer-events:none; z-index:4;}
+.adv-joy-knob{position:absolute; left:50%; top:50%; width:44px; height:44px; margin:-22px 0 0 -22px; border-radius:50%; background:rgba(255,255,255,.35); border:2px solid rgba(255,255,255,.6);}
+.adv-rbtns{position:absolute; right:14px; bottom:96px; display:flex; flex-direction:column; gap:10px; z-index:5;}
+.adv-jump{width:72px; height:72px; border-radius:50%; border:none; background:rgba(46,143,79,.78); color:#fff; font-size:30px; font-weight:900; box-shadow:0 3px 10px rgba(0,0,0,.4); touch-action:none;}
+.adv-jump:active{transform:scale(.92); background:rgba(46,143,79,1);}
+.adv-hotbar{position:absolute; left:50%; bottom:8px; transform:translateX(-50%); display:flex; gap:3px; padding:4px; background:rgba(0,0,0,.4); border-radius:10px; z-index:5;}
+.adv-slot{position:relative; width:42px; height:42px; border-radius:7px; border:2px solid rgba(255,255,255,.12); background:rgba(20,24,34,.85); padding:0; overflow:hidden;}
+.adv-slot.is-sel{border-color:#fff; box-shadow:0 0 0 2px rgba(255,255,255,.4); background:rgba(40,50,70,.95);}
+.adv-slot img{width:34px; height:34px; image-rendering:pixelated; position:absolute; left:50%; top:48%; transform:translate(-50%,-50%); pointer-events:none;}
+.adv-cnt{position:absolute; right:2px; bottom:0; font-size:12px; font-weight:900; color:#fff; text-shadow:1px 1px 0 #000; pointer-events:none;}
+.adv-dur{position:absolute; left:2px; right:2px; bottom:2px; height:3px; background:#3fd05a; border-radius:2px;}
+/* 조합/제련/상자/인벤 시트 */
+.adv-craftlist{max-height:52vh; overflow-y:auto; display:flex; flex-direction:column; gap:6px; margin:6px 0;}
+.adv-recipe{display:flex; align-items:center; gap:10px; padding:6px 8px; background:var(--surface-2,#1a1f2b); border-radius:10px;}
+.adv-recipe.dim{opacity:.5;}
+.adv-rout{width:38px; height:38px; image-rendering:pixelated; border-radius:6px; background:rgba(0,0,0,.2);}
+.adv-rinfo{flex:1; min-width:0;}
+.adv-rinfo b{font-size:14px;}
+.adv-needs{display:flex; flex-wrap:wrap; gap:4px; margin-top:3px;}
+.adv-need{display:inline-flex; align-items:center; gap:2px; font-size:12px; padding:1px 5px; border-radius:8px; background:rgba(0,0,0,.25);}
+.adv-need img{width:16px; height:16px; image-rendering:pixelated;}
+.adv-need.ok{color:#8de8a0;} .adv-need.no{color:#e88;}
+.adv-craftbtn{min-width:62px; padding:6px 10px; font-size:13px;}
+.adv-invgrid{display:grid; grid-template-columns:repeat(9,1fr); gap:4px; margin:6px 0;}
+.adv-invgrid .adv-slot{width:100%; aspect-ratio:1; height:auto;}
+.adv-invgrid .adv-slot.hot{border-color:rgba(120,180,255,.5);}
+.adv-invgrid .adv-slot.adv-eatable{border-color:rgba(120,220,140,.5);}
+.adv-chestgrid{grid-template-columns:repeat(6,1fr);}
+.adv-invrow{display:flex; gap:8px; margin:8px 0;}
