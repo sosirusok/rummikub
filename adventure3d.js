@@ -181,6 +181,7 @@
 
   function blockOpaque(id) { const b = BYID[id]; return b && b.opaque; }
   function blockSolid(id) { const b = BYID[id]; return b && b.solid; }
+  function aoSolid(x, y, z) { return blockOpaque(getBlock(x, y, z)) ? 1 : 0; }
 
   /* ---------------- 메싱(면 컬링) ---------------- */
   // 면 방향: +x,-x,+y,-y,+z,-z. 면별 음영(상단 밝게).
@@ -192,6 +193,9 @@
     { dir: [0, 0, 1], corners: [[1, 0, 1], [1, 1, 1], [0, 1, 1], [0, 0, 1]], shade: 0.62, n: 'side' },
     { dir: [0, 0, -1], corners: [[0, 0, 0], [0, 1, 0], [1, 1, 0], [1, 0, 0]], shade: 0.62, n: 'side' },
   ];
+  // 각 면의 면내 두 축(법선 외) 인덱스 — AO(코너 음영) 계산용
+  FACES.forEach(f => { const na = f.dir.findIndex(v => v !== 0); f.ax = [0, 1, 2].filter(i => i !== na); });
+  const AO_MUL = [0.45, 0.62, 0.82, 1.0];
   function faceTexName(b, faceN) {
     if (typeof b.tex === 'string') return b.tex;
     if (faceN === 'top') return b.tex.top; if (faceN === 'bottom') return b.tex.bottom; return b.tex.side;
@@ -216,10 +220,20 @@
         const base = isWater ? wvi : vi;
         const sh = f.shade;
         const uvco = [[u.x0, u.y1], [u.x0, u.y0], [u.x1, u.y0], [u.x1, u.y1]];
+        const a = f.ax[0], b = f.ax[1];
+        const bx = wx + f.dir[0], by = y + f.dir[1], bz = wz + f.dir[2];   // 면 바깥(공기) 칸
         for (let k = 0; k < 4; k++) {
           const cc = f.corners[k];
+          // 코너 음영(AO): 면내 두 인접 + 대각
+          const sa = cc[a] ? 1 : -1, sb = cc[b] ? 1 : -1;
+          const o1 = [0, 0, 0], o2 = [0, 0, 0], od = [0, 0, 0]; o1[a] = sa; o2[b] = sb; od[a] = sa; od[b] = sb;
+          const s1 = aoSolid(bx + o1[0], by + o1[1], bz + o1[2]);
+          const s2 = aoSolid(bx + o2[0], by + o2[1], bz + o2[2]);
+          const sd = aoSolid(bx + od[0], by + od[1], bz + od[2]);
+          const aol = (s1 && s2) ? 0 : (3 - (s1 + s2 + sd));
+          const v = sh * AO_MUL[aol];
           target.pos.push(wx + cc[0], y + cc[1] - (isWater && f.n === 'top' ? 0.12 : 0), wz + cc[2]);
-          target.col.push(sh, sh, sh);
+          target.col.push(v, v, v);
           target.uv.push(uvco[k][0], uvco[k][1]);
         }
         target.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
@@ -242,6 +256,33 @@
   }
   function disposeMesh(m) { if (m) { scene.remove(m); if (m.geometry) m.geometry.dispose(); } }
   let blockMat = null, waterMat = null;
+
+  /* ---------------- 오버레이(조준 윤곽선·균열) ---------------- */
+  let outlineMesh = null, crackMesh = null, crackMats = [];
+  function setupOverlays() {
+    const eg = new THREE.EdgesGeometry(new THREE.BoxGeometry(1.002, 1.002, 1.002));
+    outlineMesh = new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.5 }));
+    outlineMesh.visible = false; scene.add(outlineMesh);
+    crackMats = [];
+    for (let s = 0; s < 8; s++) {
+      const cv = document.createElement('canvas'); cv.width = cv.height = 16; const c = cv.getContext('2d');
+      c.clearRect(0, 0, 16, 16); c.fillStyle = 'rgba(0,0,0,0.55)';
+      const r = rngFrom(12345 + s); const lines = (s + 1) * 3;
+      for (let i = 0; i < lines; i++) { let x = (r() * 16) | 0, y = (r() * 16) | 0; const len = 2 + ((r() * (s + 2)) | 0); for (let j = 0; j < len; j++) { c.fillRect(x, y, 1, 1); x += (r() < .5 ? 1 : -1); y += (r() < .5 ? 1 : 0); x = (x + 16) % 16; y = (y + 16) % 16; } }
+      const tx = new THREE.CanvasTexture(cv); tx.magFilter = THREE.NearestFilter; tx.minFilter = THREE.NearestFilter; tx.generateMipmaps = false;
+      crackMats.push(new THREE.MeshBasicMaterial({ map: tx, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1 }));
+    }
+    crackMesh = new THREE.Mesh(new THREE.BoxGeometry(1.003, 1.003, 1.003), crackMats[0]); crackMesh.visible = false; scene.add(crackMesh);
+  }
+  function updateOverlays(t) {
+    if (!outlineMesh) return;
+    if (t) { outlineMesh.visible = true; outlineMesh.position.set(t.x + 0.5, t.y + 0.5, t.z + 0.5); }
+    else outlineMesh.visible = false;
+    if (mining && t && breakTarget && t.x === breakTarget.x && t.y === breakTarget.y && t.z === breakTarget.z && breakProg > 0) {
+      crackMesh.visible = true; crackMesh.position.set(t.x + 0.5, t.y + 0.5, t.z + 0.5);
+      crackMesh.material = crackMats[Math.min(7, Math.floor(breakProg * 8))];
+    } else crackMesh.visible = false;
+  }
 
   /* ---------------- 텍스처 아틀라스 ---------------- */
   function px(c, x, y, col) { c.fillStyle = col; c.fillRect(x, y, 1, 1); }
@@ -306,6 +347,7 @@
     document.addEventListener('keydown', onKey); document.addEventListener('keyup', onKeyUp);
     canvas.addEventListener('pointerdown', onDown); canvas.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp); canvas.addEventListener('contextmenu', e => e.preventDefault());
+    canvas.addEventListener('wheel', onWheel, { passive: false });
     document.addEventListener('pointerlockchange', () => { look.locked = (document.pointerLockElement === canvas); });
   }
   function unbindInput() {
@@ -313,21 +355,26 @@
     if (canvas) { canvas.removeEventListener('pointerdown', onDown); canvas.removeEventListener('pointermove', onMove); }
     window.removeEventListener('pointerup', onUp);
   }
-  function onKey(e) { keys[e.code] = true; if (e.code === 'KeyE') { e.preventDefault(); toggleInventory(); } if (e.code === 'Space') e.preventDefault(); }
+  function onKey(e) {
+    keys[e.code] = true;
+    if (e.code === 'KeyE') { e.preventDefault(); toggleInventory(); }
+    if (e.code === 'Space') e.preventDefault();
+    if (e.code.indexOf('Digit') === 0) { const n = Number(e.code.slice(5)); if (n >= 1 && n <= 9) { hotbar = n - 1; refreshHotbar(); } }
+  }
   function onKeyUp(e) { keys[e.code] = false; }
+  function onWheel(e) { e.preventDefault(); hotbar = (hotbar + (e.deltaY > 0 ? 1 : -1) + 9) % 9; refreshHotbar(); }
   function relPos(e) { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
   const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
   function onDown(e) {
     const p = relPos(e); const W = canvas.clientWidth;
     if (!isTouch) {
-      // 데스크톱: 포인터락 + 좌클릭 파괴 / 우클릭 설치
       if (!look.locked) { canvas.requestPointerLock && canvas.requestPointerLock(); return; }
-      if (e.button === 2) placeBlock(); else startBreak();
+      if (e.button === 2) placeOrUse(); else mining = true;   // 좌클릭 꾹=캐기, 우클릭=설치/사용
       return;
     }
-    // 터치: 좌측 이동 조이스틱, 우측 시점/상호작용
+    // 터치: 좌측 이동 조이스틱, 우측 = 꾹 캐기 / 탭 설치
     if (p.x < W * 0.4 && move.id === -1) { move.active = true; move.id = e.pointerId; move.ox = move.x = p.x; move.oy = move.y = p.y; }
-    else if (look.id === -1) { look.id = e.pointerId; look.lx = p.x; look.ly = p.y; look.moved = 0; look.downT = performance.now(); look.dx0 = p.x; look.dy0 = p.y; }
+    else if (look.id === -1) { look.id = e.pointerId; look.lx = p.x; look.ly = p.y; look.moved = 0; look.downT = performance.now(); mining = true; }
   }
   function onMove(e) {
     if (!isTouch) {
@@ -336,12 +383,14 @@
     }
     const p = relPos(e);
     if (e.pointerId === move.id) { move.x = p.x; move.y = p.y; }
-    else if (e.pointerId === look.id) { const dx = p.x - look.lx, dy = p.y - look.ly; P.yaw -= dx * 0.005; P.pitch -= dy * 0.005; clampPitch(); look.lx = p.x; look.ly = p.y; look.moved += Math.abs(dx) + Math.abs(dy); }
+    else if (e.pointerId === look.id) { const dx = p.x - look.lx, dy = p.y - look.ly; P.yaw -= dx * 0.005; P.pitch -= dy * 0.005; clampPitch(); look.lx = p.x; look.ly = p.y; look.moved += Math.abs(dx) + Math.abs(dy); if (look.moved > 16) mining = false; }
   }
   function onUp(e) {
+    if (!isTouch) { if (e.button === 0) mining = false; return; }
     if (e.pointerId === move.id) { move.active = false; move.id = -1; }
     else if (e.pointerId === look.id) {
-      if (isTouch && look.moved < 10) { const dt = performance.now() - look.downT; if (dt < 300) startBreak(); else placeBlock(); }   // 짧은탭=파괴, 길게=설치
+      mining = false; breakProg = 0;
+      if (look.moved < 10 && (performance.now() - look.downT) < 200) placeOrUse();   // 짧은 탭 = 설치/사용
       look.id = -1;
     }
   }
@@ -370,30 +419,66 @@
   }
 
   /* ---------------- 파괴/설치 ---------------- */
-  function startBreak() {
-    const t = raycast(); if (!t) return;
-    const id = getBlock(t.x, t.y, t.z); const b = BYID[id]; if (!b || id === ID.bedrock) return;
-    breakBlock(t.x, t.y, t.z);
+  let mining = false, breakProg = 0, breakTarget = null, swingT = 0;
+  function breakTime(key, held) {
+    const def = bprop(key); if (!def || def.hard == null) return 0.15;
+    const it = held && window.ADV_ITEMS && window.ADV_ITEMS[held.k]; const need = def.tool;
+    const proper = !need || (it && it.tool === need);
+    let mult = 1; if (it && it.tool && need && it.tool === need) mult = it.speed || 1;
+    let harvest = true; if (def.level && def.level > 0) { const lvl = (it && it.tool === need) ? (it.level || 0) : -1; harvest = lvl >= def.level; }
+    let t = def.hard * ((proper && harvest) ? 1.5 : 5) / mult;
+    return Math.max(0.05, t * (cfg.breakMul || 1));
   }
+  function canHarvest(key, held) { const def = bprop(key); if (!def) return true; if (def.level && def.level > 0) { const it = held && window.ADV_ITEMS && window.ADV_ITEMS[held.k]; const lvl = (it && it.tool === def.tool) ? (it.level || 0) : -1; return lvl >= def.level; } return true; }
+  function processMining(dt) {
+    if (!mining) { breakProg = 0; breakTarget = null; return; }
+    const t = raycast(); if (!t) { breakProg = 0; breakTarget = null; return; }
+    const id = getBlock(t.x, t.y, t.z); if (id === ID.bedrock || id === 0) { breakProg = 0; return; }
+    if (!breakTarget || breakTarget.x !== t.x || breakTarget.y !== t.y || breakTarget.z !== t.z) { breakTarget = { x: t.x, y: t.y, z: t.z }; breakProg = 0; }
+    const bt = breakTime(BYID[id].key, inv[hotbar]);
+    breakProg += dt / bt; swing();
+    if (breakProg >= 1) { breakBlock(t.x, t.y, t.z); breakProg = 0; breakTarget = null; }
+  }
+  function swing() { if (swingT <= 0) swingT = 0.28; }
+  function placeOrUse() {
+    const t = raycast();
+    if (t) { const id = getBlock(t.x, t.y, t.z); const b = BYID[id]; if (b && b.station) { openStation(b.station); swing(); return; } }
+    if (placeBlock()) swing();
+  }
+  function openStation(st) { if (st === 'craft') openInventory('table'); else if (st === 'furnace') toast('화로는 곧 추가돼요'); else if (st === 'chest') toast('상자는 곧 추가돼요'); }
   function breakBlock(x, y, z) {
     const id = getBlock(x, y, z); const key = BYID[id].key; const def = bprop(key);
+    const harvest = canHarvest(key, inv[hotbar]);
     setBlock(x, y, z, 0);
-    // 드롭 → 인벤 직접(서바이벌 채집)
+    settleGravity(x, y + 1, z);                    // 위 모래/자갈 낙하
+    swing();
+    if (!harvest) return;                          // 요구 도구 미달 → 드롭 없음
     if (def) {
       const drops = def.drops || [{ i: key, c: 1 }];
       for (const dr of drops) { const ch = dr.chance != null ? dr.chance * cfg.dropMul : 1; if (Math.random() > ch) continue; let cnt = dr.c; if (dr.max) cnt = dr.c + Math.floor(Math.random() * (dr.max - dr.c + 1)); if (cnt > 0) addItem(dr.i, cnt); }
     } else addItem(key, 1);
-    flash();
+  }
+  // 모래/자갈 낙하
+  function settleGravity(x, y, z) {
+    let cur = y;
+    while (cur < WORLD_H) {
+      const id = getBlock(x, cur, z); const def = bprop(BYID[id] && BYID[id].key);
+      if (!def || !def.gravity) break;
+      let ny = cur; while (ny > 0 && getBlock(x, ny - 1, z) === 0) ny--;
+      if (ny !== cur) { setBlock(x, cur, z, 0); setBlock(x, ny, z, id); }
+      cur++;
+    }
   }
   function placeBlock() {
-    const s = inv[hotbar]; if (!s) return;
-    const placeKey = window.ADV_BLOCKS[s.k] ? s.k : null; if (!placeKey || ID[placeKey] === undefined) return;
-    const t = raycast(); if (!t) return;
+    const s = inv[hotbar]; if (!s) return false;
+    const placeKey = window.ADV_BLOCKS[s.k] ? s.k : null; if (!placeKey || ID[placeKey] === undefined) return false;
+    const t = raycast(); if (!t) return false;
     const nx = t.x + t.face[0], ny = t.y + t.face[1], nz = t.z + t.face[2];
-    if (getBlock(nx, ny, nz) !== 0) return;
-    // 플레이어와 겹침 방지
-    if (aabbHitsBlock(nx, ny, nz)) return;
-    setBlock(nx, ny, nz, ID[placeKey]); consumeHeld(1); flash();
+    if (getBlock(nx, ny, nz) !== 0) return false;
+    if (aabbHitsBlock(nx, ny, nz)) return false;
+    setBlock(nx, ny, nz, ID[placeKey]); consumeHeld(1);
+    settleGravity(nx, ny, nz);                      // 설치한 중력블록 낙하
+    return true;
   }
   function aabbHitsBlock(bx, by, bz) {
     const minX = P.x - P.w / 2, maxX = P.x + P.w / 2, minZ = P.z - P.w / 2, maxZ = P.z + P.w / 2, minY = P.y, maxY = P.y + P.h;
@@ -419,7 +504,8 @@
       if (keys.KeyW) mf += 1; if (keys.KeyS) mf -= 1; if (keys.KeyA) ms -= 1; if (keys.KeyD) ms += 1;
       if (move.active) { const dx = move.x - move.ox, dy = move.y - move.oy; if (Math.abs(dx) > 8) ms += dx > 0 ? 1 : -1; if (Math.abs(dy) > 8) mf += dy < 0 ? 1 : -1; }
     }
-    const sin = Math.sin(P.yaw), cos = Math.cos(P.yaw); const speed = (keys.ShiftLeft ? 2.6 : 4.3);
+    const sprint = (keys.ControlLeft || keys.ControlRight) && (mf > 0) && !invOpen; P.sprinting = sprint && (mf || ms);
+    const sin = Math.sin(P.yaw), cos = Math.cos(P.yaw); const speed = (keys.ShiftLeft ? 2.6 : (sprint ? 5.8 : 4.3));
     // 전진 방향(시점 yaw 기준): forward = (-sin, , -cos)
     let dx = (-sin * mf + cos * ms), dz = (-cos * mf - (-sin) * ms);
     const len = Math.hypot(dx, dz); if (len > 0) { dx /= len; dz /= len; }
@@ -465,6 +551,7 @@
     const d = dayFactor(); const day = (world.time % cfg.dayLen) / cfg.dayLen < 0.5;
     const sky = day ? new THREE.Color(0x7fb2e0).multiplyScalar(d) : new THREE.Color(0x0a0e1a);
     scene.background = sky; if (scene.fog) scene.fog.color = sky;
+    if (renderer) renderer.setClearColor(sky, 1);
     if (blockMat) blockMat.color.setScalar(d); if (waterMat) waterMat.color.setScalar(d);
   }
 
@@ -475,11 +562,14 @@
     try {
       if (!lastT) lastT = ts; let dt = (ts - lastT) / 1000; lastT = ts; if (dt > 0.1) dt = 0.1;
       world.time += dt;
-      collide(dt); streamChunks(); netTick(dt);
+      collide(dt); streamChunks(); netTick(dt); processMining(dt);
       // 카메라
       camera.position.set(P.x, P.y + P.eye, P.z);
       const d = lookDir(); camera.lookAt(P.x + d.x, P.y + P.eye + d.y, P.z + d.z);
+      const fovTarget = P.sprinting ? 80 : 72; camera.fov += (fovTarget - camera.fov) * Math.min(1, dt * 8); camera.updateProjectionMatrix();
       updateSky();
+      updateOverlays(mining ? breakTarget : raycast());
+      if (swingT > 0) { swingT -= dt; updateHand(); }
       renderer.render(scene, camera);
       _saveT += dt; if (_saveT > 8 && _dirty) { _saveT = 0; saveNow(); flushServer(); }
     } catch (e) { console.error('adv3d loop', e); }
@@ -494,14 +584,22 @@
         <div class="adv3-hp" id="adv3hp"></div>
         <div class="adv3-topbtns"><button class="adv-ibtn" data-act="adv3_inv">🎒</button><button class="adv-ibtn" data-act="adv_exit">✕</button></div>
       </div>
-      ${isTouch ? `<div class="adv3-jump" data-act="adv3_jump">⤒</div>` : `<div class="adv3-hint">WASD 이동 · 마우스 시점 · 좌클릭 파괴 · 우클릭 설치 · E 가방</div>`}
+      ${isTouch ? `<div class="adv3-jump" data-act="adv3_jump">⤒</div>` : `<div class="adv3-hint">WASD 이동 · 마우스 시점 · 좌클릭 꾹 파괴 · 우클릭 설치/사용 · 휠/숫자 핫바 · Ctrl 달리기 · E 가방</div>`}
+      <img class="adv3-hand" id="adv3hand" alt="">
       <div class="adv-hotbar" id="adv3hotbar"></div>
     </section>`;
+  }
+  function updateHand() {
+    const el = document.getElementById('adv3hand'); if (!el) return;
+    const s = inv[hotbar];
+    if (s) { el.style.display = 'block'; const u = icon(s.k); if (el.dataset.k !== s.k) { el.src = u; el.dataset.k = s.k; } } else { el.style.display = 'none'; el.dataset.k = ''; }
+    const sw = swingT > 0 ? Math.sin((1 - swingT / 0.28) * Math.PI) : 0;
+    el.style.transform = `translate(${-sw * 18}px, ${ -10 + sw * 22}px) rotate(${-sw * 24}deg)`;
   }
   function refreshHotbar() {
     const el = document.getElementById('adv3hotbar'); if (!el) return; let h = '';
     for (let i = 0; i < 9; i++) { const s = inv[i]; const sel = i === hotbar ? ' is-sel' : ''; h += `<button class="adv-slot${sel}" data-act="adv3_hot" data-i="${i}">${s ? `<img src="${icon(s.k)}"><span class="adv-cnt">${s.n > 1 ? s.n : ''}</span>` : ''}</button>`; }
-    el.innerHTML = h;
+    el.innerHTML = h; updateHand();
   }
   function updateHUD() { const el = document.getElementById('adv3hp'); if (!el) return; let s = ''; for (let i = 0; i < 10; i++) s += (P.hp - i * 2 >= 2 ? '❤️' : P.hp - i * 2 === 1 ? '💗' : '🖤'); el.textContent = s; }
 
@@ -534,10 +632,11 @@
   }
 
   /* ---------------- 인벤/조합 UI(직접 배치 3×3, 셰이프리스) ---------------- */
-  let invOpen = false; let grid = new Array(9).fill(null); let carry = null;
-  function toggleInventory() { if (invOpen) closeInv(); else openInventory(); }
-  function openInventory() {
-    invOpen = true; if (document.exitPointerLock) try { document.exitPointerLock(); } catch (e) {}
+  let invOpen = false; let grid = new Array(9).fill(null); let carry = null; let craftN = 4, craftTable = false;
+  function toggleInventory() { if (invOpen) closeInv(); else openInventory('inv'); }
+  function openInventory(mode) {
+    invOpen = true; craftTable = (mode === 'table'); craftN = craftTable ? 9 : 4;
+    if (document.exitPointerLock) try { document.exitPointerLock(); } catch (e) {}
     renderInv();
   }
   function closeInv() { invOpen = false; // 그리드 아이템 회수
@@ -545,9 +644,10 @@
     closeSheet(); refreshHotbar();
   }
   function craftOutput() {
-    const items = {}; grid.forEach(g => { if (g) items[g.k] = (items[g.k] || 0) + g.n; });
+    const items = {}; for (let i = 0; i < craftN; i++) { const g = grid[i]; if (g) items[g.k] = (items[g.k] || 0) + g.n; }
     const keys2 = Object.keys(items); if (!keys2.length) return null;
     for (const rc of window.ADV_RECIPES) {
+      if (rc.table && !craftTable) continue;                 // 큰 조합은 제작대 필요
       const need = {}; rc.need.forEach(([k, n]) => need[k] = n);
       const nk = Object.keys(need); if (nk.length !== keys2.length) continue;
       let ok = true; for (const k of nk) { if (items[k] !== need[k]) { ok = false; break; } }
@@ -558,12 +658,13 @@
   function renderInv() {
     const out = craftOutput();
     const gcell = (i) => { const g = grid[i]; return `<button class="adv-slot adv3-gcell" data-act="adv3_grid" data-i="${i}">${g ? `<img src="${icon(g.k)}"><span class="adv-cnt">${g.n > 1 ? g.n : ''}</span>` : ''}</button>`; };
-    const gridHTML = `<div class="adv3-craftgrid">${[0, 1, 2, 3, 4, 5, 6, 7, 8].map(gcell).join('')}</div>`;
+    const cellsN = craftTable ? [0, 1, 2, 3, 4, 5, 6, 7, 8] : [0, 1, 2, 3];
+    const gridHTML = `<div class="adv3-craftgrid ${craftTable ? 'g3' : 'g2'}">${cellsN.map(gcell).join('')}</div>`;
     const outHTML = `<div class="adv3-craftout"><button class="adv-slot adv3-outcell" data-act="adv3_take">${out ? `<img src="${icon(out.out)}"><span class="adv-cnt">${out.count > 1 ? out.count : ''}</span>` : ''}</button></div>`;
     const cells = inv.map((s, i) => `<button class="adv-slot${i < 9 ? ' hot' : ''}" data-act="adv3_islot" data-i="${i}">${s ? `<img src="${icon(s.k)}"><span class="adv-cnt">${s.n > 1 ? s.n : ''}</span>` : ''}</button>`).join('');
     const carryHTML = carry ? `<div class="adv3-carry">들고있음: ${window.advKor(carry.k)} ×${carry.n} <button class="btn btn--ghost" data-act="adv3_drop">내려놓기</button></div>` : '';
-    openSheet(`<h3 class="sheet__title">🛠 조합 (3×3 · 직접 배치)</h3>
-      <p class="muted" style="font-size:12px">아이템 탭→들기, 칸 탭→1개 놓기. 재료를 칸에 채우면 결과가 뜨고, 결과 탭하면 제작.</p>
+    openSheet(`<h3 class="sheet__title">🛠 조합 (${craftTable ? '제작대 3×3' : '2×2'} · 직접 배치)</h3>
+      <p class="muted" style="font-size:12px">아이템 탭→들기, 칸 탭→1개 놓기. ${craftTable ? '' : '큰 조합은 제작대(crafting_table)를 설치하고 우클릭/탭하세요. '}재료를 칸에 채우면 결과가 뜨고, 결과 탭하면 제작.</p>
       <div class="adv3-crafttop">${gridHTML}<div class="adv3-arrow">▶</div>${outHTML}</div>
       ${carryHTML}
       <div class="adv3-invlabel muted">가방</div><div class="adv-invgrid">${cells}</div>
@@ -623,8 +724,8 @@
     camera = new THREE.PerspectiveCamera(72, 1, 0.1, 1000);
     cfg = loadCfg(); seed = WORLD_SEED;
     try { world.time = (typeof serverNow === 'function' ? serverNow() : Date.now()) / 1000 % cfg.dayLen; } catch (e) { world.time = cfg.dayLen * 0.25; }
-    if (world.time < cfg.dayLen * 0.12) world.time = cfg.dayLen * 0.25;   // 첫 진입은 환한 낮 보장
-    buildAtlas();
+    const _f = world.time / cfg.dayLen; if (!(_f > 0.1 && _f < 0.45)) world.time = cfg.dayLen * 0.22;   // 첫 진입은 환한 낮 보장(마크 새월드처럼)
+    buildAtlas(); setupOverlays();
     resize(); window.addEventListener('resize', resize);
     bindInput(); running = true; lastT = 0;
     (async () => {
