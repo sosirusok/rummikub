@@ -101,7 +101,20 @@
     const a00 = c000 + (c100 - c000) * ux, a10 = c010 + (c110 - c010) * ux, a01 = c001 + (c101 - c001) * ux, a11 = c011 + (c111 - c011) * ux;
     const b0 = a00 + (a10 - a00) * uy, b1 = a01 + (a11 - a01) * uy; return b0 + (b1 - b0) * uz;
   }
-  function biome(x, z) { const n = vnoise(x + 1000, z + 1000, 0.0021); const t = vnoise(x - 3000, z + 7000, 0.0024); if (t < 0.22) return 'snow'; if (t > 0.82 && n < 0.4) return 'desert'; return n > 0.55 ? 'forest' : 'plains'; }
+  // 마크식 2축(온도·습도) 바이옴 — 큰 지역 단위로 또렷하게 구분(설원/사막/사바나/숲/평원)
+  const biomeCache = new Map();
+  function biome(x, z) {
+    const k = x + ',' + z; const c = biomeCache.get(k); if (c !== undefined) return c;
+    const t = vnoise(x + 8000, z - 8000, 0.0046);          // 온도 0..1 (파장 ~220 → 이동 중 여러 바이옴 통과)
+    const h = vnoise(x - 6000, z + 6000, 0.0052);          // 습도 0..1 (파장 ~190)
+    let b;
+    if (t < 0.27) b = 'snow';                              // 추움 → 설원(자작/눈)
+    else if (t > 0.70) b = h < 0.40 ? 'desert' : 'savanna';// 더움: 건조=사막 / 보통=사바나
+    else if (h > 0.62) b = 'forest';                       // 온화+습함 → 숲(빽빽)
+    else b = 'plains';                                     // 그 외 → 평원
+    biomeCache.set(k, b); if (biomeCache.size > 80000) biomeCache.clear();
+    return b;
+  }
   const surfCache = new Map();
   function surfaceH(x, z) {
     const ck = x + ',' + z; if (surfCache.has(ck)) return surfCache.get(ck);
@@ -117,9 +130,33 @@
     surfCache.set(ck, sy); if (surfCache.size > 60000) surfCache.clear();
     return sy;
   }
-  function isTreeAt(x, z) { const b = biome(x, z); if (b === 'desert') return false; const p = b === 'forest' ? 0.055 : b === 'snow' ? 0.015 : 0.014; return h2(x * 7 + 1, z * 13 + 3) < p; }
-  // 바이옴별 잔디/잎 색조(마크의 biome coloring)
-  function biomeTint(x, z) { const b = biome(x, z); if (b === 'desert') return [0.74, 0.72, 0.34]; if (b === 'snow') return [0.50, 0.71, 0.59]; const n = vnoise(x + 50, z + 50, 0.02); return [0.45 + n * 0.18, 0.74 - n * 0.05, 0.32 + n * 0.12]; }
+  const treeCache = new Map();
+  function isTreeAt(x, z) {
+    const k = x + ',' + z; const cv = treeCache.get(k); if (cv !== undefined) return cv;
+    let res = false; const b = biome(x, z);
+    if (b !== 'desert') {
+      const p = b === 'forest' ? 0.06 : b === 'savanna' ? 0.008 : b === 'snow' ? 0.018 : 0.013;
+      if (h2(x * 7 + 1, z * 13 + 3) < p) {
+        const sy = surfaceH(x, z);
+        if (sy > SEA + 1) {   // 물·해변엔 나무 X + 주변 완만할 때만(절벽 나무 방지)
+          const e = Math.abs(surfaceH(x + 1, z) - sy) + Math.abs(surfaceH(x - 1, z) - sy) + Math.abs(surfaceH(x, z + 1) - sy) + Math.abs(surfaceH(x, z - 1) - sy);
+          res = e <= 3;
+        }
+      }
+    }
+    treeCache.set(k, res); if (treeCache.size > 80000) treeCache.clear();
+    return res;
+  }
+  // 바이옴별 잔디/잎 색조(마크의 biome coloring) — 또렷하게 구분
+  function biomeTint(x, z) {
+    const b = biome(x, z);
+    if (b === 'desert') return [0.74, 0.71, 0.33];     // 마른 황록
+    if (b === 'savanna') return [0.76, 0.70, 0.36];    // 사바나 올리브
+    if (b === 'snow') return [0.51, 0.72, 0.60];       // 차가운 청록
+    if (b === 'forest') return [0.33, 0.69, 0.29];     // 진한 숲 초록
+    const n = vnoise(x + 50, z + 50, 0.02);
+    return [0.42 + n * 0.16, 0.75 - n * 0.05, 0.34 + n * 0.10];   // 평원 밝은 초록
+  }
   function genBlock(x, y, z) {
     if (y <= 0) return ID.bedrock;
     if (y <= 2 && hash3(x, y, z) < 0.5) return ID.bedrock;
