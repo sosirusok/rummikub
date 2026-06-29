@@ -12,7 +12,7 @@
   'use strict';
   if (typeof window === 'undefined') return;
 
-  const CHUNK = 16, WORLD_H = 96, SEA = 44, RENDER = 5;   // 렌더 반경(청크)
+  const CHUNK = 16, WORLD_H = 96, SEA = 44, RENDER = 4;   // 렌더 반경(청크) — 저사양 성능
   const REACH = 6;
   const SAVE_KEY = 'adv3_save_v1';
   const CFG_KEY = 'adv_cfg_v1';                            // 2D와 공유(개발자 모드 수치)
@@ -336,15 +336,32 @@
     function drawTex2Base(c, ox, oy) { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); c.fillStyle = t < 0.33 ? '#727272' : t < 0.66 ? '#7e7e7e' : '#8a8a8a'; c.fillRect(ox + x, oy + y, 1, 1); } }
   }
   function hashStr(s) { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return h >>> 0; }
+  // 패딩 아틀라스(256x256, 8x8 셀, 16px 타일 + 8px 가장자리 익스트루드) → 밉맵/이방성 필터에서 블리딩 없음
   function buildAtlas() {
     const names = new Set();
     BLOCKS.forEach(b => { if (!b.tex) return; if (typeof b.tex === 'string') names.add(b.tex); else { names.add(b.tex.top); names.add(b.tex.side); names.add(b.tex.bottom); } });
-    const list = Array.from(names); const cols = 8, rows = Math.ceil(list.length / cols);
-    const cv = document.createElement('canvas'); cv.width = cols * 16; cv.height = rows * 16; const c = cv.getContext('2d');
-    list.forEach((nm, i) => { const cx = (i % cols) * 16, cy = ((i / cols) | 0) * 16; drawTex(c, cx, cy, nm); });
-    // UV(작은 인셋으로 블리딩 방지)
-    list.forEach((nm, i) => { const cx = (i % cols), cy = ((i / cols) | 0); const e = 0.02; atlasUV[nm] = { x0: (cx + e) / cols, x1: (cx + 1 - e) / cols, y0: (cy + e) / rows, y1: (cy + 1 - e) / rows }; });
-    atlasTex = new THREE.CanvasTexture(cv); atlasTex.magFilter = THREE.NearestFilter; atlasTex.minFilter = THREE.NearestFilter; atlasTex.generateMipmaps = false; atlasTex.needsUpdate = true;
+    const list = Array.from(names); const COLS = 8, ROWS = 8, CELL = 32, PAD = 8, T = 16, ATLAS = 256;   // 256=2^8(밉맵용 pow2)
+    const cv = document.createElement('canvas'); cv.width = cv.height = ATLAS; const c = cv.getContext('2d'); c.imageSmoothingEnabled = false;
+    const tmp = document.createElement('canvas'); tmp.width = tmp.height = T; const tc = tmp.getContext('2d');
+    list.forEach((nm, i) => {
+      const ox = (i % COLS) * CELL, oy = ((i / COLS) | 0) * CELL;
+      tc.clearRect(0, 0, T, T); drawTex(tc, 0, 0, nm);
+      c.drawImage(tmp, ox + PAD, oy + PAD);                                   // 중앙 타일
+      c.drawImage(tmp, 0, 0, T, 1, ox + PAD, oy, T, PAD);                     // 위 가장자리
+      c.drawImage(tmp, 0, T - 1, T, 1, ox + PAD, oy + PAD + T, T, PAD);       // 아래
+      c.drawImage(tmp, 0, 0, 1, T, ox, oy + PAD, PAD, T);                     // 왼쪽
+      c.drawImage(tmp, T - 1, 0, 1, T, ox + PAD + T, oy + PAD, PAD, T);       // 오른쪽
+      c.drawImage(tmp, 0, 0, 1, 1, ox, oy, PAD, PAD);                         // 모서리
+      c.drawImage(tmp, T - 1, 0, 1, 1, ox + PAD + T, oy, PAD, PAD);
+      c.drawImage(tmp, 0, T - 1, 1, 1, ox, oy + PAD + T, PAD, PAD);
+      c.drawImage(tmp, T - 1, T - 1, 1, 1, ox + PAD + T, oy + PAD + T, PAD, PAD);
+      const e = 0.5;                                                          // 타일 안쪽으로 0.5px 인셋
+      atlasUV[nm] = { x0: (ox + PAD + e) / ATLAS, x1: (ox + PAD + T - e) / ATLAS, y0: (oy + PAD + e) / ATLAS, y1: (oy + PAD + T - e) / ATLAS };
+    });
+    atlasTex = new THREE.CanvasTexture(cv);
+    atlasTex.magFilter = THREE.NearestFilter; atlasTex.minFilter = THREE.NearestMipmapLinearFilter; atlasTex.generateMipmaps = true;
+    try { atlasTex.anisotropy = renderer.capabilities.getMaxAnisotropy(); } catch (e) {}   // 비스듬한 바닥 선명하게(번쩍임 제거)
+    atlasTex.needsUpdate = true;
     blockMat = new THREE.MeshBasicMaterial({ map: atlasTex, vertexColors: true });
     waterMat = new THREE.MeshBasicMaterial({ map: atlasTex, vertexColors: true, transparent: true, opacity: 0.72, depthWrite: false });
   }
@@ -866,7 +883,7 @@
   }
   function closeInv() { invOpen = false; // 그리드 아이템 회수
     grid.forEach((g, i) => { if (g) { addItem(g.k, g.n); grid[i] = null; } }); if (carry) { addItem(carry.k, carry.n); carry = null; }
-    closeSheet(); refreshHotbar();
+    const w = document.getElementById('adv3invwrap'); if (w) w.remove(); refreshHotbar();
   }
   function craftOutput() {
     const items = {}; for (let i = 0; i < craftN; i++) { const g = grid[i]; if (g) items[g.k] = (items[g.k] || 0) + g.n; }
@@ -880,20 +897,30 @@
     }
     return null;
   }
+  function slotHTML(s, act, i, cls) { return `<button class="mc-slot${cls || ''}" data-act="${act}" data-i="${i}">${s ? `<img src="${icon(s.k)}"><span class="mc-cnt">${s.n > 1 ? s.n : ''}</span>` : ''}</button>`; }
   function renderInv() {
     const out = craftOutput();
-    const gcell = (i) => { const g = grid[i]; return `<button class="adv-slot adv3-gcell" data-act="adv3_grid" data-i="${i}">${g ? `<img src="${icon(g.k)}"><span class="adv-cnt">${g.n > 1 ? g.n : ''}</span>` : ''}</button>`; };
-    const cellsN = craftTable ? [0, 1, 2, 3, 4, 5, 6, 7, 8] : [0, 1, 2, 3];
-    const gridHTML = `<div class="adv3-craftgrid ${craftTable ? 'g3' : 'g2'}">${cellsN.map(gcell).join('')}</div>`;
-    const outHTML = `<div class="adv3-craftout"><button class="adv-slot adv3-outcell" data-act="adv3_take">${out ? `<img src="${icon(out.out)}"><span class="adv-cnt">${out.count > 1 ? out.count : ''}</span>` : ''}</button></div>`;
-    const cells = inv.map((s, i) => `<button class="adv-slot${i < 9 ? ' hot' : ''}" data-act="adv3_islot" data-i="${i}">${s ? `<img src="${icon(s.k)}"><span class="adv-cnt">${s.n > 1 ? s.n : ''}</span>` : ''}</button>`).join('');
-    const carryHTML = carry ? `<div class="adv3-carry">들고있음: ${window.advKor(carry.k)} ×${carry.n} <button class="btn btn--ghost" data-act="adv3_drop">내려놓기</button></div>` : '';
-    openSheet(`<h3 class="sheet__title">🛠 조합 (${craftTable ? '제작대 3×3' : '2×2'} · 직접 배치)</h3>
-      <p class="muted" style="font-size:12px">아이템 탭→들기, 칸 탭→1개 놓기. ${craftTable ? '' : '큰 조합은 제작대(crafting_table)를 설치하고 우클릭/탭하세요. '}재료를 칸에 채우면 결과가 뜨고, 결과 탭하면 제작.</p>
-      <div class="adv3-crafttop">${gridHTML}<div class="adv3-arrow">▶</div>${outHTML}</div>
-      ${carryHTML}
-      <div class="adv3-invlabel muted">가방</div><div class="adv-invgrid">${cells}</div>
-      <button class="btn btn--ghost btn--lg" data-act="adv3_close">닫기 (E)</button>`);
+    const cn = craftTable ? 9 : 4, cc = craftTable ? 3 : 2;
+    const craftCells = []; for (let i = 0; i < cn; i++) craftCells.push(slotHTML(grid[i], 'adv3_grid', i));
+    const outCell = `<button class="mc-slot mc-out" data-act="adv3_take">${out ? `<img src="${icon(out.out)}"><span class="mc-cnt">${out.count > 1 ? out.count : ''}</span>` : ''}</button>`;
+    const store = []; for (let i = 9; i < 36; i++) store.push(slotHTML(inv[i], 'adv3_islot', i));
+    const hot = []; for (let i = 0; i < 9; i++) hot.push(slotHTML(inv[i], 'adv3_islot', i, ' mc-hot'));
+    const carryB = carry ? `<div class="mc-carry"><img src="${icon(carry.k)}"><span>${carry.n}</span><button class="mc-drop" data-act="adv3_drop">내려놓기</button></div>` : '';
+    const html = `<div class="mc-panel">
+        <div class="mc-row1">
+          <div class="mc-craft mc-c${cc}">${craftCells.join('')}</div>
+          <div class="mc-arrow">▶</div>
+          <div class="mc-outwrap">${outCell}</div>
+        </div>
+        <div class="mc-store">${store.join('')}</div>
+        <div class="mc-hot">${hot.join('')}</div>
+        ${carryB}
+        <button class="mc-x" data-act="adv3_close">✕</button>
+        <div class="mc-hint">${craftTable ? '제작대 3×3' : '2×2'} · 아이템 탭→들기, 칸 탭→놓기</div>
+      </div>`;
+    let w = document.getElementById('adv3invwrap');
+    if (!w) { w = document.createElement('div'); w.id = 'adv3invwrap'; w.className = 'mc-wrap'; w.addEventListener('pointerdown', e => { if (e.target === w) closeInv(); }); document.body.appendChild(w); }
+    w.innerHTML = html;
   }
   function invItemTap(i) {
     const s = inv[i]; if (carry) { // 들고있는 것을 인벤에 합치기/스왑
@@ -945,7 +972,7 @@
     canvas = document.getElementById('adv3canvas');
     try { renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: true, powerPreference: 'low-power' }); }
     catch (e) { app().innerHTML = serverErr('이 기기/브라우저가 3D(WebGL)를 지원하지 않아요.'); return; }
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+    renderer.setPixelRatio(1);   // 저사양 성능: 픽셀비율 1 고정(고DPI에서 프래그먼트 2~4배 절감)
     renderer.setClearColor(0x000000, 0);   // 캔버스 투명 → 뒤의 CSS 하늘이 보임(소프트웨어GL에서도 안정적)
     scene = new THREE.Scene(); scene.background = null; scene.fog = new THREE.Fog(0x9fc6ea, CHUNK * (RENDER - 1), CHUNK * (RENDER + 1.5));
     camera = new THREE.PerspectiveCamera(72, 1, 0.1, 1000);
