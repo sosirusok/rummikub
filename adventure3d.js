@@ -12,7 +12,7 @@
   'use strict';
   if (typeof window === 'undefined') return;
 
-  const CHUNK = 16, WORLD_H = 96, SEA = 44, RENDER = 4;   // 렌더 반경(청크) — 저사양 성능
+  const CHUNK = 16, WORLD_H = 96, SEA = 44, RENDER = 3;   // 렌더 반경(청크) — 저사양 성능(3=49청크, 폴더폰 타깃)
   const REACH = 6;
   const SAVE_KEY = 'adv3_save_v1';
   const CFG_KEY = 'adv_cfg_v1';                            // 2D와 공유(개발자 모드 수치)
@@ -48,6 +48,13 @@
     { key: 'chest', tex: { top: 'planks', side: 'chest', bottom: 'planks' }, station: 'chest' },
     { key: 'glowstone', tex: 'glow', light: true },
     { key: 'obsidian', tex: 'obsidian' },
+    { key: 'birch_log', tex: { top: 'log_top', side: 'birch_side', bottom: 'log_top' } },
+    { key: 'birch_leaves', tex: 'leaves', opaque: false },
+    { key: 'cactus', tex: { top: 'cactus_top', side: 'cactus_side', bottom: 'cactus_top' } },
+    { key: 'tall_grass', tex: 'tall_grass', opaque: false, solid: false, cross: true },
+    { key: 'flower_red', tex: 'flower_red', opaque: false, solid: false, cross: true },
+    { key: 'flower_yellow', tex: 'flower_yellow', opaque: false, solid: false, cross: true },
+    { key: 'sugar_cane', tex: 'sugar_cane', opaque: false, solid: false, cross: true },
   ];
   const ID = {}, BYID = BLOCKS;
   BLOCKS.forEach((b, i) => { b.id = i; ID[b.key] = i; if (b.solid === undefined) b.solid = true; if (b.opaque === undefined) b.opaque = true; });
@@ -98,20 +105,19 @@
   const surfCache = new Map();
   function surfaceH(x, z) {
     const ck = x + ',' + z; if (surfCache.has(ck)) return surfCache.get(ck);
-    // 기복도(어떤 지역은 평지, 어떤 지역은 산악)
-    let relief = vnoise(x + 5000, z + 5000, 0.0025);               // 0..1
-    relief = Math.max(0.22, Math.min(1, relief * 1.25));
-    // 단일 옥타브 고진폭 합 → 실제 언덕(노이즈 평균화 회피). 정점 ±20블록.
-    let hill = (vnoise(x, z, 0.0075) - 0.5) * 42                   // 큰 언덕(파장 ~133)
-             + (vnoise(x + 99, z - 99, 0.02) - 0.5) * 16          // 중간(파장 ~50)
-             + (vnoise(x - 50, z + 50, 0.05) - 0.5) * 6;          // 디테일
-    const cont = (vnoise(x, z, 0.0014) - 0.5) * 22;               // 대륙성(완만한 고저)
-    let h = 52 + cont + hill * relief;
-    const sy = Math.max(6, Math.min(WORLD_H - 16, Math.round(h)));
+    // 마크식 3-맵 합성: 대륙성(저주파 대지/바다) + 기복도(평지↔산) + 다옥타브 구릉.
+    const cont = fbm(x, z, 0.0035, 3);                       // 대륙성 -0.5..0.5 (파장 ~285, 시야 내 가끔 해안)
+    let relief = vnoise(x + 5000, z + 5000, 0.004);          // 기복도 0..1 (파장 ~250)
+    relief = relief * relief * (2 - relief);                 // smoothstep풍 → 대부분 평지, 가끔 험지
+    const hills = fbm(x + 1234, z - 4321, 0.021, 4);         // 주 구릉 -0.5..0.5 (파장 ~48, 시야 내 2-3개)
+    const detail = (vnoise(x - 99, z + 99, 0.09) - 0.5);    // 미세 기복(파장 ~11)
+    // 평지: ±6블록 완만 / 언덕: ±20 / 산악: ±34. 대륙성으로 해안·바다 형성.
+    let h = SEA + 6 + cont * 28 + hills * (11 + relief * 56) + detail * 1.8;
+    const sy = Math.max(6, Math.min(WORLD_H - 18, Math.round(h)));
     surfCache.set(ck, sy); if (surfCache.size > 60000) surfCache.clear();
     return sy;
   }
-  function isTreeAt(x, z) { const b = biome(x, z); if (b === 'desert') return false; const p = b === 'forest' ? 0.10 : b === 'snow' ? 0.03 : 0.04; return h2(x * 7 + 1, z * 13 + 3) < p; }
+  function isTreeAt(x, z) { const b = biome(x, z); if (b === 'desert') return false; const p = b === 'forest' ? 0.055 : b === 'snow' ? 0.015 : 0.014; return h2(x * 7 + 1, z * 13 + 3) < p; }
   // 바이옴별 잔디/잎 색조(마크의 biome coloring)
   function biomeTint(x, z) { const b = biome(x, z); if (b === 'desert') return [0.74, 0.72, 0.34]; if (b === 'snow') return [0.50, 0.71, 0.59]; const n = vnoise(x + 50, z + 50, 0.02); return [0.45 + n * 0.18, 0.74 - n * 0.05, 0.32 + n * 0.12]; }
   function genBlock(x, y, z) {
@@ -122,6 +128,23 @@
       if (y <= SEA) return ID.water;
       // 나무
       const t = treeBlock(x, y, z); if (t) return t;
+      // 식물(지표 위)
+      if (sy > SEA) {
+        if (b === 'desert') {                                          // 선인장(1~2칸)
+          if (h2(x * 3 + 2, z * 3 + 5) < 0.018) { const ch = 1 + (hash3(x, 7, z) < 0.5 ? 1 : 0); if (y >= sy + 1 && y <= sy + ch) return ID.cactus; }
+        } else if (y === sy + 1) {
+          // 사탕수수(물가 1칸 옆, 2~3칸)
+          const nearWater = surfaceH(x + 1, z) <= SEA || surfaceH(x - 1, z) <= SEA || surfaceH(x, z + 1) <= SEA || surfaceH(x, z - 1) <= SEA;
+          const pv = hash3(x * 5 + 7, 0, z * 5 + 13);
+          if (b !== 'snow' && nearWater && sy <= SEA + 2 && hash3(x * 9 + 1, 0, z * 9 + 4) < 0.28) return ID.sugar_cane;
+          if (b === 'snow') { if (pv < 0.04) return ID.tall_grass; }
+          else { const dense = (b === 'forest') ? 0.20 : 0.13; if (pv < dense) return ID.tall_grass; else if (pv < dense + 0.018) return ID.flower_red; else if (pv < dense + 0.034) return ID.flower_yellow; }
+        } else if (b !== 'snow' && b !== 'desert' && y === sy + 2) {
+          // 사탕수수 2~3번째 칸
+          const nearWater = surfaceH(x + 1, z) <= SEA || surfaceH(x - 1, z) <= SEA || surfaceH(x, z + 1) <= SEA || surfaceH(x, z - 1) <= SEA;
+          if (nearWater && sy <= SEA + 2 && hash3(x * 9 + 1, 0, z * 9 + 4) < 0.28) { if (hash3(x, 3, z) < 0.6) return ID.sugar_cane; }
+        }
+      }
       return ID.air;
     }
     if (y === sy) {
@@ -159,10 +182,11 @@
       const sy = surfaceH(ox, oz); if (sy < SEA) continue;
       const th = 4 + Math.floor(h2(ox, oz) * 3);
       const top = sy + th;
-      if (dx === 0 && dz === 0 && y > sy && y <= top - 1) return ID.oak_log;        // 줄기
+      const birch = biome(ox, oz) === 'snow' || h2(ox * 11 + 5, oz * 11 + 7) < 0.22;   // 설원/일부 = 자작나무
+      if (dx === 0 && dz === 0 && y > sy && y <= top - 1) return birch ? ID.birch_log : ID.oak_log;   // 줄기
       const ly = y - (top - 1);
       if (Math.abs(dx) + Math.abs(dz) <= 3 && ly >= -1 && ly <= 1) {                 // 잎
-        if (!(dx === 0 && dz === 0 && y <= top - 1)) { if (hash3(x, y, z) < 0.85) return ID.oak_leaves; }
+        if (!(dx === 0 && dz === 0 && y <= top - 1)) { if (hash3(x, y, z) < 0.85) return birch ? ID.birch_leaves : ID.oak_leaves; }
       }
     }
     return 0;
@@ -236,16 +260,38 @@
   function buildChunkMesh(c) {
     const pos = [], col = [], uv = [], idxArr = [];
     const wpos = [], wcol = [], wuv = [], widx = [];
-    let vi = 0, wvi = 0;
+    const ppos = [], pcol = [], puv = [], pidx = [];
+    let vi = 0, wvi = 0, pvi = 0;
+    // 패딩 불투명 마스크(청크+1칸 경계). 면 컬링/AO를 Map조회 대신 배열조회로 → 메싱 대폭 가속.
+    const MW = CHUNK + 2, baseX = c.cx * CHUNK - 1, baseZ = c.cz * CHUNK - 1;
+    const omask = new Uint8Array(MW * MW * WORLD_H);
+    for (let mz = 0; mz < MW; mz++) for (let mx = 0; mx < MW; mx++) {
+      const inside = (mx >= 1 && mx <= CHUNK && mz >= 1 && mz <= CHUNK);
+      for (let y = 0; y < WORLD_H; y++) { const id2 = inside ? c.blocks[idx(mx - 1, y, mz - 1)] : getBlock(baseX + mx, y, baseZ + mz); if (id2 && BYID[id2] && BYID[id2].opaque) omask[(y * MW + mz) * MW + mx] = 1; }
+    }
+    function mOpaque(wx, y, wz) { if (y < 0 || y >= WORLD_H) return 0; const mx = wx - baseX, mz = wz - baseZ; if (mx < 0 || mx >= MW || mz < 0 || mz >= MW) return blockOpaque(getBlock(wx, y, wz)) ? 1 : 0; return omask[(y * MW + mz) * MW + mx]; }
     for (let lx = 0; lx < CHUNK; lx++) for (let lz = 0; lz < CHUNK; lz++) for (let y = 0; y < WORLD_H; y++) {
       const id = c.blocks[idx(lx, y, lz)]; if (id === 0) continue;
       const b = BYID[id]; const wx = c.cx * CHUNK + lx, wz = c.cz * CHUNK + lz;
       const isWater = b.liquid;
+      if (b.cross) {   // 십자(X) 스프라이트 식물 — 대각 2장
+        const tn = faceTexName(b, 'side'); const u = atlasUV[tn] || atlasUV.stone;
+        const uvco = [[u.x0, u.y1], [u.x1, u.y1], [u.x1, u.y0], [u.x0, u.y0]];
+        let tr = 1, tg = 1, tb = 1;
+        if (b.key === 'tall_grass') { const tt = biomeTint(wx, wz); tr = tt[0]; tg = tt[1]; tb = tt[2]; }
+        const diags = [[[wx, wz], [wx + 1, wz + 1]], [[wx + 1, wz], [wx, wz + 1]]];
+        for (const dg of diags) {
+          const a0 = dg[0], a1 = dg[1];
+          const vtx = [[a0[0], y, a0[1]], [a1[0], y, a1[1]], [a1[0], y + 1, a1[1]], [a0[0], y + 1, a0[1]]];
+          for (let k = 0; k < 4; k++) { ppos.push(vtx[k][0], vtx[k][1], vtx[k][2]); pcol.push(tr, tg, tb); puv.push(uvco[k][0], uvco[k][1]); }
+          pidx.push(pvi, pvi + 1, pvi + 2, pvi, pvi + 2, pvi + 3); pvi += 4;
+        }
+        continue;
+      }
       for (let fi = 0; fi < 6; fi++) {
         const f = FACES[fi]; const nx = wx + f.dir[0], ny = y + f.dir[1], nz = wz + f.dir[2];
-        const nid = getBlock(nx, ny, nz); const nb = BYID[nid] || BLOCKS[0];
-        // 인접이 불투명이면 면 생략. 투명/물끼리는 같은 종류면 생략.
-        if (nb.opaque) continue;
+        if (mOpaque(nx, ny, nz)) continue;                       // 빠른 컬링(버려진 면은 getBlock 없이 스킵)
+        const nid = getBlock(nx, ny, nz); const nb = BYID[nid] || BLOCKS[0];   // 노출된 면만 실제 조회
         if (isWater && nid === id) continue;
         if (!isWater && nb.liquid && f.dir[1] !== 1) { /* 물에 접한 고체 면은 그림 */ }
         const tn = faceTexName(b, f.n); const u = atlasUV[tn] || atlasUV.stone;
@@ -257,15 +303,15 @@
         const bx = wx + f.dir[0], by = y + f.dir[1], bz = wz + f.dir[2];   // 면 바깥(공기) 칸
         // 바이옴 색조: 잔디 윗면 / 잎 전체
         let tr = 1, tg = 1, tb = 1;
-        if ((b.key === 'grass' && f.n === 'top') || b.key === 'oak_leaves') { const tt = biomeTint(wx, wz); tr = tt[0]; tg = tt[1]; tb = tt[2]; }
+        if ((b.key === 'grass' && f.n === 'top') || b.key === 'oak_leaves' || b.key === 'birch_leaves') { const tt = biomeTint(wx, wz); tr = tt[0]; tg = tt[1]; tb = tt[2]; }
         for (let k = 0; k < 4; k++) {
           const cc = f.corners[k];
           // 코너 음영(AO): 면내 두 인접 + 대각
           const sa = cc[axA] ? 1 : -1, sb = cc[axB] ? 1 : -1;
           const o1 = [0, 0, 0], o2 = [0, 0, 0], od = [0, 0, 0]; o1[axA] = sa; o2[axB] = sb; od[axA] = sa; od[axB] = sb;
-          const s1 = aoSolid(bx + o1[0], by + o1[1], bz + o1[2]);
-          const s2 = aoSolid(bx + o2[0], by + o2[1], bz + o2[2]);
-          const sd = aoSolid(bx + od[0], by + od[1], bz + od[2]);
+          const s1 = mOpaque(bx + o1[0], by + o1[1], bz + o1[2]);
+          const s2 = mOpaque(bx + o2[0], by + o2[1], bz + o2[2]);
+          const sd = mOpaque(bx + od[0], by + od[1], bz + od[2]);
           const aol = (s1 && s2) ? 0 : (3 - (s1 + s2 + sd));
           const v = sh * AO_MUL[aol];
           target.pos.push(wx + cc[0], y + cc[1] - (isWater && f.n === 'top' ? 0.12 : 0), wz + cc[2]);
@@ -276,22 +322,23 @@
         if (isWater) wvi += 4; else vi += 4;
       }
     }
-    disposeMesh(c.mesh); disposeMesh(c.waterMesh); c.mesh = null; c.waterMesh = null;
-    if (pos.length) c.mesh = makeMesh(pos, col, uv, idxArr, false);
-    if (wpos.length) c.waterMesh = makeMesh(wpos, wcol, wuv, widx, true);
+    disposeMesh(c.mesh); disposeMesh(c.waterMesh); disposeMesh(c.plantMesh); c.mesh = null; c.waterMesh = null; c.plantMesh = null;
+    if (pos.length) c.mesh = makeMesh(pos, col, uv, idxArr, blockMat);
+    if (wpos.length) c.waterMesh = makeMesh(wpos, wcol, wuv, widx, waterMat);
+    if (ppos.length) c.plantMesh = makeMesh(ppos, pcol, puv, pidx, plantMat);
     c.dirty = false;
   }
-  function makeMesh(pos, col, uv, idxArr, water) {
+  function makeMesh(pos, col, uv, idxArr, mat) {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
     g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
     g.setIndex(idxArr);
-    const m = new THREE.Mesh(g, water ? waterMat : blockMat);
+    const m = new THREE.Mesh(g, mat);
     m.frustumCulled = true; scene.add(m); return m;
   }
   function disposeMesh(m) { if (m) { scene.remove(m); if (m.geometry) m.geometry.dispose(); } }
-  let blockMat = null, waterMat = null;
+  let blockMat = null, waterMat = null, plantMat = null;
 
   /* ---------------- 오버레이(조준 윤곽선·균열) ---------------- */
   let outlineMesh = null, crackMesh = null, crackMats = [];
@@ -333,8 +380,8 @@
     switch (name) {
       case 'stone': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.25 ? '#6f6f6f' : t < 0.5 ? '#787878' : t < 0.78 ? '#828282' : '#8c8c8c'); if (t > 0.96) f(x, y, '#5e5e5e'); } break;
       case 'dirt': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.25 ? '#6e4c34' : t < 0.55 ? '#7d573c' : t < 0.82 ? '#8a6044' : '#976b4d'); if (t > 0.95) f(x, y, '#5a3d28'); } break;
-      case 'grass_top': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.3 ? '#c4c4c4' : t < 0.7 ? '#d6d6d6' : '#e6e6e6'); if (t > 0.95) f(x, y, '#a8a8a8'); } break;
-      case 'grass_side': { fillNoise('#866043', '#75543b', '#946a4a'); for (let y = 0; y < 5; y++) for (let x = 0; x < 16; x++) { const t = r(); if (y < 3 || t < 0.5) f(x, y, t < 0.5 ? '#5b9142' : '#6aa84f'); } for (let x = 0; x < 16; x++) if (r() < 0.5) f(x, 4 + ((r() * 2) | 0), '#5b9142'); break; }
+      case 'grass_top': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.3 ? '#6aa84f' : t < 0.7 ? '#76b558' : '#83c163'); if (t > 0.95) f(x, y, '#5b9142'); } break;   // 초록 베이스(아이콘=초록, 월드=바이옴 틴트로 곱)
+      case 'grass_side': { fillNoise('#7d573c', '#6e4c34', '#8a6044'); for (let x = 0; x < 16; x++) { const gh = 3 + (r() < 0.33 ? 1 : 0); for (let y = 0; y < gh; y++) f(x, y, r() < 0.5 ? '#5b9142' : '#6aa84f'); } break; }   // 흙 베이스 + 상단 3~4px 초록 띠(마크식)
       case 'sand': fillNoise('#e0d6a0', '#d4c98e', '#ece2b0'); break;
       case 'sandstone': { fillNoise('#d9cda0', '#cabf90', '#e6dab0'); for (let y = 3; y < 16; y += 4) for (let x = 0; x < 16; x++) f(x, y, '#bcb080'); break; }
       case 'gravel': fillNoise('#867f7e', '#76706f', '#999190'); break;
@@ -360,6 +407,14 @@
       case 'craft_side': { drawTex(c, ox, oy, 'planks'); c.fillStyle = '#6b4f2a'; c.fillRect(ox + 1, oy + 8, 14, 7); break; }
       case 'furnace': { drawTex(c, ox, oy, 'stone'); c.fillStyle = '#222'; c.fillRect(ox + 4, oy + 6, 8, 8); c.fillStyle = '#e8902a'; c.fillRect(ox + 5, oy + 11, 6, 3); break; }
       case 'chest': { drawTex(c, ox, oy, 'planks'); c.fillStyle = '#3a2a14'; c.fillRect(ox, oy + 7, 16, 2); c.fillStyle = '#d7c27a'; c.fillRect(ox + 7, oy + 6, 2, 4); break; }
+      case 'birch_side': { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.6 ? '#d7d3c8' : t < 0.85 ? '#e7e3d8' : '#c4c0b4'); } for (let i = 0; i < 5; i++) { const bx = (r() * 13) | 0, by = (r() * 14) | 0, bw = 2 + ((r() * 3) | 0); c.fillStyle = '#3a3a32'; c.fillRect(ox + bx, oy + by, bw, 1); } break; }
+      case 'cactus_top': { fillNoise('#3f7d3a', '#356a31', '#4c8f46'); c.fillStyle = '#2e5e2a'; c.fillRect(ox + 4, oy + 4, 8, 8); c.fillStyle = '#5aa050'; c.fillRect(ox + 6, oy + 6, 4, 4); break; }
+      case 'cactus_side': { fillNoise('#3f7d3a', '#356a31', '#4c8f46'); c.fillStyle = '#2e5e2a'; c.fillRect(ox, oy, 1, 16); c.fillRect(ox + 15, oy, 1, 16); c.fillRect(ox + 7, oy, 2, 16); for (let i = 0; i < 10; i++) f((r() * 16) | 0, (r() * 16) | 0, '#dfe7a0'); break; }
+      // ---- cross 스프라이트(투명 배경) ----
+      case 'tall_grass': { for (let x = 1; x < 16; x += 2) { const h = 6 + ((r() * 7) | 0); const col = r() < 0.5 ? '#5b9142' : '#6aa84f'; for (let y = 16 - h; y < 16; y++) { let xx = x + ((y % 3 === 0 && r() < 0.5) ? 1 : 0); f(xx, y, col); } } break; }
+      case 'flower_red': { for (let y = 7; y < 16; y++) f(8, y, '#3f7d3a'); f(7, 11, '#356a31'); f(9, 9, '#356a31'); c.fillStyle = '#d23b32'; c.fillRect(ox + 6, oy + 3, 5, 5); c.fillStyle = '#f0d33a'; c.fillRect(ox + 8, oy + 5, 1, 1); break; }
+      case 'flower_yellow': { for (let y = 7; y < 16; y++) f(8, y, '#3f7d3a'); f(7, 10, '#356a31'); f(10, 12, '#356a31'); c.fillStyle = '#f0c829'; c.fillRect(ox + 6, oy + 3, 5, 5); c.fillStyle = '#8a5a18'; c.fillRect(ox + 8, oy + 5, 1, 1); break; }
+      case 'sugar_cane': { for (let y = 0; y < 16; y++) { const col = (y % 5 === 0) ? '#7bbf5c' : (r() < 0.5 ? '#8fc36a' : '#a3d178'); f(7, y, col); f(8, y, col); } break; }
       default: fillNoise('#888', '#666', '#aaa');
     }
     function oreTex(c, ox, oy, ore) { drawTex2Base(c, ox, oy); for (let i = 0; i < 8; i++) { const x = 2 + ((hash3(i, 1, 0) * 12) | 0), y = 2 + ((hash3(i, 2, 0) * 12) | 0); c.fillStyle = ore; c.fillRect(ox + x, oy + y, 2, 2); c.fillStyle = '#fff4'; c.fillRect(ox + x, oy + y, 1, 1); } }
@@ -377,6 +432,7 @@
     atlasTex = new THREE.CanvasTexture(cv); atlasTex.magFilter = THREE.NearestFilter; atlasTex.minFilter = THREE.NearestFilter; atlasTex.generateMipmaps = false; atlasTex.needsUpdate = true;
     blockMat = new THREE.MeshBasicMaterial({ map: atlasTex, vertexColors: true });
     waterMat = new THREE.MeshBasicMaterial({ map: atlasTex, vertexColors: true, transparent: true, opacity: 0.72, depthWrite: false });
+    plantMat = new THREE.MeshBasicMaterial({ map: atlasTex, vertexColors: true, alphaTest: 0.5, side: THREE.DoubleSide });   // 컷아웃 식물(양면)
   }
 
   /* ---------------- 입력 ---------------- */
@@ -502,7 +558,7 @@
     if (def) {
       const drops = def.drops || [{ i: key, c: 1 }];
       for (const dr of drops) { const ch = dr.chance != null ? dr.chance * cfg.dropMul : 1; if (Math.random() > ch) continue; let cnt = dr.c; if (dr.max) cnt = dr.c + Math.floor(Math.random() * (dr.max - dr.c + 1)); if (cnt > 0) addItem(dr.i, cnt); }
-    } else addItem(key, 1);
+    } else if (window.advDef && window.advDef(key)) addItem(key, 1);   // 미정의 장식(잡초/꽃)은 드롭 없음 — 죽은 아이템 방지
   }
   // 모래/자갈 낙하
   function settleGravity(x, y, z) {
@@ -666,25 +722,35 @@
     return g;
   }
   function shade(col, f) { const r = Math.min(255, ((col >> 16) & 255) * f) | 0, gr = Math.min(255, ((col >> 8) & 255) * f) | 0, b = Math.min(255, (col & 255) * f) | 0; return (r << 16) | (gr << 8) | b; }
+  const PASSIVE = ['pig', 'cow', 'sheep', 'chicken'], HOSTILE = ['zombie', 'skeleton', 'creeper', 'spider'];
+  function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
   function spawnMobs(dt) {
-    _spawnT += dt; if (_spawnT < 1.5) return; _spawnT = 0;
+    _spawnT += dt; if (_spawnT < 2.0) return; _spawnT = 0;
     const night = dayFactor() < 0.45; let nH = 0, nP = 0;
     for (const m of mobs) { if (MOB[m.type].hostile) nH++; else nP++; }
-    const want = Math.random();
-    let type = null;
-    if ((night || Math.random() < 0.3) && nH < 16 && want < 0.7) type = ['zombie', 'skeleton', 'creeper', 'spider'][Math.floor(Math.random() * 4)];
-    else if (!night && nP < 10 && want < 0.4) type = ['pig', 'cow', 'sheep', 'chicken'][Math.floor(Math.random() * 4)];
-    if (!type) return;
-    const md = MOB[type]; const ang = Math.random() * Math.PI * 2, r = 16 + Math.random() * 24;
+    // 밤: 적대몹 보충 / 낮·황혼: 수동동물 보충(마크 규칙)
+    if (night) { if (nH < 14 && Math.random() < 0.8) trySpawn(pick(HOSTILE), night); }
+    else { if (nP < 12 && Math.random() < 0.7) trySpawn(pick(PASSIVE), night); }
+  }
+  // 지정 종을 플레이어 주변 적절한 지면에 스폰 시도. 성공 true.
+  function trySpawn(type, night) {
+    const md = MOB[type];
+    const ang = Math.random() * Math.PI * 2, r = 14 + Math.random() * 30;
     const sx = Math.floor(P.x + Math.cos(ang) * r), sz = Math.floor(P.z + Math.sin(ang) * r);
-    // 지면 탐색
-    let y = Math.min(WORLD_H - 3, Math.floor(P.y + 8)); while (y > 2 && getBlock(sx, y, sz) === 0) y--;
-    const ground = getBlock(sx, y, sz), surf = surfaceH(sx, sz);
-    if (!blockSolid(ground)) return;
-    if (getBlock(sx, y + 1, sz) !== 0 || getBlock(sx, y + 2, sz) !== 0) return;
-    if (md.hostile) { if (!night && y > surf - 3) return; }                    // 적대: 밤이거나 지하
-    else { if (BYID[ground].key !== 'grass' || y < surf - 1) return; }          // 수동: 밝은 지표 잔디
+    const surf = surfaceH(sx, sz);
+    let y = Math.min(WORLD_H - 3, Math.floor(P.y + 10)); while (y > 2 && getBlock(sx, y, sz) === 0) y--;   // 지면 하강 탐색
+    const ground = getBlock(sx, y, sz);
+    if (!blockSolid(ground)) return false;
+    if (getBlock(sx, y + 1, sz) !== 0 || getBlock(sx, y + 2, sz) !== 0) return false;   // 2칸 여유
+    const gk = BYID[ground] && BYID[ground].key;
+    if (md.hostile) { if (!night && y >= surf - 1) return false; }                          // 적대: 밤 또는 지하(낮 지표 금지)
+    else { if (gk !== 'grass' && gk !== 'snow_block' && gk !== 'sand') return false; if (y < surf - 1) return false; }   // 수동: 밝은 지표(잔디/눈/모래)
     addMob(type, sx + 0.5, y + 1, sz + 0.5);
+    return true;
+  }
+  // 새 월드/입장 시 주변에 수동동물 무리 즉시 배치(마크처럼 빈 세계 방지)
+  function spawnInitialMobs() {
+    let made = 0; for (let tries = 0; tries < 80 && made < 8; tries++) { if (trySpawn(pick(PASSIVE), false)) made++; }
   }
   function addMob(type, x, y, z, baby) {
     const md = MOB[type]; const g = buildMobMesh(type); if (baby) g.scale.setScalar(0.5); scene.add(g);
@@ -775,7 +841,7 @@
       }
     }
     // 멀리 언로드
-    chunks.forEach((c, k) => { if (Math.max(Math.abs(c.cx - pcx), Math.abs(c.cz - pcz)) > RENDER + 2) { disposeMesh(c.mesh); disposeMesh(c.waterMesh); chunks.delete(k); } });
+    chunks.forEach((c, k) => { if (Math.max(Math.abs(c.cx - pcx), Math.abs(c.cz - pcz)) > RENDER + 2) { disposeMesh(c.mesh); disposeMesh(c.waterMesh); disposeMesh(c.plantMesh); chunks.delete(k); } });
   }
 
   /* ---------------- 낮밤 ---------------- */
@@ -790,7 +856,7 @@
     if (Math.abs(d - _lastSkyD) > 0.02) {
       _lastSkyD = d; const el = document.getElementById('adv3sky'); if (el) el.style.background = skyGradient(day, d, f);
     }
-    if (blockMat) blockMat.color.setScalar(d); if (waterMat) waterMat.color.setScalar(d);
+    if (blockMat) blockMat.color.setScalar(d); if (waterMat) waterMat.color.setScalar(d); if (plantMat) plantMat.color.setScalar(d);
   }
   function skyGradient(day, d, f) {
     if (!day) return 'linear-gradient(#04060c 0%, #070b14 55%, #0c1320 100%)';
@@ -877,7 +943,8 @@
     if (window.ADV_BLOCKS[key] && ID[key] !== undefined) drawCubeIcon(c, key, s); else drawItemIcon2(c, key, s);
     const u = cv.toDataURL(); iconCache[key] = u; return u;
   }
-  function texCanvas(name) { const cv = document.createElement('canvas'); cv.width = cv.height = 16; drawTex(cv.getContext('2d'), 0, 0, name); return cv; }
+  const _texCanvasCache = {};
+  function texCanvas(name) { if (_texCanvasCache[name]) return _texCanvasCache[name]; const cv = document.createElement('canvas'); cv.width = cv.height = 16; drawTex(cv.getContext('2d'), 0, 0, name); _texCanvasCache[name] = cv; return cv; }
   // 한 면(평행사변형)에 16×16 텍스처를 affine 변환으로 1번 매핑 + 음영(타일링 X → 반블럭처럼 안 보임)
   function isoFace(c, img, A, B, C, shade) {
     // A=원점, B=u축(가로 16px), C=v축(세로 16px) → 네번째 점 D=B+C-A
@@ -932,15 +999,74 @@
     grid.forEach((g, i) => { if (g) { addItem(g.k, g.n); grid[i] = null; } }); if (carry) { addItem(carry.k, carry.n); carry = null; }
     const w = document.getElementById('adv3invwrap'); if (w) w.remove(); refreshHotbar();
   }
+  /* ---- 조합 레시피: 마크식 shaped(위치) + shapeless ---- */
+  function trimPat(rows) {
+    let r0 = 99, r1 = -1, c0 = 99, c1 = -1;
+    for (let r = 0; r < rows.length; r++) for (let c = 0; c < rows[r].length; c++) if (rows[r][c]) { if (r < r0) r0 = r; if (r > r1) r1 = r; if (c < c0) c0 = c; if (c > c1) c1 = c; }
+    if (r1 < 0) return null;
+    const out = []; for (let r = r0; r <= r1; r++) { const row = []; for (let c = c0; c <= c1; c++) row.push(rows[r][c] || null); out.push(row); }
+    return out;
+  }
+  function patEq(a, b) { if (!a || !b || a.length !== b.length) return false; for (let r = 0; r < a.length; r++) { if (a[r].length !== b[r].length) return false; for (let c = 0; c < a[r].length; c++) if ((a[r][c] || null) !== (b[r][c] || null)) return false; } return true; }
+  function mirrorPat(p) { return p.map(row => row.slice().reverse()); }
+  let _recipes = null;
+  function recipes() {
+    if (_recipes) return _recipes;
+    const R = [];
+    const shaped = (out, count, rows, key, table) => { R.push({ out, count, table: !!table, shaped: true, pat: trimPat(rows.map(r => r.split('').map(ch => ch === ' ' ? null : key[ch]))) }); };
+    const shapeless = (out, count, bag, table) => { R.push({ out, count, table: !!table, shaped: false, bag }); };
+    shapeless('oak_planks', 4, { oak_log: 1 });
+    shapeless('birch_planks', 4, { birch_log: 1 });
+    shaped('stick', 4, ['P', 'P'], { P: 'oak_planks' });
+    shaped('crafting_table', 1, ['PP', 'PP'], { P: 'oak_planks' });
+    shaped('torch', 4, ['O', 'S'], { O: 'coal', S: 'stick' });
+    shaped('chest', 1, ['PPP', 'P P', 'PPP'], { P: 'oak_planks' }, true);
+    shaped('furnace', 1, ['CCC', 'C C', 'CCC'], { C: 'cobblestone' }, true);
+    shaped('ladder', 3, ['S S', 'SSS', 'S S'], { S: 'stick' }, true);
+    shaped('bowl', 4, ['P P', ' P '], { P: 'oak_planks' }, true);
+    shaped('bookshelf', 1, ['PPP', 'BBB', 'PPP'], { P: 'oak_planks', B: 'book' }, true);
+    shaped('bricks', 1, ['BB', 'BB'], { B: 'brick_item' }, true);
+    shaped('stone_bricks', 4, ['SS', 'SS'], { S: 'stone' }, true);
+    shaped('bread', 1, ['WWW'], { W: 'wheat' }, true);
+    shaped('cookie', 8, ['WSW'], { W: 'wheat', S: 'sugar' }, true);
+    shaped('tnt', 1, ['GSG', 'SGS', 'GSG'], { G: 'gunpowder', S: 'sand' }, true);
+    shaped('bucket', 1, ['I I', ' I '], { I: 'iron_ingot' }, true);
+    shaped('bow', 1, [' ST', 'S T', ' ST'], { S: 'stick', T: 'string' }, true);
+    shaped('arrow', 4, ['F', 'S', 'E'], { F: 'flint', S: 'stick', E: 'feather' }, true);
+    shaped('shears', 1, [' I', 'I '], { I: 'iron_ingot' }, true);
+    shaped('flint_and_steel', 1, ['I ', ' F'], { I: 'iron_ingot', F: 'flint' });
+    shaped('glowstone', 1, ['DD', 'DD'], { D: 'glowstone_dust' }, true);
+    shaped('fishing_rod', 1, ['  J', ' JT', 'J T'], { J: 'stick', T: 'string' }, true);
+    shaped('bed', 1, ['WWW', 'PPP'], { W: 'wool', P: 'oak_planks' }, true);
+    shaped('paper', 3, ['UUU'], { U: 'sugar_cane' }, true);
+    shaped('book', 1, ['AA', 'L '], { A: 'paper', L: 'leather' });
+    const TMAT = { wood: 'oak_planks', stone: 'cobblestone', iron: 'iron_ingot', gold: 'gold_ingot', diamond: 'diamond' };
+    for (const m in TMAT) { const M = TMAT[m]; const k = { M, S: 'stick' };
+      shaped(m + '_pickaxe', 1, ['MMM', ' S ', ' S '], k, true);
+      shaped(m + '_axe', 1, ['MM', 'MS', ' S'], k, true);
+      shaped(m + '_shovel', 1, ['M', 'S', 'S'], k, true);
+      shaped(m + '_sword', 1, ['M', 'M', 'S'], k, true);
+      shaped(m + '_hoe', 1, ['MM', ' S', ' S'], k, true);
+    }
+    const AMAT = { leather: 'leather', gold: 'gold_ingot', iron: 'iron_ingot', diamond: 'diamond' };
+    for (const m in AMAT) { const A = AMAT[m]; const k = { A };
+      shaped(m + '_helmet', 1, ['AAA', 'A A'], k, true);
+      shaped(m + '_chestplate', 1, ['A A', 'AAA', 'AAA'], k, true);
+      shaped(m + '_leggings', 1, ['AAA', 'A A', 'A A'], k, true);
+      shaped(m + '_boots', 1, ['A A', 'A A'], k, true);
+    }
+    _recipes = R; return R;
+  }
   function craftOutput() {
-    const items = {}; for (let i = 0; i < craftN; i++) { const g = grid[i]; if (g) items[g.k] = (items[g.k] || 0) + g.n; }
-    const keys2 = Object.keys(items); if (!keys2.length) return null;
-    for (const rc of window.ADV_RECIPES) {
-      if (rc.table && !craftTable) continue;                 // 큰 조합은 제작대 필요
-      const need = {}; rc.need.forEach(([k, n]) => need[k] = n);
-      const nk = Object.keys(need); if (nk.length !== keys2.length) continue;
-      let ok = true; for (const k of nk) { if (items[k] !== need[k]) { ok = false; break; } }
-      if (ok) return rc;
+    const N = craftTable ? 3 : 2;
+    const mat = []; for (let r = 0; r < N; r++) { const row = []; for (let cc = 0; cc < N; cc++) { const g = grid[r * N + cc]; row.push(g ? g.k : null); } mat.push(row); }
+    const gp = trimPat(mat); if (!gp) return null;
+    const bag = {}; for (let i = 0; i < N * N; i++) { const g = grid[i]; if (g) bag[g.k] = (bag[g.k] || 0) + 1; }
+    const bk = Object.keys(bag);
+    for (const rc of recipes()) {
+      if (rc.table && !craftTable) continue;                        // 3×3 전용은 제작대 필요
+      if (rc.shaped) { if (patEq(gp, rc.pat) || patEq(gp, mirrorPat(rc.pat))) return rc; }
+      else { const nk = Object.keys(rc.bag); if (nk.length === bk.length && bk.every(k => rc.bag[k] !== undefined)) return rc; }   // shapeless: 정확히 그 종류들만(여분 금지)
     }
     return null;
   }
@@ -1025,11 +1151,12 @@
     refreshHotbar(); updateArmorClass(); renderInv();
   }
   function takeOutput() {
-    const out = craftOutput(); if (!out) return;
-    // 손에 들고 있으면 같은 종류만 누적 가능
-    if (carry && (carry.k !== out.out || carry.n + out.count > maxStack(out.out))) return;
-    for (const [k, n] of out.need) { let rem = n; for (let i = 0; i < 9; i++) { if (grid[i] && grid[i].k === k) { const d = Math.min(grid[i].n, rem); grid[i].n -= d; rem -= d; if (grid[i].n <= 0) grid[i] = null; } } }
-    if (carry) carry.n += out.count; else carry = { k: out.out, n: out.count };
+    const rc = craftOutput(); if (!rc) return;
+    if (carry && (carry.k !== rc.out || carry.n + rc.count > maxStack(rc.out))) return;   // 손에 들고 있으면 같은 종류만 누적
+    const N = craftTable ? 3 : 2;
+    if (rc.shaped) { for (let i = 0; i < N * N; i++) { if (grid[i]) { grid[i].n--; if (grid[i].n <= 0) grid[i] = null; } } }   // 채워진 칸마다 1개 소비
+    else { for (const k in rc.bag) { let rem = rc.bag[k]; for (let i = 0; i < N * N; i++) { if (grid[i] && grid[i].k === k) { const d = Math.min(grid[i].n, rem); grid[i].n -= d; rem -= d; if (grid[i].n <= 0) grid[i] = null; } } } }
+    if (carry) carry.n += rc.count; else carry = { k: rc.out, n: rc.count };
     refreshHotbar(); renderInv();
   }
   function armorPoints() { let p = 0; for (const sk of ['head', 'chest', 'legs', 'feet']) { const a = armorEq[sk]; if (a) { const d = window.advDef && window.advDef(a.k); if (d && d.armor) p += d.armor; } } return p; }
@@ -1088,6 +1215,8 @@
       findSafeSpawn(hasSaved);             // 안전 지면에 안착(지형 박힘/추락 방지)
       loaded = true;                       // 이제부터 물리 시작
       refreshHotbar(); updateHUD(); netStart();
+      try { spawnInitialMobs(); } catch (e) {}   // 주변에 동물 무리 즉시 배치
+      flashHeldName();
     })();
     raf = requestAnimationFrame(loop);
   }
@@ -1121,7 +1250,7 @@
     window.removeEventListener('resize', resize); unbindInput();
     try { saveNow(); flushServer(); } catch (e) {}
     netStop();
-    chunks.forEach(c => { disposeMesh(c.mesh); disposeMesh(c.waterMesh); }); chunks.clear();
+    chunks.forEach(c => { disposeMesh(c.mesh); disposeMesh(c.waterMesh); disposeMesh(c.plantMesh); }); chunks.clear();
     mobs.forEach(m => { try { scene.remove(m.group); } catch (e) {} }); mobs = [];
     if (renderer) { try { renderer.dispose(); } catch (e) {} }
     if (document.exitPointerLock && document.pointerLockElement) try { document.exitPointerLock(); } catch (e) {}
