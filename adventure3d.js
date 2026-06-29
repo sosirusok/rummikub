@@ -369,28 +369,11 @@
   function buildAtlas() {
     const names = new Set();
     BLOCKS.forEach(b => { if (!b.tex) return; if (typeof b.tex === 'string') names.add(b.tex); else { names.add(b.tex.top); names.add(b.tex.side); names.add(b.tex.bottom); } });
-    const list = Array.from(names); const COLS = 8, ROWS = 8, CELL = 32, PAD = 8, T = 16, ATLAS = 256;   // 256=2^8(밉맵용 pow2)
-    const cv = document.createElement('canvas'); cv.width = cv.height = ATLAS; const c = cv.getContext('2d'); c.imageSmoothingEnabled = false;
-    const tmp = document.createElement('canvas'); tmp.width = tmp.height = T; const tc = tmp.getContext('2d');
-    list.forEach((nm, i) => {
-      const ox = (i % COLS) * CELL, oy = ((i / COLS) | 0) * CELL;
-      tc.clearRect(0, 0, T, T); drawTex(tc, 0, 0, nm);
-      c.drawImage(tmp, ox + PAD, oy + PAD);                                   // 중앙 타일
-      c.drawImage(tmp, 0, 0, T, 1, ox + PAD, oy, T, PAD);                     // 위 가장자리
-      c.drawImage(tmp, 0, T - 1, T, 1, ox + PAD, oy + PAD + T, T, PAD);       // 아래
-      c.drawImage(tmp, 0, 0, 1, T, ox, oy + PAD, PAD, T);                     // 왼쪽
-      c.drawImage(tmp, T - 1, 0, 1, T, ox + PAD + T, oy + PAD, PAD, T);       // 오른쪽
-      c.drawImage(tmp, 0, 0, 1, 1, ox, oy, PAD, PAD);                         // 모서리
-      c.drawImage(tmp, T - 1, 0, 1, 1, ox + PAD + T, oy, PAD, PAD);
-      c.drawImage(tmp, 0, T - 1, 1, 1, ox, oy + PAD + T, PAD, PAD);
-      c.drawImage(tmp, T - 1, T - 1, 1, 1, ox + PAD + T, oy + PAD + T, PAD, PAD);
-      const e = 0.5;                                                          // 타일 안쪽으로 0.5px 인셋
-      atlasUV[nm] = { x0: (ox + PAD + e) / ATLAS, x1: (ox + PAD + T - e) / ATLAS, y0: (oy + PAD + e) / ATLAS, y1: (oy + PAD + T - e) / ATLAS };
-    });
-    atlasTex = new THREE.CanvasTexture(cv);
-    atlasTex.magFilter = THREE.NearestFilter; atlasTex.minFilter = THREE.NearestMipmapLinearFilter; atlasTex.generateMipmaps = true;
-    try { atlasTex.anisotropy = renderer.capabilities.getMaxAnisotropy(); } catch (e) {}   // 비스듬한 바닥 선명하게(번쩍임 제거)
-    atlasTex.needsUpdate = true;
+    const list = Array.from(names); const cols = 8, rows = Math.ceil(list.length / cols);
+    const cv = document.createElement('canvas'); cv.width = cols * 16; cv.height = rows * 16; const c = cv.getContext('2d'); c.imageSmoothingEnabled = false;
+    list.forEach((nm, i) => { const cx = (i % cols) * 16, cy = ((i / cols) | 0) * 16; drawTex(c, cx, cy, nm); });
+    list.forEach((nm, i) => { const cx = (i % cols), cy = ((i / cols) | 0); const e = 0.01; atlasUV[nm] = { x0: (cx + e) / cols, x1: (cx + 1 - e) / cols, y0: (cy + e) / rows, y1: (cy + 1 - e) / rows }; });
+    atlasTex = new THREE.CanvasTexture(cv); atlasTex.magFilter = THREE.NearestFilter; atlasTex.minFilter = THREE.NearestFilter; atlasTex.generateMipmaps = false; atlasTex.needsUpdate = true;
     blockMat = new THREE.MeshBasicMaterial({ map: atlasTex, vertexColors: true });
     waterMat = new THREE.MeshBasicMaterial({ map: atlasTex, vertexColors: true, transparent: true, opacity: 0.72, depthWrite: false });
   }
