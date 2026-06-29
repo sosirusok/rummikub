@@ -61,7 +61,7 @@
   function bprop(key) { return (window.ADV_BLOCKS && window.ADV_BLOCKS[key]) || null; }   // 경도/도구/드롭
 
   /* ---------------- 상태 ---------------- */
-  let running = false, loaded = false, renderer = null, scene = null, camera = null, raf = 0;
+  let running = false, loaded = false, renderer = null, scene = null, camera = null, raf = 0, contextLost = false;
   let canvas = null, atlasTex = null, atlasUV = {};
   const chunks = new Map();             // "cx,cz" -> {blocks:Uint8Array, mesh, waterMesh, dirty}
   const overlay = new Map();            // "x,y,z" -> id (사용자 편집, 영속)
@@ -264,7 +264,7 @@
     let vi = 0, wvi = 0, pvi = 0;
     // 패딩 불투명 마스크(청크+1칸 경계). 면 컬링/AO를 Map조회 대신 배열조회로 → 메싱 대폭 가속.
     const MW = CHUNK + 2, baseX = c.cx * CHUNK - 1, baseZ = c.cz * CHUNK - 1;
-    const omask = new Uint8Array(MW * MW * WORLD_H);
+    const omask = _omask || (_omask = new Uint8Array(MW * MW * WORLD_H)); omask.fill(0);   // 재사용(매 빌드 31KB 할당 → GC 부담 제거)
     for (let mz = 0; mz < MW; mz++) for (let mx = 0; mx < MW; mx++) {
       const inside = (mx >= 1 && mx <= CHUNK && mz >= 1 && mz <= CHUNK);
       for (let y = 0; y < WORLD_H; y++) { const id2 = inside ? c.blocks[idx(mx - 1, y, mz - 1)] : getBlock(baseX + mx, y, baseZ + mz); if (id2 && BYID[id2] && BYID[id2].opaque) omask[(y * MW + mz) * MW + mx] = 1; }
@@ -338,7 +338,7 @@
     m.frustumCulled = true; scene.add(m); return m;
   }
   function disposeMesh(m) { if (m) { scene.remove(m); if (m.geometry) m.geometry.dispose(); } }
-  let blockMat = null, waterMat = null, plantMat = null;
+  let blockMat = null, waterMat = null, plantMat = null, _omask = null;
 
   /* ---------------- 오버레이(조준 윤곽선·균열) ---------------- */
   let outlineMesh = null, crackMesh = null, crackMats = [];
@@ -375,12 +375,14 @@
     const A = window.ADV_BLOCKS || {};
     const r = rngFrom(hashStr(name) >>> 0);
     function f(x, y, col) { px(c, ox + x, oy + y, col); }
-    function fillNoise(p0, p1, p2) { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.33 ? p1 : t < 0.66 ? p0 : p2); } }
+    function f2(x, y, col) { c.fillStyle = col; c.fillRect(ox + x, oy + y, 2, 2); }   // 2×2 픽셀 클러스터(노이즈 덜 지저분·블록다움 ↑)
+    function noise2(cols) { for (let y = 0; y < 16; y += 2) for (let x = 0; x < 16; x += 2) f2(x, y, cols[(r() * cols.length) | 0]); }
+    function fillNoise(p0, p1, p2) { noise2([p1, p0, p0, p2, p0]); }
     const P3 = (k) => (A[k] && A[k].pal) || ['#888', '#666', '#aaa'];
     switch (name) {
-      case 'stone': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.25 ? '#6f6f6f' : t < 0.5 ? '#787878' : t < 0.78 ? '#828282' : '#8c8c8c'); if (t > 0.96) f(x, y, '#5e5e5e'); } break;
-      case 'dirt': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.25 ? '#6e4c34' : t < 0.55 ? '#7d573c' : t < 0.82 ? '#8a6044' : '#976b4d'); if (t > 0.95) f(x, y, '#5a3d28'); } break;
-      case 'grass_top': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.3 ? '#6aa84f' : t < 0.7 ? '#76b558' : '#83c163'); if (t > 0.95) f(x, y, '#5b9142'); } break;   // 초록 베이스(아이콘=초록, 월드=바이옴 틴트로 곱)
+      case 'stone': noise2(['#7a7a7a', '#828282', '#888888', '#7e7e7e', '#767676', '#8c8c8c']); for (let i = 0; i < 5; i++) f2((r() * 8 | 0) * 2, (r() * 8 | 0) * 2, '#6c6c6c'); break;
+      case 'dirt': noise2(['#7d573c', '#86603f', '#765036', '#8a6044', '#70492f']); break;
+      case 'grass_top': noise2(['#6aa84f', '#74b257', '#7fbd60', '#69a64e', '#80c062']); break;   // 초록 베이스(아이콘=초록, 월드=바이옴 틴트로 곱)
       case 'grass_side': { fillNoise('#7d573c', '#6e4c34', '#8a6044'); for (let x = 0; x < 16; x++) { const gh = 3 + (r() < 0.33 ? 1 : 0); for (let y = 0; y < gh; y++) f(x, y, r() < 0.5 ? '#5b9142' : '#6aa84f'); } break; }   // 흙 베이스 + 상단 3~4px 초록 띠(마크식)
       case 'sand': fillNoise('#e0d6a0', '#d4c98e', '#ece2b0'); break;
       case 'sandstone': { fillNoise('#d9cda0', '#cabf90', '#e6dab0'); for (let y = 3; y < 16; y += 4) for (let x = 0; x < 16; x++) f(x, y, '#bcb080'); break; }
@@ -417,8 +419,7 @@
       case 'sugar_cane': { for (let y = 0; y < 16; y++) { const col = (y % 5 === 0) ? '#7bbf5c' : (r() < 0.5 ? '#8fc36a' : '#a3d178'); f(7, y, col); f(8, y, col); } break; }
       default: fillNoise('#888', '#666', '#aaa');
     }
-    function oreTex(c, ox, oy, ore) { drawTex2Base(c, ox, oy); for (let i = 0; i < 8; i++) { const x = 2 + ((hash3(i, 1, 0) * 12) | 0), y = 2 + ((hash3(i, 2, 0) * 12) | 0); c.fillStyle = ore; c.fillRect(ox + x, oy + y, 2, 2); c.fillStyle = '#fff4'; c.fillRect(ox + x, oy + y, 1, 1); } }
-    function drawTex2Base(c, ox, oy) { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); c.fillStyle = t < 0.33 ? '#727272' : t < 0.66 ? '#7e7e7e' : '#8a8a8a'; c.fillRect(ox + x, oy + y, 1, 1); } }
+    function oreTex(c, ox, oy, ore) { noise2(['#7a7a7a', '#828282', '#888888', '#7e7e7e', '#767676']); for (let i = 0; i < 6; i++) { const x = 2 + ((hash3(i, 1, 0) * 11) | 0), y = 2 + ((hash3(i, 2, 0) * 11) | 0); c.fillStyle = ore; c.fillRect(ox + x, oy + y, 3, 3); c.fillStyle = 'rgba(255,255,255,0.35)'; c.fillRect(ox + x, oy + y, 1, 1); c.fillStyle = 'rgba(0,0,0,0.25)'; c.fillRect(ox + x + 2, oy + y + 2, 1, 1); } }
   }
   function hashStr(s) { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return h >>> 0; }
   // 패딩 아틀라스(256x256, 8x8 셀, 16px 타일 + 8px 가장자리 익스트루드) → 밉맵/이방성 필터에서 블리딩 없음
@@ -873,6 +874,7 @@
   let lastT = 0;
   function loop(ts) {
     if (!running) return; raf = requestAnimationFrame(loop);
+    if (contextLost) { lastT = ts; return; }   // GPU 컨텍스트 복구 대기(렌더 호출 시 추가 오류 방지)
     try {
       if (!lastT) lastT = ts; let dt = (ts - lastT) / 1000; lastT = ts; if (dt > 0.1) dt = 0.1;
       world.time += dt;
@@ -940,7 +942,8 @@
   function icon(key) {
     if (iconCache[key]) return iconCache[key];
     const s = 48; const cv = document.createElement('canvas'); cv.width = cv.height = s; const c = cv.getContext('2d'); c.imageSmoothingEnabled = false;
-    if (window.ADV_BLOCKS[key] && ID[key] !== undefined) drawCubeIcon(c, key, s); else drawItemIcon2(c, key, s);
+    try { if (window.ADV_BLOCKS[key] && ID[key] !== undefined && BYID[ID[key]] && BYID[ID[key]].tex) drawCubeIcon(c, key, s); else drawItemIcon2(c, key, s); }
+    catch (e) { try { drawItemIcon2(c, key, s); } catch (e2) {} }
     const u = cv.toDataURL(); iconCache[key] = u; return u;
   }
   const _texCanvasCache = {};
@@ -1197,6 +1200,9 @@
     catch (e) { app().innerHTML = serverErr('이 기기/브라우저가 3D(WebGL)를 지원하지 않아요.'); return; }
     renderer.setPixelRatio(1);   // 저사양 성능: 픽셀비율 1 고정(고DPI에서 프래그먼트 2~4배 절감)
     renderer.setClearColor(0x000000, 0);   // 캔버스 투명 → 뒤의 CSS 하늘이 보임(소프트웨어GL에서도 안정적)
+    // ★ WebGL 컨텍스트 손실 복구(저사양 기기에서 GPU 메모리 부족 시 '튕김/검은화면' 방지)
+    canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); contextLost = true; }, false);
+    canvas.addEventListener('webglcontextrestored', () => { try { _texCanvasCache && (void 0); buildAtlas(); setupOverlays(); chunks.forEach(c => c.dirty = true); contextLost = false; } catch (err) { console.error('ctx restore', err); } }, false);
     scene = new THREE.Scene(); scene.background = null; scene.fog = new THREE.Fog(0x9fc6ea, CHUNK * (RENDER - 1), CHUNK * (RENDER + 1.5));
     camera = new THREE.PerspectiveCamera(72, 1, 0.1, 1000);
     cfg = loadCfg(); seed = WORLD_SEED;
@@ -1278,6 +1284,7 @@
     inv: () => inv, grid: () => grid, armor: () => armorEq, carry: () => carry,
     setInv: (i, v) => { inv[i] = v; }, setGrid: (i, v) => { grid[i] = v; }, setCarry: v => { carry = v; },
     setCraftTable: v => { craftTable = v; craftN = v ? 9 : 4; },
+    setBlock, breakBlock, BLOCKS, icon2: icon, biome,
   };
   window.adventure3dStart = start;
   window.adventure3dStop = stop;
