@@ -82,16 +82,35 @@
   function hash3(x, y, z) { let h = (x * 374761393 + y * 668265263 + z * 1274126177 + seed * 2147483647) | 0; h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
   function h2(x, z) { return hash3(x, 0, z); }
   function vnoise(x, z, f) { const xf = x * f, zf = z * f; const x0 = Math.floor(xf), z0 = Math.floor(zf), tx = xf - x0, tz = zf - z0; const a = h2(x0, z0), b = h2(x0 + 1, z0), c = h2(x0, z0 + 1), d = h2(x0 + 1, z0 + 1); const ux = tx * tx * (3 - 2 * tx), uz = tz * tz * (3 - 2 * tz); return (a + (b - a) * ux) * (1 - uz) + (c + (d - c) * ux) * uz; }
-  function biome(x, z) { const n = vnoise(x + 1000, z + 1000, 0.004); return n < 0.3 ? 'desert' : n < 0.75 ? 'plains' : 'snow'; }
+  // 프랙탈 노이즈(여러 옥타브 합) → 자연스러운 기복. 반환 -0.5..0.5
+  function fbm(x, z, f, oct) { let a = 0, amp = 1, fr = f, tot = 0; for (let i = 0; i < oct; i++) { a += (vnoise(x + i * 211, z - i * 173, fr) - 0.5) * amp; tot += amp; amp *= 0.5; fr *= 2; } return a / tot; }
+  // 3D 값 노이즈(트라이리니어) → 진짜 3D 동굴(평면 반복 패턴 없음)
+  function vnoise3(x, y, z, f) {
+    const xf = x * f, yf = y * f, zf = z * f; const x0 = Math.floor(xf), y0 = Math.floor(yf), z0 = Math.floor(zf);
+    const tx = xf - x0, ty = yf - y0, tz = zf - z0; const ux = tx * tx * (3 - 2 * tx), uy = ty * ty * (3 - 2 * ty), uz = tz * tz * (3 - 2 * tz);
+    const c000 = hash3(x0, y0, z0), c100 = hash3(x0 + 1, y0, z0), c010 = hash3(x0, y0 + 1, z0), c110 = hash3(x0 + 1, y0 + 1, z0);
+    const c001 = hash3(x0, y0, z0 + 1), c101 = hash3(x0 + 1, y0, z0 + 1), c011 = hash3(x0, y0 + 1, z0 + 1), c111 = hash3(x0 + 1, y0 + 1, z0 + 1);
+    const a00 = c000 + (c100 - c000) * ux, a10 = c010 + (c110 - c010) * ux, a01 = c001 + (c101 - c001) * ux, a11 = c011 + (c111 - c011) * ux;
+    const b0 = a00 + (a10 - a00) * uy, b1 = a01 + (a11 - a01) * uy; return b0 + (b1 - b0) * uz;
+  }
+  function biome(x, z) { const n = vnoise(x + 1000, z + 1000, 0.0021); const t = vnoise(x - 3000, z + 7000, 0.0024); if (t < 0.22) return 'snow'; if (t > 0.82 && n < 0.4) return 'desert'; return n > 0.55 ? 'forest' : 'plains'; }
   const surfCache = new Map();
   function surfaceH(x, z) {
     const ck = x + ',' + z; if (surfCache.has(ck)) return surfCache.get(ck);
-    let h = 48 + (vnoise(x, z, 0.01) - 0.5) * 24 + (vnoise(x, z, 0.04) - 0.5) * 8;
-    const sy = Math.max(8, Math.min(WORLD_H - 20, Math.round(h)));
-    surfCache.set(ck, sy); if (surfCache.size > 40000) surfCache.clear();
+    // 기복도(어떤 지역은 평지, 어떤 지역은 산악)
+    let relief = vnoise(x + 5000, z + 5000, 0.0025);               // 0..1
+    relief = Math.max(0.22, Math.min(1, relief * 1.25));
+    // 단일 옥타브 고진폭 합 → 실제 언덕(노이즈 평균화 회피). 정점 ±20블록.
+    let hill = (vnoise(x, z, 0.0075) - 0.5) * 42                   // 큰 언덕(파장 ~133)
+             + (vnoise(x + 99, z - 99, 0.02) - 0.5) * 16          // 중간(파장 ~50)
+             + (vnoise(x - 50, z + 50, 0.05) - 0.5) * 6;          // 디테일
+    const cont = (vnoise(x, z, 0.0014) - 0.5) * 22;               // 대륙성(완만한 고저)
+    let h = 52 + cont + hill * relief;
+    const sy = Math.max(6, Math.min(WORLD_H - 16, Math.round(h)));
+    surfCache.set(ck, sy); if (surfCache.size > 60000) surfCache.clear();
     return sy;
   }
-  function isTreeAt(x, z) { return h2(x * 7 + 1, z * 13 + 3) < 0.02 && biome(x, z) !== 'desert'; }
+  function isTreeAt(x, z) { const b = biome(x, z); if (b === 'desert') return false; const p = b === 'forest' ? 0.10 : b === 'snow' ? 0.03 : 0.04; return h2(x * 7 + 1, z * 13 + 3) < p; }
   // 바이옴별 잔디/잎 색조(마크의 biome coloring)
   function biomeTint(x, z) { const b = biome(x, z); if (b === 'desert') return [0.74, 0.72, 0.34]; if (b === 'snow') return [0.50, 0.71, 0.59]; const n = vnoise(x + 50, z + 50, 0.02); return [0.45 + n * 0.18, 0.74 - n * 0.05, 0.32 + n * 0.12]; }
   function genBlock(x, y, z) {
@@ -104,9 +123,14 @@
       const t = treeBlock(x, y, z); if (t) return t;
       return ID.air;
     }
-    if (y === sy) { if (sy >= SEA) return ID.sand; if (b === 'desert') return ID.sand; if (b === 'snow') return ID.snow_block; return ID.grass; }
+    if (y === sy) {
+      if (sy <= SEA) return ID.sand;                  // 해수면 이하(수중 바닥·해변) = 모래
+      if (b === 'desert') return ID.sand;             // 사막 = 모래
+      if (b === 'snow') return ID.snow_block;         // 설원 = 눈
+      return ID.grass;                                // 육지 = 잔디
+    }
     const depth = sy - y;
-    if (depth <= 3) return b === 'desert' ? ID.sandstone : ID.dirt;
+    if (depth <= 3) return (b === 'desert' || sy <= SEA + 1) ? (b === 'desert' ? ID.sandstone : ID.sand) : ID.dirt;
     // 동굴
     if (caveCarve(x, y, z)) return ID.air;
     // 광물
@@ -119,9 +143,14 @@
     return ID.stone;
   }
   function caveCarve(x, y, z) {
-    if (y < 5 || y > 55) return false;
-    const n = vnoise(x + y * 7, z - y * 5, 0.06);
-    return n > 0.78;
+    if (y < 4 || y > 58) return false;
+    // 스파게티 동굴: 두 3D 노이즈가 동시에 0 부근 → 가늘게 굽이치는 터널(반복 패턴 없음)
+    const n1 = vnoise3(x, y, z, 0.045), n2 = vnoise3(x + 421, y + 13, z + 977, 0.045);
+    const band = 0.066 + (y < 30 ? 0.02 : 0);          // 깊을수록 살짝 넓게
+    if (Math.abs(n1 - 0.5) < band && Math.abs(n2 - 0.5) < band) return true;
+    // 치즈 동굴: 깊은 곳 넓은 공동
+    if (y < 40 && vnoise3(x, y * 1.4, z, 0.03) > 0.82) return true;
+    return false;
   }
   function treeBlock(x, y, z) {
     for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) {
@@ -1006,16 +1035,17 @@
       if (P.y < top + 1 || P.y > top + 40 || blockSolid(getBlock(fx, Math.floor(P.y + 0.1), fz)) || blockSolid(getBlock(fx, Math.floor(P.y + 1), fz))) P.y = top + 1.05;
       P.vx = P.vy = P.vz = 0; P.onGround = false; return;
     }
-    // 새 캐릭터: 0,0 부근에서 '물 위가 아닌 육지' 컬럼 탐색
+    // 새 캐릭터: 0,0 부근에서 '물 위가 아닌 마른 육지' 컬럼 탐색. 지면(surfaceH) 위에 안착(나무 위 X).
     let bx = 0, bz = 0, found = false;
-    for (let r = 0; r < 64 && !found; r++) for (let dx = -r; dx <= r && !found; dx++) for (let dz = -r; dz <= r && !found; dz++) {
+    for (let r = 0; r < 80 && !found; r++) for (let dx = -r; dx <= r && !found; dx++) for (let dz = -r; dz <= r && !found; dz++) {
       if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
-      if (surfaceH(dx, dz) >= SEA) continue;                 // 물밑 지형 제외
-      const top = columnTop(dx, dz); const tb = BYID[getBlock(dx, top, dz)];
-      if (tb && tb.solid && !tb.liquid && getBlock(dx, top + 1, dz) === 0) { bx = dx; bz = dz; found = true; }
+      const sh = surfaceH(dx, dz); if (sh <= SEA + 1) continue;       // 마른 육지만(물·해변 제외)
+      getChunk(Math.floor(dx / CHUNK), Math.floor(dz / CHUNK), true);
+      if (isTreeAt(dx, dz)) continue;                                 // 나무 줄기 칸 회피
+      bx = dx; bz = dz; found = true;
     }
-    const top = columnTop(bx, bz);
-    P.x = bx + 0.5; P.z = bz + 0.5; P.y = top + 1.05; P.spawnX = P.x; P.spawnZ = P.z; P.vx = P.vy = P.vz = 0; P.onGround = false;
+    const gy = surfaceH(bx, bz);                                      // 지면 높이(나무 무시)
+    P.x = bx + 0.5; P.z = bz + 0.5; P.y = gy + 1.05; P.spawnX = P.x; P.spawnZ = P.z; P.vx = P.vy = P.vz = 0; P.onGround = false;
   }
   function resize() { if (!renderer) return; const w = canvas.clientWidth || window.innerWidth, h = canvas.clientHeight || window.innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
   function serverErr(msg) { return `<section class="screen"><header class="room__top"><button class="btn btn--ghost" data-act="adv_exit">← 홈</button><b style="margin-left:6px">🗺️ 모험</b></header><div class="grow center" style="justify-content:center;text-align:center;padding:20px"><p style="white-space:pre-wrap;line-height:1.7">${esc(msg)}</p></div></section>`; }
@@ -1047,7 +1077,7 @@
   }
 
   /* ---------------- 공개 API ---------------- */
-  if (typeof window !== 'undefined' && window.__ADV3_TEST) window.__adv3 = { addMob, P, mobs: () => mobs, hurtPlayer, eatFood, MOB, getBlock, genBlock, surfaceH, ID, BYID, blockSolid };
+  if (typeof window !== 'undefined' && window.__ADV3_TEST) window.__adv3 = { addMob, P, mobs: () => mobs, hurtPlayer, eatFood, MOB, getBlock, genBlock, surfaceH, ID, BYID, blockSolid, chunkInfo: () => ({ n: chunks.size, meshed: Array.from(chunks.values()).filter(c => c.mesh).length, loaded }) };
   window.adventure3dStart = start;
   window.adventure3dStop = stop;
   window.adventure3dRunning = function () { return running; };
