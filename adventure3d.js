@@ -54,7 +54,7 @@
   function bprop(key) { return (window.ADV_BLOCKS && window.ADV_BLOCKS[key]) || null; }   // 경도/도구/드롭
 
   /* ---------------- 상태 ---------------- */
-  let running = false, renderer = null, scene = null, camera = null, raf = 0;
+  let running = false, loaded = false, renderer = null, scene = null, camera = null, raf = 0;
   let canvas = null, atlasTex = null, atlasUV = {};
   const chunks = new Map();             // "cx,cz" -> {blocks:Uint8Array, mesh, waterMesh, dirty}
   const overlay = new Map();            // "x,y,z" -> id (사용자 편집, 영속)
@@ -223,7 +223,7 @@
         const base = isWater ? wvi : vi;
         const sh = f.shade;
         const uvco = [[u.x0, u.y1], [u.x0, u.y0], [u.x1, u.y0], [u.x1, u.y1]];
-        const a = f.ax[0], b = f.ax[1];
+        const axA = f.ax[0], axB = f.ax[1];   // 면내 두 축(법선 외). 'b'(블록)와 셰도잉 금지!
         const bx = wx + f.dir[0], by = y + f.dir[1], bz = wz + f.dir[2];   // 면 바깥(공기) 칸
         // 바이옴 색조: 잔디 윗면 / 잎 전체
         let tr = 1, tg = 1, tb = 1;
@@ -231,8 +231,8 @@
         for (let k = 0; k < 4; k++) {
           const cc = f.corners[k];
           // 코너 음영(AO): 면내 두 인접 + 대각
-          const sa = cc[a] ? 1 : -1, sb = cc[b] ? 1 : -1;
-          const o1 = [0, 0, 0], o2 = [0, 0, 0], od = [0, 0, 0]; o1[a] = sa; o2[b] = sb; od[a] = sa; od[b] = sb;
+          const sa = cc[axA] ? 1 : -1, sb = cc[axB] ? 1 : -1;
+          const o1 = [0, 0, 0], o2 = [0, 0, 0], od = [0, 0, 0]; o1[axA] = sa; o2[axB] = sb; od[axA] = sa; od[axB] = sb;
           const s1 = aoSolid(bx + o1[0], by + o1[1], bz + o1[2]);
           const s2 = aoSolid(bx + o2[0], by + o2[1], bz + o2[2]);
           const sd = aoSolid(bx + od[0], by + od[1], bz + od[2]);
@@ -556,7 +556,7 @@
   }
   function respawn() {
     const sx = P.spawnX != null ? P.spawnX : 0.5, sz = P.spawnZ != null ? P.spawnZ : 0.5;
-    P.x = sx; P.z = sz; P.y = surfaceH(Math.floor(sx), Math.floor(sz)) + 2; P.vx = P.vy = P.vz = 0;
+    P.x = sx; P.z = sz; P.y = columnTop(Math.floor(sx), Math.floor(sz)) + 1.05; P.vx = P.vy = P.vz = 0;
     P.hp = 20; P.hunger = 20; P.sat = 5; P.exh = 0; P.airT = 0; P.fallStart = null;
     if (!cfg.keepInvOnDeath) { inv = new Array(36).fill(null); refreshHotbar(); }
     updateHUD();
@@ -779,7 +779,8 @@
     try {
       if (!lastT) lastT = ts; let dt = (ts - lastT) / 1000; lastT = ts; if (dt > 0.1) dt = 0.1;
       world.time += dt;
-      collide(dt); streamChunks(); netTick(dt); processMining(dt); updateVitals(dt); updateMobs(dt);
+      streamChunks();
+      if (loaded) { collide(dt); netTick(dt); processMining(dt); updateVitals(dt); updateMobs(dt); }   // 로드 완료 전엔 물리 정지(지형에 박히는 버그 방지)
       // 카메라
       camera.position.set(P.x, P.y + P.eye, P.z);
       const d = lookDir(); camera.lookAt(P.x + d.x, P.y + P.eye + d.y, P.z + d.z);
@@ -956,20 +957,39 @@
     bindInput(); running = true; lastT = 0;
     (async () => {
       // 서버 월드 로드(가능하면), 아니면 로컬
-      let loadedOverlay = null;
-      if (cloudReady()) { const w = await cloudLoadWorld(); if (w) { loadedOverlay = w; } const pd = await cloudLoadPlayer(); if (pd) applyPlayer(pd); else newPlayer(); }
-      else { const ls = loadLocal(); if (ls) applyPlayer(ls); else newPlayer(); }
+      let loadedOverlay = null, hasSaved = false;
+      if (cloudReady()) { const w = await cloudLoadWorld(); if (w) { loadedOverlay = w; } const pd = await cloudLoadPlayer(); if (pd) { applyPlayer(pd); hasSaved = true; } else newPlayer(); }
+      else { const ls = loadLocal(); if (ls) { applyPlayer(ls); hasSaved = true; } else newPlayer(); }
       if (loadedOverlay) { for (const k in loadedOverlay) overlay.set(k, Number(loadedOverlay[k])); }
       else { const ls = loadLocal(); if (ls && ls.overlay) for (const k in ls.overlay) overlay.set(k, ls.overlay[k]); }
-      // 지표로 스폰 보정
-      ensureSpawn();
+      findSafeSpawn(hasSaved);             // 안전 지면에 안착(지형 박힘/추락 방지)
+      loaded = true;                       // 이제부터 물리 시작
       refreshHotbar(); updateHUD(); netStart();
     })();
     raf = requestAnimationFrame(loop);
   }
   function applyPlayer(d) { if (d.p) { P.x = d.p.x; P.y = d.p.y; P.z = d.p.z; P.yaw = d.p.yaw || 0; P.pitch = d.p.pitch || 0; P.hp = d.p.hp || 20; P.hunger = d.p.hunger != null ? d.p.hunger : 20; P.sat = d.p.sat != null ? d.p.sat : 5; P.spawnX = d.p.spawnX; P.spawnZ = d.p.spawnZ; } if (d.inv) inv = d.inv.map(s => s ? { k: s.k, n: s.n } : null); if (d.hotbar != null) hotbar = d.hotbar; }
   function newPlayer() { inv = new Array(36).fill(null); P.x = 0.5; P.z = 0.5; P.y = surfaceH(0, 0) + 2; P.hp = 20; P.hunger = 20; P.sat = 5; P.exh = 0; P.spawnX = 0.5; P.spawnZ = 0.5; }   // 기본템 없음
-  function ensureSpawn() { getChunk(Math.floor(P.x / CHUNK), Math.floor(P.z / CHUNK), true); let y = WORLD_H - 1; while (y > 1 && getBlock(Math.floor(P.x), y, Math.floor(P.z)) === 0) y--; if (P.y < y + 1) P.y = y + 2; }
+  // 컬럼 최상단 고체 y (청크 생성 포함)
+  function columnTop(x, z) { getChunk(Math.floor(x / CHUNK), Math.floor(z / CHUNK), true); let y = WORLD_H - 2; while (y > 1 && !blockSolid(getBlock(x, y, z))) y--; return y; }
+  function findSafeSpawn(hasSaved) {
+    if (hasSaved) {
+      const fx = Math.floor(P.x), fz = Math.floor(P.z); const top = columnTop(fx, fz);
+      // 저장 위치가 지형에 박혀있거나 비정상이면 표면 위로 보정
+      if (P.y < top + 1 || P.y > top + 40 || blockSolid(getBlock(fx, Math.floor(P.y + 0.1), fz)) || blockSolid(getBlock(fx, Math.floor(P.y + 1), fz))) P.y = top + 1.05;
+      P.vx = P.vy = P.vz = 0; P.onGround = false; return;
+    }
+    // 새 캐릭터: 0,0 부근에서 '물 위가 아닌 육지' 컬럼 탐색
+    let bx = 0, bz = 0, found = false;
+    for (let r = 0; r < 64 && !found; r++) for (let dx = -r; dx <= r && !found; dx++) for (let dz = -r; dz <= r && !found; dz++) {
+      if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
+      if (surfaceH(dx, dz) >= SEA) continue;                 // 물밑 지형 제외
+      const top = columnTop(dx, dz); const tb = BYID[getBlock(dx, top, dz)];
+      if (tb && tb.solid && !tb.liquid && getBlock(dx, top + 1, dz) === 0) { bx = dx; bz = dz; found = true; }
+    }
+    const top = columnTop(bx, bz);
+    P.x = bx + 0.5; P.z = bz + 0.5; P.y = top + 1.05; P.spawnX = P.x; P.spawnZ = P.z; P.vx = P.vy = P.vz = 0; P.onGround = false;
+  }
   function resize() { if (!renderer) return; const w = canvas.clientWidth || window.innerWidth, h = canvas.clientHeight || window.innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
   function serverErr(msg) { return `<section class="screen"><header class="room__top"><button class="btn btn--ghost" data-act="adv_exit">← 홈</button><b style="margin-left:6px">🗺️ 모험</b></header><div class="grow center" style="justify-content:center;text-align:center;padding:20px"><p style="white-space:pre-wrap;line-height:1.7">${esc(msg)}</p></div></section>`; }
   function stop() {
@@ -1000,7 +1020,7 @@
   }
 
   /* ---------------- 공개 API ---------------- */
-  if (typeof window !== 'undefined' && window.__ADV3_TEST) window.__adv3 = { addMob, P, mobs: () => mobs, hurtPlayer, eatFood, MOB };
+  if (typeof window !== 'undefined' && window.__ADV3_TEST) window.__adv3 = { addMob, P, mobs: () => mobs, hurtPlayer, eatFood, MOB, getBlock, genBlock, surfaceH, ID, BYID, blockSolid };
   window.adventure3dStart = start;
   window.adventure3dStop = stop;
   window.adventure3dRunning = function () { return running; };
