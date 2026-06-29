@@ -1248,7 +1248,7 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 
 /* ============================ 모험 3D — 인벤토리(마크식 컴팩트) ============================ */
 .mc-wrap{position:fixed; inset:0; z-index:200; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.6);}
-.mc-panel{position:relative; --sl:min(9vw,46px); background:#c8c8c8; border:4px solid; border-color:#fefefe #545454 #545454 #fefefe; padding:14px; border-radius:3px; box-shadow:0 8px 30px rgba(0,0,0,.5); max-width:96vw;}
+.mc-panel{position:relative; --sl:min(9vw,46px); background:#c8c8c8; border:4px solid; border-color:#fefefe #545454 #545454 #fefefe; padding:14px; border-radius:3px; box-shadow:0 8px 30px rgba(0,0,0,.5); max-width:98vw; max-height:96vh; overflow:auto;}
 .mc-row1{display:flex; align-items:center; justify-content:center; gap:10px; margin-bottom:12px;}
 .mc-craft{display:grid; gap:3px;}
 .mc-craft.mc-c2{grid-template-columns:repeat(2,var(--sl));} .mc-craft.mc-c3{grid-template-columns:repeat(3,var(--sl));}
@@ -1266,4 +1266,21 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .mc-carry{display:flex; align-items:center; justify-content:center; gap:6px; font-size:12px; color:#222; margin-top:8px;}
 .mc-carry img{width:24px; height:24px; image-rendering:pixelated;}
 .mc-drop{border:none; background:#5a5a5a; color:#fff; font-size:11px; padding:3px 8px; border-radius:4px;}
+/* 방어구/보조손 칸 */
+.mc-armor{display:grid; grid-template-columns:var(--sl); gap:3px; position:relative;}
+.mc-offwrap{margin-top:6px;}
+.mc-slot.mc-arm,.mc-slot.mc-off{background:#7d7d7d;}
+.mc-ph{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); font-size:calc(var(--sl)*.5); opacity:.32; pointer-events:none; filter:grayscale(1);}
+/* 선택 아이템 이름(핫바 위 페이드) + 방어구 게이지 */
+.adv3-itemname{position:absolute; left:50%; bottom:62px; transform:translateX(-50%); z-index:6; color:#fff; font-size:14px; font-weight:700; text-shadow:0 1px 2px #000,0 0 6px #000; opacity:0; transition:opacity .25s; pointer-events:none; white-space:nowrap;}
+.adv3-itemname.show{opacity:1;}
+.adv3-armor{font-size:13px; letter-spacing:-2px; filter:drop-shadow(0 1px 1px #000);}
+/* 좁은 화면(폴더폰) — 9칸이 가로로 들어오게 슬롯/여백 축소 */
+@media (max-width:380px){
+  .mc-panel{--sl:min(8.2vw,46px); padding:9px;}
+  .mc-store,.mc-hot{gap:2px;} .mc-craft{gap:2px;}
+  .mc-row1{gap:6px; margin-bottom:8px;}
+  .mc-hint{font-size:9px;}
+}
+@media (max-height:520px){ .mc-row1{margin-bottom:6px;} .mc-store{margin-bottom:6px;} .mc-hint{margin-top:4px;} }
 :root[data-theme="light"] .mc-panel{background:#c8c8c8;}

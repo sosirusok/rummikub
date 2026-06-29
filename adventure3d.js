@@ -67,6 +67,7 @@
     fallStart: null, name: 'Player', flying: false };
   let inv = new Array(36).fill(null);   // {k,n}
   let hotbar = 0;
+  let armorEq = { head: null, chest: null, legs: null, feet: null, off: null };   // 장착(투구/갑옷/바지/부츠/보조손)
   let world = { time: 0 };
   let cfg = loadCfg();
 
@@ -395,10 +396,10 @@
     keys[e.code] = true;
     if (e.code === 'KeyE') { e.preventDefault(); toggleInventory(); }
     if (e.code === 'Space') e.preventDefault();
-    if (e.code.indexOf('Digit') === 0) { const n = Number(e.code.slice(5)); if (n >= 1 && n <= 9) { hotbar = n - 1; refreshHotbar(); } }
+    if (e.code.indexOf('Digit') === 0) { const n = Number(e.code.slice(5)); if (n >= 1 && n <= 9) { hotbar = n - 1; refreshHotbar(); flashHeldName(); } }
   }
   function onKeyUp(e) { keys[e.code] = false; }
-  function onWheel(e) { e.preventDefault(); hotbar = (hotbar + (e.deltaY > 0 ? 1 : -1) + 9) % 9; refreshHotbar(); }
+  function onWheel(e) { e.preventDefault(); hotbar = (hotbar + (e.deltaY > 0 ? 1 : -1) + 9) % 9; refreshHotbar(); flashHeldName(); }
   function relPos(e) { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
   const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
   function onDown(e) {
@@ -627,6 +628,7 @@
   function hurtPlayer(dmg, cause) {
     if (P.hp <= 0) return;
     if (P.hurtT > 0.2 && cause !== 'starve' && cause !== 'drown' && cause !== 'lava' && cause !== 'fall') return;   // 무적프레임
+    if (cause !== 'starve' && cause !== 'drown') { const p = armorPoints(); if (p > 0) dmg = dmg * (1 - Math.min(0.8, p * 0.04)); }   // 방어구 경감(1포인트=4%, 최대 80%)
     P.hp = Math.max(0, P.hp - dmg); P.hurtT = 0.5; if (cause !== 'starve' && cause !== 'drown') addExhaustion(0.1);
     if (navigator.vibrate) try { navigator.vibrate(30); } catch (e) {}
     if (P.hp <= 0) { onDeath(cause); }
@@ -831,11 +833,12 @@
       <div class="adv3-hurt" id="adv3hurt"></div>
       <div class="adv3-cross">+</div>
       <div class="adv3-top">
-        <div class="adv3-vitals"><div class="adv3-hp" id="adv3hp"></div><div class="adv3-food" id="adv3food"></div></div>
+        <div class="adv3-vitals"><div class="adv3-armor" id="adv3armor"></div><div class="adv3-hp" id="adv3hp"></div><div class="adv3-food" id="adv3food"></div></div>
         <div class="adv3-topbtns"><button class="adv-ibtn" data-act="adv3_inv">🎒</button><button class="adv-ibtn" data-act="adv_exit">✕</button></div>
       </div>
       ${isTouch ? `<div class="adv3-jump" data-act="adv3_jump">⤒</div>` : `<div class="adv3-hint">WASD 이동 · 마우스 시점 · 좌클릭 꾹 파괴 · 우클릭 설치/사용 · 휠/숫자 핫바 · Ctrl 달리기 · E 가방</div>`}
       <img class="adv3-hand" id="adv3hand" alt="">
+      <div class="adv3-itemname" id="adv3itemname"></div>
       <div class="adv-hotbar" id="adv3hotbar"></div>
     </section>`;
   }
@@ -848,13 +851,22 @@
   }
   function refreshHotbar() {
     const el = document.getElementById('adv3hotbar'); if (!el) return; let h = '';
-    for (let i = 0; i < 9; i++) { const s = inv[i]; const sel = i === hotbar ? ' is-sel' : ''; h += `<button class="adv-slot${sel}" data-act="adv3_hot" data-i="${i}">${s ? `<img src="${icon(s.k)}"><span class="adv-cnt">${s.n > 1 ? s.n : ''}</span>` : ''}</button>`; }
+    for (let i = 0; i < 9; i++) { const s = inv[i]; const sel = i === hotbar ? ' is-sel' : ''; const nm = s ? esc(itemName(s.k)) : ''; h += `<button class="adv-slot${sel}" data-act="adv3_hot" data-i="${i}" title="${nm}">${s ? `<img src="${icon(s.k)}"><span class="adv-cnt">${s.n > 1 ? s.n : ''}</span>` : ''}</button>`; }
     el.innerHTML = h; updateHand();
+  }
+  function itemName(k) { try { return (window.advKor && window.advKor(k)) || k; } catch (e) { return k; } }
+  let _nameT = null;
+  function flashHeldName() {
+    const el = document.getElementById('adv3itemname'); if (!el) return;
+    const s = inv[hotbar]; if (!s) { el.classList.remove('show'); return; }
+    el.textContent = itemName(s.k) + (s.n > 1 ? ' ×' + s.n : ''); el.classList.add('show');
+    clearTimeout(_nameT); _nameT = setTimeout(() => { const e2 = document.getElementById('adv3itemname'); if (e2) e2.classList.remove('show'); }, 1800);
   }
   function updateHUD() {
     const el = document.getElementById('adv3hp'); if (!el) return;
     let s = ''; for (let i = 0; i < 10; i++) { const v = P.hp - i * 2; s += (v >= 2 ? '❤️' : v === 1 ? '💗' : '🖤'); } el.textContent = s;
     const fe = document.getElementById('adv3food'); if (fe) { let f = ''; for (let i = 0; i < 10; i++) { const v = P.hunger - i * 2; f += (v >= 2 ? '🍗' : v === 1 ? '🦴' : '▫️'); } fe.textContent = f; }
+    updateArmorClass();
   }
 
   /* ---------------- 아이콘(블록=아이소 큐브, 아이템=2D) ---------------- */
@@ -866,21 +878,44 @@
     const u = cv.toDataURL(); iconCache[key] = u; return u;
   }
   function texCanvas(name) { const cv = document.createElement('canvas'); cv.width = cv.height = 16; drawTex(cv.getContext('2d'), 0, 0, name); return cv; }
+  // 한 면(평행사변형)에 16×16 텍스처를 affine 변환으로 1번 매핑 + 음영(타일링 X → 반블럭처럼 안 보임)
+  function isoFace(c, img, A, B, C, shade) {
+    // A=원점, B=u축(가로 16px), C=v축(세로 16px) → 네번째 점 D=B+C-A
+    const D = [B[0] + C[0] - A[0], B[1] + C[1] - A[1]];
+    c.save();
+    c.beginPath(); c.moveTo(A[0], A[1]); c.lineTo(B[0], B[1]); c.lineTo(D[0], D[1]); c.lineTo(C[0], C[1]); c.closePath(); c.clip();
+    const ux = (B[0] - A[0]) / 16, uy = (B[1] - A[1]) / 16, vx = (C[0] - A[0]) / 16, vy = (C[1] - A[1]) / 16;
+    c.imageSmoothingEnabled = false; c.setTransform(ux, uy, vx, vy, A[0], A[1]); c.drawImage(img, 0, 0, 16, 16);
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    if (shade < 1) { c.fillStyle = 'rgba(0,0,0,' + (1 - shade).toFixed(2) + ')'; c.beginPath(); c.moveTo(A[0], A[1]); c.lineTo(B[0], B[1]); c.lineTo(D[0], D[1]); c.lineTo(C[0], C[1]); c.closePath(); c.fill(); }
+    c.restore();
+  }
   function drawCubeIcon(c, key, s) {
     const b = BYID[ID[key]]; const top = texCanvas(faceTexName(b, 'top')), side = texCanvas(faceTexName(b, 'side'));
-    // 간단 아이소 큐브
-    const cx = s / 2, w = s * 0.42, hh = s * 0.24;
-    function quad(img, pts, sh) { c.save(); c.globalAlpha = 1; const pat = c.createPattern(img, 'repeat'); c.fillStyle = pat || '#888'; c.beginPath(); c.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < 4; i++) c.lineTo(pts[i][0], pts[i][1]); c.closePath(); c.fill(); c.fillStyle = 'rgba(0,0,0,' + (1 - sh) + ')'; c.fill(); c.restore(); }
-    const T = s * 0.14, B = s * 0.86, M = s * 0.5;
-    quad(top, [[cx, T], [cx + w, T + hh], [cx, T + 2 * hh], [cx - w, T + hh]], 1.0);   // 윗면
-    quad(side, [[cx - w, T + hh], [cx, T + 2 * hh], [cx, B], [cx - w, B - hh]], 0.8);   // 좌면
-    quad(side, [[cx, T + 2 * hh], [cx + w, T + hh], [cx + w, B - hh], [cx, B]], 0.62);  // 우면
+    const cx = s / 2, hw = s * 0.40, mh = s * 0.225, topY = s * 0.10, sideH = s * 0.40;
+    // 윗면 꼭짓점(다이아몬드): Vt 위, Vr 우, Vb 아래중앙, Vl 좌
+    const Vt = [cx, topY], Vr = [cx + hw, topY + mh], Vb = [cx, topY + 2 * mh], Vl = [cx - hw, topY + mh];
+    // 아래로 내린 점(측면 하단)
+    const Vbd = [Vb[0], Vb[1] + sideH], Vld = [Vl[0], Vl[1] + sideH], Vrd = [Vr[0], Vr[1] + sideH];
+    isoFace(c, top, Vl, Vt, Vb, 1.0);     // 윗면(가장 밝게)
+    isoFace(c, side, Vl, Vb, Vld, 0.80);  // 좌측면
+    isoFace(c, side, Vb, Vr, Vbd, 0.60);  // 우측면(가장 어둡게)
+    void Vrd;
   }
   function drawItemIcon2(c, key, s) {
     const d = window.ADV_ITEMS && window.ADV_ITEMS[key]; const u = s / 16;
     const matCol = { wood: '#9c7a44', stone: '#9a9a9a', iron: '#dcdcdc', gold: '#f7d75c', diamond: '#5decd5' };
+    const armCol = { leather: '#8a5a32', gold: '#f7d75c', iron: '#cfcfcf', diamond: '#5decd5' };
     function rect(x, y, w, h, col) { c.fillStyle = col; c.fillRect(x * u, y * u, w * u, h * u); }
     if (d && d.tool) { const m = matCol[d.mat] || '#bbb'; rect(7, 7, 1.8, 8, '#6b4f2a'); if (d.tool === 'pickaxe') { rect(3, 4, 10, 2, m); rect(3, 4, 2, 3, m); rect(11, 4, 2, 3, m); } else if (d.tool === 'axe') { rect(8, 3, 4, 5, m); } else if (d.tool === 'shovel') { rect(7, 3, 3, 4, m); } else if (d.tool === 'sword') { rect(7.4, 2, 1.8, 9, m); rect(6, 10, 4, 1.8, '#6b4f2a'); } else rect(6, 4, 5, 6, m); return; }
+    if (d && d.armor != null && d.slot) {   // 방어구: 부위별 실루엣
+      const m = armCol[d.mat] || '#bbb', dk = 'rgba(0,0,0,.22)';
+      if (d.slot === 'head') { rect(4, 3, 8, 5, m); rect(3, 6, 10, 2, m); rect(5, 7, 6, 2, dk); }
+      else if (d.slot === 'chest') { rect(3, 3, 10, 2, m); rect(4, 4, 8, 8, m); rect(2, 4, 2, 5, m); rect(12, 4, 2, 5, m); rect(7, 5, 2, 6, dk); }
+      else if (d.slot === 'legs') { rect(4, 3, 8, 3, m); rect(4, 5, 3, 9, m); rect(9, 5, 3, 9, m); rect(7, 5, 2, 8, dk); }
+      else { rect(3, 7, 5, 4, m); rect(8, 7, 5, 4, m); rect(3, 11, 6, 2, m); rect(8, 11, 5, 2, m); }
+      return;
+    }
     if (d && d.food) { c.fillStyle = '#cc7a3a'; c.beginPath(); c.arc(s / 2, s / 2, s * 0.3, 0, 7); c.fill(); return; }
     c.fillStyle = '#b88'; c.beginPath(); c.arc(s / 2, s / 2, s * 0.28, 0, 7); c.fill();
   }
@@ -909,17 +944,34 @@
     }
     return null;
   }
-  function slotHTML(s, act, i, cls) { return `<button class="mc-slot${cls || ''}" data-act="${act}" data-i="${i}">${s ? `<img src="${icon(s.k)}"><span class="mc-cnt">${s.n > 1 ? s.n : ''}</span>` : ''}</button>`; }
+  function maxStack(k) { try { return (window.advStack && window.advStack(k)) || 64; } catch (e) { return 64; } }
+  // 슬롯 종류별 접근자(인벤/제작/방어구/보조손) — 좌/우클릭 통합 로직이 사용
+  function slotRef(kind, idx) {
+    if (kind === 'inv') return { get: () => inv[idx], set: v => { inv[idx] = v; } };
+    if (kind === 'grid') return { get: () => grid[idx], set: v => { grid[idx] = v; } };
+    if (kind === 'off') return { get: () => armorEq.off, set: v => { armorEq.off = v; } };
+    if (kind === 'armor') return { get: () => armorEq[idx], set: v => { armorEq[idx] = v; }, accept: k => { const d = window.advDef && window.advDef(k); return !!(d && d.slot === idx); }, max: 1 };
+    return null;
+  }
+  // 셀 HTML(data-sk 슬롯종류, data-si 인덱스/방어구키) — 이름 툴팁 포함
+  function cell(s, kind, idx, cls, placeholder) {
+    const nm = s ? esc(itemName(s.k)) : '';
+    const inner = s ? `<img src="${icon(s.k)}"><span class="mc-cnt">${s.n > 1 ? s.n : ''}</span>` : (placeholder ? `<span class="mc-ph">${placeholder}</span>` : '');
+    return `<button class="mc-slot${cls || ''}" data-sk="${kind}" data-si="${idx}" title="${nm}">${inner}</button>`;
+  }
   function renderInv() {
     const out = craftOutput();
     const cn = craftTable ? 9 : 4, cc = craftTable ? 3 : 2;
-    const craftCells = []; for (let i = 0; i < cn; i++) craftCells.push(slotHTML(grid[i], 'adv3_grid', i));
-    const outCell = `<button class="mc-slot mc-out" data-act="adv3_take">${out ? `<img src="${icon(out.out)}"><span class="mc-cnt">${out.count > 1 ? out.count : ''}</span>` : ''}</button>`;
-    const store = []; for (let i = 9; i < 36; i++) store.push(slotHTML(inv[i], 'adv3_islot', i));
-    const hot = []; for (let i = 0; i < 9; i++) hot.push(slotHTML(inv[i], 'adv3_islot', i, ' mc-hot'));
-    const carryB = carry ? `<div class="mc-carry"><img src="${icon(carry.k)}"><span>${carry.n}</span><button class="mc-drop" data-act="adv3_drop">내려놓기</button></div>` : '';
+    const craftCells = []; for (let i = 0; i < cn; i++) craftCells.push(cell(grid[i], 'grid', i));
+    const outCell = `<button class="mc-slot mc-out" data-sk="out" data-si="0" title="${out ? esc(itemName(out.out)) : ''}">${out ? `<img src="${icon(out.out)}"><span class="mc-cnt">${out.count > 1 ? out.count : ''}</span>` : ''}</button>`;
+    const arm = ['head', 'chest', 'legs', 'feet'].map((sk, j) => cell(armorEq[sk], 'armor', sk, ' mc-arm', ['🪖', '👕', '👖', '🥾'][j]));
+    const offCell = cell(armorEq.off, 'off', 0, ' mc-off', '🛡');
+    const store = []; for (let i = 9; i < 36; i++) store.push(cell(inv[i], 'inv', i));
+    const hot = []; for (let i = 0; i < 9; i++) hot.push(cell(inv[i], 'inv', i, ' mc-hot'));
+    const carryB = carry ? `<div class="mc-carry"><img src="${icon(carry.k)}"><span>${carry.n}</span> ${esc(itemName(carry.k))}<button class="mc-drop" data-act="adv3_drop">버리기</button></div>` : '';
     const html = `<div class="mc-panel">
         <div class="mc-row1">
+          <div class="mc-armor">${arm.join('')}<div class="mc-offwrap">${offCell}</div></div>
           <div class="mc-craft mc-c${cc}">${craftCells.join('')}</div>
           <div class="mc-arrow">▶</div>
           <div class="mc-outwrap">${outCell}</div>
@@ -928,34 +980,66 @@
         <div class="mc-hot">${hot.join('')}</div>
         ${carryB}
         <button class="mc-x" data-act="adv3_close">✕</button>
-        <div class="mc-hint">${craftTable ? '제작대 3×3' : '2×2'} · 아이템 탭→들기, 칸 탭→놓기</div>
+        <div class="mc-hint">${craftTable ? '제작대 3×3' : '2×2'} · 좌클릭=전체 집기/놓기·교체 · 우클릭=절반/한 개 · 방어구칸=장착</div>
       </div>`;
     let w = document.getElementById('adv3invwrap');
-    if (!w) { w = document.createElement('div'); w.id = 'adv3invwrap'; w.className = 'mc-wrap'; w.addEventListener('pointerdown', e => { if (e.target === w) closeInv(); }); document.body.appendChild(w); }
+    if (!w) {
+      w = document.createElement('div'); w.id = 'adv3invwrap'; w.className = 'mc-wrap';
+      w.addEventListener('pointerdown', onInvPointer);
+      w.addEventListener('contextmenu', e => e.preventDefault());   // 우클릭 메뉴 억제
+      document.body.appendChild(w);
+    }
     w.innerHTML = html;
   }
-  function invItemTap(i) {
-    const s = inv[i]; if (carry) { // 들고있는 것을 인벤에 합치기/스왑
-      if (!s) { inv[i] = carry; carry = null; } else if (s.k === carry.k) { s.n += carry.n; carry = null; } else { inv[i] = carry; carry = { k: s.k, n: s.n }; }
-    } else { if (!s) return; carry = { k: s.k, n: s.n }; inv[i] = null; }
-    refreshHotbar(); renderInv();
+  function onInvPointer(e) {
+    const w = document.getElementById('adv3invwrap');
+    if (e.target === w) { closeInv(); return; }                       // 빈 곳 → 닫기
+    const sl = e.target.closest('.mc-slot');
+    if (!sl) return;                                                  // 닫기/버리기 버튼은 data-act 로 처리(전역)
+    e.preventDefault(); e.stopPropagation();                          // 전역 탭 시스템 차단(좌클릭 중복 방지)
+    const right = (e.button === 2) || (e.button == null && e.ctrlKey);
+    slotClick(sl.dataset.sk, sl.dataset.si, right);
   }
-  function gridTap(i) {
-    if (carry) { const g = grid[i]; if (!g) { grid[i] = { k: carry.k, n: 1 }; carry.n--; if (carry.n <= 0) carry = null; } else if (g.k === carry.k) { g.n++; carry.n--; if (carry.n <= 0) carry = null; } else { /* 교체: 기존 회수 */ addItem(g.k, g.n); grid[i] = { k: carry.k, n: 1 }; carry.n--; if (carry.n <= 0) carry = null; } }
-    else { const g = grid[i]; if (g) { if (!carry) { carry = { k: g.k, n: g.n }; grid[i] = null; } } }
-    renderInv();
+  // 마인크래프트식 좌/우클릭 인벤 조작
+  function slotClick(kind, idx, right) {
+    if (kind === 'out') { takeOutput(); return; }
+    if (kind === 'inv' || kind === 'grid') { /* idx는 숫자 */ idx = Number(idx); }
+    const ref = slotRef(kind, idx); if (!ref) return;
+    const max = ref.max || (carry ? maxStack(carry.k) : 64);
+    let s = ref.get();
+    if (!carry) {
+      if (!s) return;
+      if (right && s.n > 1) { const half = Math.ceil(s.n / 2); carry = { k: s.k, n: half }; s.n -= half; ref.set(s.n > 0 ? s : null); }
+      else { carry = { k: s.k, n: s.n }; ref.set(null); }
+    } else {
+      if (ref.accept && !ref.accept(carry.k)) { refreshHotbar(); renderInv(); return; }   // 방어구칸: 맞는 부위만
+      if (!s) {
+        if (right) { ref.set({ k: carry.k, n: 1 }); carry.n--; if (carry.n <= 0) carry = null; }
+        else { const put = Math.min(carry.n, max); ref.set({ k: carry.k, n: put }); carry.n -= put; if (carry.n <= 0) carry = null; }
+      } else if (s.k === carry.k) {
+        if (s.n < max) { const add = right ? 1 : Math.min(max - s.n, carry.n); s.n += add; carry.n -= add; if (carry.n <= 0) carry = null; }
+      } else {
+        if (!right && carry.n <= max) { ref.set({ k: carry.k, n: carry.n }); carry = { k: s.k, n: s.n }; }   // 교체(좌클릭)
+      }
+    }
+    refreshHotbar(); updateArmorClass(); renderInv();
   }
   function takeOutput() {
     const out = craftOutput(); if (!out) return;
+    // 손에 들고 있으면 같은 종류만 누적 가능
+    if (carry && (carry.k !== out.out || carry.n + out.count > maxStack(out.out))) return;
     for (const [k, n] of out.need) { let rem = n; for (let i = 0; i < 9; i++) { if (grid[i] && grid[i].k === k) { const d = Math.min(grid[i].n, rem); grid[i].n -= d; rem -= d; if (grid[i].n <= 0) grid[i] = null; } } }
-    addItem(out.out, out.count); renderInv();
+    if (carry) carry.n += out.count; else carry = { k: out.out, n: out.count };
+    refreshHotbar(); renderInv();
   }
+  function armorPoints() { let p = 0; for (const sk of ['head', 'chest', 'legs', 'feet']) { const a = armorEq[sk]; if (a) { const d = window.advDef && window.advDef(a.k); if (d && d.armor) p += d.armor; } } return p; }
+  function updateArmorClass() { const el = document.getElementById('adv3armor'); if (el) { const p = armorPoints(); el.textContent = p > 0 ? '🛡'.repeat(Math.min(10, Math.ceil(p / 2))) : ''; } }
 
   /* ---------------- 세이브/서버 ---------------- */
   let _saveT = 0, _dirty = false;
   function scheduleSave() { _dirty = true; }
   function pState() { return { x: P.x, y: P.y, z: P.z, yaw: P.yaw, pitch: P.pitch, hp: P.hp, hunger: P.hunger, sat: P.sat, spawnX: P.spawnX, spawnZ: P.spawnZ }; }
-  function serialize() { const ov = {}; overlay.forEach((v, k) => ov[k] = v); return { p: pState(), inv, hotbar, overlay: ov }; }
+  function serialize() { const ov = {}; overlay.forEach((v, k) => ov[k] = v); return { p: pState(), inv, hotbar, armor: armorEq, overlay: ov }; }
   function saveNow() { try { localStorage.setItem(SAVE_KEY, JSON.stringify({ p: pState(), inv, hotbar })); } catch (e) {} cloudSavePlayer(); _dirty = false; }
   function loadLocal() { try { return JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch (e) { return null; } }
 
@@ -1007,8 +1091,8 @@
     })();
     raf = requestAnimationFrame(loop);
   }
-  function applyPlayer(d) { if (d.p) { P.x = d.p.x; P.y = d.p.y; P.z = d.p.z; P.yaw = d.p.yaw || 0; P.pitch = d.p.pitch || 0; P.hp = d.p.hp || 20; P.hunger = d.p.hunger != null ? d.p.hunger : 20; P.sat = d.p.sat != null ? d.p.sat : 5; P.spawnX = d.p.spawnX; P.spawnZ = d.p.spawnZ; } if (d.inv) inv = d.inv.map(s => s ? { k: s.k, n: s.n } : null); if (d.hotbar != null) hotbar = d.hotbar; }
-  function newPlayer() { inv = new Array(36).fill(null); P.x = 0.5; P.z = 0.5; P.y = surfaceH(0, 0) + 2; P.hp = 20; P.hunger = 20; P.sat = 5; P.exh = 0; P.spawnX = 0.5; P.spawnZ = 0.5; }   // 기본템 없음
+  function applyPlayer(d) { if (d.p) { P.x = d.p.x; P.y = d.p.y; P.z = d.p.z; P.yaw = d.p.yaw || 0; P.pitch = d.p.pitch || 0; P.hp = d.p.hp || 20; P.hunger = d.p.hunger != null ? d.p.hunger : 20; P.sat = d.p.sat != null ? d.p.sat : 5; P.spawnX = d.p.spawnX; P.spawnZ = d.p.spawnZ; } if (d.inv) inv = d.inv.map(s => s ? { k: s.k, n: s.n } : null); if (d.hotbar != null) hotbar = d.hotbar; if (d.armor) { for (const sk of ['head', 'chest', 'legs', 'feet', 'off']) armorEq[sk] = d.armor[sk] ? { k: d.armor[sk].k, n: d.armor[sk].n } : null; } }
+  function newPlayer() { inv = new Array(36).fill(null); armorEq = { head: null, chest: null, legs: null, feet: null, off: null }; P.x = 0.5; P.z = 0.5; P.y = surfaceH(0, 0) + 2; P.hp = 20; P.hunger = 20; P.sat = 5; P.exh = 0; P.spawnX = 0.5; P.spawnZ = 0.5; }   // 기본템 없음
   // 컬럼 최상단 고체 y (청크 생성 포함)
   function columnTop(x, z) { getChunk(Math.floor(x / CHUNK), Math.floor(z / CHUNK), true); let y = WORLD_H - 2; while (y > 1 && !blockSolid(getBlock(x, y, z))) y--; return y; }
   function findSafeSpawn(hasSaved) {
@@ -1049,10 +1133,7 @@
     switch (a) {
       case 'adv3_inv': toggleInventory(); return true;
       case 'adv3_close': closeInv(); return true;
-      case 'adv3_hot': hotbar = Number(el.dataset.i); refreshHotbar(); return true;
-      case 'adv3_islot': invItemTap(Number(el.dataset.i)); return true;
-      case 'adv3_grid': gridTap(Number(el.dataset.i)); return true;
-      case 'adv3_take': takeOutput(); return true;
+      case 'adv3_hot': hotbar = Number(el.dataset.i); refreshHotbar(); flashHeldName(); return true;
       case 'adv3_drop': if (carry) { addItem(carry.k, carry.n); carry = null; renderInv(); } return true;
       case 'adv3_jump': keys.Space = true; setTimeout(() => keys.Space = false, 120); return true;
     }
@@ -1060,7 +1141,15 @@
   }
 
   /* ---------------- 공개 API ---------------- */
-  if (typeof window !== 'undefined' && window.__ADV3_TEST) window.__adv3 = { addMob, P, mobs: () => mobs, hurtPlayer, eatFood, MOB, getBlock, genBlock, surfaceH, ID, BYID, blockSolid, chunkInfo: () => ({ n: chunks.size, meshed: Array.from(chunks.values()).filter(c => c.mesh).length, loaded }) };
+  if (typeof window !== 'undefined' && window.__ADV3_TEST) window.__adv3 = {
+    addMob, P, mobs: () => mobs, hurtPlayer, eatFood, MOB, getBlock, genBlock, surfaceH, ID, BYID, blockSolid,
+    chunkInfo: () => ({ n: chunks.size, meshed: Array.from(chunks.values()).filter(c => c.mesh).length, loaded }),
+    // 인벤/장비 검증용
+    icon, drawCubeIcon, openInventory, closeInv, renderInv, slotClick, takeOutput, armorPoints, craftOutput,
+    inv: () => inv, grid: () => grid, armor: () => armorEq, carry: () => carry,
+    setInv: (i, v) => { inv[i] = v; }, setGrid: (i, v) => { grid[i] = v; }, setCarry: v => { carry = v; },
+    setCraftTable: v => { craftTable = v; craftN = v ? 9 : 4; },
+  };
   window.adventure3dStart = start;
   window.adventure3dStop = stop;
   window.adventure3dRunning = function () { return running; };
