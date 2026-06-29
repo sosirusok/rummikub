@@ -63,7 +63,8 @@
   let netCh = null, netSend = null;
 
   const P = { x: 0.5, y: 70, z: 0.5, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, onGround: false,
-    w: 0.6, h: 1.8, eye: 1.62, hp: 20, hunger: 20, name: 'Player', flying: false };
+    w: 0.6, h: 1.8, eye: 1.62, hp: 20, hunger: 20, sat: 5, exh: 0, airT: 0, hurtT: 0, attackT: 0,
+    fallStart: null, name: 'Player', flying: false };
   let inv = new Array(36).fill(null);   // {k,n}
   let hotbar = 0;
   let world = { time: 0 };
@@ -375,12 +376,14 @@
     const p = relPos(e); const W = canvas.clientWidth;
     if (!isTouch) {
       if (!look.locked) { canvas.requestPointerLock && canvas.requestPointerLock(); return; }
-      if (e.button === 2) placeOrUse(); else mining = true;   // 좌클릭 꾹=캐기, 우클릭=설치/사용
+      if (e.button === 2) { placeOrUse(); return; }
+      const m = mobInFront(); if (m) { attackMob(m); return; }   // 좌클릭: 앞 몹 공격
+      mining = true;   // 아니면 꾹=캐기
       return;
     }
-    // 터치: 좌측 이동 조이스틱, 우측 = 꾹 캐기 / 탭 설치
+    // 터치: 좌측 이동 조이스틱, 우측 = (앞 몹이면 공격) 꾹 캐기 / 탭 설치
     if (p.x < W * 0.4 && move.id === -1) { move.active = true; move.id = e.pointerId; move.ox = move.x = p.x; move.oy = move.y = p.y; }
-    else if (look.id === -1) { look.id = e.pointerId; look.lx = p.x; look.ly = p.y; look.moved = 0; look.downT = performance.now(); mining = true; }
+    else if (look.id === -1) { look.id = e.pointerId; look.lx = p.x; look.ly = p.y; look.moved = 0; look.downT = performance.now(); look.attacked = false; const m = mobInFront(); if (m) { attackMob(m); look.attacked = true; } else mining = true; }
   }
   function onMove(e) {
     if (!isTouch) {
@@ -396,7 +399,7 @@
     if (e.pointerId === move.id) { move.active = false; move.id = -1; }
     else if (e.pointerId === look.id) {
       mining = false; breakProg = 0;
-      if (look.moved < 10 && (performance.now() - look.downT) < 200) placeOrUse();   // 짧은 탭 = 설치/사용
+      if (!look.attacked && look.moved < 10 && (performance.now() - look.downT) < 200) placeOrUse();   // 짧은 탭 = 설치/사용
       look.id = -1;
     }
   }
@@ -449,6 +452,13 @@
   function placeOrUse() {
     const t = raycast();
     if (t) { const id = getBlock(t.x, t.y, t.z); const b = BYID[id]; if (b && b.station) { openStation(b.station); swing(); return; } }
+    const held = inv[hotbar];
+    if (held) {
+      // 동물 먹이(번식)
+      const m = mobInFront(); if (m && MOB[m.type] && !MOB[m.type].hostile && MOB[m.type].breed === held.k && !m.baby && m.loveT <= 0) { feedMob(m); swing(); return; }
+      // 음식 먹기
+      const it = window.ADV_ITEMS[held.k]; if (it && it.food) { if (eatFood(hotbar)) { swing(); return; } }
+    }
     if (placeBlock()) swing();
   }
   function openStation(st) { if (st === 'craft') openInventory('table'); else if (st === 'furnace') toast('화로는 곧 추가돼요'); else if (st === 'chest') toast('상자는 곧 추가돼요'); }
@@ -457,7 +467,7 @@
     const harvest = canHarvest(key, inv[hotbar]);
     setBlock(x, y, z, 0);
     settleGravity(x, y + 1, z);                    // 위 모래/자갈 낙하
-    swing();
+    swing(); addExhaustion(0.005);                 // 블록 파괴 탈진
     if (!harvest) return;                          // 요구 도구 미달 → 드롭 없음
     if (def) {
       const drops = def.drops || [{ i: key, c: 1 }];
@@ -519,10 +529,20 @@
     // 점프/중력
     P.vy -= 26 * dt; if (P.vy < -55) P.vy = -55;
     const wantJump = keys.Space || (move.active && (move.y - move.oy) < -34);
-    if (wantJump && P.onGround && !invOpen) { P.vy = 8.5; P.onGround = false; }
+    const wasGround = P.onGround;
+    if (wantJump && P.onGround && !invOpen) { P.vy = 8.5; P.onGround = false; addExhaustion(sprint ? 0.2 : 0.05); }   // 점프 탈진
+    const px = P.x, pz = P.z;
     moveAxis('x', P.vx * dt); moveAxis('z', P.vz * dt); P.onGround = false; moveAxis('y', P.vy * dt);
-    if (P.y < -30) { respawn(); }
+    // 이동거리 탈진(달리기 0.1/m, 수영 0.01/m)
+    const moved = Math.hypot(P.x - px, P.z - pz);
+    if (moved > 0.0005) { if (headInWater() || feetInWater()) addExhaustion(0.01 * moved); else if (sprint) addExhaustion(0.1 * moved); }
+    // 낙하 데미지 추적
+    if (!wasGround && P.onGround) { if (P.fallStart != null) { const d = P.fallStart - P.y; const dmg = Math.floor(d - 3); if (dmg > 0 && !feetInWater()) hurtPlayer(dmg, 'fall'); } P.fallStart = null; }
+    if (!P.onGround) { if (P.vy <= 0 && P.fallStart == null) P.fallStart = P.y; if (P.fallStart != null && P.y > P.fallStart) P.fallStart = P.y; }
+    if (P.y < -30) hurtPlayer(99, 'void');
   }
+  function feetInWater() { return getBlock(Math.floor(P.x), Math.floor(P.y + 0.2), Math.floor(P.z)) === ID.water; }
+  function headInWater() { return getBlock(Math.floor(P.x), Math.floor(P.y + P.h - 0.2), Math.floor(P.z)) === ID.water; }
   function moveAxis(ax, amt) {
     if (amt === 0) return; P[ax] += amt;
     const minX = P.x - P.w / 2, maxX = P.x + P.w / 2, minZ = P.z - P.w / 2, maxZ = P.z + P.w / 2, minY = P.y, maxY = P.y + P.h;
@@ -534,7 +554,183 @@
       if (ax === 'z') { if (amt > 0) P.z = z - P.w / 2 - 0.0001; else P.z = z + 1 + P.w / 2 + 0.0001; P.vz = 0; return; }
     }
   }
-  function respawn() { const sy = surfaceH(Math.floor(P.x), Math.floor(P.z)); P.y = sy + 2; P.vy = 0; P.hp = cfg.startHp || 20; }
+  function respawn() {
+    const sx = P.spawnX != null ? P.spawnX : 0.5, sz = P.spawnZ != null ? P.spawnZ : 0.5;
+    P.x = sx; P.z = sz; P.y = surfaceH(Math.floor(sx), Math.floor(sz)) + 2; P.vx = P.vy = P.vz = 0;
+    P.hp = 20; P.hunger = 20; P.sat = 5; P.exh = 0; P.airT = 0; P.fallStart = null;
+    if (!cfg.keepInvOnDeath) { inv = new Array(36).fill(null); refreshHotbar(); }
+    updateHUD();
+  }
+
+  /* ---------------- 생존(체력/허기/포화/탈진) — 1.10.2 정확값 ---------------- */
+  function addExhaustion(v) {
+    P.exh += v;
+    while (P.exh >= 4) { P.exh -= 4; if (P.sat > 0) P.sat = Math.max(0, P.sat - 1); else P.hunger = Math.max(0, P.hunger - 1); }
+  }
+  const FOOD_SAT = { bread: 6, cooked_porkchop: 12.8, cooked_beef: 12.8, cooked_chicken: 7.2, raw_porkchop: 1.8, raw_beef: 1.8, raw_chicken: 1.2, apple: 2.4, golden_apple: 9.6, carrot: 3.6, potato: 0.6, baked_potato: 6, cookie: 0.4, melon_slice: 1.2, raw_fish: 1.2, cooked_fish: 6, pumpkin_pie: 4.8, rotten_flesh: 0.8 };
+  function eatFood(slot) {
+    const s = inv[slot]; if (!s) return false; const it = window.ADV_ITEMS[s.k]; if (!it || !it.food) return false;
+    if (P.hunger >= 20 && !it.regen) return false;
+    P.hunger = Math.min(20, P.hunger + it.food);
+    P.sat = Math.min(P.hunger, P.sat + (FOOD_SAT[s.k] != null ? FOOD_SAT[s.k] : it.food * 1.2));
+    if (it.regen) P.hp = Math.min(20, P.hp + 4);
+    if (it.poison && Math.random() < it.poison) hurtPlayer(1, 'poison');
+    s.n--; if (s.n <= 0) inv[slot] = null; refreshHotbar(); updateHUD(); scheduleSave(); return true;
+  }
+  let _regenT = 0, _starveT = 0, _drownT = 0, _hurtCss = 0;
+  function updateVitals(dt) {
+    // 자연재생: 허기>=18 → 4초마다 1HP + 탈진 6.0 (1.10.2)
+    if (P.hunger >= 18 && P.hp < 20) { _regenT += dt; if (_regenT >= 4) { _regenT = 0; P.hp = Math.min(20, P.hp + 1); addExhaustion(6.0); } } else _regenT = 0;
+    // 포화 빠른재생(허기 만땅 & 포화>0): 0.5초마다 1HP + 탈진 6.0
+    if (P.hunger >= 20 && P.sat > 0 && P.hp < 20) { _regenT += dt; if (_regenT >= 0.5) { _regenT = 0; P.hp = Math.min(20, P.hp + 1); addExhaustion(6.0); } }
+    // 굶주림: 허기0 → 4초마다 1피해(Normal: 체력 1칸까지)
+    if (P.hunger <= 0) { _starveT += dt; if (_starveT >= 4) { _starveT = 0; if (P.hp > 1) hurtPlayer(1, 'starve'); } } else _starveT = 0;
+    // 익사: 머리 물속 → 15초 후 1초마다 2피해
+    if (headInWater()) { P.airT += dt; if (P.airT > 15) { _drownT += dt; if (_drownT >= 1) { _drownT = 0; hurtPlayer(2, 'drown'); } } } else { P.airT = Math.max(0, P.airT - dt * 3); _drownT = 0; }
+    // 용암: 4피해/0.5초
+    const feet = getBlock(Math.floor(P.x), Math.floor(P.y + 0.2), Math.floor(P.z));
+    if (BYID[feet] && BYID[feet].key === 'lava') { P._lavaT = (P._lavaT || 0) + dt; if (P._lavaT >= 0.5) { P._lavaT = 0; hurtPlayer(4, 'lava'); } }
+    if (P.hurtT > 0) P.hurtT -= dt;
+    if (P.attackT > 0) P.attackT -= dt;
+    // 데미지 비네트
+    const el = document.getElementById('adv3hurt'); if (el) { const a = P.hurtT > 0 ? Math.min(0.5, P.hurtT) : 0; if (Math.abs(a - _hurtCss) > 0.02) { _hurtCss = a; el.style.opacity = a; } }
+  }
+  function hurtPlayer(dmg, cause) {
+    if (P.hp <= 0) return;
+    if (P.hurtT > 0.2 && cause !== 'starve' && cause !== 'drown' && cause !== 'lava' && cause !== 'fall') return;   // 무적프레임
+    P.hp = Math.max(0, P.hp - dmg); P.hurtT = 0.5; if (cause !== 'starve' && cause !== 'drown') addExhaustion(0.1);
+    if (navigator.vibrate) try { navigator.vibrate(30); } catch (e) {}
+    if (P.hp <= 0) { onDeath(cause); }
+    updateHUD();
+  }
+  function onDeath(cause) { if (!cfg.keepInvOnDeath) { /* 인벤 드롭 생략(즉시 리셋) */ } toast('사망 — 리스폰', false); respawn(); }
+
+  /* ---------------- 몹 — 1.10.2 수치 ---------------- */
+  const MOB = {
+    pig:     { kor: '돼지', hostile: false, hp: 10, dmg: 0, speed: 4.0, w: 0.9, h: 0.9, col: 0xe6a8ad, drops: [{ i: 'raw_porkchop', min: 1, max: 3 }], breed: 'wheat', biped: false },
+    cow:     { kor: '소', hostile: false, hp: 10, dmg: 0, speed: 3.4, w: 0.9, h: 1.4, col: 0x4a3a2c, drops: [{ i: 'raw_beef', min: 1, max: 3 }, { i: 'leather', min: 0, max: 2 }], breed: 'wheat', biped: false },
+    sheep:   { kor: '양', hostile: false, hp: 8, dmg: 0, speed: 3.4, w: 0.9, h: 1.3, col: 0xeceff0, drops: [{ i: 'raw_beef', min: 1, max: 2 }, { i: 'wool', min: 1, max: 1 }], breed: 'wheat', biped: false },
+    chicken: { kor: '닭', hostile: false, hp: 4, dmg: 0, speed: 3.5, w: 0.4, h: 0.7, col: 0xf2f2f2, drops: [{ i: 'raw_chicken', min: 1, max: 1 }, { i: 'feather', min: 0, max: 2 }], breed: 'seeds', biped: true },
+    zombie:  { kor: '좀비', hostile: true, hp: 20, dmg: 3, speed: 3.5, w: 0.6, h: 1.95, col: 0x3f7a4f, burn: true, drops: [{ i: 'rotten_flesh', min: 0, max: 2 }], biped: true },
+    skeleton:{ kor: '스켈레톤', hostile: true, hp: 20, dmg: 2, speed: 3.5, w: 0.6, h: 1.99, col: 0xd5d8d6, burn: true, ranged: true, drops: [{ i: 'bone', min: 0, max: 2 }, { i: 'arrow', min: 0, max: 2 }], biped: true },
+    creeper: { kor: '크리퍼', hostile: true, hp: 20, dmg: 0, speed: 3.5, w: 0.6, h: 1.7, col: 0x5fa05f, explode: true, drops: [{ i: 'gunpowder', min: 0, max: 2 }], biped: true },
+    spider:  { kor: '거미', hostile: true, hp: 16, dmg: 2, speed: 4.6, w: 1.4, h: 0.9, col: 0x39312e, climb: true, drops: [{ i: 'string', min: 0, max: 2 }], biped: false },
+  };
+  let mobs = [], mobMatCache = {}, _spawnT = 0;
+  function mobMat(col) { if (!mobMatCache[col]) mobMatCache[col] = new THREE.MeshBasicMaterial({ color: col }); return mobMatCache[col]; }
+  function buildMobMesh(type) {
+    const md = MOB[type]; const g = new THREE.Group();
+    const bodyMat = mobMat(md.col);
+    if (md.biped) {
+      const body = new THREE.Mesh(new THREE.BoxGeometry(md.w, md.h * 0.55, md.w * 0.6), bodyMat); body.position.y = md.h * 0.5; g.add(body);
+      const head = new THREE.Mesh(new THREE.BoxGeometry(md.w * 0.9, md.w * 0.9, md.w * 0.9), mobMat(shade(md.col, 1.08))); head.position.y = md.h * 0.85; g.add(head);
+      const legGeo = new THREE.BoxGeometry(md.w * 0.35, md.h * 0.45, md.w * 0.35); const lm = mobMat(shade(md.col, 0.8));
+      [-1, 1].forEach(s => { const l = new THREE.Mesh(legGeo, lm); l.position.set(s * md.w * 0.22, md.h * 0.22, 0); g.add(l); });
+    } else {
+      const body = new THREE.Mesh(new THREE.BoxGeometry(md.w * 0.7, md.h * 0.7, md.w), bodyMat); body.position.y = md.h * 0.55; g.add(body);
+      const head = new THREE.Mesh(new THREE.BoxGeometry(md.w * 0.6, md.h * 0.55, md.w * 0.45), mobMat(shade(md.col, 1.08))); head.position.set(0, md.h * 0.6, md.w * 0.5); g.add(head);
+      const legGeo = new THREE.BoxGeometry(md.w * 0.22, md.h * 0.4, md.w * 0.22); const lm = mobMat(shade(md.col, 0.8));
+      [[-1, 1], [1, 1], [-1, -1], [1, -1]].forEach(o => { const l = new THREE.Mesh(legGeo, lm); l.position.set(o[0] * md.w * 0.28, md.h * 0.2, o[1] * md.w * 0.32); g.add(l); });
+    }
+    return g;
+  }
+  function shade(col, f) { const r = Math.min(255, ((col >> 16) & 255) * f) | 0, gr = Math.min(255, ((col >> 8) & 255) * f) | 0, b = Math.min(255, (col & 255) * f) | 0; return (r << 16) | (gr << 8) | b; }
+  function spawnMobs(dt) {
+    _spawnT += dt; if (_spawnT < 1.5) return; _spawnT = 0;
+    const night = dayFactor() < 0.45; let nH = 0, nP = 0;
+    for (const m of mobs) { if (MOB[m.type].hostile) nH++; else nP++; }
+    const want = Math.random();
+    let type = null;
+    if ((night || Math.random() < 0.3) && nH < 16 && want < 0.7) type = ['zombie', 'skeleton', 'creeper', 'spider'][Math.floor(Math.random() * 4)];
+    else if (!night && nP < 10 && want < 0.4) type = ['pig', 'cow', 'sheep', 'chicken'][Math.floor(Math.random() * 4)];
+    if (!type) return;
+    const md = MOB[type]; const ang = Math.random() * Math.PI * 2, r = 16 + Math.random() * 24;
+    const sx = Math.floor(P.x + Math.cos(ang) * r), sz = Math.floor(P.z + Math.sin(ang) * r);
+    // 지면 탐색
+    let y = Math.min(WORLD_H - 3, Math.floor(P.y + 8)); while (y > 2 && getBlock(sx, y, sz) === 0) y--;
+    const ground = getBlock(sx, y, sz), surf = surfaceH(sx, sz);
+    if (!blockSolid(ground)) return;
+    if (getBlock(sx, y + 1, sz) !== 0 || getBlock(sx, y + 2, sz) !== 0) return;
+    if (md.hostile) { if (!night && y > surf - 3) return; }                    // 적대: 밤이거나 지하
+    else { if (BYID[ground].key !== 'grass' || y < surf - 1) return; }          // 수동: 밝은 지표 잔디
+    addMob(type, sx + 0.5, y + 1, sz + 0.5);
+  }
+  function addMob(type, x, y, z, baby) {
+    const md = MOB[type]; const g = buildMobMesh(type); if (baby) g.scale.setScalar(0.5); scene.add(g);
+    mobs.push({ type, x, y, z, vx: 0, vy: 0, vz: 0, yaw: 0, hp: md.hp, onGround: false, group: g, w: md.w, h: md.h, baby: baby ? 1 : 0, growT: baby ? 1200 : 0, loveT: 0, fleeT: 0, fuse: 0, atkT: 0, wT: 0, wdir: 0, hurtT: 0, fallStart: null });
+  }
+  function entMoveAxis(e, ax, amt) {
+    if (amt === 0) return; e[ax] += amt;
+    const minX = e.x - e.w / 2, maxX = e.x + e.w / 2, minZ = e.z - e.w / 2, maxZ = e.z + e.w / 2, minY = e.y, maxY = e.y + e.h;
+    for (let x = Math.floor(minX); x <= Math.floor(maxX); x++) for (let z = Math.floor(minZ); z <= Math.floor(maxZ); z++) for (let y = Math.floor(minY); y <= Math.floor(maxY); y++) {
+      if (!blockSolid(getBlock(x, y, z))) continue;
+      if (ax === 'y') { if (amt > 0) { e.y = y - e.h - 1e-4; e.vy = 0; } else { e.y = y + 1 + 1e-4; e.vy = 0; e.onGround = true; } return; }
+      if (ax === 'x') { if (amt > 0) e.x = x - e.w / 2 - 1e-4; else e.x = x + 1 + e.w / 2 + 1e-4; e.vx = 0; e.blocked = true; return; }
+      if (ax === 'z') { if (amt > 0) e.z = z - e.w / 2 - 1e-4; else e.z = z + 1 + e.w / 2 + 1e-4; e.vz = 0; e.blocked = true; return; }
+    }
+  }
+  function entPhysics(e, dt) {
+    e.vy -= 26 * dt; if (e.vy < -55) e.vy = -55; e.blocked = false; e.onGround = false;
+    const sy = e.y; entMoveAxis(e, 'x', e.vx * dt); entMoveAxis(e, 'z', e.vz * dt); entMoveAxis(e, 'y', e.vy * dt);
+    if (e.onGround && e.fallStart != null) { const d = e.fallStart - e.y; const dm = Math.floor(d - 3); if (dm > 0) e.hp -= dm; e.fallStart = null; }
+    if (!e.onGround) { if (e.vy <= 0 && e.fallStart == null) e.fallStart = sy; if (e.fallStart != null && e.y > e.fallStart) e.fallStart = e.y; }
+  }
+  function exposedToSky(x, y, z) { for (let yy = y + 1; yy < WORLD_H; yy++) if (blockOpaque(getBlock(x, yy, z))) return false; return true; }
+  function updateMobs(dt) {
+    spawnMobs(dt);
+    const bright = dayFactor() > 0.8;
+    for (let i = mobs.length - 1; i >= 0; i--) {
+      const m = mobs[i]; const md = MOB[m.type];
+      const dx = P.x - m.x, dz = P.z - m.z, dist = Math.hypot(dx, dz), distY = Math.abs(P.y - m.y);
+      if (dist > 120) { scene.remove(m.group); mobs.splice(i, 1); continue; }
+      // 좀비/스켈레톤 낮 화상
+      if (md.burn && bright && exposedToSky(Math.floor(m.x), Math.floor(m.y), Math.floor(m.z))) { m.burnT = (m.burnT || 0) + dt; if (m.burnT > 0.5) { m.burnT = 0; m.hp -= 1; m.hurtT = 0.2; } }
+      let dir = 0;
+      if (md.hostile) {
+        if (dist < 16 && distY < 6) {
+          const s = Math.sign(dx) || 1, sz2 = Math.sign(dz) || 0; const ln = dist || 1;
+          m.vx = (dx / ln) * md.speed; m.vz = (dz / ln) * md.speed; m.yaw = Math.atan2(dx, dz);
+          if (dist < 1.4 && distY < 2) {
+            if (md.explode) { m.fuse += dt; if (m.fuse > 1.5) { creeperBoom(m); scene.remove(m.group); mobs.splice(i, 1); continue; } }
+            else { m.atkT -= dt; if (m.atkT <= 0) { m.atkT = 1.0; hurtPlayer(md.dmg, m.type); } }
+          } else if (md.explode) m.fuse = Math.max(0, m.fuse - dt);
+          // 스켈레톤 원거리
+          if (md.ranged && dist > 2 && dist < 15) { m.atkT -= dt; if (m.atkT <= 0) { m.atkT = 2.0; hurtPlayer(md.dmg, m.type); } }
+        } else { wander(m, dt, md); }
+      } else {
+        if (m.fleeT > 0) { m.fleeT -= dt; const ln = dist || 1; m.vx = -(dx / ln) * md.speed * 1.3; m.vz = -(dz / ln) * md.speed * 1.3; m.yaw = Math.atan2(-dx, -dz); }
+        else wander(m, dt, md);
+        if (m.loveT > 0) { m.loveT -= dt; tryBreed(m); }
+        if (m.baby) { m.growT -= dt; if (m.growT <= 0) { m.baby = 0; m.group.scale.setScalar(1); } }
+      }
+      // 턱 점프 / 거미 등반
+      if (m.blocked && m.onGround) { m.vy = (md.climb ? 7 : 8); }
+      entPhysics(m, dt);
+      if (m.hurtT > 0) m.hurtT -= dt;
+      if (m.y < -20 || m.hp <= 0) { if (m.hp <= 0) mobDeath(m); scene.remove(m.group); mobs.splice(i, 1); continue; }
+      // 메시 갱신
+      m.group.position.set(m.x, m.y, m.z); m.group.rotation.y = m.yaw;
+      if (m.hurtT > 0) m.group.scale.setScalar((m.baby ? 0.5 : 1) * 1.05); else if (!m.baby) m.group.scale.setScalar(1);
+    }
+  }
+  function wander(m, dt, md) { m.wT -= dt; if (m.wT <= 0) { m.wT = 1.5 + Math.random() * 2.5; m.wdir = Math.random() < 0.4 ? 0 : (Math.random() * Math.PI * 2); m.wmove = Math.random() < 0.6; } if (m.wmove) { m.vx = Math.sin(m.wdir) * md.speed * 0.4; m.vz = Math.cos(m.wdir) * md.speed * 0.4; m.yaw = m.wdir; } else { m.vx = 0; m.vz = 0; } }
+  function creeperBoom(m) {
+    const R = 3.5;
+    for (let dx = -4; dx <= 4; dx++) for (let dy = -4; dy <= 4; dy++) for (let dz = -4; dz <= 4; dz++) {
+      if (dx * dx + dy * dy + dz * dz > R * R) continue; const x = Math.floor(m.x) + dx, y = Math.floor(m.y) + dy, z = Math.floor(m.z) + dz;
+      const id = getBlock(x, y, z); if (id !== 0 && id !== ID.bedrock && BYID[id]) setBlock(x, y, z, 0);
+    }
+    const pd = Math.hypot(P.x - m.x, P.y - m.y, P.z - m.z); if (pd < R + 1) hurtPlayer(Math.round(24 * (1 - pd / (R + 1))), 'creeper');
+  }
+  function mobDeath(m) { const md = MOB[m.type]; for (const dr of (md.drops || [])) { let cnt = dr.min + Math.floor(Math.random() * (dr.max - dr.min + 1)); if (cnt > 0) addItem(dr.i, cnt); } }
+  function mobInFront() {
+    const d = lookDir(); let best = null, bestDot = 0.86;
+    for (const m of mobs) { const vx = (m.x) - P.x, vy = (m.y + m.h / 2) - (P.y + P.eye), vz = (m.z) - P.z; const dist = Math.hypot(vx, vy, vz); if (dist > 3.6 || dist < 0.01) continue; const dot = (vx * d.x + vy * d.y + vz * d.z) / dist; if (dot > bestDot) { bestDot = dot; best = m; } }
+    return best;
+  }
+  function attackMob(m) { const held = inv[hotbar]; const it = held && window.ADV_ITEMS[held.k]; const dmg = (it && it.dmg) ? it.dmg : 1; m.hp -= dmg; m.hurtT = 0.25; const ln = Math.hypot(m.x - P.x, m.z - P.z) || 1; m.vx = (m.x - P.x) / ln * 6; m.vz = (m.z - P.z) / ln * 6; m.vy = 5; if (!MOB[m.type].hostile) m.fleeT = 6; addExhaustion(0.1); swing(); }
+  function feedMob(m) { const s = inv[hotbar]; if (!s) return; s.n--; if (s.n <= 0) inv[hotbar] = null; refreshHotbar(); m.loveT = 30; }
+  function tryBreed(m) { for (const o of mobs) { if (o !== m && o.type === m.type && o.loveT > 0 && !o.baby && Math.hypot(o.x - m.x, o.z - m.z) < 6) { addMob(m.type, m.x, m.y, m.z, true); m.loveT = 0; o.loveT = 0; toast('새끼가 태어났어요!', true); return; } } }
 
   /* ---------------- 청크 스트리밍 ---------------- */
   function streamChunks() {
@@ -583,7 +779,7 @@
     try {
       if (!lastT) lastT = ts; let dt = (ts - lastT) / 1000; lastT = ts; if (dt > 0.1) dt = 0.1;
       world.time += dt;
-      collide(dt); streamChunks(); netTick(dt); processMining(dt);
+      collide(dt); streamChunks(); netTick(dt); processMining(dt); updateVitals(dt); updateMobs(dt);
       // 카메라
       camera.position.set(P.x, P.y + P.eye, P.z);
       const d = lookDir(); camera.lookAt(P.x + d.x, P.y + P.eye + d.y, P.z + d.z);
@@ -602,9 +798,10 @@
     return `<section class="screen adv3-screen" data-adv3="1">
       <div class="adv3-sky" id="adv3sky"></div>
       <canvas id="adv3canvas"></canvas>
+      <div class="adv3-hurt" id="adv3hurt"></div>
       <div class="adv3-cross">+</div>
       <div class="adv3-top">
-        <div class="adv3-hp" id="adv3hp"></div>
+        <div class="adv3-vitals"><div class="adv3-hp" id="adv3hp"></div><div class="adv3-food" id="adv3food"></div></div>
         <div class="adv3-topbtns"><button class="adv-ibtn" data-act="adv3_inv">🎒</button><button class="adv-ibtn" data-act="adv_exit">✕</button></div>
       </div>
       ${isTouch ? `<div class="adv3-jump" data-act="adv3_jump">⤒</div>` : `<div class="adv3-hint">WASD 이동 · 마우스 시점 · 좌클릭 꾹 파괴 · 우클릭 설치/사용 · 휠/숫자 핫바 · Ctrl 달리기 · E 가방</div>`}
@@ -624,7 +821,11 @@
     for (let i = 0; i < 9; i++) { const s = inv[i]; const sel = i === hotbar ? ' is-sel' : ''; h += `<button class="adv-slot${sel}" data-act="adv3_hot" data-i="${i}">${s ? `<img src="${icon(s.k)}"><span class="adv-cnt">${s.n > 1 ? s.n : ''}</span>` : ''}</button>`; }
     el.innerHTML = h; updateHand();
   }
-  function updateHUD() { const el = document.getElementById('adv3hp'); if (!el) return; let s = ''; for (let i = 0; i < 10; i++) s += (P.hp - i * 2 >= 2 ? '❤️' : P.hp - i * 2 === 1 ? '💗' : '🖤'); el.textContent = s; }
+  function updateHUD() {
+    const el = document.getElementById('adv3hp'); if (!el) return;
+    let s = ''; for (let i = 0; i < 10; i++) { const v = P.hp - i * 2; s += (v >= 2 ? '❤️' : v === 1 ? '💗' : '🖤'); } el.textContent = s;
+    const fe = document.getElementById('adv3food'); if (fe) { let f = ''; for (let i = 0; i < 10; i++) { const v = P.hunger - i * 2; f += (v >= 2 ? '🍗' : v === 1 ? '🦴' : '▫️'); } fe.textContent = f; }
+  }
 
   /* ---------------- 아이콘(블록=아이소 큐브, 아이템=2D) ---------------- */
   const iconCache = {};
@@ -713,8 +914,9 @@
   /* ---------------- 세이브/서버 ---------------- */
   let _saveT = 0, _dirty = false;
   function scheduleSave() { _dirty = true; }
-  function serialize() { const ov = {}; overlay.forEach((v, k) => ov[k] = v); return { p: { x: P.x, y: P.y, z: P.z, yaw: P.yaw, pitch: P.pitch, hp: P.hp }, inv, hotbar, overlay: ov }; }
-  function saveNow() { try { localStorage.setItem(SAVE_KEY, JSON.stringify({ p: { x: P.x, y: P.y, z: P.z, yaw: P.yaw, pitch: P.pitch, hp: P.hp }, inv, hotbar })); } catch (e) {} cloudSavePlayer(); _dirty = false; }
+  function pState() { return { x: P.x, y: P.y, z: P.z, yaw: P.yaw, pitch: P.pitch, hp: P.hp, hunger: P.hunger, sat: P.sat, spawnX: P.spawnX, spawnZ: P.spawnZ }; }
+  function serialize() { const ov = {}; overlay.forEach((v, k) => ov[k] = v); return { p: pState(), inv, hotbar, overlay: ov }; }
+  function saveNow() { try { localStorage.setItem(SAVE_KEY, JSON.stringify({ p: pState(), inv, hotbar })); } catch (e) {} cloudSavePlayer(); _dirty = false; }
   function loadLocal() { try { return JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch (e) { return null; } }
 
   function cloudReady() { return cfg.cloud && typeof sb !== 'undefined' && sb && typeof ME !== 'undefined' && ME && ME.token; }
@@ -765,8 +967,8 @@
     })();
     raf = requestAnimationFrame(loop);
   }
-  function applyPlayer(d) { if (d.p) { P.x = d.p.x; P.y = d.p.y; P.z = d.p.z; P.yaw = d.p.yaw || 0; P.pitch = d.p.pitch || 0; P.hp = d.p.hp || 20; } if (d.inv) inv = d.inv.map(s => s ? { k: s.k, n: s.n } : null); if (d.hotbar != null) hotbar = d.hotbar; }
-  function newPlayer() { inv = new Array(36).fill(null); P.x = 0.5; P.z = 0.5; P.y = surfaceH(0, 0) + 2; P.hp = cfg.startHp || 20; }   // 기본템 없음
+  function applyPlayer(d) { if (d.p) { P.x = d.p.x; P.y = d.p.y; P.z = d.p.z; P.yaw = d.p.yaw || 0; P.pitch = d.p.pitch || 0; P.hp = d.p.hp || 20; P.hunger = d.p.hunger != null ? d.p.hunger : 20; P.sat = d.p.sat != null ? d.p.sat : 5; P.spawnX = d.p.spawnX; P.spawnZ = d.p.spawnZ; } if (d.inv) inv = d.inv.map(s => s ? { k: s.k, n: s.n } : null); if (d.hotbar != null) hotbar = d.hotbar; }
+  function newPlayer() { inv = new Array(36).fill(null); P.x = 0.5; P.z = 0.5; P.y = surfaceH(0, 0) + 2; P.hp = 20; P.hunger = 20; P.sat = 5; P.exh = 0; P.spawnX = 0.5; P.spawnZ = 0.5; }   // 기본템 없음
   function ensureSpawn() { getChunk(Math.floor(P.x / CHUNK), Math.floor(P.z / CHUNK), true); let y = WORLD_H - 1; while (y > 1 && getBlock(Math.floor(P.x), y, Math.floor(P.z)) === 0) y--; if (P.y < y + 1) P.y = y + 2; }
   function resize() { if (!renderer) return; const w = canvas.clientWidth || window.innerWidth, h = canvas.clientHeight || window.innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
   function serverErr(msg) { return `<section class="screen"><header class="room__top"><button class="btn btn--ghost" data-act="adv_exit">← 홈</button><b style="margin-left:6px">🗺️ 모험</b></header><div class="grow center" style="justify-content:center;text-align:center;padding:20px"><p style="white-space:pre-wrap;line-height:1.7">${esc(msg)}</p></div></section>`; }
@@ -776,6 +978,7 @@
     try { saveNow(); flushServer(); } catch (e) {}
     netStop();
     chunks.forEach(c => { disposeMesh(c.mesh); disposeMesh(c.waterMesh); }); chunks.clear();
+    mobs.forEach(m => { try { scene.remove(m.group); } catch (e) {} }); mobs = [];
     if (renderer) { try { renderer.dispose(); } catch (e) {} }
     if (document.exitPointerLock && document.pointerLockElement) try { document.exitPointerLock(); } catch (e) {}
     renderer = null; scene = null; camera = null; canvas = null; invOpen = false;
@@ -797,6 +1000,7 @@
   }
 
   /* ---------------- 공개 API ---------------- */
+  if (typeof window !== 'undefined' && window.__ADV3_TEST) window.__adv3 = { addMob, P, mobs: () => mobs, hurtPlayer, eatFood, MOB };
   window.adventure3dStart = start;
   window.adventure3dStop = stop;
   window.adventure3dRunning = function () { return running; };
