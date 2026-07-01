@@ -1277,9 +1277,9 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .adv3-armor{font-size:13px; letter-spacing:-2px; filter:drop-shadow(0 1px 1px #000);}
 /* 좁은 화면(폴더폰) — 9칸이 가로로 들어오게 슬롯/여백 축소 */
 @media (max-width:380px){
-  .mc-panel{--sl:min(8.2vw,46px); padding:9px;}
+  .mc-panel{--sl:min(9.6vw,46px); padding:6px;}
   .mc-store,.mc-hot{gap:2px;} .mc-craft{gap:2px;}
-  .mc-row1{gap:6px; margin-bottom:8px;}
+  .mc-row1{gap:5px; margin-bottom:6px;}
   .mc-hint{font-size:9px;}
 }
 @media (max-height:520px){ .mc-row1{margin-bottom:6px;} .mc-store{margin-bottom:6px;} .mc-hint{margin-top:4px;} }

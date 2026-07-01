@@ -1618,7 +1618,7 @@
         <div class="mc-hot">${hot.join('')}</div>
         ${carryB}
         <button class="mc-x" data-act="adv3_close">✕</button>
-        <div class="mc-hint">${craftTable ? '제작대 3×3' : '2×2'} · 좌클릭=전체 집기/놓기·교체 · 우클릭=절반/한 개 · 방어구칸=장착</div>
+        <div class="mc-hint">${craftTable ? '제작대 3×3' : '2×2'} · 좌클릭=전체 집기/놓기·교체 · 우클릭(터치=꾹 누르기)=절반/한 개 · Shift+클릭(터치=두번 탭)=빠른 이동 · 방어구칸=장착</div>
       </div>`;
     let w = document.getElementById('adv3invwrap');
     if (!w) {
@@ -1629,19 +1629,60 @@
     }
     w.innerHTML = html;
   }
+  // 터치: 롱프레스=우클릭(절반/한개), 빠른 두번탭(같은 칸)=퀵무브. 데스크톱: 우클릭 그대로 + Shift+좌클릭=퀵무브.
+  let _touchTimer = null, _touchSlot = null, _touchStart = null, _touchFired = false, _touchMoveH = null, _lastTapSlot = null, _lastTapT = 0;
   function onInvPointer(e) {
     const w = document.getElementById('adv3invwrap');
     if (e.target === w) { closeInv(); return; }                       // 빈 곳 → 닫기
     const sl = e.target.closest('.mc-slot');
     if (!sl) return;                                                  // 닫기/버리기 버튼은 data-act 로 처리(전역)
     e.preventDefault(); e.stopPropagation();                          // 전역 탭 시스템 차단(좌클릭 중복 방지)
+    if (e.pointerType === 'touch') {
+      _touchSlot = sl; _touchFired = false; _touchStart = [e.clientX, e.clientY];
+      clearTimeout(_touchTimer);
+      _touchTimer = setTimeout(() => { if (_touchSlot === sl) { _touchFired = true; slotClick(sl.dataset.sk, sl.dataset.si, true, false); _touchSlot = null; } }, 420);
+      if (_touchMoveH) document.removeEventListener('pointermove', _touchMoveH);
+      _touchMoveH = (ev) => { if (_touchStart && (Math.abs(ev.clientX - _touchStart[0]) > 12 || Math.abs(ev.clientY - _touchStart[1]) > 12)) { clearTimeout(_touchTimer); _touchSlot = null; } };
+      document.addEventListener('pointermove', _touchMoveH);
+      const up = () => {
+        document.removeEventListener('pointerup', up); document.removeEventListener('pointercancel', up);
+        if (_touchMoveH) { document.removeEventListener('pointermove', _touchMoveH); _touchMoveH = null; }
+        clearTimeout(_touchTimer);
+        if (_touchFired || _touchSlot !== sl) { _touchSlot = null; return; }   // 롱프레스로 이미 처리됐거나 도중 취소됨
+        _touchSlot = null;
+        const now = Date.now(), isDouble = _lastTapSlot === sl && (now - _lastTapT) < 300;
+        _lastTapSlot = sl; _lastTapT = now;
+        slotClick(sl.dataset.sk, sl.dataset.si, false, isDouble);
+      };
+      document.addEventListener('pointerup', up); document.addEventListener('pointercancel', up);
+      return;
+    }
     const right = (e.button === 2) || (e.button == null && e.ctrlKey);
-    slotClick(sl.dataset.sk, sl.dataset.si, right);
+    slotClick(sl.dataset.sk, sl.dataset.si, right, e.shiftKey);
   }
-  // 마인크래프트식 좌/우클릭 인벤 조작
-  function slotClick(kind, idx, right) {
+  // 재고 범위[lo,hi)에 최대한 채워 넣기(기존 스택 합치기 우선, 그다음 빈칸) → 못 넣은 개수 반환
+  function moveToInvRange(k, n, lo, hi) {
+    const max = maxStack(k);
+    for (let i = lo; i < hi && n > 0; i++) { const t = inv[i]; if (t && t.k === k && t.n < max) { const add = Math.min(max - t.n, n); t.n += add; n -= add; } }
+    for (let i = lo; i < hi && n > 0; i++) { if (!inv[i]) { const add = Math.min(max, n); inv[i] = { k, n: add }; n -= add; } }
+    return n;
+  }
+  // 퀵무브(Shift+클릭/더블탭): 핫바↔저장칸 자동 이동, 제작칸·방어구는 저장칸(꽉 차면 핫바)으로.
+  function quickTransfer(kind, idx) {
+    const ref = slotRef(kind, idx); if (!ref) return;
+    const s = ref.get(); if (!s) return;
+    let left;
+    if (kind === 'inv' && idx < 9) left = moveToInvRange(s.k, s.n, 9, 36);
+    else if (kind === 'inv') left = moveToInvRange(s.k, s.n, 0, 9);
+    else { left = moveToInvRange(s.k, s.n, 9, 36); if (left > 0) left = moveToInvRange(s.k, left, 0, 9); }
+    if (left !== s.n) ref.set(left > 0 ? { k: s.k, n: left } : null);
+    refreshHotbar(); updateArmorClass(); renderInv();
+  }
+  // 마인크래프트식 좌/우클릭 인벤 조작(+ Shift/더블탭 퀵무브)
+  function slotClick(kind, idx, right, shift) {
     if (kind === 'out') { takeOutput(); return; }
     if (kind === 'inv' || kind === 'grid') { /* idx는 숫자 */ idx = Number(idx); }
+    if (shift && !carry) { quickTransfer(kind, idx); return; }
     const ref = slotRef(kind, idx); if (!ref) return;
     const max = ref.max || (carry ? maxStack(carry.k) : 64);
     let s = ref.get();
@@ -1798,7 +1839,7 @@
     addMob, P, mobs: () => mobs, hurtPlayer, eatFood, MOB, getBlock, genBlock, surfaceH, ID, BYID, blockSolid,
     chunkInfo: () => ({ n: chunks.size, meshed: Array.from(chunks.values()).filter(c => c.mesh).length, loaded }),
     // 인벤/장비 검증용
-    icon, drawCubeIcon, openInventory, closeInv, renderInv, slotClick, takeOutput, armorPoints, craftOutput,
+    icon, drawCubeIcon, openInventory, closeInv, renderInv, slotClick, takeOutput, armorPoints, craftOutput, quickTransfer,
     inv: () => inv, grid: () => grid, armor: () => armorEq, carry: () => carry,
     setInv: (i, v) => { inv[i] = v; }, setGrid: (i, v) => { grid[i] = v; }, setCarry: v => { carry = v; },
     setCraftTable: v => { craftTable = v; craftN = v ? 9 : 4; },
