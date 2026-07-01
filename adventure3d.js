@@ -66,6 +66,27 @@
     { key: 'lapis_block', tex: 'lapis_block' },
     { key: 'emerald_block', tex: 'emerald_block' },
     { key: 'pumpkin', tex: { top: 'pumpkin_top', side: 'pumpkin_side', bottom: 'pumpkin_top' } },
+    { key: 'farmland', tex: { top: 'farmland_top', side: 'dirt', bottom: 'dirt' } },
+    { key: 'wheat_crop', tex: 'wheat_young', opaque: false, solid: false, cross: true },
+    { key: 'wheat_ripe', tex: 'wheat_mature', opaque: false, solid: false, cross: true },
+    { key: 'carrot_crop', tex: 'carrot_young', opaque: false, solid: false, cross: true },
+    { key: 'carrot_ripe', tex: 'carrot_mature', opaque: false, solid: false, cross: true },
+    { key: 'potato_crop', tex: 'potato_young', opaque: false, solid: false, cross: true },
+    { key: 'potato_ripe', tex: 'potato_mature', opaque: false, solid: false, cross: true },
+    { key: 'sapling', tex: 'sapling_tex', opaque: false, solid: false, cross: true },
+    { key: 'granite', tex: 'granite' },
+    { key: 'andesite', tex: 'andesite' },
+    { key: 'diorite', tex: 'diorite' },
+    { key: 'mossy_cobblestone', tex: 'mossy_cobble' },
+    { key: 'clay', tex: 'clay_block' },
+    { key: 'ice', tex: 'ice', opaque: false },
+    { key: 'wool', tex: 'wool' },
+    { key: 'bookshelf', tex: { top: 'planks', side: 'bookshelf', bottom: 'planks' } },
+    { key: 'torch', tex: 'torch', opaque: false, solid: false, cross: true, light: true },
+    { key: 'lava', tex: 'lava', solid: false, opaque: false, liquid: 'lava', light: true },
+    { key: 'ladder', tex: 'ladder', opaque: false, solid: false, cross: true },
+    { key: 'tnt', tex: 'tnt' },
+    { key: 'bed', tex: 'wool', opaque: false, solid: false },
   ];
   const ID = {}, BYID = BLOCKS;
   BLOCKS.forEach((b, i) => { b.id = i; ID[b.key] = i; if (b.solid === undefined) b.solid = true; if (b.opaque === undefined) b.opaque = true; });
@@ -185,7 +206,7 @@
     if (y <= 2 && hash3(x, y, z) < 0.5) return ID.bedrock;
     const sy = surfaceH(x, z), b = biome(x, z);
     if (y > sy) {
-      if (y <= SEA) return ID.water;
+      if (y <= SEA) { if (b === 'snow' && y === SEA) return ID.ice; return ID.water; }   // 설원 수면 = 얼음
       // 나무
       const t = treeBlock(x, y, z); if (t) return t;
       // 식물(지표 위)
@@ -211,7 +232,7 @@
       return ID.air;
     }
     if (y === sy) {
-      if (sy <= SEA) return ID.sand;                  // 해수면 이하(수중 바닥·해변) = 모래
+      if (sy <= SEA) { if (sy >= SEA - 3 && hash3(x * 7 + 3, 0, z * 7 + 11) < 0.05) return ID.clay; return ID.sand; }   // 해수면 이하(수중 바닥·해변) = 모래(얕은 곳 일부 점토)
       if (b === 'desert') return ID.sand;             // 사막 = 모래
       if (b === 'snow') return ID.snow_block;         // 설원 = 눈
       return ID.grass;                                // 육지 = 잔디
@@ -219,7 +240,7 @@
     const depth = sy - y;
     if (depth <= 3) return (b === 'desert' || sy <= SEA + 1) ? (b === 'desert' ? ID.sandstone : ID.sand) : ID.dirt;
     // 동굴
-    if (caveCarve(x, y, z)) return ID.air;
+    if (caveCarve(x, y, z)) { if (y <= 9 && vnoise3(x + 3000, y, z + 3000, 0.05) > 0.62) return ID.lava; return ID.air; }   // 깊은 곳 용암 웅덩이
     // 광물 — 2×2×2 셀 해시로 미니 광맥(마크식 y분포). 깊을수록 귀한 광물.
     const r = hash3((x >> 1) * 3 + 1, (y >> 1) * 5 + 2, (z >> 1) * 7 + 3);
     if (r < 0.014) return ID.coal_ore;                                   // 석탄: 어디서나 흔함
@@ -229,6 +250,10 @@
     if (r < 0.041 && y < 15) return ID.redstone_ore;                     // 레드스톤: 매우 깊음
     if (r < 0.045 && y < 14) return ID.diamond_ore;                      // 다이아: 최심부, 드묾
     if (r < 0.030 && y >= 30 && surfaceH(x, z) > 64) return ID.emerald_ore;   // 에메랄드: 산악에만
+    // 화강암/안산암/섬록암 — 4×4×4 셀 뭉치(마크식 반점 분포)
+    const sv = hash3((x >> 2) * 11 + 3, (y >> 2) * 7 + 5, (z >> 2) * 13 + 9);
+    if (sv < 0.10) { const which = hash3((x >> 2) * 17 + 1, (y >> 2) * 19 + 2, (z >> 2) * 23 + 3); return which < 0.34 ? ID.granite : which < 0.67 ? ID.andesite : ID.diorite; }
+    if (y < 20 && sv > 0.97) return ID.mossy_cobblestone;   // 깊은 축축한 동굴 근처 희귀 이끼 조약돌
     return ID.stone;
   }
   function caveCarve(x, y, z) {
@@ -326,7 +351,8 @@
     const pos = [], col = [], uv = [], idxArr = [];
     const wpos = [], wcol = [], wuv = [], widx = [];
     const ppos = [], pcol = [], puv = [], pidx = [];
-    let vi = 0, wvi = 0, pvi = 0;
+    const lpos = [], lcol = [], luv = [], lidx = [];
+    let vi = 0, wvi = 0, pvi = 0, lvi = 0;
     // 패딩 불투명 마스크(청크+1칸 경계). 면 컬링/AO를 Map조회 대신 배열조회로 → 메싱 대폭 가속.
     const MW = CHUNK + 2, baseX = c.cx * CHUNK - 1, baseZ = c.cz * CHUNK - 1;
     const omask = _omask || (_omask = new Uint8Array(MW * MW * WORLD_H)); omask.fill(0);   // 재사용(매 빌드 31KB 할당 → GC 부담 제거)
@@ -338,7 +364,7 @@
     for (let lx = 0; lx < CHUNK; lx++) for (let lz = 0; lz < CHUNK; lz++) for (let y = 0; y < WORLD_H; y++) {
       const id = c.blocks[idx(lx, y, lz)]; if (id === 0) continue;
       const b = BYID[id]; const wx = c.cx * CHUNK + lx, wz = c.cz * CHUNK + lz;
-      const isWater = b.liquid;
+      const liq = b.liquid;   // undefined(고체) | true(물) | 'lava'(용암)
       if (b.cross) {   // 십자(X) 스프라이트 식물 — 대각 2장
         const tn = faceTexName(b, 'side'); const u = atlasUV[tn] || atlasUV.stone;
         const uvco = [[u.x0, u.y1], [u.x1, u.y1], [u.x1, u.y0], [u.x0, u.y0]];
@@ -357,11 +383,11 @@
         const f = FACES[fi]; const nx = wx + f.dir[0], ny = y + f.dir[1], nz = wz + f.dir[2];
         if (mOpaque(nx, ny, nz)) continue;                       // 빠른 컬링(버려진 면은 getBlock 없이 스킵)
         const nid = getBlock(nx, ny, nz); const nb = BYID[nid] || BLOCKS[0];   // 노출된 면만 실제 조회
-        if (isWater && nid === id) continue;
-        if (!isWater && nb.liquid && f.dir[1] !== 1) { /* 물에 접한 고체 면은 그림 */ }
+        if (liq && nid === id) continue;
+        if (!liq && nb.liquid && f.dir[1] !== 1) { /* 액체에 접한 고체 면은 그림 */ }
         const tn = faceTexName(b, f.n); const u = atlasUV[tn] || atlasUV.stone;
-        const target = isWater ? { pos: wpos, col: wcol, uv: wuv, idx: widx } : { pos, col, uv, idx: idxArr };
-        const base = isWater ? wvi : vi;
+        const target = liq === 'lava' ? { pos: lpos, col: lcol, uv: luv, idx: lidx } : liq ? { pos: wpos, col: wcol, uv: wuv, idx: widx } : { pos, col, uv, idx: idxArr };
+        const base = liq === 'lava' ? lvi : liq ? wvi : vi;
         const sh = f.shade;
         const uvco = [[u.x0, u.y1], [u.x0, u.y0], [u.x1, u.y0], [u.x1, u.y1]];
         const axA = f.ax[0], axB = f.ax[1];   // 면내 두 축(법선 외). 'b'(블록)와 셰도잉 금지!
@@ -379,18 +405,19 @@
           const sd = mOpaque(bx + od[0], by + od[1], bz + od[2]);
           const aol = (s1 && s2) ? 0 : (3 - (s1 + s2 + sd));
           const v = sh * AO_MUL[aol];
-          target.pos.push(wx + cc[0], y + cc[1] - (isWater && f.n === 'top' ? 0.12 : 0), wz + cc[2]);
+          target.pos.push(wx + cc[0], y + cc[1] - (liq && f.n === 'top' ? 0.12 : 0), wz + cc[2]);
           target.col.push(v * tr, v * tg, v * tb);
           target.uv.push(uvco[k][0], uvco[k][1]);
         }
         target.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
-        if (isWater) wvi += 4; else vi += 4;
+        if (liq === 'lava') lvi += 4; else if (liq) wvi += 4; else vi += 4;
       }
     }
-    disposeMesh(c.mesh); disposeMesh(c.waterMesh); disposeMesh(c.plantMesh); c.mesh = null; c.waterMesh = null; c.plantMesh = null;
+    disposeMesh(c.mesh); disposeMesh(c.waterMesh); disposeMesh(c.plantMesh); disposeMesh(c.lavaMesh); c.mesh = null; c.waterMesh = null; c.plantMesh = null; c.lavaMesh = null;
     if (pos.length) c.mesh = makeMesh(pos, col, uv, idxArr, blockMat);
     if (wpos.length) c.waterMesh = makeMesh(wpos, wcol, wuv, widx, waterMat);
     if (ppos.length) c.plantMesh = makeMesh(ppos, pcol, puv, pidx, plantMat);
+    if (lpos.length) c.lavaMesh = makeMesh(lpos, lcol, luv, lidx, lavaMat);
     c.dirty = false;
   }
   function makeMesh(pos, col, uv, idxArr, mat) {
@@ -403,7 +430,7 @@
     m.frustumCulled = true; scene.add(m); return m;
   }
   function disposeMesh(m) { if (m) { scene.remove(m); if (m.geometry) m.geometry.dispose(); } }
-  let blockMat = null, waterMat = null, plantMat = null, _omask = null;
+  let blockMat = null, waterMat = null, plantMat = null, lavaMat = null, _omask = null;
 
   /* ---------------- 오버레이(조준 윤곽선·균열) ---------------- */
   let outlineMesh = null, crackMesh = null, crackMats = [];
@@ -491,6 +518,26 @@
       case 'flower_red': { for (let y = 7; y < 16; y++) f(8, y, '#3f7d3a'); f(7, 11, '#356a31'); f(9, 9, '#356a31'); c.fillStyle = '#d23b32'; c.fillRect(ox + 6, oy + 3, 5, 5); c.fillStyle = '#f0d33a'; c.fillRect(ox + 8, oy + 5, 1, 1); break; }
       case 'flower_yellow': { for (let y = 7; y < 16; y++) f(8, y, '#3f7d3a'); f(7, 10, '#356a31'); f(10, 12, '#356a31'); c.fillStyle = '#f0c829'; c.fillRect(ox + 6, oy + 3, 5, 5); c.fillStyle = '#8a5a18'; c.fillRect(ox + 8, oy + 5, 1, 1); break; }
       case 'sugar_cane': { for (let y = 0; y < 16; y++) { const col = (y % 5 === 0) ? '#7bbf5c' : (r() < 0.5 ? '#8fc36a' : '#a3d178'); f(7, y, col); f(8, y, col); } break; }
+      case 'farmland_top': { fillNoise('#5a3f28', '#4a3320', '#6a4d34'); c.fillStyle = '#3a2818'; for (let y = 2; y < 16; y += 4) c.fillRect(ox, oy + y, 16, 1); break; }
+      case 'wheat_young': { for (let x = 2; x < 14; x += 3) { const h = 4 + ((r() * 3) | 0); for (let y = 16 - h; y < 16; y++) f(x, y, r() < 0.5 ? '#5b9142' : '#6aa84f'); } break; }
+      case 'wheat_mature': { for (let x = 1; x < 16; x += 2) { const h = 9 + ((r() * 4) | 0); const topY = 16 - h; for (let y = topY; y < 16; y++) f(x, y, (y < topY + 4) ? (r() < 0.5 ? '#d8b23a' : '#e8c24a') : (r() < 0.5 ? '#8a7a2a' : '#a08a30')); } break; }
+      case 'carrot_young': { for (let x = 3; x < 13; x += 3) { const h = 3 + ((r() * 3) | 0); for (let y = 16 - h; y < 16; y++) f(x, y, r() < 0.5 ? '#3f7d3a' : '#4c8f46'); } break; }
+      case 'carrot_mature': { for (let x = 1; x < 16; x += 2) { const h = 8 + ((r() * 3) | 0); for (let y = 16 - h; y < 16; y++) f(x, y, r() < 0.5 ? '#3f7d3a' : '#4c8f46'); } for (let i = 0; i < 3; i++) { const x = 4 + i * 4; f(x, 15, '#e07b1f'); f(x, 14, '#d06a15'); } break; }
+      case 'potato_young': { for (let x = 3; x < 13; x += 3) { const h = 3 + ((r() * 3) | 0); for (let y = 16 - h; y < 16; y++) f(x, y, r() < 0.5 ? '#3f7d3a' : '#4c8f46'); } break; }
+      case 'potato_mature': { for (let x = 1; x < 16; x += 2) { const h = 8 + ((r() * 3) | 0); for (let y = 16 - h; y < 16; y++) f(x, y, r() < 0.5 ? '#3f7d3a' : '#4c8f46'); } for (let i = 0; i < 3; i++) { const x = 4 + i * 4; f(x, 15, '#c8a25a'); f(x, 14, '#b8924a'); } break; }
+      case 'sapling_tex': { for (let y = 6; y < 16; y++) f(8, y, '#4c8f38'); f(6, 9, '#4c8f38'); f(10, 8, '#4c8f38'); f(6, 10, '#3f7d3a'); f(10, 9, '#3f7d3a'); break; }
+      case 'granite': fillNoise('#9a7163', '#8c6356', '#a87e6f'); break;
+      case 'andesite': fillNoise('#888a89', '#7c7e7d', '#9a9c9b'); break;
+      case 'diorite': fillNoise('#bcbcbc', '#a8a8a8', '#d0d0d0'); break;
+      case 'mossy_cobble': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); let col = (hash3(x * 3, 0, y * 3) < 0.18) ? '#5a5a5a' : (t < 0.5 ? '#7d7d7d' : '#919191'); if (hash3(x * 5 + 2, 1, y * 5 + 3) < 0.22) col = t < 0.5 ? '#5c6b4d' : '#6b7a5a'; f(x, y, col); } break;
+      case 'clay_block': fillNoise('#a4a8b6', '#9498a6', '#b4b8c6'); break;
+      case 'ice': fillNoise('#83a0f0', '#7390e0', '#a0bcff'); break;
+      case 'wool': fillNoise('#e9ecec', '#dadddd', '#f6f9f9'); break;
+      case 'bookshelf': { drawTexFine(c, ox, oy, 'planks'); for (let by = 0; by < 2; by++) { const y0 = 2 + by * 7; c.fillStyle = '#6b4f2a'; c.fillRect(ox + 1, oy + y0, 14, 5); for (let i = 0; i < 6; i++) { c.fillStyle = i % 2 ? '#c0392b' : '#3a6ee0'; c.fillRect(ox + 2 + i * 2, oy + y0 + 1, 1, 3); } } break; }
+      case 'torch': { c.fillStyle = '#5b472d'; c.fillRect(ox + 7, oy + 6, 2, 9); c.fillStyle = '#e8902a'; c.fillRect(ox + 6, oy + 3, 4, 4); c.fillStyle = '#ffd35e'; c.fillRect(ox + 7, oy + 4, 2, 2); break; }
+      case 'lava': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) f(x, y, r() < 0.5 ? '#e8632a' : '#d2541f'); for (let i = 0; i < 5; i++) f((r() * 16) | 0, (r() * 16) | 0, '#f7a02a'); break;
+      case 'ladder': { for (let xx = 2; xx <= 13; xx += 11) { c.fillStyle = '#8a6a3a'; c.fillRect(ox + xx, oy, 2, 16); } for (let y = 2; y < 16; y += 5) { c.fillStyle = '#9c7a44'; c.fillRect(ox + 3, oy + y, 10, 2); } break; }
+      case 'tnt': { fillNoise('#c0392b', '#a93226', '#e74c3c'); c.fillStyle = '#e8d840'; c.fillRect(ox, oy + 6, 16, 4); c.fillStyle = '#222'; for (let i = 0; i < 3; i++) c.fillRect(ox + 2 + i * 5, oy + 7, 2, 2); break; }
       default: fillNoise('#888', '#666', '#aaa');
     }
   }
@@ -502,7 +549,7 @@
   // '꽉 차지 않은' 모양은 실루엣(알파)을 16×16 그대로 유지하고 채색만 8×8 팔레트를 써서
   // 잎맥처럼 가느다란 형태가 뭉개지지 않게 함. 그 외(불투명 블록)는 2×2 블록 단위로 채워
   // 동일한 결과를 더 적은 fillRect로 얻음. atlas·texCanvas 등 drawTex의 모든 호출 경로에 적용.
-  const CUTOUT_TEX = { tall_grass: 1, flower_red: 1, flower_yellow: 1, sugar_cane: 1 };
+  const CUTOUT_TEX = { tall_grass: 1, flower_red: 1, flower_yellow: 1, sugar_cane: 1, wheat_young: 1, wheat_mature: 1, carrot_young: 1, carrot_mature: 1, potato_young: 1, potato_mature: 1, sapling_tex: 1, torch: 1, ladder: 1 };
   let _dtOffCanvas = null;
   function drawTex(c, ox, oy, name) {
     if (!_dtOffCanvas) { _dtOffCanvas = document.createElement('canvas'); _dtOffCanvas.width = 16; _dtOffCanvas.height = 16; }
@@ -553,6 +600,7 @@
     blockMat = new THREE.MeshBasicMaterial({ map: atlasTex, vertexColors: true });
     waterMat = new THREE.MeshBasicMaterial({ map: atlasTex, vertexColors: true, transparent: true, opacity: 0.72, depthWrite: false });
     plantMat = new THREE.MeshBasicMaterial({ map: atlasTex, vertexColors: true, alphaTest: 0.5, side: THREE.DoubleSide });   // 컷아웃 식물(양면)
+    lavaMat = new THREE.MeshBasicMaterial({ map: atlasTex, vertexColors: true });   // 용암(물과 달리 불투명)
   }
 
   /* ---------------- 입력 ---------------- */
@@ -661,6 +709,16 @@
     const held = inv[hotbar];
     if (held) {
       const it0 = window.ADV_ITEMS[held.k]; if (it0 && it0.bow) { shootArrow(); return; }   // 활: 조준 발사
+      // 괭이: 흙/잔디 → 경작지(위 칸이 비어야 함)
+      if (it0 && it0.tool === 'hoe' && t) {
+        const tk = BYID[getBlock(t.x, t.y, t.z)].key;
+        if ((tk === 'dirt' || tk === 'grass') && getBlock(t.x, t.y + 1, t.z) === 0) { setBlock(t.x, t.y, t.z, ID.farmland); swing(); return; }
+      }
+      // 씨앗/작물 심기: 경작지 위에 심기
+      if (it0 && it0.plant && t) {
+        const tk = BYID[getBlock(t.x, t.y, t.z)].key;
+        if (tk === 'farmland' && getBlock(t.x, t.y + 1, t.z) === 0 && ID[it0.plant] !== undefined) { setBlock(t.x, t.y + 1, t.z, ID[it0.plant]); consumeHeld(1); swing(); return; }
+      }
       // 동물 먹이(번식)
       const m = mobInFront(); if (m && MOB[m.type] && !MOB[m.type].hostile && MOB[m.type].breed === held.k && !m.baby && m.loveT <= 0) { feedMob(m); swing(); return; }
       // 음식 먹기
@@ -702,6 +760,28 @@
     setBlock(nx, ny, nz, ID[placeKey]); consumeHeld(1);
     settleGravity(nx, ny, nz);                      // 설치한 중력블록 낙하
     return true;
+  }
+  // 작물 성장 — 실제 마크 랜덤틱 공식: 확률=1/(floor(25/points)+1), 평균 랜덤틱 간격 68.27초(자바 에디션)
+  const CROP_RIPE = { wheat_crop: 'wheat_ripe', carrot_crop: 'carrot_ripe', potato_crop: 'potato_ripe' };
+  function isHydrated(fx, fy, fz) {
+    for (let dz = -4; dz <= 4; dz++) for (let dx = -4; dx <= 4; dx++) {
+      if (getBlock(fx + dx, fy, fz + dz) === ID.water || getBlock(fx + dx, fy + 1, fz + dz) === ID.water) return true;
+    }
+    return false;
+  }
+  let _growT = 0;
+  function growTick(dt) {
+    _growT += dt; if (_growT < 1) return; _growT = 0;
+    overlay.forEach((id, key) => {
+      const b = BYID[id]; if (!b || !CROP_RIPE[b.key]) return;
+      const p = key.split(',').map(Number); const x = p[0], y = p[1], z = p[2];
+      const cx = Math.floor(x / CHUNK), cz = Math.floor(z / CHUNK); if (!chunks.has(ckey(cx, cz))) return;   // 로드된 청크만(마크처럼 언로드 지역은 성장 정지)
+      if (getBlock(x, y + 1, z) !== 0) return;                    // 위가 막히면 성장 불가(빛 차단 근사)
+      const hyd = isHydrated(x, y - 1, z);
+      const points = hyd ? 4 : 2;
+      const chance = 1 / (Math.floor(25 / points) + 1);
+      if (Math.random() < chance / 68.27) setBlock(x, y, z, ID[CROP_RIPE[b.key]]);
+    });
   }
   function aabbHitsBlock(bx, by, bz) {
     const minX = P.x - P.w / 2, maxX = P.x + P.w / 2, minZ = P.z - P.w / 2, maxZ = P.z + P.w / 2, minY = P.y, maxY = P.y + P.h;
@@ -994,7 +1074,7 @@
       }
     }
     // 멀리 언로드
-    chunks.forEach((c, k) => { if (Math.max(Math.abs(c.cx - pcx), Math.abs(c.cz - pcz)) > RENDER + 2) { disposeMesh(c.mesh); disposeMesh(c.waterMesh); disposeMesh(c.plantMesh); chunks.delete(k); } });
+    chunks.forEach((c, k) => { if (Math.max(Math.abs(c.cx - pcx), Math.abs(c.cz - pcz)) > RENDER + 2) { disposeMesh(c.mesh); disposeMesh(c.waterMesh); disposeMesh(c.plantMesh); disposeMesh(c.lavaMesh); chunks.delete(k); } });
   }
 
   /* ---------------- 낮밤 ---------------- */
@@ -1031,7 +1111,7 @@
       if (!lastT) lastT = ts; let dt = (ts - lastT) / 1000; lastT = ts; if (dt > 0.1) dt = 0.1;
       world.time += dt;
       streamChunks();
-      if (loaded) { collide(dt); netTick(dt); processMining(dt); updateVitals(dt); updateMobs(dt); }   // 로드 완료 전엔 물리 정지(지형에 박히는 버그 방지)
+      if (loaded) { collide(dt); netTick(dt); processMining(dt); updateVitals(dt); updateMobs(dt); growTick(dt); }   // 로드 완료 전엔 물리 정지(지형에 박히는 버그 방지)
       // 카메라
       camera.position.set(P.x, P.y + P.eye, P.z);
       const d = lookDir(); camera.lookAt(P.x + d.x, P.y + P.eye + d.y, P.z + d.z);
@@ -1430,7 +1510,7 @@
     window.removeEventListener('resize', resize); unbindInput();
     try { saveNow(); flushServer(); } catch (e) {}
     netStop();
-    chunks.forEach(c => { disposeMesh(c.mesh); disposeMesh(c.waterMesh); disposeMesh(c.plantMesh); }); chunks.clear();
+    chunks.forEach(c => { disposeMesh(c.mesh); disposeMesh(c.waterMesh); disposeMesh(c.plantMesh); disposeMesh(c.lavaMesh); }); chunks.clear();
     mobs.forEach(m => { try { scene.remove(m.group); } catch (e) {} }); mobs = [];
     if (renderer) { try { renderer.dispose(); } catch (e) {} }
     if (document.exitPointerLock && document.pointerLockElement) try { document.exitPointerLock(); } catch (e) {}
@@ -1460,6 +1540,8 @@
     setCraftTable: v => { craftTable = v; craftN = v ? 9 : 4; },
     setBlock, breakBlock, BLOCKS, icon2: icon, biome,
     chunks: () => chunks, scene: () => scene, texCanvas,
+    placeOrUse, raycast, growTick, overlay: () => overlay, isHydrated,
+    hotbar: () => hotbar, setHotbar: v => { hotbar = v; },
   };
   window.adventure3dStart = start;
   window.adventure3dStop = stop;
