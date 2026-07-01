@@ -436,6 +436,7 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .home-card--rk{background:linear-gradient(150deg,#1c2940,#151922); border-top-color:var(--accent-soft);}
 .home-card--mini{background:linear-gradient(150deg,#2a1f40,#151922); border-top-color:rgba(139,92,246,.3);}
 .home-card--adv{background:linear-gradient(150deg,#14301f,#151922); border-top-color:rgba(52,168,83,.4);}
+.home-card--econ{background:linear-gradient(150deg,#3a2f10,#151922); border-top-color:rgba(250,197,28,.4);}
 .home-card__emoji{font-size:46px;}
 .home-card__title{font-size:22px; font-weight:900; letter-spacing:-.02em;}
 .home-card__sub{font-size:13px; color:var(--ink-dim);}
@@ -1292,3 +1293,42 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 }
 @media (max-height:520px){ .mc-row1{margin-bottom:6px;} .mc-store{margin-bottom:6px;} .mc-hint{margin-top:4px;} }
 :root[data-theme="light"] .mc-panel{background:#c8c8c8;}
+
+/* ===================== 경제(하이픽셀 스카이블럭 x 메이플스토리2 스타일) ===================== */
+.btn--sm{min-height:34px; padding:4px 10px; font-size:12px; flex:0 0 auto;}
+.econ-screen{background:var(--bg); overflow:hidden;}
+.econ-top{display:flex; align-items:center; gap:12px; padding:10px 14px; border-bottom:1px solid var(--line);}
+.econ-gold{font-weight:800; font-size:16px; color:#facc15;}
+.econ-class{color:var(--ink-dim); font-size:13px;}
+.econ-top .btn{margin-left:auto;}
+.econ-body{flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch;}
+.econ-zonenav{display:flex; gap:6px; padding:10px 12px; overflow-x:auto; border-bottom:1px solid var(--line);}
+.econ-zonebtn{appearance:none; border:1px solid var(--line); background:var(--panel2); color:var(--ink);
+  border-radius:12px; padding:8px 12px; white-space:nowrap; font-size:13px;}
+.econ-zonebtn.is-active{border-color:#facc15; background:rgba(250,197,28,.15); color:#facc15; font-weight:700;}
+.econ-panel{padding:14px; display:flex; flex-direction:column; gap:12px;}
+.econ-panel h3,.econ-panel h4{margin:4px 0 0; font-size:15px;}
+.econ-classgrid{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+.econ-classcard{appearance:none; border:1px solid var(--line); background:var(--panel2); color:var(--ink);
+  border-radius:14px; padding:14px; text-align:left; display:flex; flex-direction:column; gap:4px;}
+.econ-classcard__name{font-weight:800; font-size:16px;}
+.econ-classcard__flavor{font-size:12px; color:var(--ink-dim);}
+.econ-classcard__stats{font-size:12px; color:#facc15;}
+.econ-shopgrid,.econ-colgrid{display:flex; flex-direction:column; gap:6px;}
+.econ-shopitem,.econ-colrow,.econ-minionrow{display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  border:1px solid var(--line); border-radius:10px; padding:8px 10px; font-size:13px;}
+.econ-shopitem span:first-child,.econ-minionrow span:first-child{font-weight:700; margin-right:auto;}
+.econ-minionplace{display:flex; flex-wrap:wrap; gap:6px;}
+.econ-minionlist{display:flex; flex-direction:column; gap:6px;}
+.econ-slayercard,.econ-floorcard{border:1px solid var(--line); border-radius:12px; padding:10px;}
+.econ-tierbtns{display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;}
+.econ-essenceshop{display:flex; flex-wrap:wrap; gap:6px;}
+.econ-combat{align-items:stretch;}
+.econ-hpbar{position:relative; height:26px; border-radius:8px; background:var(--panel2); border:1px solid var(--line); overflow:hidden;}
+.econ-hpbar__fill{position:absolute; inset:0 auto 0 0; background:linear-gradient(90deg,#dc2626,#f87171); transition:width .2s;}
+.econ-hpbar--player .econ-hpbar__fill{background:linear-gradient(90deg,#16a34a,#4ade80);}
+.econ-hpbar span{position:relative; z-index:1; display:flex; align-items:center; justify-content:center; height:100%; font-size:12px; font-weight:700; text-shadow:0 1px 2px rgba(0,0,0,.6);}
+.econ-puzzlebtns{display:flex; gap:8px;}
+.econ-secretdoor{display:flex; align-items:center; gap:6px; margin-top:6px;}
+.econ-secret{font-style:italic;}
+:root[data-theme="light"] .home-card--econ{background:linear-gradient(150deg,#fdf0c8,#fff);}
