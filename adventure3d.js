@@ -596,7 +596,9 @@
     const cv = document.createElement('canvas'); cv.width = cols * 16; cv.height = rows * 16; const c = cv.getContext('2d'); c.imageSmoothingEnabled = false;
     list.forEach((nm, i) => { const cx = (i % cols) * 16, cy = ((i / cols) | 0) * 16; drawTex(c, cx, cy, nm); });
     list.forEach((nm, i) => { const cx = (i % cols), cy = ((i / cols) | 0); const e = 0.01; atlasUV[nm] = { x0: (cx + e) / cols, x1: (cx + 1 - e) / cols, y0: (cy + e) / rows, y1: (cy + 1 - e) / rows }; });
-    atlasTex = new THREE.CanvasTexture(cv); atlasTex.magFilter = THREE.NearestFilter; atlasTex.minFilter = THREE.NearestFilter; atlasTex.generateMipmaps = false; atlasTex.needsUpdate = true;
+    atlasTex = new THREE.CanvasTexture(cv); atlasTex.magFilter = THREE.NearestFilter; atlasTex.minFilter = THREE.NearestFilter; atlasTex.generateMipmaps = false;
+    atlasTex.flipY = false;   // CanvasTexture 기본 flipY=true는 V좌표를 뒤집어 atlasUV(캔버스 픽셀 기준 계산)와 어긋나 행이 통째로 위아래 반전 샘플링됨 → 끔
+    atlasTex.needsUpdate = true;
     blockMat = new THREE.MeshBasicMaterial({ map: atlasTex, vertexColors: true });
     waterMat = new THREE.MeshBasicMaterial({ map: atlasTex, vertexColors: true, transparent: true, opacity: 0.72, depthWrite: false });
     plantMat = new THREE.MeshBasicMaterial({ map: atlasTex, vertexColors: true, alphaTest: 0.5, side: THREE.DoubleSide });   // 컷아웃 식물(양면)
@@ -1424,16 +1426,19 @@
   function scheduleSave() { _dirty = true; }
   function pState() { return { x: P.x, y: P.y, z: P.z, yaw: P.yaw, pitch: P.pitch, hp: P.hp, hunger: P.hunger, sat: P.sat, spawnX: P.spawnX, spawnZ: P.spawnZ }; }
   function serialize() { const ov = {}; overlay.forEach((v, k) => ov[k] = v); return { p: pState(), inv, hotbar, armor: armorEq, overlay: ov }; }
-  function saveNow() { try { localStorage.setItem(SAVE_KEY, JSON.stringify({ p: pState(), inv, hotbar })); } catch (e) {} cloudSavePlayer(); _dirty = false; }
+  function saveNow(force) { try { localStorage.setItem(SAVE_KEY, JSON.stringify({ p: pState(), inv, hotbar })); } catch (e) {} cloudSavePlayer(force); _dirty = false; }
   function loadLocal() { try { return JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch (e) { return null; } }
+  // 탭 백그라운드 전환/닫기 시 즉시 저장(주기저장 8초 대기 중 이탈하면 위치 되돌아가는 문제 방지)
+  function flushOnHide() { if (document.visibilityState === 'hidden') { try { saveNow(true); flushServer(true); } catch (e) {} } }
+  function flushOnPageHide() { try { saveNow(true); flushServer(true); } catch (e) {} }
 
   function cloudReady() { return cfg.cloud && typeof sb !== 'undefined' && sb && typeof ME !== 'undefined' && ME && ME.token; }
   function queueServer(x, y, z, id) { pendingServer.set(x + ',' + y + ',' + z, id); }
   let _flushAt = 0;
-  async function flushServer() { if (!cloudReady() || !pendingServer.size) return; if (Date.now() - _flushAt < 1500) return; _flushAt = Date.now(); const batch = {}; pendingServer.forEach((v, k) => batch[k] = String(v)); pendingServer = new Map(); try { await sb.rpc('adv3_world_set', { p_token: ME.token, p_edits: batch }); } catch (e) { for (const k in batch) if (!pendingServer.has(k)) pendingServer.set(k, Number(batch[k])); } }
+  async function flushServer(force) { if (!cloudReady() || !pendingServer.size) return; if (!force && Date.now() - _flushAt < 1500) return; _flushAt = Date.now(); const batch = {}; pendingServer.forEach((v, k) => batch[k] = String(v)); pendingServer = new Map(); try { await sb.rpc('adv3_world_set', { p_token: ME.token, p_edits: batch }); } catch (e) { for (const k in batch) if (!pendingServer.has(k)) pendingServer.set(k, Number(batch[k])); } }
   async function cloudLoadWorld() { if (!cloudReady()) return null; try { const { data, error } = await sb.rpc('adv3_world_get'); if (error) return null; return data || {}; } catch (e) { return null; } }
   let _cpAt = 0;
-  async function cloudSavePlayer() { if (!cloudReady()) return; if (Date.now() - _cpAt < 4000) return; _cpAt = Date.now(); try { await sb.rpc('adv_save_player', { p_token: ME.token, p_state: { v3: serialize() } }); } catch (e) {} }
+  async function cloudSavePlayer(force) { if (!cloudReady()) return; if (!force && Date.now() - _cpAt < 4000) return; _cpAt = Date.now(); try { await sb.rpc('adv_save_player', { p_token: ME.token, p_state: { v3: serialize() } }); } catch (e) {} }
   async function cloudLoadPlayer() { if (!cloudReady()) return null; try { const { data } = await sb.rpc('adv_load_player', { p_token: ME.token }); return data && data.v3 ? data.v3 : null; } catch (e) { return null; } }
 
   /* ---------------- 멀티 ---------------- */
@@ -1464,6 +1469,8 @@
     const _f = world.time / cfg.dayLen; if (!(_f > 0.1 && _f < 0.45)) world.time = cfg.dayLen * 0.22;   // 첫 진입은 환한 낮 보장(마크 새월드처럼)
     buildAtlas(); setupOverlays();
     resize(); window.addEventListener('resize', resize);
+    document.addEventListener('visibilitychange', flushOnHide);
+    window.addEventListener('pagehide', flushOnPageHide);
     bindInput(); running = true; lastT = 0;
     (async () => {
       // 서버 월드 로드(가능하면), 아니면 로컬
@@ -1508,7 +1515,9 @@
   function stop() {
     if (!running) return; running = false; if (raf) cancelAnimationFrame(raf); raf = 0;
     window.removeEventListener('resize', resize); unbindInput();
-    try { saveNow(); flushServer(); } catch (e) {}
+    document.removeEventListener('visibilitychange', flushOnHide);
+    window.removeEventListener('pagehide', flushOnPageHide);
+    try { saveNow(true); flushServer(true); } catch (e) {}
     netStop();
     chunks.forEach(c => { disposeMesh(c.mesh); disposeMesh(c.waterMesh); disposeMesh(c.plantMesh); disposeMesh(c.lavaMesh); }); chunks.clear();
     mobs.forEach(m => { try { scene.remove(m.group); } catch (e) {} }); mobs = [];
@@ -1542,6 +1551,8 @@
     chunks: () => chunks, scene: () => scene, texCanvas,
     placeOrUse, raycast, growTick, overlay: () => overlay, isHydrated,
     hotbar: () => hotbar, setHotbar: v => { hotbar = v; },
+    atlasUV: () => atlasUV, atlasImg: () => atlasTex && atlasTex.image, faceTexName, BYID,
+    biomeTint,
   };
   window.adventure3dStart = start;
   window.adventure3dStop = stop;
