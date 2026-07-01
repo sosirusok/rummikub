@@ -107,6 +107,8 @@
   let canvas = null, atlasTex = null, atlasUV = {};
   const chunks = new Map();             // "cx,cz" -> {blocks:Uint8Array, mesh, waterMesh, dirty}
   const overlay = new Map();            // "x,y,z" -> id (사용자 편집, 영속)
+  const furnaces = new Map();           // "x,y,z" -> {in,fuel,out,burnT,burnMax,cookT}(로컬 저장, 화로별 상태)
+  const chests = new Map();             // "x,y,z" -> Array(27)(로컬 저장, 상자별 27칸)
   let pendingServer = new Map();
   const others = {};                    // 멀티 플레이어 아바타
   let netCh = null, netSend = null;
@@ -188,6 +190,23 @@
     surfCache.set(ck, sy); if (surfCache.size > 60000) surfCache.clear();
     return sy;
   }
+  // 내륙 호수: 해수면과 무관하게 고지대에도 드물게 형성되는 작은 호수/연못(성긴 노이즈 임계값)
+  function lakeDepth(x, z) {
+    const sy = surfaceH(x, z);
+    if (sy <= SEA + 4) return 0;   // 해안 근처는 이미 바다로 연결되니 별도 호수 X
+    const b = biome(x, z);
+    if (b === 'mountains' || b === 'desert' || b === 'badlands' || b === 'snow') return 0;   // 지형상 호수가 어울리지 않는 바이옴 제외
+    const n = vnoise(x + 33000, z - 17000, 0.012);
+    if (n < 0.90) return 0;
+    return 1 + Math.min(2, Math.floor((n - 0.90) * 30));   // 0.90~1.0 구간 → 깊이 1~3
+  }
+  // 사탕수수: 밑받침 블록(y)과 같은 높이에서 동서남북 중 실제 물 블록 인접 여부(고도 무관, 내륙 호수도 인정, 마크 실제 규칙)
+  function isWaterAt(x, y, z) {
+    const nsy = surfaceH(x, z);
+    if (y > nsy) return y <= SEA;
+    const ld = lakeDepth(x, z); return ld > 0 && y > nsy - ld && y <= nsy;
+  }
+  function waterAdjacent(x, y, z) { return isWaterAt(x + 1, y, z) || isWaterAt(x - 1, y, z) || isWaterAt(x, y, z + 1) || isWaterAt(x, y, z - 1); }
   const treeCache = new Map();
   // 나무 배치: 순수 셀당 확률(과거 방식)은 캐노피(반경2)가 서로 겹치는 밀집 클러스터를
   // 만들어 '초록 벽'처럼 보이는 버그를 냄. 격자(지터드 그리드)로 후보 위치를 셀당 1곳만
@@ -207,7 +226,7 @@
           : b === 'swamp' ? 0.25 : b === 'snow' ? 0.20 : b === 'savanna' ? 0.10 : b === 'mountains' ? 0.04 : 0.16;   // 셀당 확률(간격은 격자가 보장)
         if (h2(x * 7 + 1, z * 13 + 3) < p) {
           const sy = surfaceH(x, z);
-          if (sy > SEA + 1) {   // 물·해변엔 나무 X + 주변 완만할 때만(절벽 나무 방지)
+          if (sy > SEA + 1 && lakeDepth(x, z) === 0) {   // 물·해변·내륙 호수엔 나무 X + 주변 완만할 때만(절벽 나무 방지)
             const e = Math.abs(surfaceH(x + 1, z) - sy) + Math.abs(surfaceH(x - 1, z) - sy) + Math.abs(surfaceH(x, z + 1) - sy) + Math.abs(surfaceH(x, z - 1) - sy);
             res = e <= 3;
           }
@@ -260,33 +279,41 @@
     if (y <= 0) return ID.bedrock;
     if (y <= 2 && hash3(x, y, z) < 0.5) return ID.bedrock;
     const sy = surfaceH(x, z), b = biome(x, z);
+    const ld = lakeDepth(x, z), gy = sy - ld;   // gy = 실제 고체 지표(호수면 아래 진짜 바닥). 호수 없으면 gy===sy로 이하 로직 완전 동일.
     if (y > sy) {
       if (y <= SEA) { if (b === 'snow' && y === SEA) return ID.ice; return ID.water; }   // 설원 수면 = 얼음
       // 나무
       const t = treeBlock(x, y, z); if (t) return t;
+      // 사탕수수(해안가): 해수면과 정확히 같은 높이의 해변 지표는 아래 sy>SEA 분기에 안 들지만
+      // 실제 마크에서 가장 흔한 사탕수수 위치가 바로 이 "해수면과 같은 높이의 해변"이므로 별도 처리
+      if (sy === SEA && b !== 'snow' && b !== 'desert' && b !== 'badlands' && b !== 'mountains' && (y === sy + 1 || y === sy + 2)
+        && waterAdjacent(x, sy, z) && hash3(x * 9 + 1, 0, z * 9 + 4) < 0.28) {
+        if (y === sy + 1) return ID.sugar_cane;
+        if (hash3(x, 3, z) < 0.6) return ID.sugar_cane;
+      }
       // 식물(지표 위)
       if (sy > SEA) {
         if (b === 'desert') {                                          // 선인장(1~2칸)
           if (h2(x * 3 + 2, z * 3 + 5) < 0.018) { const ch = 1 + (hash3(x, 7, z) < 0.5 ? 1 : 0); if (y >= sy + 1 && y <= sy + ch) return ID.cactus; }
         } else if (y === sy + 1) {
           if (b === 'snow' || b === 'badlands' || b === 'mountains') return ID.air;   // 눈 평원·메마른 고지·바위산엔 잡초/꽃 없음
-          // 사탕수수(물가 1칸 옆, 2~3칸)
-          const nearWater = surfaceH(x + 1, z) <= SEA || surfaceH(x - 1, z) <= SEA || surfaceH(x, z + 1) <= SEA || surfaceH(x, z - 1) <= SEA;
+          // 사탕수수: 실제 마크 규칙 = 밑받침 블록과 같은 높이에서 사방(동서남북) 중 실제 물 블록이 있어야만(고도 제한 없음)
           const pv = hash3(x * 5 + 7, 0, z * 5 + 13);
-          if (nearWater && sy <= SEA + 2 && hash3(x * 9 + 1, 0, z * 9 + 4) < 0.28) return ID.sugar_cane;
+          if (waterAdjacent(x, sy, z) && hash3(x * 9 + 1, 0, z * 9 + 4) < 0.28) return ID.sugar_cane;
           if ((b === 'forest' || b === 'plains' || b === 'savanna' || b === 'jungle') && pumpkinAt(x, z)) return ID.pumpkin;   // 희귀 호박 패치(무리)
           const fl = flowerAt(x, z); if (fl) return fl;                                                      // 노이즈 기반 꽃밭
           const dense = (b === 'jungle') ? 0.30 : (b === 'forest' || b === 'taiga' || b === 'birch_forest') ? 0.20 : (b === 'savanna') ? 0.16 : (b === 'swamp') ? 0.24 : 0.13;   // 바이옴별 잡초 밀도
           if (pv < dense) return ID.tall_grass;
         } else if (b !== 'snow' && b !== 'desert' && b !== 'badlands' && b !== 'mountains' && y === sy + 2) {
-          // 사탕수수 2~3번째 칸
-          const nearWater = surfaceH(x + 1, z) <= SEA || surfaceH(x - 1, z) <= SEA || surfaceH(x, z + 1) <= SEA || surfaceH(x, z - 1) <= SEA;
-          if (nearWater && sy <= SEA + 2 && hash3(x * 9 + 1, 0, z * 9 + 4) < 0.28) { if (hash3(x, 3, z) < 0.6) return ID.sugar_cane; }
+          // 사탕수수 2~3번째 칸(물 인접 조건은 밑받침 기준으로 동일하게 재검사)
+          if (waterAdjacent(x, sy, z) && hash3(x * 9 + 1, 0, z * 9 + 4) < 0.28) { if (hash3(x, 3, z) < 0.6) return ID.sugar_cane; }
         }
       }
       return ID.air;
     }
-    if (y === sy) {
+    if (ld > 0 && y > gy && y <= sy) return ID.water;   // 내륙 호수 몸통(수면=원래 지표 sy, 바닥=gy)
+    if (y === gy) {
+      if (ld > 0) return hash3(x * 7 + 3, 2, z * 7 + 11) < 0.10 ? ID.clay : ID.sand;   // 호수 바닥 = 대개 모래, 일부 점토
       if (sy <= SEA) { if (sy >= SEA - 3 && hash3(x * 7 + 3, 0, z * 7 + 11) < 0.05) return ID.clay; return ID.sand; }   // 해수면 이하(수중 바닥·해변) = 모래(얕은 곳 일부 점토)
       if (b === 'desert') return ID.sand;             // 사막 = 모래
       if (b === 'badlands') return ID.terracotta;     // 메마른 고원 = 테라코타(메사)
@@ -294,10 +321,10 @@
       if (b === 'mountains') return sy > 74 ? ID.snow_block : ID.stone;   // 산악 = 맨바위(정상은 만년설)
       return ID.grass;                                // 육지 = 잔디
     }
-    const depth = sy - y;
+    const depth = gy - y;
     if (b === 'badlands' && depth <= 4) return ID.terracotta;             // 메사 특유의 두꺼운 테라코타 층
     if (b === 'mountains' && depth <= 2) return ID.stone;
-    if (depth <= 3) return (b === 'desert' || sy <= SEA + 1) ? (b === 'desert' ? ID.sandstone : ID.sand) : ID.dirt;
+    if (depth <= 3) return (b === 'desert' || gy <= SEA + 1) ? (b === 'desert' ? ID.sandstone : ID.sand) : ID.dirt;
     // 동굴
     if (caveCarve(x, y, z)) { if (y <= 9 && vnoise3(x + 3000, y, z + 3000, 0.05) > 0.62) return ID.lava; return ID.air; }   // 깊은 곳 용암 웅덩이
     // 광물 — 2×2×2 셀 해시로 미니 광맥(마크식 y분포). 깊을수록 귀한 광물.
@@ -425,8 +452,19 @@
     if (mod(x) === 0) markDirty(cx - 1, cz); if (mod(x) === CHUNK - 1) markDirty(cx + 1, cz);
     if (mod(z) === 0) markDirty(cx, cz - 1); if (mod(z) === CHUNK - 1) markDirty(cx, cz + 1);
     if (!fromNet) { queueServer(x, y, z, id); if (netSend) netSend({ t: 'b', x, y, z, i: id }); scheduleSave(); }
+    checkUnsupported(x, y + 1, z);   // 아래를 지지대로 쓰는 잡초/꽃/사탕수수/작물/묘목/횃불: 지지 사라지면 실제 마크처럼 연쇄 파괴
   }
   function markDirty(cx, cz) { const c = chunks.get(ckey(cx, cz)); if (c) c.dirty = true; }
+  // 아래 블록이 있어야만 존재 가능한 블록들(마크 "attached/needs support" 규칙)
+  const NEEDS_SUPPORT = { tall_grass: 1, flower_red: 1, flower_yellow: 1, sugar_cane: 1, wheat_crop: 1, wheat_ripe: 1, carrot_crop: 1, carrot_ripe: 1, potato_crop: 1, potato_ripe: 1, sapling: 1, torch: 1 };
+  function checkUnsupported(x, y, z) {
+    const id = getBlock(x, y, z); if (id === 0) return;
+    const b = BYID[id]; if (!b || !NEEDS_SUPPORT[b.key]) return;
+    const belowId = getBlock(x, y - 1, z);
+    if (b.key === 'sugar_cane' && BYID[belowId] && BYID[belowId].key === 'sugar_cane') return;   // 사탕수수는 사탕수수 위에도 계속 자람
+    if (blockSolid(belowId)) return;
+    breakBlock(x, y, z);   // 지지대 소실 → 즉시 파괴(드롭 포함, 마크와 동일)
+  }
 
   function blockOpaque(id) { const b = BYID[id]; return b && b.opaque; }
   function blockSolid(id) { const b = BYID[id]; return b && b.solid; }
@@ -789,7 +827,7 @@
     let face = [0, 0, 0];
     for (let i = 0; i < REACH * 3; i++) {
       const id = getBlock(x, y, z);
-      if (id !== 0 && blockSolid(id)) return { x, y, z, face };
+      if (id !== 0) { const bb = BYID[id]; if (!bb || !bb.liquid) return { x, y, z, face }; }   // 액체 통과, 그 외(잡초/꽃/사탕수수 등 비고체 포함) 전부 조준 가능
       if (tMX < tMY && tMX < tMZ) { x += stepX; tMX += tDX; face = [-stepX, 0, 0]; }
       else if (tMY < tMZ) { y += stepY; tMY += tDY; face = [0, -stepY, 0]; }
       else { z += stepZ; tMZ += tDZ; face = [0, 0, -stepZ]; }
@@ -828,7 +866,7 @@
   function swing() { if (swingT <= 0) swingT = 0.28; }
   function placeOrUse() {
     const t = raycast();
-    if (t) { const id = getBlock(t.x, t.y, t.z); const b = BYID[id]; if (b && b.station) { openStation(b.station); swing(); return; } }
+    if (t) { const id = getBlock(t.x, t.y, t.z); const b = BYID[id]; if (b && b.station) { openStation(b.station, t.x, t.y, t.z); swing(); return; } }
     const held = inv[hotbar];
     if (held) {
       const it0 = window.ADV_ITEMS[held.k]; if (it0 && it0.bow) { shootArrow(); return; }   // 활: 조준 발사
@@ -849,7 +887,38 @@
     }
     if (placeBlock()) swing();
   }
-  function openStation(st) { if (st === 'craft') openInventory('table'); else if (st === 'furnace') toast('화로는 곧 추가돼요'); else if (st === 'chest') toast('상자는 곧 추가돼요'); }
+  function openStation(st, x, y, z) { if (st === 'craft') openInventory('table'); else if (st === 'furnace') openFurnace(x, y, z); else if (st === 'chest') openChest(x, y, z); }
+  function posKey(x, y, z) { return x + ',' + y + ',' + z; }
+  function getFurnace(x, y, z) { const k = posKey(x, y, z); let f = furnaces.get(k); if (!f) { f = { in: null, fuel: null, out: null, burnT: 0, burnMax: 0, cookT: 0 }; furnaces.set(k, f); } return f; }
+  function getChest(x, y, z) { const k = posKey(x, y, z); let c = chests.get(k); if (!c) { c = new Array(27).fill(null); chests.set(k, c); } return c; }
+  function curFurnace() { return curContainerPos && getFurnace(curContainerPos[0], curContainerPos[1], curContainerPos[2]); }
+  function curChest() { return curContainerPos && getChest(curContainerPos[0], curContainerPos[1], curContainerPos[2]); }
+  function isFuel(k) { return !!(window.ADV_SMELT && window.ADV_SMELT.fuel && window.ADV_SMELT.fuel[k]); }
+  function openFurnace(x, y, z) { invOpen = true; uiMode = 'furnace'; curContainerPos = [x, y, z]; if (document.exitPointerLock) try { document.exitPointerLock(); } catch (e) {} renderInv(); }
+  function openChest(x, y, z) { invOpen = true; uiMode = 'chest'; curContainerPos = [x, y, z]; if (document.exitPointerLock) try { document.exitPointerLock(); } catch (e) {} renderInv(); }
+  // 화로: 로드된 청크 내 전부 매 프레임 진행(마크처럼 UI를 안 보고 있어도 계속 구워짐). 아이템당 10초(200틱, 실측).
+  function furnaceTick(dt) {
+    if (!furnaces.size) return;
+    const smelt = (window.ADV_SMELT && window.ADV_SMELT.recipes) || {};
+    const fuelTbl = (window.ADV_SMELT && window.ADV_SMELT.fuel) || {};
+    furnaces.forEach((f, key) => {
+      const p = key.split(',').map(Number); const cx = Math.floor(p[0] / CHUNK), cz = Math.floor(p[2] / CHUNK);
+      if (!chunks.has(ckey(cx, cz))) return;   // 로드된 청크만(마크와 동일 — 언로드 지역은 정지)
+      const outKey = f.in && smelt[f.in.k];
+      const canSmelt = !!(outKey && (!f.out || (f.out.k === outKey && f.out.n < maxStack(outKey))));
+      if (f.burnT <= 0 && canSmelt && f.fuel) {
+        const fu = fuelTbl[f.fuel.k];
+        if (fu) { f.burnMax = fu * 10; f.burnT = f.burnMax; f.fuel.n--; if (f.fuel.n <= 0) f.fuel = null; }
+      }
+      if (f.burnT > 0) {
+        f.burnT -= dt;
+        if (canSmelt) {
+          f.cookT += dt;
+          if (f.cookT >= 10) { f.cookT = 0; f.in.n--; if (f.in.n <= 0) f.in = null; if (f.out) f.out.n++; else f.out = { k: outKey, n: 1 }; }
+        } else f.cookT = Math.max(0, f.cookT - dt * 2);
+      } else f.cookT = 0;
+    });
+  }
   function breakBlock(x, y, z) {
     const id = getBlock(x, y, z); const key = BYID[id].key; const def = bprop(key);
     const harvest = canHarvest(key, inv[hotbar]);
@@ -1316,7 +1385,7 @@
       if (!lastT) lastT = ts; let dt = (ts - lastT) / 1000; lastT = ts; if (dt > 0.1) dt = 0.1;
       world.time += dt;
       streamChunks();
-      if (loaded) { collide(dt); netTick(dt); processMining(dt); updateVitals(dt); updateMobs(dt); growTick(dt); }   // 로드 완료 전엔 물리 정지(지형에 박히는 버그 방지)
+      if (loaded) { collide(dt); netTick(dt); processMining(dt); updateVitals(dt); updateMobs(dt); growTick(dt); furnaceTick(dt); }   // 로드 완료 전엔 물리 정지(지형에 박히는 버그 방지)
       // 카메라
       camera.position.set(P.x, P.y + P.eye, P.z);
       const d = lookDir(); camera.lookAt(P.x + d.x, P.y + P.eye + d.y, P.z + d.z);
@@ -1327,7 +1396,7 @@
       updateOverlays(mining ? breakTarget : raycast());
       if (swingT > 0) { swingT -= dt; updateHand(); }
       renderer.render(scene, camera);
-      _coordT += dt; if (_coordT > 0.2) { _coordT = 0; updateCoordHUD(); }
+      _coordT += dt; if (_coordT > 0.2) { _coordT = 0; updateCoordHUD(); if (invOpen && uiMode === 'furnace') renderInv(); }   // 화로 UI는 진행바 실시간 갱신
       _saveT += dt; if (_saveT > 8 && _dirty) { _saveT = 0; saveNow(); flushServer(); }
     } catch (e) { console.error('adv3d loop', e); }
   }
@@ -1484,15 +1553,17 @@
 
   /* ---------------- 인벤/조합 UI(직접 배치 3×3, 셰이프리스) ---------------- */
   let invOpen = false; let grid = new Array(9).fill(null); let carry = null; let craftN = 4, craftTable = false;
+  let uiMode = 'inv'; let curContainerPos = null;   // 'inv'|'table'|'furnace'|'chest' — 화로/상자는 위치별 영속 상태 참조
   function toggleInventory() { if (invOpen) closeInv(); else openInventory('inv'); }
   function openInventory(mode) {
     invOpen = true; craftTable = (mode === 'table'); craftN = craftTable ? 9 : 4;
+    uiMode = craftTable ? 'table' : 'inv'; curContainerPos = null;
     if (document.exitPointerLock) try { document.exitPointerLock(); } catch (e) {}
     renderInv();
   }
-  function closeInv() { invOpen = false; // 그리드 아이템 회수
+  function closeInv() { invOpen = false; uiMode = 'inv'; curContainerPos = null; // 그리드 아이템 회수(화로/상자 내용물은 위치에 영속되어 그대로 둠)
     grid.forEach((g, i) => { if (g) { addItem(g.k, g.n); grid[i] = null; } }); if (carry) { addItem(carry.k, carry.n); carry = null; }
-    const w = document.getElementById('adv3invwrap'); if (w) w.remove(); refreshHotbar();
+    const w = document.getElementById('adv3invwrap'); if (w) w.remove(); refreshHotbar(); scheduleSave();
   }
   /* ---- 조합 레시피: 마크식 shaped(위치) + shapeless ---- */
   function trimPat(rows) {
@@ -1589,6 +1660,10 @@
     if (kind === 'grid') return { get: () => grid[idx], set: v => { grid[idx] = v; } };
     if (kind === 'off') return { get: () => armorEq.off, set: v => { armorEq.off = v; } };
     if (kind === 'armor') return { get: () => armorEq[idx], set: v => { armorEq[idx] = v; }, accept: k => { const d = window.advDef && window.advDef(k); return !!(d && d.slot === idx); }, max: 1 };
+    if (kind === 'fin') { const f = curFurnace(); return f && { get: () => f.in, set: v => { f.in = v; } }; }
+    if (kind === 'ffuel') { const f = curFurnace(); return f && { get: () => f.fuel, set: v => { f.fuel = v; }, accept: k => isFuel(k) }; }
+    if (kind === 'fout') { const f = curFurnace(); return f && { get: () => f.out, set: v => { f.out = v; }, accept: () => false }; }   // 출력칸: 꺼내기만(직접 넣기 불가, 마크와 동일)
+    if (kind === 'chest') { const c = curChest(); return c && { get: () => c[idx], set: v => { c[idx] = v; } }; }
     return null;
   }
   // 셀 HTML(data-sk 슬롯종류, data-si 인덱스/방어구키) — 이름 툴팁 포함
@@ -1597,29 +1672,65 @@
     const inner = s ? `<img src="${icon(s.k)}"><span class="mc-cnt">${s.n > 1 ? s.n : ''}</span>` : (placeholder ? `<span class="mc-ph">${placeholder}</span>` : '');
     return `<button class="mc-slot${cls || ''}" data-sk="${kind}" data-si="${idx}" title="${nm}">${inner}</button>`;
   }
-  function renderInv() {
+  function carryHTML() { return carry ? `<div class="mc-carry"><img src="${icon(carry.k)}"><span>${carry.n}</span> ${esc(itemName(carry.k))}<button class="mc-drop" data-act="adv3_drop">버리기</button></div>` : ''; }
+  function invRowsHTML() {
+    const store = []; for (let i = 9; i < 36; i++) store.push(cell(inv[i], 'inv', i));
+    const hot = []; for (let i = 0; i < 9; i++) hot.push(cell(inv[i], 'inv', i, ' mc-hot'));
+    return `<div class="mc-store">${store.join('')}</div><div class="mc-hot">${hot.join('')}</div>`;
+  }
+  function renderCraftHTML() {
     const out = craftOutput();
     const cn = craftTable ? 9 : 4, cc = craftTable ? 3 : 2;
     const craftCells = []; for (let i = 0; i < cn; i++) craftCells.push(cell(grid[i], 'grid', i));
     const outCell = `<button class="mc-slot mc-out" data-sk="out" data-si="0" title="${out ? esc(itemName(out.out)) : ''}">${out ? `<img src="${icon(out.out)}"><span class="mc-cnt">${out.count > 1 ? out.count : ''}</span>` : ''}</button>`;
     const arm = ['head', 'chest', 'legs', 'feet'].map((sk, j) => cell(armorEq[sk], 'armor', sk, ' mc-arm', ['🪖', '👕', '👖', '🥾'][j]));
     const offCell = cell(armorEq.off, 'off', 0, ' mc-off', '🛡');
-    const store = []; for (let i = 9; i < 36; i++) store.push(cell(inv[i], 'inv', i));
-    const hot = []; for (let i = 0; i < 9; i++) hot.push(cell(inv[i], 'inv', i, ' mc-hot'));
-    const carryB = carry ? `<div class="mc-carry"><img src="${icon(carry.k)}"><span>${carry.n}</span> ${esc(itemName(carry.k))}<button class="mc-drop" data-act="adv3_drop">버리기</button></div>` : '';
-    const html = `<div class="mc-panel">
+    return `<div class="mc-panel">
         <div class="mc-row1">
           <div class="mc-armor">${arm.join('')}<div class="mc-offwrap">${offCell}</div></div>
           <div class="mc-craft mc-c${cc}">${craftCells.join('')}</div>
           <div class="mc-arrow">▶</div>
           <div class="mc-outwrap">${outCell}</div>
         </div>
-        <div class="mc-store">${store.join('')}</div>
-        <div class="mc-hot">${hot.join('')}</div>
-        ${carryB}
+        ${invRowsHTML()}
+        ${carryHTML()}
         <button class="mc-x" data-act="adv3_close">✕</button>
         <div class="mc-hint">${craftTable ? '제작대 3×3' : '2×2'} · 좌클릭=전체 집기/놓기·교체 · 우클릭(터치=꾹 누르기)=절반/한 개 · Shift+클릭(터치=두번 탭)=빠른 이동 · 방어구칸=장착</div>
       </div>`;
+  }
+  function renderFurnaceHTML() {
+    const f = curFurnace() || { in: null, fuel: null, out: null, burnT: 0, burnMax: 0, cookT: 0 };
+    const burnPct = f.burnMax > 0 ? Math.max(0, Math.min(1, f.burnT / f.burnMax)) : 0;
+    const cookPct = Math.max(0, Math.min(1, f.cookT / 10));
+    return `<div class="mc-panel">
+        <div class="mc-frow">
+          <div class="mc-fcol">
+            ${cell(f.in, 'fin', 0)}
+            <div class="mc-fflame"><div class="mc-fflame-fill" style="height:${Math.round(burnPct * 100)}%"></div></div>
+            ${cell(f.fuel, 'ffuel', 0)}
+          </div>
+          <div class="mc-farrow"><div class="mc-farrow-fill" style="width:${Math.round(cookPct * 100)}%"></div></div>
+          ${cell(f.out, 'fout', 0, ' mc-out')}
+        </div>
+        ${invRowsHTML()}
+        ${carryHTML()}
+        <button class="mc-x" data-act="adv3_close">✕</button>
+        <div class="mc-hint">화로 · 재료+연료를 넣으면 자동으로 구워짐(아이템당 10초) · Shift+클릭=빠른 이동</div>
+      </div>`;
+  }
+  function renderChestHTML() {
+    const c = curChest() || new Array(27).fill(null);
+    const cCells = []; for (let i = 0; i < 27; i++) cCells.push(cell(c[i], 'chest', i));
+    return `<div class="mc-panel">
+        <div class="mc-chestgrid">${cCells.join('')}</div>
+        ${invRowsHTML()}
+        ${carryHTML()}
+        <button class="mc-x" data-act="adv3_close">✕</button>
+        <div class="mc-hint">상자(27칸) · Shift+클릭(터치=두번 탭)=빠른 이동</div>
+      </div>`;
+  }
+  function renderInv() {
+    const html = uiMode === 'furnace' ? renderFurnaceHTML() : uiMode === 'chest' ? renderChestHTML() : renderCraftHTML();
     let w = document.getElementById('adv3invwrap');
     if (!w) {
       w = document.createElement('div'); w.id = 'adv3invwrap'; w.className = 'mc-wrap';
@@ -1667,12 +1778,35 @@
     for (let i = lo; i < hi && n > 0; i++) { if (!inv[i]) { const add = Math.min(max, n); inv[i] = { k, n: add }; n -= add; } }
     return n;
   }
-  // 퀵무브(Shift+클릭/더블탭): 핫바↔저장칸 자동 이동, 제작칸·방어구는 저장칸(꽉 차면 핫바)으로.
+  // 단일칸(화로 재료/연료) 대상 이동: 비어있으면 채우고, 같은 종류면 합치기(최대 스택까지) → 못 넣은 개수 반환
+  function moveToSingleRef(ref, k, n) {
+    const max = maxStack(k); const t = ref.get();
+    if (!t) { const add = Math.min(max, n); ref.set({ k, n: add }); return n - add; }
+    if (t.k === k && t.n < max) { const add = Math.min(max - t.n, n); t.n += add; return n - add; }
+    return n;
+  }
+  // 상자(27칸) 대상 이동: 기존 스택에 합치기 우선, 그다음 빈칸 → 못 넣은 개수 반환
+  function moveToChestRange(k, n) {
+    const c = curChest(); if (!c) return n;
+    const max = maxStack(k);
+    for (let i = 0; i < c.length && n > 0; i++) { const t = c[i]; if (t && t.k === k && t.n < max) { const add = Math.min(max - t.n, n); t.n += add; n -= add; } }
+    for (let i = 0; i < c.length && n > 0; i++) { if (!c[i]) { const add = Math.min(max, n); c[i] = { k, n: add }; n -= add; } }
+    return n;
+  }
+  // 퀵무브(Shift+클릭/더블탭): 화로/상자가 열려있으면 재료칸에 밀어넣고, 아니면 핫바↔저장칸 자동 이동.
+  // 제작칸·방어구·화로·상자 자신의 칸에서 꺼낼 때는 저장칸(꽉 차면 핫바)으로.
   function quickTransfer(kind, idx) {
     const ref = slotRef(kind, idx); if (!ref) return;
     const s = ref.get(); if (!s) return;
     let left;
-    if (kind === 'inv' && idx < 9) left = moveToInvRange(s.k, s.n, 9, 36);
+    if (kind === 'inv' && uiMode === 'furnace' && curContainerPos) {
+      const f = curFurnace(); const smelt = (window.ADV_SMELT && window.ADV_SMELT.recipes) || {};
+      if (smelt[s.k] && (!f.in || f.in.k === s.k)) left = moveToSingleRef(slotRef('fin', 0), s.k, s.n);
+      else if (isFuel(s.k) && (!f.fuel || f.fuel.k === s.k)) left = moveToSingleRef(slotRef('ffuel', 0), s.k, s.n);
+      else left = idx < 9 ? moveToInvRange(s.k, s.n, 9, 36) : moveToInvRange(s.k, s.n, 0, 9);
+    } else if (kind === 'inv' && uiMode === 'chest' && curContainerPos) {
+      left = moveToChestRange(s.k, s.n);
+    } else if (kind === 'inv' && idx < 9) left = moveToInvRange(s.k, s.n, 9, 36);
     else if (kind === 'inv') left = moveToInvRange(s.k, s.n, 0, 9);
     else { left = moveToInvRange(s.k, s.n, 9, 36); if (left > 0) left = moveToInvRange(s.k, left, 0, 9); }
     if (left !== s.n) ref.set(left > 0 ? { k: s.k, n: left } : null);
@@ -1681,7 +1815,7 @@
   // 마인크래프트식 좌/우클릭 인벤 조작(+ Shift/더블탭 퀵무브)
   function slotClick(kind, idx, right, shift) {
     if (kind === 'out') { takeOutput(); return; }
-    if (kind === 'inv' || kind === 'grid') { /* idx는 숫자 */ idx = Number(idx); }
+    if (kind === 'inv' || kind === 'grid' || kind === 'chest') { /* idx는 숫자 */ idx = Number(idx); }
     if (shift && !carry) { quickTransfer(kind, idx); return; }
     const ref = slotRef(kind, idx); if (!ref) return;
     const max = ref.max || (carry ? maxStack(carry.k) : 64);
@@ -1720,7 +1854,19 @@
   function scheduleSave() { _dirty = true; }
   function pState() { return { x: P.x, y: P.y, z: P.z, yaw: P.yaw, pitch: P.pitch, hp: P.hp, hunger: P.hunger, sat: P.sat, spawnX: P.spawnX, spawnZ: P.spawnZ }; }
   function serialize() { const ov = {}; overlay.forEach((v, k) => ov[k] = v); return { p: pState(), inv, hotbar, armor: armorEq, overlay: ov }; }
-  function saveNow(force) { try { localStorage.setItem(SAVE_KEY, JSON.stringify({ p: pState(), inv, hotbar })); } catch (e) {} cloudSavePlayer(force); _dirty = false; }
+  // 화로/상자 내용물은 로컬 저장만(월드 오버레이는 서버 RPC로 여러 플레이어가 공유하지만,
+  // 그 스키마를 확장할 수 없어 컨테이너는 로컬 전용 — 클라우드 저장은 기존과 동일하게 유지)
+  function serializeContainers() {
+    const fu = {}; furnaces.forEach((v, k) => { if (v.in || v.fuel || v.out) fu[k] = v; });
+    const ch = {}; chests.forEach((v, k) => { if (v.some(s => s)) ch[k] = v; });
+    return { fu, ch };
+  }
+  function loadContainers(c) {
+    if (!c) return;
+    if (c.fu) for (const k in c.fu) furnaces.set(k, Object.assign({ in: null, fuel: null, out: null, burnT: 0, burnMax: 0, cookT: 0 }, c.fu[k]));
+    if (c.ch) for (const k in c.ch) chests.set(k, c.ch[k]);
+  }
+  function saveNow(force) { try { localStorage.setItem(SAVE_KEY, JSON.stringify({ p: pState(), inv, hotbar, containers: serializeContainers() })); } catch (e) {} cloudSavePlayer(force); _dirty = false; }
   function loadLocal() { try { return JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch (e) { return null; } }
   // 탭 백그라운드 전환/닫기 시 즉시 저장(주기저장 8초 대기 중 이탈하면 위치 되돌아가는 문제 방지)
   function flushOnHide() { if (document.visibilityState === 'hidden') { try { saveNow(true); flushServer(true); } catch (e) {} } }
@@ -1781,7 +1927,7 @@
     })();
     raf = requestAnimationFrame(loop);
   }
-  function applyPlayer(d) { if (d.p) { P.x = d.p.x; P.y = d.p.y; P.z = d.p.z; P.yaw = d.p.yaw || 0; P.pitch = d.p.pitch || 0; P.hp = d.p.hp || 20; P.hunger = d.p.hunger != null ? d.p.hunger : 20; P.sat = d.p.sat != null ? d.p.sat : 5; P.spawnX = d.p.spawnX; P.spawnZ = d.p.spawnZ; } if (d.inv) inv = d.inv.map(s => s ? { k: s.k, n: s.n } : null); if (d.hotbar != null) hotbar = d.hotbar; if (d.armor) { for (const sk of ['head', 'chest', 'legs', 'feet', 'off']) armorEq[sk] = d.armor[sk] ? { k: d.armor[sk].k, n: d.armor[sk].n } : null; } }
+  function applyPlayer(d) { if (d.p) { P.x = d.p.x; P.y = d.p.y; P.z = d.p.z; P.yaw = d.p.yaw || 0; P.pitch = d.p.pitch || 0; P.hp = d.p.hp || 20; P.hunger = d.p.hunger != null ? d.p.hunger : 20; P.sat = d.p.sat != null ? d.p.sat : 5; P.spawnX = d.p.spawnX; P.spawnZ = d.p.spawnZ; } if (d.inv) inv = d.inv.map(s => s ? { k: s.k, n: s.n } : null); if (d.hotbar != null) hotbar = d.hotbar; if (d.armor) { for (const sk of ['head', 'chest', 'legs', 'feet', 'off']) armorEq[sk] = d.armor[sk] ? { k: d.armor[sk].k, n: d.armor[sk].n } : null; } if (d.containers) loadContainers(d.containers); }
   function newPlayer() { inv = new Array(36).fill(null); armorEq = { head: null, chest: null, legs: null, feet: null, off: null }; P.x = 0.5; P.z = 0.5; P.y = surfaceH(0, 0) + 2; P.hp = 20; P.hunger = 20; P.sat = 5; P.exh = 0; P.spawnX = 0.5; P.spawnZ = 0.5; }   // 기본템 없음
   // 컬럼 최상단 고체 y (청크 생성 포함)
   function columnTop(x, z) { getChunk(Math.floor(x / CHUNK), Math.floor(z / CHUNK), true); let y = WORLD_H - 2; while (y > 1 && !blockSolid(getBlock(x, y, z))) y--; return y; }
@@ -1849,6 +1995,9 @@
     hotbar: () => hotbar, setHotbar: v => { hotbar = v; },
     atlasUV: () => atlasUV, atlasImg: () => atlasTex && atlasTex.image, faceTexName, BYID,
     biomeTint, camera: () => camera, dayFactor, entPhysics, entMoveAxis,
+    openStation, openFurnace, openChest, getFurnace, getChest, furnaceTick,
+    furnaces: () => furnaces, chests: () => chests, uiMode: () => uiMode, curContainerPos: () => curContainerPos,
+    checkUnsupported, lakeDepth, waterAdjacent, isWaterAt, mining: v => { mining = v; }, breakProg: () => breakProg,
   };
   window.adventure3dStart = start;
   window.adventure3dStop = stop;

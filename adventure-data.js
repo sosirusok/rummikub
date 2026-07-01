@@ -228,10 +228,16 @@
     iron_ore_drop: 'iron_ingot', gold_ore_drop: 'gold_ingot', sand: 'glass',
     cobblestone: 'stone', clay_ball: 'brick_item', raw_porkchop: 'cooked_porkchop',
     raw_beef: 'cooked_beef', raw_chicken: 'cooked_chicken', potato: 'baked_potato',
-    oak_log: 'charcoal', birch_log: 'charcoal', iron_ore: 'iron_ingot', gold_ore: 'gold_ingot',
+    oak_log: 'charcoal', birch_log: 'charcoal', spruce_log: 'charcoal', acacia_log: 'charcoal', jungle_log: 'charcoal',
+    iron_ore: 'iron_ingot', gold_ore: 'gold_ingot',
     raw_fish: 'cooked_fish',
   };
-  const FUEL = { coal: 8, charcoal: 8, coal_block: 80, oak_planks: 1.5, oak_log: 1.5, birch_planks: 1.5, birch_log: 1.5, stick: 0.5, lava_bucket: 100, crafting_table: 1.5, chest: 1.5, bowl: 0.5 };   // 책장은 실제 마크에서 연료 아님(제거), 그릇은 막대와 동일(0.5)
+  const FUEL = {
+    coal: 8, charcoal: 8, coal_block: 80, stick: 0.5, lava_bucket: 100, bowl: 0.5,
+    oak_planks: 1.5, oak_log: 1.5, birch_planks: 1.5, birch_log: 1.5,
+    spruce_planks: 1.5, spruce_log: 1.5, acacia_planks: 1.5, acacia_log: 1.5, jungle_planks: 1.5, jungle_log: 1.5,
+    crafting_table: 1.5, chest: 1.5,
+  };   // 책장은 실제 마크에서 연료 아님(제거), 그릇은 막대와 동일(0.5). 단위=제련 가능 아이템 개수(×10초=연소시간)
 
   // ---------------- 몹 ----------------
   // hp, dmg, speed(타일/초), 적대(공격), drops, 크기
