@@ -65,6 +65,7 @@ async function boot() {
 function handleAct(act, el) {
   if (act.indexOf('adv3_') === 0) { if (typeof adventure3dAct === 'function' && adventure3dAct(act, el)) return; }   // 3D 모험 위임
   if (act.indexOf('adv_') === 0) { if (typeof adventureAct === 'function' && adventureAct(act, el)) return; }   // 모험 탭 위임
+  if (act.indexOf('econ_') === 0) { if (typeof econAct === 'function' && econAct(act, el)) return; }   // 경제 탭 위임
   if (typeof chatOnAct === 'function' && chatOnAct(act)) return;   // 채팅 위임(모든 화면 공통)
   if (act.indexOf('eng_') === 0) { if (typeof engageAct === 'function' && engageAct(act, el)) return; }   // 흥미요소(코인/업적/상점/출석)
   if (act.indexOf('dv_') === 0) { davinciAct(act, el); return; }   // 다빈치 코드 액션 위임
@@ -180,6 +181,7 @@ function headerHTML() {
 }
 function goHome() {
   if (typeof adventureStop === 'function') adventureStop();
+  if (typeof economyStop === 'function') economyStop();
   cleanupRoom(); cleanupLobby(); ROOM_ID = null; setScreen('home');
   app().innerHTML = `
     <section class="screen screen--home">
@@ -204,6 +206,9 @@ function goHome() {
         <button class="home-card home-card--adv" data-act="goAdventure">
           <span class="home-card__emoji">🗺️</span><span class="home-card__title">모험</span>
           <span class="home-card__sub">2D 마인크래프트 서바이벌 · 비밀번호 입장 · 멀티</span></button>
+        <button class="home-card home-card--econ" data-act="econ_enter">
+          <span class="home-card__emoji">💰</span><span class="home-card__title">경제</span>
+          <span class="home-card__sub">채굴·농사·낚시 컬렉션 · 일꾼 · 슬레이어 · 던전</span></button>
         <button class="home-card home-card--dev" data-act="goDev">
           <span class="home-card__emoji">🛠</span><span class="home-card__title">개발자 모드</span>
           <span class="home-card__sub">방 초기화 · 유저 스탯 · 게임 로그 · 공지 (관리자)</span></button>
