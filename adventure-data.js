@@ -43,14 +43,28 @@
   def('diamond_ore',  { kor: '다이아 광석', hard: 3.0, tool: PICK, level: 2, drops: [{ i: 'diamond', c: 1 }], xp: 5, pal: ['#7e7e7e', '#727272', '#8a8a8a'], ore: '#5decd5', tex: 'ore' });
   def('emerald_ore',  { kor: '에메랄드 광석', hard: 3.0, tool: PICK, level: 2, drops: [{ i: 'emerald', c: 1 }], xp: 5, pal: ['#7e7e7e', '#727272', '#8a8a8a'], ore: '#3bd16f', tex: 'ore' });
 
+  // ---- 저장 블록(광물 9개 ↔ 블록 1개) ----
+  def('iron_block',    { kor: '철 블록', hard: 5.0, tool: PICK, level: 1, pal: ['#e4e4e0', '#d6d6d2', '#f0f0ec'], tex: 'iron_block' });
+  def('gold_block',    { kor: '금 블록', hard: 3.0, tool: PICK, level: 2, pal: ['#f2d75c', '#e4c74c', '#fbe36e'], tex: 'gold_block' });
+  def('diamond_block', { kor: '다이아 블록', hard: 5.0, tool: PICK, level: 2, pal: ['#6ef0dc', '#5ee0cc', '#7effe8'], tex: 'diamond_block' });
+  def('coal_block',    { kor: '석탄 블록', hard: 5.0, tool: PICK, level: 0, pal: ['#1c1c1e', '#141416', '#26262a'], tex: 'coal_block' });
+  def('redstone_block',{ kor: '레드스톤 블록', hard: 5.0, tool: PICK, level: 0, pal: ['#c81f28', '#b81a22', '#d83038'], tex: 'redstone_block' });
+  def('lapis_block',   { kor: '청금석 블록', hard: 3.0, tool: PICK, level: 1, pal: ['#1f4fc0', '#1740a0', '#2a5fd8'], tex: 'lapis_block' });
+  def('emerald_block', { kor: '에메랄드 블록', hard: 5.0, tool: PICK, level: 2, pal: ['#1fbf5c', '#17a94f', '#2ad06c'], tex: 'emerald_block' });
+
   // ---- 나무/식물 ----
   def('oak_log',    { kor: '참나무 원목', hard: 2.0, tool: AXE, level: 0, pal: ['#6b5436', '#5b472d', '#7c6342'], ring: '#b59b6a', tex: 'log' });
   def('birch_log',  { kor: '자작나무 원목', hard: 2.0, tool: AXE, level: 0, pal: ['#d7d3c8', '#c4c0b4', '#e7e3d8'], ring: '#5c5a4e', tex: 'log' });
   def('oak_planks', { kor: '참나무 판자', hard: 2.0, tool: AXE, level: 0, pal: ['#b08a4f', '#9c7a44', '#c49a5b'], tex: 'plank' });
   def('birch_planks', { kor: '자작나무 판자', hard: 2.0, tool: AXE, level: 0, pal: ['#d8cda0', '#c8bd90', '#e6dbb0'], tex: 'plank' });
   def('oak_leaves', { kor: '참나무 잎', hard: 0.3, tool: SHEARS, level: 0, transparent: true, drops: [{ i: 'sapling', c: 1, chance: 0.06 }, { i: 'apple', c: 1, chance: 0.04 }], pal: ['#3f7a2e', '#356a26', '#4c8f38'], tex: 'leaves' });
+  def('birch_leaves', { kor: '자작나무 잎', hard: 0.3, tool: SHEARS, level: 0, transparent: true, drops: [{ i: 'sapling', c: 1, chance: 0.06 }], pal: ['#5c6b4d', '#4c5a3e', '#6d7c5c'], tex: 'leaves' });
   def('sapling',    { kor: '묘목', solid: false, transparent: true, hard: 0, plant: true, pal: ['#4c8f38'], tex: 'cross' });
   def('cactus',     { kor: '선인장', hard: 0.4, tool: AXE, level: 0, transparent: true, hurt: 1, pal: ['#3f7d3a', '#356a31', '#4c8f46'], tex: 'noise' });
+  def('tall_grass', { kor: '키 큰 풀', solid: false, transparent: true, hard: 0, drops: [{ i: 'seeds', c: 1, chance: 0.12 }], pal: ['#5b9142', '#4f7f3a', '#6aa84f'], tex: 'cross' });
+  def('flower_red', { kor: '빨간 꽃', solid: false, transparent: true, hard: 0, drops: [{ i: 'flower_red', c: 1 }], pal: ['#d23b32', '#b8302a', '#e8483e'], tex: 'cross' });
+  def('flower_yellow', { kor: '노란 꽃', solid: false, transparent: true, hard: 0, drops: [{ i: 'flower_yellow', c: 1 }], pal: ['#f0c829', '#dcb622', '#f7d75c'], tex: 'cross' });
+  def('sugar_cane', { kor: '사탕수수', solid: false, transparent: true, hard: 0, drops: [{ i: 'sugar_cane', c: 1 }], pal: ['#8fc36a', '#7bbf5c', '#a3d178'], tex: 'cross' });
   def('wheat_crop', { kor: '밀(어림)', solid: false, transparent: true, hard: 0, plant: true, crop: 'wheat_ripe', drops: [{ i: 'seeds', c: 1 }], pal: ['#6a8c3a'], tex: 'cross' });
   def('wheat_ripe', { kor: '밀(익음)', solid: false, transparent: true, hard: 0, plant: true, ripe: true, drops: [{ i: 'wheat', c: 1 }, { i: 'seeds', c: 1, max: 3 }], pal: ['#cdb24a'], tex: 'cross' });
   def('carrot_crop', { kor: '당근(어림)', solid: false, transparent: true, hard: 0, plant: true, crop: 'carrot_ripe', drops: [{ i: 'carrot', c: 1 }], pal: ['#3f7d3a'], tex: 'cross' });
@@ -107,6 +121,7 @@
   item('water_bucket', { kor: '물 양동이', stack: 1, places: 'water' });
   item('lava_bucket', { kor: '용암 양동이', stack: 1, places: 'lava' });
   item('fishing_rod', { kor: '낚싯대', stack: 1, dur: 65, fishing: true });
+  item('shield', { kor: '방패', stack: 1, dur: 336, shield: true });
 
   // 방어구: 마인크래프트 방어 포인트(1.5.2). 1포인트 = 피해 4% 감소(최대 80%).
   const ARMOR_PTS = { leather: { head: 1, chest: 3, legs: 2, feet: 1 }, gold: { head: 2, chest: 5, legs: 3, feet: 1 }, iron: { head: 2, chest: 6, legs: 5, feet: 2 }, diamond: { head: 3, chest: 8, legs: 6, feet: 3 } };
@@ -217,8 +232,7 @@
     spider:  { kor: '거미', hp: 16, hostile: true, dmg: 2, speed: 2.1, w: 1.3, h: 0.8, climb: true, drops: [{ i: 'string', c: 0, max: 2 }], col: '#3a3a3a' },
   };
   mat('rotten_flesh', '썩은 살점', { food: 4, poison: 0.8 });
-  mat('sugar_cane', '사탕수수', { block: null });
-  item('iron_block', { kor: '철 블록' }); item('bowl', { kor: '그릇', stack: 64 });
+  item('bowl', { kor: '그릇', stack: 64 });
 
   window.ADV_BLOCKS = B;
   window.ADV_ITEMS = I;

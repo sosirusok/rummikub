@@ -58,6 +58,14 @@
     { key: 'birch_planks', tex: 'birch_planks' },
     { key: 'lapis_ore', tex: 'lapis_ore' },
     { key: 'emerald_ore', tex: 'emerald_ore' },
+    { key: 'iron_block', tex: 'iron_block' },
+    { key: 'gold_block', tex: 'gold_block' },
+    { key: 'diamond_block', tex: 'diamond_block' },
+    { key: 'coal_block', tex: 'coal_block' },
+    { key: 'redstone_block', tex: 'redstone_block' },
+    { key: 'lapis_block', tex: 'lapis_block' },
+    { key: 'emerald_block', tex: 'emerald_block' },
+    { key: 'pumpkin', tex: { top: 'pumpkin_top', side: 'pumpkin_side', bottom: 'pumpkin_top' } },
   ];
   const ID = {}, BYID = BLOCKS;
   BLOCKS.forEach((b, i) => { b.id = i; ID[b.key] = i; if (b.solid === undefined) b.solid = true; if (b.opaque === undefined) b.opaque = true; });
@@ -179,7 +187,10 @@
           const pv = hash3(x * 5 + 7, 0, z * 5 + 13);
           if (b !== 'snow' && nearWater && sy <= SEA + 2 && hash3(x * 9 + 1, 0, z * 9 + 4) < 0.28) return ID.sugar_cane;
           if (b === 'snow') { if (pv < 0.04) return ID.tall_grass; }
-          else { const dense = (b === 'forest') ? 0.20 : 0.13; if (pv < dense) return ID.tall_grass; else if (pv < dense + 0.018) return ID.flower_red; else if (pv < dense + 0.034) return ID.flower_yellow; }
+          else {
+            if ((b === 'forest' || b === 'plains' || b === 'savanna') && hash3(x * 13 + 3, 0, z * 13 + 9) < 0.004) return ID.pumpkin;   // 호박 덩굴(드묾)
+            const dense = (b === 'forest') ? 0.20 : 0.13; if (pv < dense) return ID.tall_grass; else if (pv < dense + 0.018) return ID.flower_red; else if (pv < dense + 0.034) return ID.flower_yellow;
+          }
         } else if (b !== 'snow' && b !== 'desert' && y === sy + 2) {
           // 사탕수수 2~3번째 칸
           const nearWater = surfaceH(x + 1, z) <= SEA || surfaceH(x - 1, z) <= SEA || surfaceH(x, z + 1) <= SEA || surfaceH(x, z - 1) <= SEA;
@@ -414,18 +425,15 @@
   /* ---------------- 텍스처 아틀라스 ---------------- */
   function px(c, x, y, col) { c.fillStyle = col; c.fillRect(x, y, 1, 1); }
   function rngFrom(n) { let s = (n >>> 0) || 1; return function () { s ^= s << 13; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; }; }
-  function drawTex(c, ox, oy, name) {
-    const A = window.ADV_BLOCKS || {};
+  // 정밀(16×16) 원본 패턴 생성 — 아래 drawTex()가 이걸 2×2 평균으로 8×8 실효해상도로 낮춤
+  function drawTexFine(c, ox, oy, name) {
     const r = rngFrom(hashStr(name) >>> 0);
     function f(x, y, col) { px(c, ox + x, oy + y, col); }
-    function f2(x, y, col) { c.fillStyle = col; c.fillRect(ox + x, oy + y, 2, 2); }   // 2×2 픽셀 클러스터(노이즈 덜 지저분·블록다움 ↑)
-    function noise2(cols) { for (let y = 0; y < 16; y += 2) for (let x = 0; x < 16; x += 2) f2(x, y, cols[(r() * cols.length) | 0]); }
-    function fillNoise(p0, p1, p2) { noise2([p1, p0, p0, p2, p0]); }
-    const P3 = (k) => (A[k] && A[k].pal) || ['#888', '#666', '#aaa'];
+    function fillNoise(p0, p1, p2) { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.33 ? p1 : t < 0.66 ? p0 : p2); } }
     switch (name) {
-      case 'stone': noise2(['#7a7a7a', '#828282', '#888888', '#7e7e7e', '#767676', '#8c8c8c']); for (let i = 0; i < 5; i++) f2((r() * 8 | 0) * 2, (r() * 8 | 0) * 2, '#6c6c6c'); break;
-      case 'dirt': noise2(['#7d573c', '#86603f', '#765036', '#8a6044', '#70492f']); break;
-      case 'grass_top': noise2(['#6aa84f', '#74b257', '#7fbd60', '#69a64e', '#80c062']); break;   // 초록 베이스(아이콘=초록, 월드=바이옴 틴트로 곱)
+      case 'stone': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.25 ? '#6f6f6f' : t < 0.5 ? '#787878' : t < 0.78 ? '#828282' : '#8c8c8c'); if (t > 0.96) f(x, y, '#5e5e5e'); } break;
+      case 'dirt': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.25 ? '#6e4c34' : t < 0.55 ? '#7d573c' : t < 0.82 ? '#8a6044' : '#976b4d'); if (t > 0.95) f(x, y, '#5a3d28'); } break;
+      case 'grass_top': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.3 ? '#5b9142' : t < 0.7 ? '#6aa84f' : '#7bbf5c'); if (t > 0.95) f(x, y, '#4f7f3a'); } break;   // 초록 베이스(아이콘=초록, 월드=바이옴 틴트로 곱)
       case 'grass_side': { fillNoise('#7d573c', '#6e4c34', '#8a6044'); for (let x = 0; x < 16; x++) { const gh = 3 + (r() < 0.33 ? 1 : 0); for (let y = 0; y < gh; y++) f(x, y, r() < 0.5 ? '#5b9142' : '#6aa84f'); } break; }   // 흙 베이스 + 상단 3~4px 초록 띠(마크식)
       case 'sand': fillNoise('#e0d6a0', '#d4c98e', '#ece2b0'); break;
       case 'sandstone': { fillNoise('#d9cda0', '#cabf90', '#e6dab0'); for (let y = 3; y < 16; y += 4) for (let x = 0; x < 16; x++) f(x, y, '#bcb080'); break; }
@@ -438,26 +446,35 @@
       case 'planks': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { f(x, y, ((y >> 2) % 2) ? '#9c7a44' : '#b08a4f'); if (y % 4 === 0) f(x, y, '#7a5f34'); } break;
       case 'birch_planks': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { f(x, y, ((y >> 2) % 2) ? '#c8b787' : '#d8c99a'); if (y % 4 === 0) f(x, y, '#b0a074'); } break;   // 자작 판자(밝은 크림색)
       case 'leaves': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.4 ? '#9a9a9a' : t < 0.75 ? '#b6b6b6' : '#cccccc'); if (t > 0.9) f(x, y, '#6e6e6e'); if (t < 0.08) f(x, y, '#5a5a5a'); } break;
-      case 'coal_ore': oreTex(c, ox, oy, '#26262a'); break;
-      case 'iron_ore': oreTex(c, ox, oy, '#d8a282'); break;
-      case 'gold_ore': oreTex(c, ox, oy, '#fbdb4b'); break;
-      case 'diamond_ore': oreTex(c, ox, oy, '#5decd5'); break;
-      case 'redstone_ore': oreTex(c, ox, oy, '#e8323b'); break;
-      case 'lapis_ore': oreTex(c, ox, oy, '#1a44a5'); break;
-      case 'emerald_ore': oreTex(c, ox, oy, '#17a94f'); break;
+      case 'coal_ore': oreTex(c, ox, oy, r, '#26262a'); break;
+      case 'iron_ore': oreTex(c, ox, oy, r, '#d8a282'); break;
+      case 'gold_ore': oreTex(c, ox, oy, r, '#fbdb4b'); break;
+      case 'diamond_ore': oreTex(c, ox, oy, r, '#5decd5'); break;
+      case 'redstone_ore': oreTex(c, ox, oy, r, '#e8323b'); break;
+      case 'lapis_ore': oreTex(c, ox, oy, r, '#1a44a5'); break;
+      case 'emerald_ore': oreTex(c, ox, oy, r, '#17a94f'); break;
       case 'glass': { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) f(x, y, '#bfe6f2'); c.fillStyle = '#dff2f9'; c.fillRect(ox, oy, 16, 1); c.fillRect(ox, oy, 1, 16); c.fillStyle = '#9fd0e0'; c.fillRect(ox, oy + 15, 16, 1); c.fillRect(ox + 15, oy, 1, 16); break; }
       case 'bedrock': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.33 ? '#3a3a3a' : t < 0.66 ? '#565656' : '#6b6b6b'); } break;
       case 'snow': fillNoise('#f0f4f7', '#e2e8ec', '#ffffff'); break;
       case 'water': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) f(x, y, r() < 0.5 ? '#3463cf' : '#3a6ee0'); break;
       case 'obsidian': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.4 ? '#120d1c' : t < 0.8 ? '#1a1326' : '#2a2040'); } break;
       case 'glow': { fillNoise('#c8a23f', '#b38e30', '#f4d35e'); for (let i = 0; i < 8; i++) f((r() * 16) | 0, (r() * 16) | 0, '#fff7cc'); break; }
-      case 'craft_top': { drawTex(c, ox, oy, 'planks'); c.fillStyle = '#5a4327'; c.fillRect(ox + 2, oy + 2, 5, 5); c.fillRect(ox + 9, oy + 2, 5, 5); c.fillRect(ox + 2, oy + 9, 12, 5); break; }
-      case 'craft_side': { drawTex(c, ox, oy, 'planks'); c.fillStyle = '#6b4f2a'; c.fillRect(ox + 1, oy + 8, 14, 7); break; }
-      case 'furnace': { drawTex(c, ox, oy, 'stone'); c.fillStyle = '#222'; c.fillRect(ox + 4, oy + 6, 8, 8); c.fillStyle = '#e8902a'; c.fillRect(ox + 5, oy + 11, 6, 3); break; }
-      case 'chest': { drawTex(c, ox, oy, 'planks'); c.fillStyle = '#3a2a14'; c.fillRect(ox, oy + 7, 16, 2); c.fillStyle = '#d7c27a'; c.fillRect(ox + 7, oy + 6, 2, 4); break; }
+      case 'craft_top': { drawTexFine(c, ox, oy, 'planks'); c.fillStyle = '#5a4327'; c.fillRect(ox + 2, oy + 2, 5, 5); c.fillRect(ox + 9, oy + 2, 5, 5); c.fillRect(ox + 2, oy + 9, 12, 5); break; }
+      case 'craft_side': { drawTexFine(c, ox, oy, 'planks'); c.fillStyle = '#6b4f2a'; c.fillRect(ox + 1, oy + 8, 14, 7); break; }
+      case 'furnace': { drawTexFine(c, ox, oy, 'stone'); c.fillStyle = '#222'; c.fillRect(ox + 4, oy + 6, 8, 8); c.fillStyle = '#e8902a'; c.fillRect(ox + 5, oy + 11, 6, 3); break; }
+      case 'chest': { drawTexFine(c, ox, oy, 'planks'); c.fillStyle = '#3a2a14'; c.fillRect(ox, oy + 7, 16, 2); c.fillStyle = '#d7c27a'; c.fillRect(ox + 7, oy + 6, 2, 4); break; }
       case 'birch_side': { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.6 ? '#d7d3c8' : t < 0.85 ? '#e7e3d8' : '#c4c0b4'); } for (let i = 0; i < 5; i++) { const bx = (r() * 13) | 0, by = (r() * 14) | 0, bw = 2 + ((r() * 3) | 0); c.fillStyle = '#3a3a32'; c.fillRect(ox + bx, oy + by, bw, 1); } break; }
       case 'cactus_top': { fillNoise('#3f7d3a', '#356a31', '#4c8f46'); c.fillStyle = '#2e5e2a'; c.fillRect(ox + 4, oy + 4, 8, 8); c.fillStyle = '#5aa050'; c.fillRect(ox + 6, oy + 6, 4, 4); break; }
       case 'cactus_side': { fillNoise('#3f7d3a', '#356a31', '#4c8f46'); c.fillStyle = '#2e5e2a'; c.fillRect(ox, oy, 1, 16); c.fillRect(ox + 15, oy, 1, 16); c.fillRect(ox + 7, oy, 2, 16); for (let i = 0; i < 10; i++) f((r() * 16) | 0, (r() * 16) | 0, '#dfe7a0'); break; }
+      case 'iron_block': fillNoise('#e4e4e0', '#d6d6d2', '#f0f0ec'); break;
+      case 'gold_block': fillNoise('#f2d75c', '#e4c74c', '#fbe36e'); break;
+      case 'diamond_block': fillNoise('#6ef0dc', '#5ee0cc', '#7effe8'); break;
+      case 'coal_block': fillNoise('#1c1c1e', '#141416', '#26262a'); break;
+      case 'redstone_block': fillNoise('#c81f28', '#b81a22', '#d83038'); break;
+      case 'lapis_block': fillNoise('#1f4fc0', '#1740a0', '#2a5fd8'); break;
+      case 'emerald_block': fillNoise('#1fbf5c', '#17a94f', '#2ad06c'); break;
+      case 'pumpkin_top': { fillNoise('#d6791f', '#c46c18', '#e8902f'); c.fillStyle = '#8a5012'; for (let i = 2; i <= 6; i += 2) c.strokeRect(ox + 8 - i + .5, oy + 8 - i + .5, i * 2 - 1, i * 2 - 1); break; }
+      case 'pumpkin_side': { fillNoise('#d6791f', '#c46c18', '#e8902f'); for (let y = 0; y < 16; y++) { f(3, y, '#a85f16'); f(7, y, '#a85f16'); f(12, y, '#a85f16'); } break; }
       // ---- cross 스프라이트(투명 배경) ----
       case 'tall_grass': { for (let x = 1; x < 16; x += 2) { const h = 6 + ((r() * 7) | 0); const col = r() < 0.5 ? '#5b9142' : '#6aa84f'; for (let y = 16 - h; y < 16; y++) { let xx = x + ((y % 3 === 0 && r() < 0.5) ? 1 : 0); f(xx, y, col); } } break; }
       case 'flower_red': { for (let y = 7; y < 16; y++) f(8, y, '#3f7d3a'); f(7, 11, '#356a31'); f(9, 9, '#356a31'); c.fillStyle = '#d23b32'; c.fillRect(ox + 6, oy + 3, 5, 5); c.fillStyle = '#f0d33a'; c.fillRect(ox + 8, oy + 5, 1, 1); break; }
@@ -465,7 +482,34 @@
       case 'sugar_cane': { for (let y = 0; y < 16; y++) { const col = (y % 5 === 0) ? '#7bbf5c' : (r() < 0.5 ? '#8fc36a' : '#a3d178'); f(7, y, col); f(8, y, col); } break; }
       default: fillNoise('#888', '#666', '#aaa');
     }
-    function oreTex(c, ox, oy, ore) { noise2(['#7a7a7a', '#828282', '#888888', '#7e7e7e', '#767676']); for (let i = 0; i < 6; i++) { const x = 2 + ((hash3(i, 1, 0) * 11) | 0), y = 2 + ((hash3(i, 2, 0) * 11) | 0); c.fillStyle = ore; c.fillRect(ox + x, oy + y, 3, 3); c.fillStyle = 'rgba(255,255,255,0.35)'; c.fillRect(ox + x, oy + y, 1, 1); c.fillStyle = 'rgba(0,0,0,0.25)'; c.fillRect(ox + x + 2, oy + y + 2, 1, 1); } }
+  }
+  function oreTex(c, ox, oy, r, ore) {
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); px(c, ox + x, oy + y, t < 0.33 ? '#727272' : t < 0.66 ? '#7e7e7e' : '#8a8a8a'); }
+    for (let i = 0; i < 6; i++) { const x = 2 + ((hash3(i, 1, 0) * 11) | 0), y = 2 + ((hash3(i, 2, 0) * 11) | 0); c.fillStyle = ore; c.fillRect(ox + x, oy + y, 3, 3); c.fillStyle = 'rgba(255,255,255,0.35)'; c.fillRect(ox + x, oy + y, 1, 1); c.fillStyle = 'rgba(0,0,0,0.25)'; c.fillRect(ox + x + 2, oy + y + 2, 1, 1); }
+  }
+  // ★ 16×16 정밀 패턴 → 8×8 실효해상도로 변환: 2×2 픽셀 그룹(예 1,1·1,2·2,1·2,2)의
+  // 색을 평균해 그 값을 하나로 대입 → 결과적으로 16×16 캔버스에 2×2 크기 블록 64개(8×8)만 남음.
+  // 모든 텍스처(블록/아이템/식물)에 100% 동일하게 적용(atlas·texCanvas 등 drawTex의 모든 호출 경로).
+  let _dtOffCanvas = null;
+  function drawTex(c, ox, oy, name) {
+    if (!_dtOffCanvas) { _dtOffCanvas = document.createElement('canvas'); _dtOffCanvas.width = 16; _dtOffCanvas.height = 16; }
+    const oc = _dtOffCanvas.getContext && _dtOffCanvas.getContext('2d');
+    if (!oc || typeof oc.getImageData !== 'function') { drawTexFine(c, ox, oy, name); return; }   // 캔버스 픽셀 읽기 미지원 환경(테스트 등) 폴백
+    oc.clearRect(0, 0, 16, 16);
+    drawTexFine(oc, 0, 0, name);
+    let id;
+    try { id = oc.getImageData(0, 0, 16, 16).data; } catch (e) { drawTexFine(c, ox, oy, name); return; }
+    for (let by = 0; by < 8; by++) for (let bx = 0; bx < 8; bx++) {
+      let sr = 0, sg = 0, sb = 0, sa = 0;
+      for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) {
+        const px2 = bx * 2 + dx, py2 = by * 2 + dy, idx = (py2 * 16 + px2) * 4, a = id[idx + 3];
+        sr += id[idx] * a; sg += id[idx + 1] * a; sb += id[idx + 2] * a; sa += a;   // 알파 가중 평균(투명 픽셀이 색을 어둡히지 않게)
+      }
+      const avgA = (sa / 4) | 0; if (avgA < 24) continue;   // 대부분 투명 → 비움(십자 스프라이트 컷아웃 유지)
+      const rr = Math.round(sr / sa), gg = Math.round(sg / sa), bb = Math.round(sb / sa);
+      c.fillStyle = avgA >= 248 ? `rgb(${rr},${gg},${bb})` : `rgba(${rr},${gg},${bb},${(avgA / 255).toFixed(3)})`;
+      c.fillRect(ox + bx * 2, oy + by * 2, 2, 2);
+    }
   }
   function hashStr(s) { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return h >>> 0; }
   // 패딩 아틀라스(256x256, 8x8 셀, 16px 타일 + 8px 가장자리 익스트루드) → 밉맵/이방성 필터에서 블리딩 없음
@@ -587,6 +631,7 @@
     if (t) { const id = getBlock(t.x, t.y, t.z); const b = BYID[id]; if (b && b.station) { openStation(b.station); swing(); return; } }
     const held = inv[hotbar];
     if (held) {
+      const it0 = window.ADV_ITEMS[held.k]; if (it0 && it0.bow) { shootArrow(); return; }   // 활: 조준 발사
       // 동물 먹이(번식)
       const m = mobInFront(); if (m && MOB[m.type] && !MOB[m.type].hostile && MOB[m.type].breed === held.k && !m.baby && m.loveT <= 0) { feedMob(m); swing(); return; }
       // 음식 먹기
@@ -732,6 +777,7 @@
     if (P.hp <= 0) return;
     if (P.hurtT > 0.2 && cause !== 'starve' && cause !== 'drown' && cause !== 'lava' && cause !== 'fall') return;   // 무적프레임
     if (cause !== 'starve' && cause !== 'drown') { const p = armorPoints(); if (p > 0) dmg = dmg * (1 - Math.min(0.8, p * 0.04)); }   // 방어구 경감(1포인트=4%, 최대 80%)
+    if (cause !== 'starve' && cause !== 'drown' && cause !== 'fall' && armorEq.off && armorEq.off.k === 'shield') dmg *= 0.7;   // 방패 소지: 근접/발사체 피해 30% 추가 경감
     P.hp = Math.max(0, P.hp - dmg); P.hurtT = 0.5; if (cause !== 'starve' && cause !== 'drown') addExhaustion(0.1);
     if (navigator.vibrate) try { navigator.vibrate(30); } catch (e) {}
     if (P.hp <= 0) { onDeath(cause); }
@@ -889,12 +935,21 @@
     const pd = Math.hypot(P.x - m.x, P.y - m.y, P.z - m.z); if (pd < R + 1) hurtPlayer(Math.round(24 * (1 - pd / (R + 1))), 'creeper');
   }
   function mobDeath(m) { const md = MOB[m.type]; for (const dr of (md.drops || [])) { let cnt = dr.min + Math.floor(Math.random() * (dr.max - dr.min + 1)); if (cnt > 0) addItem(dr.i, cnt); } }
-  function mobInFront() {
-    const d = lookDir(); let best = null, bestDot = 0.86;
-    for (const m of mobs) { const vx = (m.x) - P.x, vy = (m.y + m.h / 2) - (P.y + P.eye), vz = (m.z) - P.z; const dist = Math.hypot(vx, vy, vz); if (dist > 3.6 || dist < 0.01) continue; const dot = (vx * d.x + vy * d.y + vz * d.z) / dist; if (dot > bestDot) { bestDot = dot; best = m; } }
+  function mobInSight(range, dotMin) {
+    const d = lookDir(); let best = null, bestDot = dotMin;
+    for (const m of mobs) { const vx = (m.x) - P.x, vy = (m.y + m.h / 2) - (P.y + P.eye), vz = (m.z) - P.z; const dist = Math.hypot(vx, vy, vz); if (dist > range || dist < 0.01) continue; const dot = (vx * d.x + vy * d.y + vz * d.z) / dist; if (dot > bestDot) { bestDot = dot; best = m; } }
     return best;
   }
+  function mobInFront() { return mobInSight(3.6, 0.86); }
   function attackMob(m) { const held = inv[hotbar]; const it = held && window.ADV_ITEMS[held.k]; const dmg = (it && it.dmg) ? it.dmg : 1; m.hp -= dmg; m.hurtT = 0.25; const ln = Math.hypot(m.x - P.x, m.z - P.z) || 1; m.vx = (m.x - P.x) / ln * 6; m.vz = (m.z - P.z) / ln * 6; m.vy = 5; if (!MOB[m.type].hostile) m.fleeT = 6; addExhaustion(0.1); swing(); }
+  // 활: 화살 소모 후 조준선상 가장 가까운 몹에 즉발 명중(투사체 물리 생략, 히트스캔으로 근사)
+  function consumeArrow() { for (let i = 0; i < inv.length; i++) { const s = inv[i]; if (s && s.k === 'arrow') { s.n--; if (s.n <= 0) inv[i] = null; refreshHotbar(); scheduleSave(); return true; } } return false; }
+  function shootArrow() {
+    if (!consumeArrow()) { toast('화살이 없어요', false); return; }
+    const m = mobInSight(24, 0.985);
+    if (m) { const dmg = 5 + Math.random() * 2; m.hp -= dmg; m.hurtT = 0.25; const ln = Math.hypot(m.x - P.x, m.z - P.z) || 1; m.vx = (m.x - P.x) / ln * 4; m.vz = (m.z - P.z) / ln * 4; m.vy = 3; if (!MOB[m.type].hostile) m.fleeT = 6; }
+    addExhaustion(0.1); swing();
+  }
   function feedMob(m) { const s = inv[hotbar]; if (!s) return; s.n--; if (s.n <= 0) inv[hotbar] = null; refreshHotbar(); m.loveT = 30; }
   function tryBreed(m) { for (const o of mobs) { if (o !== m && o.type === m.type && o.loveT > 0 && !o.baby && Math.hypot(o.x - m.x, o.z - m.z) < 6) { addMob(m.type, m.x, m.y, m.z, true); m.loveT = 0; o.loveT = 0; toast('새끼가 태어났어요!', true); return; } } }
 
@@ -1010,9 +1065,17 @@
   function icon(key) {
     if (iconCache[key]) return iconCache[key];
     const s = 48; const cv = document.createElement('canvas'); cv.width = cv.height = s; const c = cv.getContext('2d'); c.imageSmoothingEnabled = false;
-    try { if (window.ADV_BLOCKS[key] && ID[key] !== undefined && BYID[ID[key]] && BYID[ID[key]].tex) drawCubeIcon(c, key, s); else drawItemIcon2(c, key, s); }
-    catch (e) { try { drawItemIcon2(c, key, s); } catch (e2) {} }
+    try {
+      const bid = ID[key], b = bid !== undefined ? BYID[bid] : null;
+      if (window.ADV_BLOCKS[key] && b && b.cross) drawCrossIcon(c, key, s);        // 십자 식물: 평면 아이콘(정육면체 X)
+      else if (window.ADV_BLOCKS[key] && b && b.tex) drawCubeIcon(c, key, s);      // 일반 블록: 아이소 큐브
+      else drawItemIcon2(c, key, s);
+    } catch (e) { try { drawItemIcon2(c, key, s); } catch (e2) {} }
     const u = cv.toDataURL(); iconCache[key] = u; return u;
+  }
+  function drawCrossIcon(c, key, s) {
+    const b = BYID[ID[key]]; const img = texCanvas(faceTexName(b, 'side'));
+    c.imageSmoothingEnabled = false; c.drawImage(img, 0, 0, 16, 16, s * 0.06, s * 0.06, s * 0.88, s * 0.88);
   }
   const _texCanvasCache = {};
   function texCanvas(name) { if (_texCanvasCache[name]) return _texCanvasCache[name]; const cv = document.createElement('canvas'); cv.width = cv.height = 16; drawTex(cv.getContext('2d'), 0, 0, name); _texCanvasCache[name] = cv; return cv; }
@@ -1055,6 +1118,7 @@
       return;
     }
     if (d && d.food) { c.fillStyle = '#cc7a3a'; c.beginPath(); c.arc(s / 2, s / 2, s * 0.3, 0, 7); c.fill(); return; }
+    if (d && d.shield) { c.fillStyle = '#9c7a44'; c.beginPath(); c.moveTo(8 * u, 2 * u); c.lineTo(13 * u, 3.5 * u); c.lineTo(13 * u, 9 * u); c.quadraticCurveTo(13 * u, 13 * u, 8 * u, 14.5 * u); c.quadraticCurveTo(3 * u, 13 * u, 3 * u, 9 * u); c.lineTo(3 * u, 3.5 * u); c.closePath(); c.fill(); c.fillStyle = '#dcdcdc'; c.beginPath(); c.arc(8 * u, 7.5 * u, 2.2 * u, 0, 7); c.fill(); return; }
     c.fillStyle = '#b88'; c.beginPath(); c.arc(s / 2, s / 2, s * 0.28, 0, 7); c.fill();
   }
 
@@ -1129,6 +1193,16 @@
       shaped(m + '_leggings', 1, ['AAA', 'A A', 'A A'], k, true);
       shaped(m + '_boots', 1, ['A A', 'A A'], k, true);
     }
+    // 저장 블록(광물 9개 ↔ 블록 1개)
+    const STORE = { iron_ingot: 'iron_block', gold_ingot: 'gold_block', diamond: 'diamond_block', coal: 'coal_block', redstone: 'redstone_block', lapis: 'lapis_block', emerald: 'emerald_block' };
+    for (const src in STORE) { const blk = STORE[src];
+      shaped(blk, 1, ['III', 'III', 'III'], { I: src }, true);
+      shapeless(src, 9, { [blk]: 1 });
+    }
+    shaped('gold_ingot', 1, ['NNN', 'NNN', 'NNN'], { N: 'gold_nugget' }, true);
+    shapeless('gold_nugget', 9, { gold_ingot: 1 });
+    shaped('shield', 1, ['PIP', 'PPP', ' P '], { P: PLANKS, I: 'iron_ingot' }, true);
+    shapeless('pumpkin_pie', 1, { pumpkin: 1, sugar: 1 });
     _recipes = R; return R;
   }
   function craftOutput() {
