@@ -30,7 +30,7 @@
   def('sandstone',  { kor: '사암', hard: 0.8, tool: PICK, level: 0, pal: ['#d9cda0', '#cabf90', '#e6dab0'], tex: 'sandstone' });
   def('gravel',     { kor: '자갈', hard: 0.6, tool: SHOVEL, level: 0, gravity: true, drops: [{ i: 'gravel', c: 1 }, { i: 'flint', c: 1, chance: 0.1 }], pal: ['#867f7e', '#76706f', '#999190'], tex: 'cobble' });
   def('clay',       { kor: '점토', hard: 0.6, tool: SHOVEL, level: 0, drops: [{ i: 'clay_ball', c: 4 }], pal: ['#a4a8b6', '#9498a6', '#b4b8c6'], tex: 'noise' });
-  def('snow_block', { kor: '눈 블록', hard: 0.2, tool: SHOVEL, level: 0, pal: ['#f0f4f7', '#e2e8ec', '#ffffff'], tex: 'noise' });
+  def('snow_block', { kor: '눈 블록', hard: 0.2, tool: SHOVEL, level: 0, needsTool: true, drops: [{ i: 'snowball', c: 4 }], pal: ['#f0f4f7', '#e2e8ec', '#ffffff'], tex: 'noise' });   // 삽 없으면 드롭 없음, 삽으로 눈덩이 4개
   def('ice',        { kor: '얼음', hard: 0.5, tool: PICK, level: 0, transparent: true, drops: [], pal: ['#83a0f0', '#7390e0', '#a0bcff'], tex: 'noise' });
   def('obsidian',   { kor: '흑요석', hard: 50, tool: PICK, level: 3, pal: ['#1a1326', '#120d1c', '#2a2040'], tex: 'noise' });
 
@@ -55,10 +55,13 @@
   // ---- 나무/식물 ----
   def('oak_log',    { kor: '참나무 원목', hard: 2.0, tool: AXE, level: 0, pal: ['#6b5436', '#5b472d', '#7c6342'], ring: '#b59b6a', tex: 'log' });
   def('birch_log',  { kor: '자작나무 원목', hard: 2.0, tool: AXE, level: 0, pal: ['#d7d3c8', '#c4c0b4', '#e7e3d8'], ring: '#5c5a4e', tex: 'log' });
+  def('spruce_log', { kor: '가문비나무 원목', hard: 2.0, tool: AXE, level: 0, pal: ['#3b2a18', '#2e2012', '#4a3722'], ring: '#6b5236', tex: 'log' });
   def('oak_planks', { kor: '참나무 판자', hard: 2.0, tool: AXE, level: 0, pal: ['#b08a4f', '#9c7a44', '#c49a5b'], tex: 'plank' });
   def('birch_planks', { kor: '자작나무 판자', hard: 2.0, tool: AXE, level: 0, pal: ['#d8cda0', '#c8bd90', '#e6dbb0'], tex: 'plank' });
+  def('spruce_planks', { kor: '가문비나무 판자', hard: 2.0, tool: AXE, level: 0, pal: ['#6b4f2e', '#5b4226', '#7c5e38'], tex: 'plank' });
   def('oak_leaves', { kor: '참나무 잎', hard: 0.2, tool: SHEARS, level: 0, transparent: true, drops: [{ i: 'sapling', c: 1, chance: 0.06 }, { i: 'apple', c: 1, chance: 0.04 }], pal: ['#3f7a2e', '#356a26', '#4c8f38'], tex: 'leaves' });
   def('birch_leaves', { kor: '자작나무 잎', hard: 0.2, tool: SHEARS, level: 0, transparent: true, drops: [{ i: 'sapling', c: 1, chance: 0.06 }], pal: ['#5c6b4d', '#4c5a3e', '#6d7c5c'], tex: 'leaves' });
+  def('spruce_leaves', { kor: '가문비나무 잎', hard: 0.2, tool: SHEARS, level: 0, transparent: true, drops: [{ i: 'sapling', c: 1, chance: 0.06 }], pal: ['#2c4a2c', '#233b23', '#375a37'], tex: 'leaves' });
   def('sapling',    { kor: '묘목', solid: false, transparent: true, hard: 0, plant: true, pal: ['#4c8f38'], tex: 'cross' });
   def('cactus',     { kor: '선인장', hard: 0.4, tool: AXE, level: 0, transparent: true, hurt: 1, pal: ['#3f7d3a', '#356a31', '#4c8f46'], tex: 'noise' });
   def('tall_grass', { kor: '키 큰 풀', solid: false, transparent: true, hard: 0, drops: [{ i: 'seeds', c: 1, chance: 0.12 }], pal: ['#5b9142', '#4f7f3a', '#6aa84f'], tex: 'cross' });
@@ -148,6 +151,7 @@
   mat('clay_ball', '점토 덩어리'); mat('brick_item', '벽돌(아이템)');
   mat('paper', '종이'); mat('book', '책'); mat('sugar', '설탕');
   mat('slimeball', '슬라임볼'); mat('arrow', '화살', { stack: 64 });
+  mat('snowball', '눈덩이', { stack: 16 });
   mat('glowstone_dust', '발광석 가루'); mat('blaze_rod', '블레이즈 막대'); mat('seeds', '씨앗', { plant: 'wheat_crop' });
 
   // 음식: food=허기회복(0.5칸=1), sat=포화
