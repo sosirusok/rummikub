@@ -53,6 +53,13 @@
     { key: 'spruce_log', tex: { top: 'spruce_top', side: 'spruce_side', bottom: 'spruce_top' } },
     { key: 'spruce_leaves', tex: 'spruce_leaves' },
     { key: 'spruce_planks', tex: 'spruce_planks' },
+    { key: 'acacia_log', tex: { top: 'acacia_top', side: 'acacia_side', bottom: 'acacia_top' } },
+    { key: 'acacia_leaves', tex: 'acacia_leaves' },
+    { key: 'acacia_planks', tex: 'acacia_planks' },
+    { key: 'jungle_log', tex: { top: 'jungle_top', side: 'jungle_side', bottom: 'jungle_top' } },
+    { key: 'jungle_leaves', tex: 'jungle_leaves' },
+    { key: 'jungle_planks', tex: 'jungle_planks' },
+    { key: 'terracotta', tex: 'terracotta' },
     { key: 'cactus', tex: { top: 'cactus_top', side: 'cactus_side', bottom: 'cactus_top' } },
     { key: 'tall_grass', tex: 'tall_grass', opaque: false, solid: false, cross: true },
     { key: 'flower_red', tex: 'flower_red', opaque: false, solid: false, cross: true },
@@ -139,15 +146,30 @@
   }
   // 마크식 2축(온도·습도) 바이옴 — 큰 지역 단위로 또렷하게 구분(설원/사막/사바나/숲/평원)
   const biomeCache = new Map();
+  // 실제 마크처럼 온도·습도 2축 + 고도(산악 override)로 11종 바이옴 분류.
   function biome(x, z) {
     const k = x + ',' + z; const c = biomeCache.get(k); if (c !== undefined) return c;
     const t = vnoise(x + 8000, z - 8000, 0.0046);          // 온도 0..1 (파장 ~220 → 이동 중 여러 바이옴 통과)
     const h = vnoise(x - 6000, z + 6000, 0.0052);          // 습도 0..1 (파장 ~190)
     let b;
-    if (t < 0.27) b = 'snow';                              // 추움 → 설원(자작/눈)
-    else if (t > 0.70) b = h < 0.40 ? 'desert' : 'savanna';// 더움: 건조=사막 / 보통=사바나
-    else if (h > 0.62) b = 'forest';                       // 온화+습함 → 숲(빽빽)
-    else b = 'plains';                                     // 그 외 → 평원
+    if (surfaceH(x, z) > 68) b = 'mountains';                          // 고지대는 온도·습도 무관 우선 판정(실측 지형 최고고도가 78 안팎이라 임계값 하향)
+    else if (t < 0.20) b = 'snow';                                     // 매우 추움 → 설원(가문비/눈)
+    else if (t < 0.34) b = 'taiga';                                    // 추움 → 타이가(가문비, 눈 없음)
+    else if (t < 0.62) {                                               // 온화
+      if (h < 0.28) b = 'plains';
+      else if (h < 0.48) b = 'birch_forest';
+      else if (h < 0.80) b = 'forest';
+      else b = 'swamp';
+    } else if (t < 0.82) {                                             // 따뜻
+      if (h < 0.22) b = 'savanna';
+      else if (h < 0.55) b = 'forest';
+      else b = 'jungle';
+    } else {                                                           // 더움
+      if (h < 0.20) b = 'badlands';
+      else if (h < 0.42) b = 'desert';
+      else if (h < 0.65) b = 'savanna';
+      else b = 'jungle';
+    }
     biomeCache.set(k, b); if (biomeCache.size > 80000) biomeCache.clear();
     return b;
   }
@@ -180,8 +202,9 @@
     const jz = cz * TREE_CELL + TREE_MARGIN + (hash3(cx * 17 + 11, 1, cz * 17 + 5) * span | 0);
     if (x === jx && z === jz) {   // 이 셀의 유일한 후보 좌표일 때만 검사(셀당 나무 최대 1그루)
       const b = biome(x, z);
-      if (b !== 'desert') {
-        const p = b === 'forest' ? 0.55 : b === 'savanna' ? 0.10 : b === 'snow' ? 0.20 : 0.16;   // 셀당 확률(간격은 격자가 보장)
+      if (b !== 'desert' && b !== 'badlands') {
+        const p = b === 'jungle' ? 0.65 : b === 'forest' ? 0.55 : b === 'birch_forest' ? 0.5 : b === 'taiga' ? 0.45
+          : b === 'swamp' ? 0.25 : b === 'snow' ? 0.20 : b === 'savanna' ? 0.10 : b === 'mountains' ? 0.04 : 0.16;   // 셀당 확률(간격은 격자가 보장)
         if (h2(x * 7 + 1, z * 13 + 3) < p) {
           const sy = surfaceH(x, z);
           if (sy > SEA + 1) {   // 물·해변엔 나무 X + 주변 완만할 때만(절벽 나무 방지)
@@ -198,29 +221,39 @@
   function biomeTint(x, z) {
     const b = biome(x, z);
     if (b === 'desert') return [0.74, 0.71, 0.33];     // 마른 황록
+    if (b === 'badlands') return [0.76, 0.62, 0.30];   // 메마른 황토
     if (b === 'savanna') return [0.76, 0.70, 0.36];    // 사바나 올리브
     if (b === 'snow') return [0.51, 0.72, 0.60];       // 차가운 청록
+    if (b === 'taiga') return [0.40, 0.66, 0.46];      // 서늘한 청록숲
     if (b === 'forest') return [0.33, 0.69, 0.29];     // 진한 숲 초록
+    if (b === 'birch_forest') return [0.47, 0.76, 0.36]; // 밝은 연둣빛
+    if (b === 'jungle') return [0.24, 0.72, 0.20];     // 진하고 채도 높은 정글초록
+    if (b === 'swamp') return [0.40, 0.52, 0.32];      // 탁한 늪지초록
+    if (b === 'mountains') return [0.45, 0.58, 0.44];  // 메마른 산악
     const n = vnoise(x + 50, z + 50, 0.02);
     return [0.42 + n * 0.16, 0.75 - n * 0.05, 0.34 + n * 0.10];   // 평원 밝은 초록
   }
-  // 호박: 아주 드문 '패치'로만 생성, 한 패치에 대략 5~10개가 무리지음(실제 마크 pumpkin patch)
-  const PUMP_CELL = 24;
+  // 호박: 청크(16×16) 단위 1/32 확률로만 패치 생성(실제 마크 정확 수치), 패치당 대략 5~10개 무리
   function pumpkinAt(x, z) {
-    const cx = Math.floor(x / PUMP_CELL), cz = Math.floor(z / PUMP_CELL);
-    if (hash3(cx * 41 + 7, 5, cz * 41 + 3) >= 0.06) return false;                 // 대부분 셀엔 호박 패치 없음(희귀)
-    const jx = cx * PUMP_CELL + 5 + (hash3(cx * 7 + 1, 6, cz * 7 + 2) * 14 | 0);   // 패치 중심(셀 내부로 지터)
-    const jz = cz * PUMP_CELL + 5 + (hash3(cx * 9 + 4, 7, cz * 9 + 8) * 14 | 0);
+    const cx = Math.floor(x / CHUNK), cz = Math.floor(z / CHUNK);
+    if (hash3(cx * 41 + 7, 5, cz * 41 + 3) >= 1 / 32) return false;               // 마크 실측: 청크당 1/32
+    const jx = cx * CHUNK + 3 + (hash3(cx * 7 + 1, 6, cz * 7 + 2) * (CHUNK - 6) | 0);   // 패치 중심(셀 내부로 지터)
+    const jz = cz * CHUNK + 3 + (hash3(cx * 9 + 4, 7, cz * 9 + 8) * (CHUNK - 6) | 0);
     if (Math.abs(x - jx) + Math.abs(z - jz) > 3) return false;                     // 반경 ~3 무리
-    return hash3(x * 3 + 1, 8, z * 3 + 5) < 0.42;                                  // 무리 내 듬성듬성 → 대략 5~10개
+    return hash3(x * 3 + 1, 8, z * 3 + 5) < 0.35;                                  // 무리 내 듬성듬성 → 대략 5~10개
   }
-  // 꽃: 저주파 노이즈로 '꽃밭' 영역을 군데군데 형성(전역 무작위 X). 한 꽃밭은 대체로 한 종류.
+  // 꽃: 셀 단위 지터드 패치(호박과 동일 기법) — 노이즈 등고선 형태의 줄무늬 방지, 자연스러운 뭉치.
+  const FLOWER_CELL = 22;
   function flowerAt(x, z) {
-    const patch = vnoise(x + 700, z - 300, 0.03);           // 0..1, 파장 ~33 (꽃밭 크기)
-    if (patch < 0.66) return 0;                             // 대부분 지역엔 꽃 없음
-    const density = (patch - 0.66) / 0.34 * 0.4;            // 꽃밭 중심일수록 빽빽
-    if (hash3(x * 5 + 2, 9, z * 5 + 6) > density) return 0;
-    const typeN = vnoise(x + 2000, z + 2000, 0.02);         // 종류(민들레/양귀비)를 지역 단위로 통일
+    const cx = Math.floor(x / FLOWER_CELL), cz = Math.floor(z / FLOWER_CELL);
+    if (hash3(cx * 53 + 11, 15, cz * 53 + 17) >= 0.16) return 0;                   // 대부분 셀엔 꽃밭 없음
+    const jx = cx * FLOWER_CELL + 4 + (hash3(cx * 19 + 3, 16, cz * 19 + 6) * (FLOWER_CELL - 8) | 0);
+    const jz = cz * FLOWER_CELL + 4 + (hash3(cx * 23 + 8, 17, cz * 23 + 2) * (FLOWER_CELL - 8) | 0);
+    const d = Math.abs(x - jx) + Math.abs(z - jz);
+    if (d > 5) return 0;                                                          // 반경 ~5 뭉치(끝없는 들판 X)
+    const density = 0.42 - d * 0.07;                                              // 중심일수록 빽빽, 가장자리 성김
+    if (density <= 0 || hash3(x * 5 + 2, 9, z * 5 + 6) >= density) return 0;
+    const typeN = hash3(cx * 29 + 4, 18, cz * 29 + 9);                            // 한 꽃밭은 한 종류로 통일
     return typeN < 0.5 ? ID.flower_yellow : ID.flower_red;
   }
   function genBlock(x, y, z) {
@@ -236,15 +269,16 @@
         if (b === 'desert') {                                          // 선인장(1~2칸)
           if (h2(x * 3 + 2, z * 3 + 5) < 0.018) { const ch = 1 + (hash3(x, 7, z) < 0.5 ? 1 : 0); if (y >= sy + 1 && y <= sy + ch) return ID.cactus; }
         } else if (y === sy + 1) {
-          if (b === 'snow') return ID.air;   // 설원 지표엔 잡초/꽃 없음(실제 마크 눈 평원)
+          if (b === 'snow' || b === 'badlands' || b === 'mountains') return ID.air;   // 눈 평원·메마른 고지·바위산엔 잡초/꽃 없음
           // 사탕수수(물가 1칸 옆, 2~3칸)
           const nearWater = surfaceH(x + 1, z) <= SEA || surfaceH(x - 1, z) <= SEA || surfaceH(x, z + 1) <= SEA || surfaceH(x, z - 1) <= SEA;
           const pv = hash3(x * 5 + 7, 0, z * 5 + 13);
           if (nearWater && sy <= SEA + 2 && hash3(x * 9 + 1, 0, z * 9 + 4) < 0.28) return ID.sugar_cane;
-          if ((b === 'forest' || b === 'plains' || b === 'savanna') && pumpkinAt(x, z)) return ID.pumpkin;   // 희귀 호박 패치(무리)
+          if ((b === 'forest' || b === 'plains' || b === 'savanna' || b === 'jungle') && pumpkinAt(x, z)) return ID.pumpkin;   // 희귀 호박 패치(무리)
           const fl = flowerAt(x, z); if (fl) return fl;                                                      // 노이즈 기반 꽃밭
-          const dense = (b === 'forest') ? 0.20 : (b === 'savanna') ? 0.16 : 0.13; if (pv < dense) return ID.tall_grass;   // 바이옴별 잡초 밀도
-        } else if (b !== 'snow' && b !== 'desert' && y === sy + 2) {
+          const dense = (b === 'jungle') ? 0.30 : (b === 'forest' || b === 'taiga' || b === 'birch_forest') ? 0.20 : (b === 'savanna') ? 0.16 : (b === 'swamp') ? 0.24 : 0.13;   // 바이옴별 잡초 밀도
+          if (pv < dense) return ID.tall_grass;
+        } else if (b !== 'snow' && b !== 'desert' && b !== 'badlands' && b !== 'mountains' && y === sy + 2) {
           // 사탕수수 2~3번째 칸
           const nearWater = surfaceH(x + 1, z) <= SEA || surfaceH(x - 1, z) <= SEA || surfaceH(x, z + 1) <= SEA || surfaceH(x, z - 1) <= SEA;
           if (nearWater && sy <= SEA + 2 && hash3(x * 9 + 1, 0, z * 9 + 4) < 0.28) { if (hash3(x, 3, z) < 0.6) return ID.sugar_cane; }
@@ -255,10 +289,14 @@
     if (y === sy) {
       if (sy <= SEA) { if (sy >= SEA - 3 && hash3(x * 7 + 3, 0, z * 7 + 11) < 0.05) return ID.clay; return ID.sand; }   // 해수면 이하(수중 바닥·해변) = 모래(얕은 곳 일부 점토)
       if (b === 'desert') return ID.sand;             // 사막 = 모래
+      if (b === 'badlands') return ID.terracotta;     // 메마른 고원 = 테라코타(메사)
       if (b === 'snow') return ID.snow_block;         // 설원 = 눈
+      if (b === 'mountains') return sy > 74 ? ID.snow_block : ID.stone;   // 산악 = 맨바위(정상은 만년설)
       return ID.grass;                                // 육지 = 잔디
     }
     const depth = sy - y;
+    if (b === 'badlands' && depth <= 4) return ID.terracotta;             // 메사 특유의 두꺼운 테라코타 층
+    if (b === 'mountains' && depth <= 2) return ID.stone;
     if (depth <= 3) return (b === 'desert' || sy <= SEA + 1) ? (b === 'desert' ? ID.sandstone : ID.sand) : ID.dirt;
     // 동굴
     if (caveCarve(x, y, z)) { if (y <= 9 && vnoise3(x + 3000, y, z + 3000, 0.05) > 0.62) return ID.lava; return ID.air; }   // 깊은 곳 용암 웅덩이
@@ -288,13 +326,19 @@
     return false;
   }
   function treeBlock(x, y, z) {
-    for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) {
+    for (let dx = -3; dx <= 3; dx++) for (let dz = -3; dz <= 3; dz++) {   // 정글 캐노피가 넓어 반경 3까지 스캔
       const ox = x - dx, oz = z - dz; if (!isTreeAt(ox, oz)) continue;
       const sy = surfaceH(ox, oz); if (sy < SEA) continue;
-      // 종: 설원=가문비(원뿔형·키큼), 그 외 22%=자작, 나머지=참나무
-      const species = biome(ox, oz) === 'snow' ? 'spruce' : (h2(ox * 11 + 5, oz * 11 + 7) < 0.22 ? 'birch' : 'oak');
+      const b = biome(ox, oz);
+      // 종: 설원/타이가/산악=가문비, 사바나=아카시아, 정글=정글나무, 자작나무숲=자작, 그 외 22%=자작·나머지 참나무
+      let species;
+      if (b === 'snow' || b === 'taiga' || b === 'mountains') species = 'spruce';
+      else if (b === 'savanna') species = 'acacia';
+      else if (b === 'jungle') species = 'jungle';
+      else if (b === 'birch_forest') species = 'birch';
+      else species = h2(ox * 11 + 5, oz * 11 + 7) < 0.22 ? 'birch' : 'oak';
       if (species === 'spruce') {
-        const th = 6 + Math.floor(h2(ox, oz) * 4);   // 줄기 6~9
+        const th = 6 + Math.floor(h2(ox, oz) * 4);   // 줄기 6~9(원뿔형)
         const top = sy + th;
         if (dx === 0 && dz === 0 && y > sy && y <= top) return ID.spruce_log;   // 줄기(꼭대기까지)
         const md = Math.abs(dx) + Math.abs(dz);
@@ -304,15 +348,36 @@
           if (md <= rad && hash3(x, y, z) < 0.9) return ID.spruce_leaves;
         }
         if (dx === 0 && dz === 0 && y === top + 1) return ID.spruce_leaves;   // 뾰족한 꼭대기 잎
-      } else {
+      } else if (species === 'acacia') {
+        const th = 3 + Math.floor(h2(ox, oz) * 2);   // 짧은 줄기(3~4, 자주 기운 형태 대신 단순화)
+        const top = sy + th;
+        if (dx === 0 && dz === 0 && y > sy && y <= top) return ID.acacia_log;   // 줄기
+        if ((y === top || y === top + 1) && Math.abs(dx) + Math.abs(dz) <= 2) {   // 꼭대기에만 넓적한 우산형 캐노피
+          if (hash3(x, y, z) < 0.85) return ID.acacia_leaves;
+        }
+      } else if (species === 'jungle') {
+        const th = 8 + Math.floor(h2(ox, oz) * 5);   // 매우 큰 키(8~12)
+        const top = sy + th;
+        if (dx === 0 && dz === 0 && y > sy && y <= top - 2) return ID.jungle_log;   // 줄기
+        const ly = y - (top - 2);
+        if (Math.abs(dx) + Math.abs(dz) <= 3 && ly >= -1 && ly <= 3) {   // 크고 무성한 캐노피
+          if (!(dx === 0 && dz === 0 && y <= top - 2)) { if (hash3(x, y, z) < 0.88) return ID.jungle_leaves; }
+        }
+      } else if (species === 'birch') {
+        const th = 5 + Math.floor(h2(ox, oz) * 3);   // 참나무보다 키 크고 좁은 원통형 캐노피
+        const top = sy + th;
+        if (dx === 0 && dz === 0 && y > sy && y <= top - 1) return ID.birch_log;
+        const ly = y - (top - 1);
+        if (Math.abs(dx) + Math.abs(dz) <= 2 && ly >= 0 && ly <= 2) {
+          if (!(dx === 0 && dz === 0 && y <= top - 1)) { if (hash3(x, y, z) < 0.85) return ID.birch_leaves; }
+        }
+      } else {   // oak: 낮고 둥글넓적한 캐노피
         const th = 4 + Math.floor(h2(ox, oz) * 3);
         const top = sy + th;
-        const logId = species === 'birch' ? ID.birch_log : ID.oak_log;
-        const leafId = species === 'birch' ? ID.birch_leaves : ID.oak_leaves;
-        if (dx === 0 && dz === 0 && y > sy && y <= top - 1) return logId;   // 줄기
+        if (dx === 0 && dz === 0 && y > sy && y <= top - 1) return ID.oak_log;
         const ly = y - (top - 1);
-        if (Math.abs(dx) + Math.abs(dz) <= 3 && ly >= -1 && ly <= 1) {      // 잎(둥근 관목형)
-          if (!(dx === 0 && dz === 0 && y <= top - 1)) { if (hash3(x, y, z) < 0.85) return leafId; }
+        if (Math.abs(dx) + Math.abs(dz) <= 3 && ly >= -1 && ly <= 1) {
+          if (!(dx === 0 && dz === 0 && y <= top - 1)) { if (hash3(x, y, z) < 0.85) return ID.oak_leaves; }
         }
       }
     }
@@ -523,8 +588,17 @@
       case 'spruce_planks': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { f(x, y, ((y >> 2) % 2) ? '#5b4226' : '#6b4f2e'); if (y % 4 === 0) f(x, y, '#4a3720'); } break;   // 가문비 판자(짙은 갈색)
       case 'spruce_top': { fillNoise('#4a3722', '#3b2a18', '#5a4530'); for (let i = 2; i <= 7; i += 2) { c.strokeStyle = '#2e2012'; c.strokeRect(ox + 8 - i + .5, oy + 8 - i + .5, i * 2 - 1, i * 2 - 1); } break; }
       case 'spruce_side': { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) f(x, y, ((x + (r() < .3 ? 1 : 0)) % 5 === 0) ? '#2e2012' : (r() < 0.5 ? '#3b2a18' : '#4a3722')); break; }   // 가문비 껍질(아주 짙은 갈색)
+      case 'acacia_planks': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { f(x, y, ((y >> 2) % 2) ? '#a05a2c' : '#b56b3a'); if (y % 4 === 0) f(x, y, '#7a4020'); } break;   // 아카시아 판자(주황빛)
+      case 'acacia_top': { fillNoise('#a8907c', '#8a7060', '#b8a08c'); for (let i = 2; i <= 7; i += 2) { c.strokeStyle = '#4a3020'; c.strokeRect(ox + 8 - i + .5, oy + 8 - i + .5, i * 2 - 1, i * 2 - 1); } break; }
+      case 'acacia_side': { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) f(x, y, ((x + (r() < .3 ? 1 : 0)) % 5 === 0) ? '#4a3020' : (r() < 0.5 ? '#8a7060' : '#a8907c')); break; }   // 아카시아 껍질(회갈색)
+      case 'jungle_planks': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { f(x, y, ((y >> 2) % 2) ? '#a08848' : '#b09858'); if (y % 4 === 0) f(x, y, '#806c38'); } break;   // 정글 판자(황갈색)
+      case 'jungle_top': { fillNoise('#6b5438', '#5a4530', '#7c6448'); for (let i = 2; i <= 7; i += 2) { c.strokeStyle = '#4a3824'; c.strokeRect(ox + 8 - i + .5, oy + 8 - i + .5, i * 2 - 1, i * 2 - 1); } break; }
+      case 'jungle_side': { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) f(x, y, ((x + (r() < .3 ? 1 : 0)) % 5 === 0) ? '#4a3824' : (r() < 0.5 ? '#5a4530' : '#6b5438')); break; }
+      case 'terracotta': fillNoise('#a35c3a', '#8f4c2e', '#b8724c'); break;
       case 'leaves': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.35 ? '#3f7a2e' : t < 0.7 ? '#4c8f38' : '#5aa042'); if (t > 0.92) f(x, y, '#16240e'); if (t < 0.05) f(x, y, '#0e1a09'); } break;   // 초록(바이옴 틴트로 곱) + 불투명(구멍은 어두운 색, 투명 X — 성능·8×8 변환 용이)
       case 'spruce_leaves': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.4 ? '#233b23' : t < 0.72 ? '#2c4a2c' : '#375a37'); if (t > 0.93) f(x, y, '#101e10'); } break;   // 가문비 잎(고정 짙은 청록, 바이옴 틴트 없음)
+      case 'acacia_leaves': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.4 ? '#7c8c40' : t < 0.72 ? '#8fa050' : '#a0b060'); if (t > 0.93) f(x, y, '#565f28'); } break;   // 아카시아 잎(고정 올리브그린)
+      case 'jungle_leaves': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.35 ? '#2f7a28' : t < 0.7 ? '#3a8c30' : '#48a03a'); if (t > 0.92) f(x, y, '#164010'); } break;   // 정글 잎(고정 진초록, 오크보다 채도 높음)
       case 'coal_ore': oreTex(c, ox, oy, r, '#26262a'); break;
       case 'iron_ore': oreTex(c, ox, oy, r, '#d8a282'); break;
       case 'gold_ore': oreTex(c, ox, oy, r, '#fbdb4b'); break;
@@ -1062,15 +1136,34 @@
     const md = MOB[type]; const g = buildMobMesh(type); if (baby) g.scale.setScalar(0.5); scene.add(g);
     mobs.push({ type, x, y, z, vx: 0, vy: 0, vz: 0, yaw: 0, hp: md.hp, onGround: false, group: g, w: md.w, h: md.h, baby: baby ? 1 : 0, growT: baby ? 1200 : 0, loveT: 0, fleeT: 0, fuse: 0, atkT: 0, wT: 0, wdir: 0, hurtT: 0, fallStart: null });
   }
-  function entMoveAxis(e, ax, amt) {
-    if (amt === 0) return; e[ax] += amt;
-    const minX = e.x - e.w / 2, maxX = e.x + e.w / 2, minZ = e.z - e.w / 2, maxZ = e.z + e.w / 2, minY = e.y, maxY = e.y + e.h;
+  function entBoxBlocked(e, x0, z0, y0) {
+    const minX = x0 - e.w / 2, maxX = x0 + e.w / 2, minZ = z0 - e.w / 2, maxZ = z0 + e.w / 2, minY = y0, maxY = y0 + e.h;
     for (let x = Math.floor(minX); x <= Math.floor(maxX); x++) for (let z = Math.floor(minZ); z <= Math.floor(maxZ); z++) for (let y = Math.floor(minY); y <= Math.floor(maxY); y++) {
-      if (!blockSolid(getBlock(x, y, z))) continue;
-      if (ax === 'y') { if (amt > 0) { e.y = y - e.h - 1e-4; e.vy = 0; } else { e.y = y + 1 + 1e-4; e.vy = 0; e.onGround = true; } return; }
-      if (ax === 'x') { if (amt > 0) e.x = x - e.w / 2 - 1e-4; else e.x = x + 1 + e.w / 2 + 1e-4; e.vx = 0; e.blocked = true; return; }
-      if (ax === 'z') { if (amt > 0) e.z = z - e.w / 2 - 1e-4; else e.z = z + 1 + e.w / 2 + 1e-4; e.vz = 0; e.blocked = true; return; }
+      if (blockSolid(getBlock(x, y, z))) return true;
     }
+    return false;
+  }
+  function entMoveAxis(e, ax, amt) {
+    if (amt === 0) return;
+    if (ax === 'y') {
+      e.y += amt;
+      const minX = e.x - e.w / 2, maxX = e.x + e.w / 2, minZ = e.z - e.w / 2, maxZ = e.z + e.w / 2, minY = e.y, maxY = e.y + e.h;
+      for (let x = Math.floor(minX); x <= Math.floor(maxX); x++) for (let z = Math.floor(minZ); z <= Math.floor(maxZ); z++) for (let y = Math.floor(minY); y <= Math.floor(maxY); y++) {
+        if (!blockSolid(getBlock(x, y, z))) continue;
+        if (amt > 0) { e.y = y - e.h - 1e-4; e.vy = 0; } else { e.y = y + 1 + 1e-4; e.vy = 0; e.onGround = true; }
+        return;
+      }
+      return;
+    }
+    // x/z: 목표 위치가 막히면 실제 마크의 몹 stepHeight(1블록)처럼 자동으로 한 칸 올라타서 재시도.
+    // (예전엔 완전히 멈추고 vx/vz=0으로 초기화 → 다음 프레임 점프해도 수평 속도가 없어 턱을 못 넘던 버그)
+    const nx = ax === 'x' ? e.x + amt : e.x, nz = ax === 'z' ? e.z + amt : e.z;
+    if (!entBoxBlocked(e, nx, nz, e.y)) { e.x = nx; e.z = nz; return; }
+    // 자동 계단 오르기: 위쪽(현재 칸·목표 칸 모두)이 비어있으면 한 칸 올라타서 통과(onGround 여부와 무관 — entPhysics가
+    // 수평 이동 전에 onGround를 리셋하므로 그 값을 조건으로 쓰면 항상 false가 되어 절대 발동하지 않던 버그 수정)
+    if (!entBoxBlocked(e, nx, nz, e.y + 1) && !entBoxBlocked(e, e.x, e.z, e.y + 1)) { e.x = nx; e.z = nz; e.y += 1; return; }
+    if (ax === 'x') e.vx = 0; else e.vz = 0;
+    e.blocked = true;
   }
   function entInWater(e) { return getBlock(Math.floor(e.x), Math.floor(e.y + 0.2), Math.floor(e.z)) === ID.water; }
   function entPhysics(e, dt) {
@@ -1211,7 +1304,11 @@
   function hx(c) { c = c.replace('#', ''); return [parseInt(c.slice(0, 2), 16), parseInt(c.slice(2, 4), 16), parseInt(c.slice(4, 6), 16)]; }
 
   /* ---------------- 루프 ---------------- */
-  let lastT = 0;
+  let lastT = 0, _coordT = 0;
+  function updateCoordHUD() {
+    const el = document.getElementById('adv3coord'); if (!el) return;
+    el.textContent = `X ${P.x.toFixed(1)}  Y ${P.y.toFixed(1)}  Z ${P.z.toFixed(1)}  (${biome(Math.floor(P.x), Math.floor(P.z))})`;
+  }
   function loop(ts) {
     if (!running) return; raf = requestAnimationFrame(loop);
     if (contextLost) { lastT = ts; return; }   // GPU 컨텍스트 복구 대기(렌더 호출 시 추가 오류 방지)
@@ -1230,6 +1327,7 @@
       updateOverlays(mining ? breakTarget : raycast());
       if (swingT > 0) { swingT -= dt; updateHand(); }
       renderer.render(scene, camera);
+      _coordT += dt; if (_coordT > 0.2) { _coordT = 0; updateCoordHUD(); }
       _saveT += dt; if (_saveT > 8 && _dirty) { _saveT = 0; saveNow(); flushServer(); }
     } catch (e) { console.error('adv3d loop', e); }
   }
@@ -1249,6 +1347,7 @@
       ${isTouch ? `<div class="adv3-jump" data-act="adv3_jump">⤒</div>` : `<div class="adv3-hint">WASD 이동 · 마우스 시점 · 좌클릭 꾹 파괴 · 우클릭 설치/사용 · 휠/숫자 핫바 · Ctrl 달리기 · E 가방</div>`}
       <img class="adv3-hand" id="adv3hand" alt="">
       <div class="adv3-itemname" id="adv3itemname"></div>
+      <div class="adv3-coord" id="adv3coord" style="position:absolute;left:8px;bottom:8px;padding:3px 7px;font:11px monospace;color:#dfe6ee;background:rgba(0,0,0,0.4);border-radius:4px;pointer-events:none;z-index:3;white-space:pre;"></div>
       <div class="adv-hotbar" id="adv3hotbar"></div>
     </section>`;
   }
@@ -1407,7 +1506,7 @@
   function cellMatch(g, p) { if (!g && !p) return true; if (!g || !p) return false; return Array.isArray(p) ? p.indexOf(g) >= 0 : g === p; }
   function patEq(a, b) { if (!a || !b || a.length !== b.length) return false; for (let r = 0; r < a.length; r++) { if (a[r].length !== b[r].length) return false; for (let c = 0; c < a[r].length; c++) if (!cellMatch(a[r][c], b[r][c])) return false; } return true; }
   function mirrorPat(p) { return p.map(row => row.slice().reverse()); }
-  const PLANKS = ['oak_planks', 'birch_planks', 'spruce_planks'];   // 마크 #planks 태그(아무 판자나 가능)
+  const PLANKS = ['oak_planks', 'birch_planks', 'spruce_planks', 'acacia_planks', 'jungle_planks'];   // 마크 #planks 태그(아무 판자나 가능)
   let _recipes = null;
   function recipes() {
     if (_recipes) return _recipes;
@@ -1417,6 +1516,8 @@
     shapeless('oak_planks', 4, { oak_log: 1 });
     shapeless('birch_planks', 4, { birch_log: 1 });
     shapeless('spruce_planks', 4, { spruce_log: 1 });
+    shapeless('acacia_planks', 4, { acacia_log: 1 });
+    shapeless('jungle_planks', 4, { jungle_log: 1 });
     shaped('snow_block', 1, ['SS', 'SS'], { S: 'snowball' }, false);   // 눈덩이 4개 → 눈 블록(마크)
     shaped('stick', 4, ['P', 'P'], { P: PLANKS });
     shaped('crafting_table', 1, ['PP', 'PP'], { P: PLANKS });
@@ -1645,9 +1746,11 @@
   function columnTop(x, z) { getChunk(Math.floor(x / CHUNK), Math.floor(z / CHUNK), true); let y = WORLD_H - 2; while (y > 1 && !blockSolid(getBlock(x, y, z))) y--; return y; }
   function findSafeSpawn(hasSaved) {
     if (hasSaved) {
-      const fx = Math.floor(P.x), fz = Math.floor(P.z); const top = columnTop(fx, fz);
-      // 저장 위치가 지형에 박혀있거나 비정상이면 표면 위로 보정
-      if (P.y < top + 1 || P.y > top + 40 || blockSolid(getBlock(fx, Math.floor(P.y + 0.1), fz)) || blockSolid(getBlock(fx, Math.floor(P.y + 1), fz))) P.y = top + 1.05;
+      const fx = Math.floor(P.x), fz = Math.floor(P.z);
+      getChunk(Math.floor(fx / CHUNK), Math.floor(fz / CHUNK), true);   // 청크 로드 보장(getBlock 정확도)
+      // 저장 위치가 실제로 고체 블록 안에 파묻혀 있을 때만 보정(지하 굴착 공간에 있는 건 정상 — 지표면으로 강제 이동 X)
+      const stuck = blockSolid(getBlock(fx, Math.floor(P.y + 0.1), fz)) || blockSolid(getBlock(fx, Math.floor(P.y + 1), fz));
+      if (stuck || !Number.isFinite(P.y) || P.y < -25 || P.y > WORLD_H) { P.y = columnTop(fx, fz) + 1.05; }
       P.vx = P.vy = P.vz = 0; P.onGround = false; return;
     }
     // 새 캐릭터: 0,0 부근에서 '물 위가 아닌 마른 육지' 컬럼 탐색. 지면(surfaceH) 위에 안착(나무 위 X).
@@ -1704,7 +1807,7 @@
     placeOrUse, raycast, growTick, overlay: () => overlay, isHydrated,
     hotbar: () => hotbar, setHotbar: v => { hotbar = v; },
     atlasUV: () => atlasUV, atlasImg: () => atlasTex && atlasTex.image, faceTexName, BYID,
-    biomeTint, camera: () => camera, dayFactor,
+    biomeTint, camera: () => camera, dayFactor, entPhysics, entMoveAxis,
   };
   window.adventure3dStart = start;
   window.adventure3dStop = stop;
