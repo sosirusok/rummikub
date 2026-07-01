@@ -50,6 +50,9 @@
     { key: 'obsidian', tex: 'obsidian' },
     { key: 'birch_log', tex: { top: 'log_top', side: 'birch_side', bottom: 'log_top' } },
     { key: 'birch_leaves', tex: 'leaves' },
+    { key: 'spruce_log', tex: { top: 'spruce_top', side: 'spruce_side', bottom: 'spruce_top' } },
+    { key: 'spruce_leaves', tex: 'spruce_leaves' },
+    { key: 'spruce_planks', tex: 'spruce_planks' },
     { key: 'cactus', tex: { top: 'cactus_top', side: 'cactus_side', bottom: 'cactus_top' } },
     { key: 'tall_grass', tex: 'tall_grass', opaque: false, solid: false, cross: true },
     { key: 'flower_red', tex: 'flower_red', opaque: false, solid: false, cross: true },
@@ -201,6 +204,25 @@
     const n = vnoise(x + 50, z + 50, 0.02);
     return [0.42 + n * 0.16, 0.75 - n * 0.05, 0.34 + n * 0.10];   // 평원 밝은 초록
   }
+  // 호박: 아주 드문 '패치'로만 생성, 한 패치에 대략 5~10개가 무리지음(실제 마크 pumpkin patch)
+  const PUMP_CELL = 24;
+  function pumpkinAt(x, z) {
+    const cx = Math.floor(x / PUMP_CELL), cz = Math.floor(z / PUMP_CELL);
+    if (hash3(cx * 41 + 7, 5, cz * 41 + 3) >= 0.06) return false;                 // 대부분 셀엔 호박 패치 없음(희귀)
+    const jx = cx * PUMP_CELL + 5 + (hash3(cx * 7 + 1, 6, cz * 7 + 2) * 14 | 0);   // 패치 중심(셀 내부로 지터)
+    const jz = cz * PUMP_CELL + 5 + (hash3(cx * 9 + 4, 7, cz * 9 + 8) * 14 | 0);
+    if (Math.abs(x - jx) + Math.abs(z - jz) > 3) return false;                     // 반경 ~3 무리
+    return hash3(x * 3 + 1, 8, z * 3 + 5) < 0.42;                                  // 무리 내 듬성듬성 → 대략 5~10개
+  }
+  // 꽃: 저주파 노이즈로 '꽃밭' 영역을 군데군데 형성(전역 무작위 X). 한 꽃밭은 대체로 한 종류.
+  function flowerAt(x, z) {
+    const patch = vnoise(x + 700, z - 300, 0.03);           // 0..1, 파장 ~33 (꽃밭 크기)
+    if (patch < 0.66) return 0;                             // 대부분 지역엔 꽃 없음
+    const density = (patch - 0.66) / 0.34 * 0.4;            // 꽃밭 중심일수록 빽빽
+    if (hash3(x * 5 + 2, 9, z * 5 + 6) > density) return 0;
+    const typeN = vnoise(x + 2000, z + 2000, 0.02);         // 종류(민들레/양귀비)를 지역 단위로 통일
+    return typeN < 0.5 ? ID.flower_yellow : ID.flower_red;
+  }
   function genBlock(x, y, z) {
     if (y <= 0) return ID.bedrock;
     if (y <= 2 && hash3(x, y, z) < 0.5) return ID.bedrock;
@@ -214,15 +236,14 @@
         if (b === 'desert') {                                          // 선인장(1~2칸)
           if (h2(x * 3 + 2, z * 3 + 5) < 0.018) { const ch = 1 + (hash3(x, 7, z) < 0.5 ? 1 : 0); if (y >= sy + 1 && y <= sy + ch) return ID.cactus; }
         } else if (y === sy + 1) {
+          if (b === 'snow') return ID.air;   // 설원 지표엔 잡초/꽃 없음(실제 마크 눈 평원)
           // 사탕수수(물가 1칸 옆, 2~3칸)
           const nearWater = surfaceH(x + 1, z) <= SEA || surfaceH(x - 1, z) <= SEA || surfaceH(x, z + 1) <= SEA || surfaceH(x, z - 1) <= SEA;
           const pv = hash3(x * 5 + 7, 0, z * 5 + 13);
-          if (b !== 'snow' && nearWater && sy <= SEA + 2 && hash3(x * 9 + 1, 0, z * 9 + 4) < 0.28) return ID.sugar_cane;
-          if (b === 'snow') { if (pv < 0.04) return ID.tall_grass; }
-          else {
-            if ((b === 'forest' || b === 'plains' || b === 'savanna') && hash3(x * 13 + 3, 0, z * 13 + 9) < 0.004) return ID.pumpkin;   // 호박 덩굴(드묾)
-            const dense = (b === 'forest') ? 0.20 : 0.13; if (pv < dense) return ID.tall_grass; else if (pv < dense + 0.018) return ID.flower_red; else if (pv < dense + 0.034) return ID.flower_yellow;
-          }
+          if (nearWater && sy <= SEA + 2 && hash3(x * 9 + 1, 0, z * 9 + 4) < 0.28) return ID.sugar_cane;
+          if ((b === 'forest' || b === 'plains' || b === 'savanna') && pumpkinAt(x, z)) return ID.pumpkin;   // 희귀 호박 패치(무리)
+          const fl = flowerAt(x, z); if (fl) return fl;                                                      // 노이즈 기반 꽃밭
+          const dense = (b === 'forest') ? 0.20 : (b === 'savanna') ? 0.16 : 0.13; if (pv < dense) return ID.tall_grass;   // 바이옴별 잡초 밀도
         } else if (b !== 'snow' && b !== 'desert' && y === sy + 2) {
           // 사탕수수 2~3번째 칸
           const nearWater = surfaceH(x + 1, z) <= SEA || surfaceH(x - 1, z) <= SEA || surfaceH(x, z + 1) <= SEA || surfaceH(x, z - 1) <= SEA;
@@ -270,13 +291,29 @@
     for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) {
       const ox = x - dx, oz = z - dz; if (!isTreeAt(ox, oz)) continue;
       const sy = surfaceH(ox, oz); if (sy < SEA) continue;
-      const th = 4 + Math.floor(h2(ox, oz) * 3);
-      const top = sy + th;
-      const birch = biome(ox, oz) === 'snow' || h2(ox * 11 + 5, oz * 11 + 7) < 0.22;   // 설원/일부 = 자작나무
-      if (dx === 0 && dz === 0 && y > sy && y <= top - 1) return birch ? ID.birch_log : ID.oak_log;   // 줄기
-      const ly = y - (top - 1);
-      if (Math.abs(dx) + Math.abs(dz) <= 3 && ly >= -1 && ly <= 1) {                 // 잎
-        if (!(dx === 0 && dz === 0 && y <= top - 1)) { if (hash3(x, y, z) < 0.85) return birch ? ID.birch_leaves : ID.oak_leaves; }
+      // 종: 설원=가문비(원뿔형·키큼), 그 외 22%=자작, 나머지=참나무
+      const species = biome(ox, oz) === 'snow' ? 'spruce' : (h2(ox * 11 + 5, oz * 11 + 7) < 0.22 ? 'birch' : 'oak');
+      if (species === 'spruce') {
+        const th = 6 + Math.floor(h2(ox, oz) * 4);   // 줄기 6~9
+        const top = sy + th;
+        if (dx === 0 && dz === 0 && y > sy && y <= top) return ID.spruce_log;   // 줄기(꼭대기까지)
+        const md = Math.abs(dx) + Math.abs(dz);
+        if (y >= sy + 2 && y <= top + 1 && !(dx === 0 && dz === 0)) {
+          const fromTip = (top + 1) - y;                 // 꼭대기=0
+          const rad = Math.min(2, (fromTip >> 1));       // 위는 좁고 아래로 갈수록 넓게(원뿔)
+          if (md <= rad && hash3(x, y, z) < 0.9) return ID.spruce_leaves;
+        }
+        if (dx === 0 && dz === 0 && y === top + 1) return ID.spruce_leaves;   // 뾰족한 꼭대기 잎
+      } else {
+        const th = 4 + Math.floor(h2(ox, oz) * 3);
+        const top = sy + th;
+        const logId = species === 'birch' ? ID.birch_log : ID.oak_log;
+        const leafId = species === 'birch' ? ID.birch_leaves : ID.oak_leaves;
+        if (dx === 0 && dz === 0 && y > sy && y <= top - 1) return logId;   // 줄기
+        const ly = y - (top - 1);
+        if (Math.abs(dx) + Math.abs(dz) <= 3 && ly >= -1 && ly <= 1) {      // 잎(둥근 관목형)
+          if (!(dx === 0 && dz === 0 && y <= top - 1)) { if (hash3(x, y, z) < 0.85) return leafId; }
+        }
       }
     }
     return 0;
@@ -483,7 +520,11 @@
       case 'log_side': { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) f(x, y, ((x + (r() < .3 ? 1 : 0)) % 5 === 0) ? '#5b472d' : (r() < 0.5 ? '#6b5436' : '#7c6342')); break; }
       case 'planks': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { f(x, y, ((y >> 2) % 2) ? '#9c7a44' : '#b08a4f'); if (y % 4 === 0) f(x, y, '#7a5f34'); } break;
       case 'birch_planks': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { f(x, y, ((y >> 2) % 2) ? '#c8b787' : '#d8c99a'); if (y % 4 === 0) f(x, y, '#b0a074'); } break;   // 자작 판자(밝은 크림색)
+      case 'spruce_planks': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { f(x, y, ((y >> 2) % 2) ? '#5b4226' : '#6b4f2e'); if (y % 4 === 0) f(x, y, '#4a3720'); } break;   // 가문비 판자(짙은 갈색)
+      case 'spruce_top': { fillNoise('#4a3722', '#3b2a18', '#5a4530'); for (let i = 2; i <= 7; i += 2) { c.strokeStyle = '#2e2012'; c.strokeRect(ox + 8 - i + .5, oy + 8 - i + .5, i * 2 - 1, i * 2 - 1); } break; }
+      case 'spruce_side': { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) f(x, y, ((x + (r() < .3 ? 1 : 0)) % 5 === 0) ? '#2e2012' : (r() < 0.5 ? '#3b2a18' : '#4a3722')); break; }   // 가문비 껍질(아주 짙은 갈색)
       case 'leaves': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.35 ? '#3f7a2e' : t < 0.7 ? '#4c8f38' : '#5aa042'); if (t > 0.92) f(x, y, '#16240e'); if (t < 0.05) f(x, y, '#0e1a09'); } break;   // 초록(바이옴 틴트로 곱) + 불투명(구멍은 어두운 색, 투명 X — 성능·8×8 변환 용이)
+      case 'spruce_leaves': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.4 ? '#233b23' : t < 0.72 ? '#2c4a2c' : '#375a37'); if (t > 0.93) f(x, y, '#101e10'); } break;   // 가문비 잎(고정 짙은 청록, 바이옴 틴트 없음)
       case 'coal_ore': oreTex(c, ox, oy, r, '#26262a'); break;
       case 'iron_ore': oreTex(c, ox, oy, r, '#d8a282'); break;
       case 'gold_ore': oreTex(c, ox, oy, r, '#fbdb4b'); break;
@@ -694,7 +735,13 @@
     let t = def.hard * ((proper && harvest) ? 1.5 : 5) / mult;
     return Math.max(0.05, t * (cfg.breakMul || 1));
   }
-  function canHarvest(key, held) { const def = bprop(key); if (!def) return true; if (def.level && def.level > 0) { const it = held && window.ADV_ITEMS && window.ADV_ITEMS[held.k]; const lvl = (it && it.tool === def.tool) ? (it.level || 0) : -1; return lvl >= def.level; } return true; }
+  function canHarvest(key, held) {
+    const def = bprop(key); if (!def) return true;
+    const it = held && window.ADV_ITEMS && window.ADV_ITEMS[held.k];
+    if (def.needsTool && def.tool && !(it && it.tool === def.tool)) return false;   // 눈 블록 등: 올바른 도구 없으면 드롭 없음(맨손 X)
+    if (def.level && def.level > 0) { const lvl = (it && it.tool === def.tool) ? (it.level || 0) : -1; return lvl >= def.level; }
+    return true;
+  }
   function processMining(dt) {
     if (!mining) { breakProg = 0; breakTarget = null; return; }
     const t = raycast(); if (!t) { breakProg = 0; breakTarget = null; return; }
@@ -809,17 +856,26 @@
       if (keys.KeyW) mf += 1; if (keys.KeyS) mf -= 1; if (keys.KeyA) ms -= 1; if (keys.KeyD) ms += 1;
       if (move.active) { const dx = move.x - move.ox, dy = move.y - move.oy; if (Math.abs(dx) > 8) ms += dx > 0 ? 1 : -1; if (Math.abs(dy) > 8) mf += dy < 0 ? 1 : -1; }
     }
-    const sprint = (keys.ControlLeft || keys.ControlRight) && (mf > 0) && !invOpen; P.sprinting = sprint && (mf || ms);
-    const sin = Math.sin(P.yaw), cos = Math.cos(P.yaw); const speed = (keys.ShiftLeft ? 2.6 : (sprint ? 5.8 : 4.3));
-    // 전진 방향(시점 yaw 기준): forward = (-sin, , -cos)
-    let dx = (-sin * mf + cos * ms), dz = (-cos * mf - (-sin) * ms);
+    const inWater = feetInWater() || headInWater();
+    const sprint = (keys.ControlLeft || keys.ControlRight) && (mf > 0) && !invOpen && !inWater; P.sprinting = sprint && (mf || ms);
+    const sin = Math.sin(P.yaw), cos = Math.cos(P.yaw); let speed = (keys.ShiftLeft ? 2.6 : (sprint ? 5.8 : 4.3));
+    if (inWater) speed *= 0.5;   // 물속 수영은 느림(마크: 지상보다 확연히 느림)
+    // 시점 yaw 기준 forward=(-sin,-cos), right=(cos,-sin). (예전엔 right의 z부호가 뒤집혀
+    // A/D가 바라보는 방향에 따라 좌우가 반대로 되는 버그가 있었음 — right z항을 -sin으로 교정)
+    let dx = (-sin * mf + cos * ms), dz = (-cos * mf - sin * ms);
     const len = Math.hypot(dx, dz); if (len > 0) { dx /= len; dz /= len; }
     P.vx = dx * speed; P.vz = dz * speed;
-    // 점프/중력
-    P.vy -= 32 * dt; if (P.vy < -78) P.vy = -78;   // 마크 실제 중력(≈32블록/s²)에 맞춤(예전 26은 점프가 미세하게 더 늘어짐)
     const wantJump = keys.Space || (move.active && (move.y - move.oy) < -34);
     const wasGround = P.onGround;
-    if (wantJump && P.onGround && !invOpen) { P.vy = 8.5; P.onGround = false; addExhaustion(sprint ? 0.2 : 0.05); }   // 점프 탈진
+    // 점프/중력 — 물속에선 부력(약한 중력)+헤엄쳐 오르기, 지상에선 마크 중력(≈32블록/s²)
+    if (inWater) {
+      P.vy -= 9 * dt;                                  // 약한 중력(부력)
+      if (wantJump && !invOpen) P.vy += 22 * dt;       // Space: 헤엄쳐 상승
+      if (P.vy < -4) P.vy = -4; if (P.vy > 5) P.vy = 5;   // 느리게 가라앉고, 천천히 떠오름
+    } else {
+      P.vy -= 32 * dt; if (P.vy < -78) P.vy = -78;
+      if (wantJump && P.onGround && !invOpen) { P.vy = 8.5; P.onGround = false; addExhaustion(sprint ? 0.2 : 0.05); }   // 점프 탈진
+    }
     const px = P.x, pz = P.z;
     moveAxis('x', P.vx * dt); moveAxis('z', P.vz * dt); P.onGround = false; moveAxis('y', P.vy * dt);
     // 이동거리 탈진(달리기 0.1/m, 수영 0.01/m)
@@ -910,30 +966,55 @@
   let mobs = [], mobMatCache = {}, _spawnT = 0;
   function mobMat(col) { if (!mobMatCache[col]) mobMatCache[col] = new THREE.MeshBasicMaterial({ color: col }); return mobMatCache[col]; }
   function mkBox(w, h, d, col, x, y, z) { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mobMat(col)); if (x !== undefined) m.position.set(x, y, z); return m; }
+  // 마인크래프트 블록 모델 비율(16px=1블록)에 맞춘 몹 메시. 머리는 +z(정면)에 두어 yaw로 플레이어를 바라봄.
   function buildMobMesh(type) {
     const md = MOB[type]; const g = new THREE.Group();
-    const body = md.col, dark = shade(md.col, 0.78), light = shade(md.col, 1.12), W = md.w, H = md.h;
-    if (md.biped) {
-      g.add(mkBox(W, H * 0.5, W * 0.5, body, 0, H * 0.52, 0));                 // 몸통
-      g.add(mkBox(W * 0.85, W * 0.85, W * 0.85, light, 0, H * 0.85, 0));       // 머리
-      g.add(mkBox(W * 0.6, W * 0.22, 0.03, 0x20140c, 0, H * 0.9, W * 0.44));   // 눈(어두운 띠)
-      if (type === 'creeper') {
-        [[-1, 1], [1, 1], [-1, -1], [1, -1]].forEach(o => g.add(mkBox(W * 0.3, H * 0.28, W * 0.3, dark, o[0] * W * 0.22, H * 0.14, o[1] * W * 0.22)));   // 4다리
-        g.add(mkBox(W * 0.34, W * 0.34, 0.04, 0x0c160c, 0, H * 0.78, W * 0.44));    // 입(검정)
-      } else {
-        [-1, 1].forEach(s => g.add(mkBox(W * 0.32, H * 0.42, W * 0.32, dark, s * W * 0.2, H * 0.21, 0)));   // 2다리
-        if (type === 'zombie' || type === 'skeleton') [-1, 1].forEach(s => g.add(mkBox(W * 0.22, W * 0.22, H * 0.42, type === 'skeleton' ? 0xdedede : body, s * W * 0.55, H * 0.62, W * 0.22)));   // 앞으로 뻗은 팔
-      }
-    } else {
-      g.add(mkBox(W * 0.72, H * 0.6, W * 1.05, body, 0, H * 0.5, 0));          // 몸통
-      g.add(mkBox(W * 0.58, H * 0.5, W * 0.45, light, 0, H * 0.55, W * 0.58)); // 머리(앞)
-      [[-1, 1], [1, 1], [-1, -1], [1, -1]].forEach(o => g.add(mkBox(W * 0.2, H * 0.38, W * 0.2, dark, o[0] * W * 0.26, H * 0.19, o[1] * W * 0.32)));   // 4다리
-      if (type === 'pig') g.add(mkBox(W * 0.28, W * 0.22, 0.1, 0xd98a90, 0, H * 0.5, W * 0.82));   // 돼지 코
-      if (type === 'cow') { [-1, 1].forEach(s => g.add(mkBox(0.06, 0.16, 0.06, 0xe8e0cf, s * W * 0.16, H * 0.8, W * 0.55))); g.add(mkBox(W * 0.5, H * 0.28, 0.03, 0xf2f2f2, 0, H * 0.5, W * 0.58)); }   // 뿔+흰 얼룩
-      if (type === 'sheep') { g.add(mkBox(W * 0.9, H * 0.72, W * 1.12, 0xededed, 0, H * 0.5, 0)); g.add(mkBox(W * 0.45, H * 0.4, W * 0.4, 0x3a3a3a, 0, H * 0.52, W * 0.6)); }   // 양털+검은 얼굴
-      if (type === 'chicken') { g.add(mkBox(0.1, 0.08, 0.12, 0xf0a030, 0, H * 0.55, W * 0.82)); g.add(mkBox(0.09, 0.12, 0.14, 0xd23b32, 0, H * 0.78, W * 0.55)); }   // 부리+볏
+    const body = md.col, dark = shade(md.col, 0.75), light = shade(md.col, 1.14);
+    if (type === 'creeper') {
+      const legH = 0.375, bodyH = 0.75, headS = 0.5;
+      [[-1, 1], [1, 1], [-1, -1], [1, -1]].forEach(o => g.add(mkBox(0.24, legH, 0.24, dark, o[0] * 0.12, legH / 2, o[1] * 0.16)));   // 4다리(짧음)
+      g.add(mkBox(0.26, bodyH, 0.5, body, 0, legH + bodyH / 2, 0));                     // 몸통(앞뒤로 얇고 좌우로 넓음)
+      g.add(mkBox(headS, headS, headS, light, 0, legH + bodyH + headS / 2, 0));         // 머리
+      const fy = legH + bodyH + headS * 0.6, fz = headS / 2;
+      [-1, 1].forEach(s => g.add(mkBox(0.13, 0.13, 0.02, 0x0c160c, s * 0.12, fy, fz))); // 두 눈
+      g.add(mkBox(0.2, 0.24, 0.02, 0x0c160c, 0, legH + bodyH + headS * 0.36, fz));      // 입(세로)
+    } else if (type === 'zombie' || type === 'skeleton') {
+      const skel = type === 'skeleton', legH = 0.75, bodyH = 0.75, headS = 0.5, limbW = skel ? 0.14 : 0.24;
+      [-1, 1].forEach(s => g.add(mkBox(limbW, legH, 0.24, dark, s * 0.12, legH / 2, 0)));               // 2다리
+      g.add(mkBox(0.5, bodyH, 0.26, body, 0, legH + bodyH / 2, 0));                                     // 몸통
+      g.add(mkBox(headS, headS, headS, light, 0, legH + bodyH + headS / 2, 0));                         // 머리
+      const ey = legH + bodyH + headS * 0.58;
+      [-1, 1].forEach(s => g.add(mkBox(0.1, 0.1, 0.02, skel ? 0x101010 : 0x160b06, s * 0.11, ey, headS / 2)));   // 두 눈
+      const armCol = skel ? 0xdedede : body, armY = legH + bodyH * 0.7;
+      [-1, 1].forEach(s => g.add(mkBox(limbW, limbW, bodyH, armCol, s * (0.25 + limbW / 2), armY, 0.3)));         // 앞으로 뻗은 두 팔
+    } else if (type === 'pig' || type === 'cow' || type === 'sheep') {
+      const bodyLen = md.w * 1.3, bodyH = md.h * 0.42, bodyW = md.w * 0.85, bodyCy = md.h * 0.5;
+      const legH = md.h * 0.46, legW = md.w * 0.24;
+      g.add(mkBox(bodyW, bodyH, bodyLen, body, 0, bodyCy, 0));                                          // 몸통(가로로 긴 상자)
+      [[-1, 1], [1, 1], [-1, -1], [1, -1]].forEach(o => g.add(mkBox(legW, legH, legW, dark, o[0] * (bodyW / 2 - legW / 2), legH / 2, o[1] * (bodyLen / 2 - legW / 2))));   // 4다리
+      const headS = md.w * 0.62, headCy = md.h * 0.6, headZ = bodyLen / 2 + headS * 0.35;
+      g.add(mkBox(headS, headS, headS, light, 0, headCy, headZ));                                       // 머리(앞)
+      if (type === 'pig') g.add(mkBox(headS * 0.5, headS * 0.34, 0.06, 0xd98a90, 0, headCy - 0.04, headZ + headS / 2));   // 코
+      if (type === 'cow') { g.add(mkBox(bodyW * 1.02, bodyH * 1.02, bodyLen * 0.5, 0xf2f0ec, 0, bodyCy, -bodyLen * 0.16)); [-1, 1].forEach(s => g.add(mkBox(0.06, 0.14, 0.06, 0xe8e0cf, s * headS * 0.42, headCy + headS * 0.55, headZ))); }   // 흰 얼룩+뿔
+      if (type === 'sheep') g.add(mkBox(bodyW * 1.22, bodyH * 1.55, bodyLen * 1.12, 0xf4f4f4, 0, bodyCy + 0.05, -bodyLen * 0.04));   // 복슬복슬 양털
+    } else if (type === 'chicken') {
+      const bodyLen = 0.42, bodyH = 0.38, bodyW = 0.3, bodyCy = 0.26;
+      g.add(mkBox(bodyW, bodyH, bodyLen, body, 0, bodyCy, 0));                                          // 몸통
+      const headZ = bodyLen * 0.4;
+      g.add(mkBox(0.26, 0.26, 0.22, light, 0, bodyCy + 0.28, headZ));                                   // 머리
+      g.add(mkBox(0.1, 0.06, 0.12, 0xf0a030, 0, bodyCy + 0.26, headZ + 0.15));                          // 부리
+      g.add(mkBox(0.1, 0.12, 0.06, 0xd23b32, 0, bodyCy + 0.46, headZ + 0.02));                          // 볏
+      g.add(mkBox(0.1, 0.1, 0.06, 0xd23b32, 0, bodyCy + 0.16, headZ + 0.12));                           // 볼살
+      [-1, 1].forEach(s => g.add(mkBox(0.05, 0.22, 0.05, 0xf0a030, s * 0.08, 0.11, 0)));                // 2다리
+      [-1, 1].forEach(s => g.add(mkBox(0.04, 0.3, 0.28, light, s * (bodyW / 2 + 0.02), bodyCy, -0.02)));// 날개
+      g.add(mkBox(0.08, 0.24, 0.12, light, 0, bodyCy + 0.12, -bodyLen * 0.55));                         // 꼬리
+    } else if (type === 'spider') {
+      const bodyCy = 0.32;
+      g.add(mkBox(0.7, 0.45, 0.85, body, 0, bodyCy, -0.15));                                            // 배(뒤)
+      g.add(mkBox(0.5, 0.42, 0.5, light, 0, bodyCy, 0.45));                                             // 머리(앞)
+      [-1, 1].forEach(s => { for (let i = 0; i < 4; i++) { const lz = 0.35 - i * 0.28; g.add(mkBox(0.7, 0.06, 0.06, dark, s * 0.55, 0.3, lz)); g.add(mkBox(0.06, 0.3, 0.06, dark, s * 0.86, 0.15, lz)); } });   // 8다리
+      [-1, 1].forEach(s => g.add(mkBox(0.09, 0.09, 0.02, 0xff2020, s * 0.14, bodyCy + 0.08, 0.7))); [-1, 1].forEach(s => g.add(mkBox(0.06, 0.06, 0.02, 0xff2020, s * 0.06, bodyCy + 0.16, 0.7)));   // 빨간 눈 4개
     }
-    if (type === 'spider') [-1, 1].forEach(s => g.add(mkBox(0.09, 0.09, 0.03, 0xff2020, s * W * 0.16, H * 0.55, W * 0.5)));   // 거미 빨간 눈
     return g;
   }
   function shade(col, f) { const r = Math.min(255, ((col >> 16) & 255) * f) | 0, gr = Math.min(255, ((col >> 8) & 255) * f) | 0, b = Math.min(255, (col & 255) * f) | 0; return (r << 16) | (gr << 8) | b; }
@@ -991,8 +1072,11 @@
       if (ax === 'z') { if (amt > 0) e.z = z - e.w / 2 - 1e-4; else e.z = z + 1 + e.w / 2 + 1e-4; e.vz = 0; e.blocked = true; return; }
     }
   }
+  function entInWater(e) { return getBlock(Math.floor(e.x), Math.floor(e.y + 0.2), Math.floor(e.z)) === ID.water; }
   function entPhysics(e, dt) {
-    e.vy -= 32 * dt; if (e.vy < -78) e.vy = -78; e.blocked = false; e.onGround = false;
+    if (entInWater(e)) { e.vy -= 9 * dt; e.vy += 14 * dt; if (e.vy < -3) e.vy = -3; if (e.vy > 4) e.vy = 4; }   // 부력: 몹이 물 위로 뜸(가라앉아 익사 X)
+    else { e.vy -= 32 * dt; if (e.vy < -78) e.vy = -78; }
+    e.blocked = false; e.onGround = false;
     const sy = e.y; entMoveAxis(e, 'x', e.vx * dt); entMoveAxis(e, 'z', e.vz * dt); entMoveAxis(e, 'y', e.vy * dt);
     if (e.onGround && e.fallStart != null) { const d = e.fallStart - e.y; const dm = Math.floor(d - 3); if (dm > 0) e.hp -= dm; e.fallStart = null; }
     if (!e.onGround) { if (e.vy <= 0 && e.fallStart == null) e.fallStart = sy; if (e.fallStart != null && e.y > e.fallStart) e.fallStart = e.y; }
@@ -1079,27 +1163,49 @@
     chunks.forEach((c, k) => { if (Math.max(Math.abs(c.cx - pcx), Math.abs(c.cz - pcz)) > RENDER + 2) { disposeMesh(c.mesh); disposeMesh(c.waterMesh); disposeMesh(c.plantMesh); disposeMesh(c.lavaMesh); chunks.delete(k); } });
   }
 
-  /* ---------------- 낮밤 ---------------- */
-  function dayFactor() { const f = (world.time % cfg.dayLen) / cfg.dayLen; if (f < 0.5) { let b = 1 - Math.abs(f - 0.25) / 0.25 * 0.15; if (f < 0.06) b = 0.3 + f / 0.06 * 0.7; else if (f > 0.44) b = 0.3 + (0.5 - f) / 0.06 * 0.7; return Math.max(0.3, b); } return 0.28; }
+  /* ---------------- 낮밤 (24000틱=1200초=20분, 부드러운 코사인 보간) ---------------- */
+  // 정오(f=0.25) 최대 밝기, 자정(f=0.75) 최소. 태양 고도 proxy를 smoothstep으로 완만화 →
+  // 낮/밤 전환이 급변 없이 서서히 진행(예전엔 f=0.5에서 갑자기 어두워지는 버그).
+  function dayFactor() {
+    const f = (world.time % cfg.dayLen) / cfg.dayLen;               // 0..1 (=tick/24000)
+    const sun = Math.cos((f - 0.25) * 2 * Math.PI);                 // +1 정오, -1 자정, 0 지평(일출·일몰)
+    const t = (sun + 1) / 2;                                        // 0..1
+    const s = t * t * (3 - 2 * t);                                  // smoothstep(낮·밤 각각 완만한 plateau)
+    return 0.28 + s * 0.72;                                         // 0.28(밤)~1.0(낮)
+  }
+  function dayPhaseK(d) { return Math.max(0, Math.min(1, (d - 0.28) / 0.72)); }   // 0밤~1낮
   let _lastSkyD = -1;
   function updateSky() {
-    const d = dayFactor(); const f = (world.time % cfg.dayLen) / cfg.dayLen; const day = f < 0.5;
-    // 지평선 색(안개/캔버스 가장자리) — CSS 하늘과 맞춤
-    const hc = day ? mixHex('#9fc6ea', '#05070d', 1 - Math.max(0.35, d)) : '#0a0e18';
-    if (scene.fog) scene.fog.color.set(hc);
+    const d = dayFactor();
+    const k = dayPhaseK(d);
+    // 지평선 색(안개) — 낮↔밤 연속 보간
+    if (scene.fog) scene.fog.color.set(mixHex('#0a0e18', '#9fc6ea', k));
     // CSS 하늘 갱신(밝기 0.02 이상 변할 때만)
     if (Math.abs(d - _lastSkyD) > 0.02) {
-      _lastSkyD = d; const el = document.getElementById('adv3sky'); if (el) el.style.background = skyGradient(day, d, f);
+      _lastSkyD = d; const el = document.getElementById('adv3sky'); if (el) el.style.background = skyGradient(k);
     }
-    if (blockMat) blockMat.color.setScalar(d); if (waterMat) waterMat.color.setScalar(d); if (plantMat) plantMat.color.setScalar(d);
+    if (blockMat) blockMat.color.setScalar(d); if (waterMat) waterMat.color.setScalar(d); if (plantMat) plantMat.color.setScalar(d); if (lavaMat) lavaMat.color.setScalar(Math.max(0.6, d));
   }
-  function skyGradient(day, d, f) {
-    if (!day) return 'linear-gradient(#04060c 0%, #070b14 55%, #0c1320 100%)';
-    const top = mixHex('#3f7fc8', '#0a1424', 1 - d), mid = mixHex('#76adde', '#0c1a2e', 1 - d), hor = mixHex('#bfe0f5', '#16283e', 1 - d);
-    // 일출/일몰 노을
-    const dusk = (f < 0.08 || f > 0.42);
-    const horC = dusk ? mixHex('#f4a25a', hor, 0.5) : hor;
-    return `linear-gradient(${top} 0%, ${mid} 55%, ${horC} 100%)`;
+  // k: 0(밤)~1(낮). 색을 k로 연속 보간 → 낮/밤 경계에서 급변 없음. 전이 구간(k≈0.5)에 노을.
+  function skyGradient(k) {
+    const top = mixHex('#04060c', '#3f7fc8', k), mid = mixHex('#070b14', '#76adde', k);
+    let hor = mixHex('#0c1320', '#bfe0f5', k);
+    const dusk = 1 - Math.abs(k - 0.5) * 2;                         // k=0.5(일출/일몰)에서 1, 양끝 0
+    if (dusk > 0.08) hor = mixHex(hor, '#f4a25a', dusk * 0.55);     // 지평선 주황 노을
+    return `linear-gradient(${top} 0%, ${mid} 55%, ${hor} 100%)`;
+  }
+  // 물속: 파란 화면 오버레이 + 짙은 파란 안개(시야 제한). 마크의 수중 시야와 유사.
+  const FOG_NEAR = CHUNK * (RENDER - 1), FOG_FAR = CHUNK * (RENDER + 1.5);
+  let _waterCss = -1;
+  function updateWaterScreen() {
+    const sub = headInWater();
+    const el = document.getElementById('adv3water');
+    const a = sub ? 0.5 : 0;
+    if (el && Math.abs(a - _waterCss) > 0.02) { _waterCss = a; el.style.opacity = a; }
+    if (scene.fog) {
+      if (sub) { scene.fog.color.set('#1f4d86'); scene.fog.near = 0.1; scene.fog.far = 13; }   // 수중 근거리 안개
+      else { scene.fog.near = FOG_NEAR; scene.fog.far = FOG_FAR; }                               // 색은 updateSky가 매 프레임 설정
+    }
   }
   function mixHex(a, b, t) { t = Math.max(0, Math.min(1, t)); const ca = hx(a), cb = hx(b); const r = Math.round(ca[0] + (cb[0] - ca[0]) * t), g = Math.round(ca[1] + (cb[1] - ca[1]) * t), bl = Math.round(ca[2] + (cb[2] - ca[2]) * t); return 'rgb(' + r + ',' + g + ',' + bl + ')'; }
   function hx(c) { c = c.replace('#', ''); return [parseInt(c.slice(0, 2), 16), parseInt(c.slice(2, 4), 16), parseInt(c.slice(4, 6), 16)]; }
@@ -1120,6 +1226,7 @@
       const fovTarget = P.sprinting ? 80 : 72; camera.fov += (fovTarget - camera.fov) * Math.min(1, dt * 8); camera.updateProjectionMatrix();
       if (skyDome) skyDome.position.copy(camera.position);
       updateSky();
+      updateWaterScreen();
       updateOverlays(mining ? breakTarget : raycast());
       if (swingT > 0) { swingT -= dt; updateHand(); }
       renderer.render(scene, camera);
@@ -1132,6 +1239,7 @@
     return `<section class="screen adv3-screen" data-adv3="1">
       <div class="adv3-sky" id="adv3sky"></div>
       <canvas id="adv3canvas"></canvas>
+      <div class="adv3-water" id="adv3water" style="position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .2s;background:radial-gradient(circle at 50% 45%, rgba(40,110,170,0.30), rgba(12,45,100,0.80));z-index:4"></div>
       <div class="adv3-hurt" id="adv3hurt"></div>
       <div class="adv3-cross">+</div>
       <div class="adv3-top">
@@ -1299,7 +1407,7 @@
   function cellMatch(g, p) { if (!g && !p) return true; if (!g || !p) return false; return Array.isArray(p) ? p.indexOf(g) >= 0 : g === p; }
   function patEq(a, b) { if (!a || !b || a.length !== b.length) return false; for (let r = 0; r < a.length; r++) { if (a[r].length !== b[r].length) return false; for (let c = 0; c < a[r].length; c++) if (!cellMatch(a[r][c], b[r][c])) return false; } return true; }
   function mirrorPat(p) { return p.map(row => row.slice().reverse()); }
-  const PLANKS = ['oak_planks', 'birch_planks'];   // 마크 #planks 태그(아무 판자나 가능)
+  const PLANKS = ['oak_planks', 'birch_planks', 'spruce_planks'];   // 마크 #planks 태그(아무 판자나 가능)
   let _recipes = null;
   function recipes() {
     if (_recipes) return _recipes;
@@ -1308,6 +1416,8 @@
     const shapeless = (out, count, bag, table) => { R.push({ out, count, table: !!table, shaped: false, bag }); };
     shapeless('oak_planks', 4, { oak_log: 1 });
     shapeless('birch_planks', 4, { birch_log: 1 });
+    shapeless('spruce_planks', 4, { spruce_log: 1 });
+    shaped('snow_block', 1, ['SS', 'SS'], { S: 'snowball' }, false);   // 눈덩이 4개 → 눈 블록(마크)
     shaped('stick', 4, ['P', 'P'], { P: PLANKS });
     shaped('crafting_table', 1, ['PP', 'PP'], { P: PLANKS });
     shaped('torch', 4, ['O', 'S'], { O: ['coal', 'charcoal'], S: 'stick' });
@@ -1594,7 +1704,7 @@
     placeOrUse, raycast, growTick, overlay: () => overlay, isHydrated,
     hotbar: () => hotbar, setHotbar: v => { hotbar = v; },
     atlasUV: () => atlasUV, atlasImg: () => atlasTex && atlasTex.image, faceTexName, BYID,
-    biomeTint,
+    biomeTint, camera: () => camera, dayFactor,
   };
   window.adventure3dStart = start;
   window.adventure3dStop = stop;
