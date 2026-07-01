@@ -153,7 +153,7 @@
   mat('iron_ingot', '철괴'); mat('gold_ingot', '금괴'); mat('gold_nugget', '금 조각');
   mat('diamond', '다이아몬드'); mat('emerald', '에메랄드'); mat('redstone', '레드스톤 가루');
   mat('lapis', '청금석'); mat('flint', '부싯돌'); mat('string', '실'); mat('gunpowder', '화약');
-  mat('bone', '뼈'); mat('bone_meal', '뼛가루'); mat('feather', '깃털'); mat('leather', '가죽');
+  mat('bone', '뼈'); mat('bone_meal', '뼛가루'); mat('feather', '깃털'); mat('leather', '가죽'); mat('ink_sac', '먹물 주머니');
   mat('wheat', '밀'); mat('sapling', '묘목', { block: 'sapling' });
   mat('clay_ball', '점토 덩어리'); mat('brick_item', '벽돌(아이템)');
   mat('paper', '종이'); mat('book', '책'); mat('sugar', '설탕');

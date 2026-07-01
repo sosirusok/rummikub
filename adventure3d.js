@@ -190,15 +190,28 @@
     surfCache.set(ck, sy); if (surfCache.size > 60000) surfCache.clear();
     return sy;
   }
-  // 내륙 호수: 해수면과 무관하게 고지대에도 드물게 형성되는 작은 호수/연못(성긴 노이즈 임계값)
+  // 내륙 호수: 해수면과 무관하게 고지대에도 드물게 형성되는 작은 호수/연못.
+  // (주의) 원시 노이즈 등고선 임계값 방식은 파장 전체가 통째로 호수가 되어버려 "끝없는 늪"처럼 보이는
+  // 버그를 냄(꽃밭/나무 배치에서 이미 겪은 것과 동일한 문제) — 지터드 셀(칸당 후보 1곳)로 작고 성긴 연못만 생성.
+  const LAKE_CELL = 40, LAKE_MARGIN = 8;
+  function lakeInfo(x, z) {
+    const cx = Math.floor(x / LAKE_CELL), cz = Math.floor(z / LAKE_CELL);
+    if (hash3(cx * 61 + 13, 30, cz * 61 + 29) >= 0.22) return null;   // 대부분 칸엔 호수 없음(성김)
+    const span = LAKE_CELL - LAKE_MARGIN * 2;
+    const jx = cx * LAKE_CELL + LAKE_MARGIN + (hash3(cx * 31 + 5, 31, cz * 31 + 9) * span | 0);
+    const jz = cz * LAKE_CELL + LAKE_MARGIN + (hash3(cx * 37 + 2, 32, cz * 37 + 7) * span | 0);
+    const d = Math.abs(x - jx) + Math.abs(z - jz);
+    const R = 3 + (hash3(cx * 43 + 8, 33, cz * 43 + 4) * 4 | 0);   // 반경 3~6(작은 연못)
+    if (d > R) return null;
+    const centerSy = surfaceH(jx, jz);
+    if (centerSy <= SEA + 4) return null;   // 해안 근처는 이미 바다로 연결되니 별도 호수 X
+    const b = biome(jx, jz);
+    if (b === 'mountains' || b === 'desert' || b === 'badlands' || b === 'snow') return null;   // 지형상 호수가 어울리지 않는 바이옴 제외
+    return { d, R };
+  }
   function lakeDepth(x, z) {
-    const sy = surfaceH(x, z);
-    if (sy <= SEA + 4) return 0;   // 해안 근처는 이미 바다로 연결되니 별도 호수 X
-    const b = biome(x, z);
-    if (b === 'mountains' || b === 'desert' || b === 'badlands' || b === 'snow') return 0;   // 지형상 호수가 어울리지 않는 바이옴 제외
-    const n = vnoise(x + 33000, z - 17000, 0.012);
-    if (n < 0.90) return 0;
-    return 1 + Math.min(2, Math.floor((n - 0.90) * 30));   // 0.90~1.0 구간 → 깊이 1~3
+    const info = lakeInfo(x, z); if (!info) return 0;
+    return 1 + Math.min(2, Math.floor((info.R - info.d) / 2));   // 중심일수록 깊게(1~3)
   }
   // 사탕수수: 밑받침 블록(y)과 같은 높이에서 동서남북 중 실제 물 블록 인접 여부(고도 무관, 내륙 호수도 인정, 마크 실제 규칙)
   function isWaterAt(x, y, z) {
@@ -590,12 +603,35 @@
     crackMesh = new THREE.Mesh(new THREE.BoxGeometry(1.003, 1.003, 1.003), crackMats[0]); crackMesh.visible = false; scene.add(crackMesh);
   }
   let skyDome = null, sunMesh = null;   // (CSS 하늘로 대체 — WebGL 돔 미사용)
+  // 전체 큐브가 아닌 블록(십자 식물·횃불·사다리 등)의 실제 모양에 맞춘 조준 윤곽선/균열 박스 크기(로컬 0~1 좌표계)
+  const HITBOX_SHAPE = {
+    torch: { x: [0.4, 0.6], y: [0, 0.6], z: [0.4, 0.6] },
+    tall_grass: { x: [0.1, 0.9], y: [0, 0.7], z: [0.1, 0.9] },
+    flower_red: { x: [0.15, 0.85], y: [0, 0.6], z: [0.15, 0.85] },
+    flower_yellow: { x: [0.15, 0.85], y: [0, 0.6], z: [0.15, 0.85] },
+    sugar_cane: { x: [0.15, 0.85], y: [0, 1], z: [0.15, 0.85] },
+    sapling: { x: [0.2, 0.8], y: [0, 0.7], z: [0.2, 0.8] },
+    wheat_crop: { x: [0, 1], y: [0, 0.35], z: [0, 1] },
+    wheat_ripe: { x: [0, 1], y: [0, 0.85], z: [0, 1] },
+    carrot_crop: { x: [0, 1], y: [0, 0.25], z: [0, 1] },
+    carrot_ripe: { x: [0, 1], y: [0, 0.55], z: [0, 1] },
+    potato_crop: { x: [0, 1], y: [0, 0.25], z: [0, 1] },
+    potato_ripe: { x: [0, 1], y: [0, 0.55], z: [0, 1] },
+    ladder: { x: [0, 1], y: [0, 1], z: [0, 0.15] },
+  };
+  function applyOverlayShape(mesh, t, key) {
+    const s = HITBOX_SHAPE[key];
+    if (!s) { mesh.scale.set(1, 1, 1); mesh.position.set(t.x + 0.5, t.y + 0.5, t.z + 0.5); return; }
+    mesh.scale.set(s.x[1] - s.x[0], s.y[1] - s.y[0], s.z[1] - s.z[0]);
+    mesh.position.set(t.x + (s.x[0] + s.x[1]) / 2, t.y + (s.y[0] + s.y[1]) / 2, t.z + (s.z[0] + s.z[1]) / 2);
+  }
   function updateOverlays(t) {
     if (!outlineMesh) return;
-    if (t) { outlineMesh.visible = true; outlineMesh.position.set(t.x + 0.5, t.y + 0.5, t.z + 0.5); }
+    const bb = t && BYID[getBlock(t.x, t.y, t.z)], key = bb && bb.key;
+    if (t) { outlineMesh.visible = true; applyOverlayShape(outlineMesh, t, key); }
     else outlineMesh.visible = false;
     if (mining && t && breakTarget && t.x === breakTarget.x && t.y === breakTarget.y && t.z === breakTarget.z && breakProg > 0) {
-      crackMesh.visible = true; crackMesh.position.set(t.x + 0.5, t.y + 0.5, t.z + 0.5);
+      crackMesh.visible = true; applyOverlayShape(crackMesh, t, key);
       crackMesh.material = crackMats[Math.min(7, Math.floor(breakProg * 8))];
     } else crackMesh.visible = false;
   }
@@ -1105,6 +1141,8 @@
     skeleton:{ kor: '스켈레톤', hostile: true, hp: 20, dmg: 3, speed: 3.5, w: 0.6, h: 1.99, col: 0xd5d8d6, burn: true, ranged: true, drops: [{ i: 'bone', min: 0, max: 2 }, { i: 'arrow', min: 0, max: 2 }], biped: true },
     creeper: { kor: '크리퍼', hostile: true, hp: 20, dmg: 0, speed: 3.5, w: 0.6, h: 1.7, col: 0x5fa05f, explode: true, drops: [{ i: 'gunpowder', min: 0, max: 2 }], biped: true },
     spider:  { kor: '거미', hostile: true, hp: 16, dmg: 2, speed: 4.6, w: 1.4, h: 0.9, col: 0x39312e, climb: true, drops: [{ i: 'string', min: 0, max: 2 }], biped: false },
+    cod:     { kor: '대구', hostile: false, hp: 3, dmg: 0, speed: 2.6, w: 0.5, h: 0.3, col: 0xa9835a, drops: [{ i: 'raw_fish', min: 1, max: 1 }], swim: true, biped: false },
+    squid:   { kor: '오징어', hostile: false, hp: 10, dmg: 0, speed: 2.2, w: 0.8, h: 0.8, col: 0x6a5a9c, drops: [{ i: 'ink_sac', min: 1, max: 3 }], swim: true, biped: false },
   };
   let mobs = [], mobMatCache = {}, _spawnT = 0;
   function mobMat(col) { if (!mobMatCache[col]) mobMatCache[col] = new THREE.MeshBasicMaterial({ color: col }); return mobMatCache[col]; }
@@ -1157,21 +1195,46 @@
       g.add(mkBox(0.5, 0.42, 0.5, light, 0, bodyCy, 0.45));                                             // 머리(앞)
       [-1, 1].forEach(s => { for (let i = 0; i < 4; i++) { const lz = 0.35 - i * 0.28; g.add(mkBox(0.7, 0.06, 0.06, dark, s * 0.55, 0.3, lz)); g.add(mkBox(0.06, 0.3, 0.06, dark, s * 0.86, 0.15, lz)); } });   // 8다리
       [-1, 1].forEach(s => g.add(mkBox(0.09, 0.09, 0.02, 0xff2020, s * 0.14, bodyCy + 0.08, 0.7))); [-1, 1].forEach(s => g.add(mkBox(0.06, 0.06, 0.02, 0xff2020, s * 0.06, bodyCy + 0.16, 0.7)));   // 빨간 눈 4개
+    } else if (type === 'cod') {
+      g.add(mkBox(0.22, 0.2, 0.5, body, 0, 0.15, 0));                                                    // 몸통(길쭉)
+      g.add(mkBox(0.18, 0.16, 0.16, light, 0, 0.15, 0.28));                                              // 머리
+      g.add(mkBox(0.03, 0.16, 0.16, dark, 0, 0.15, -0.32));                                              // 꼬리지느러미
+      g.add(mkBox(0.32, 0.03, 0.14, dark, 0, 0.06, -0.05));                                              // 배지느러미
+    } else if (type === 'squid') {
+      g.add(mkBox(0.5, 0.55, 0.5, body, 0, 0.5, 0));                                                     // 외투막(몸통)
+      const tCol = shade(md.col, 0.85);
+      for (let i = 0; i < 6; i++) { const ang = (i / 6) * Math.PI * 2; g.add(mkBox(0.08, 0.4, 0.08, tCol, Math.sin(ang) * 0.16, 0.18, Math.cos(ang) * 0.16)); }   // 다리(촉수) 6개(아래로 늘어짐)
     }
     return g;
   }
   function shade(col, f) { const r = Math.min(255, ((col >> 16) & 255) * f) | 0, gr = Math.min(255, ((col >> 8) & 255) * f) | 0, b = Math.min(255, (col & 255) * f) | 0; return (r << 16) | (gr << 8) | b; }
-  const PASSIVE = ['pig', 'cow', 'sheep', 'chicken'], HOSTILE = ['zombie', 'skeleton', 'creeper', 'spider'];
+  const PASSIVE = ['pig', 'cow', 'sheep', 'chicken'], HOSTILE = ['zombie', 'skeleton', 'creeper', 'spider'], AQUATIC = ['cod', 'squid'];
   function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
   // 마크식 스폰 상수: 최소 24칸, 최대 128칸, 디스폰 128, 32칸 밖 무작위 디스폰
   const SPAWN_MIN = 24, SPAWN_MAX = 96, DESPAWN = 128, RANDOM_DESPAWN = 32;
   function spawnMobs(dt) {
     _spawnT += dt; if (_spawnT < 2.0) return; _spawnT = 0;
-    const night = dayFactor() < 0.45; let nH = 0, nP = 0;
-    for (const m of mobs) { if (MOB[m.type].hostile) nH++; else nP++; }
+    const night = dayFactor() < 0.45; let nH = 0, nP = 0, nA = 0;
+    for (const m of mobs) { if (MOB[m.type].hostile) nH++; else if (MOB[m.type].swim) nA++; else nP++; }
     // 밤: 적대몹 무리(마크: 팩 4) / 낮·황혼: 수동동물 무리 보충
     if (night) { if (nH < 16 && Math.random() < 0.8) trySpawnPack(pick(HOSTILE), night, 2 + (Math.random() * 3 | 0)); }
     else { if (nP < 12 && Math.random() < 0.7) trySpawnPack(pick(PASSIVE), night, 3 + (Math.random() * 2 | 0)); }
+    // 수중생물: 낮밤 무관, 바다·호수 어디든
+    if (nA < 8 && Math.random() < 0.5) trySpawnAquaticPack(pick(AQUATIC), 2 + (Math.random() * 3 | 0));
+  }
+  // 물 컬럼 탐색: 해수면 근방부터 아래로 스캔해 실제 물 블록을 찾으면 그 자리에 스폰(바다·내륙 호수 모두 대응)
+  function placeAquaticMob(type, sx, sz) {
+    const top = Math.min(SEA + 1, surfaceH(sx, sz) + 1);
+    for (let y = top; y >= Math.max(0, top - 14); y--) {
+      if (getBlock(sx, y, sz) === ID.water) { addMob(type, sx + 0.5, y + 0.3, sz + 0.5); return true; }
+    }
+    return false;
+  }
+  function trySpawnAquaticPack(type, n) {
+    const ang = Math.random() * Math.PI * 2, r = SPAWN_MIN + Math.random() * (SPAWN_MAX - SPAWN_MIN);
+    const sx = Math.floor(P.x + Math.cos(ang) * r), sz = Math.floor(P.z + Math.sin(ang) * r);
+    if (!placeAquaticMob(type, sx, sz)) return;
+    for (let i = 1; i < n; i++) placeAquaticMob(type, sx + (Math.random() * 6 - 3 | 0), sz + (Math.random() * 6 - 3 | 0));
   }
   // 팩 단위 스폰(한 지점 주변에 여러 마리)
   function trySpawnPack(type, night, n) {
@@ -1200,6 +1263,7 @@
   // 새 월드/입장 시 주변에 수동동물 무리 즉시 배치(가까이, 바로 보이게)
   function spawnInitialMobs() {
     let made = 0; for (let tries = 0; tries < 100 && made < 10; tries++) { if (trySpawn(pick(PASSIVE), false, 16, 44)) made++; }
+    let madeA = 0; for (let tries = 0; tries < 60 && madeA < 4; tries++) { const ang = Math.random() * Math.PI * 2, r = 16 + Math.random() * 28; if (placeAquaticMob(pick(AQUATIC), Math.floor(P.x + Math.cos(ang) * r), Math.floor(P.z + Math.sin(ang) * r))) madeA++; }
   }
   function addMob(type, x, y, z, baby) {
     const md = MOB[type]; const g = buildMobMesh(type); if (baby) g.scale.setScalar(0.5); scene.add(g);
@@ -1530,6 +1594,7 @@
     blaze_rod(c, u, rect) { c.save(); c.translate(8 * u, 8 * u); c.rotate(-0.6); rect(-6, -1, 11, 2, '#c8923a'); c.restore(); c.fillStyle = '#ffdf7a'; c.beginPath(); c.arc(11.5 * u, 4 * u, 1.6 * u, 0, 7); c.fill(); },
     seeds(c, u, rect) { const pts = [[6, 7], [9, 6.5], [7.5, 9], [10, 9.5], [6.5, 10.5]]; pts.forEach(p => rect(p[0], p[1], 1, 1, '#8a6a3a')); },
     bowl(c, u, rect) { c.strokeStyle = '#8a6a3a'; c.lineWidth = 1.4 * u; c.beginPath(); c.arc(8 * u, 7 * u, 5 * u, 0.15, Math.PI - 0.15); c.stroke(); c.fillStyle = '#6b4f2a'; c.beginPath(); c.arc(8 * u, 7 * u, 4.3 * u, 0.25, Math.PI - 0.25); c.fill(); },
+    ink_sac(c, u, rect) { c.fillStyle = '#2a2a34'; c.beginPath(); c.arc(8 * u, 8 * u, 4.4 * u, 0, 7); c.fill(); c.fillStyle = 'rgba(255,255,255,.18)'; c.beginPath(); c.arc(6.5 * u, 6.5 * u, 1.2 * u, 0, 7); c.fill(); },
   };
   function drawItemIcon2(c, key, s) {
     const d = window.ADV_ITEMS && window.ADV_ITEMS[key]; const u = s / 16;
@@ -1982,7 +2047,7 @@
 
   /* ---------------- 공개 API ---------------- */
   if (typeof window !== 'undefined' && window.__ADV3_TEST) window.__adv3 = {
-    addMob, P, mobs: () => mobs, hurtPlayer, eatFood, MOB, getBlock, genBlock, surfaceH, ID, BYID, blockSolid,
+    addMob, P, mobs: () => mobs, hurtPlayer, eatFood, MOB, getBlock, genBlock, surfaceH, ID, BYID, blockSolid, placeAquaticMob,
     chunkInfo: () => ({ n: chunks.size, meshed: Array.from(chunks.values()).filter(c => c.mesh).length, loaded }),
     // 인벤/장비 검증용
     icon, drawCubeIcon, openInventory, closeInv, renderInv, slotClick, takeOutput, armorPoints, craftOutput, quickTransfer,
