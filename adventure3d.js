@@ -55,6 +55,9 @@
     { key: 'flower_red', tex: 'flower_red', opaque: false, solid: false, cross: true },
     { key: 'flower_yellow', tex: 'flower_yellow', opaque: false, solid: false, cross: true },
     { key: 'sugar_cane', tex: 'sugar_cane', opaque: false, solid: false, cross: true },
+    { key: 'birch_planks', tex: 'birch_planks' },
+    { key: 'lapis_ore', tex: 'lapis_ore' },
+    { key: 'emerald_ore', tex: 'emerald_ore' },
   ];
   const ID = {}, BYID = BLOCKS;
   BLOCKS.forEach((b, i) => { b.id = i; ID[b.key] = i; if (b.solid === undefined) b.solid = true; if (b.opaque === undefined) b.opaque = true; });
@@ -83,7 +86,8 @@
   const move = { active: false, id: -1, ox: 0, oy: 0, x: 0, y: 0 };
   let breakState = { key: '', t: 0 };
 
-  function loadCfg() { try { return Object.assign({ breakMul: 1, dropMul: 1, dayLen: 600, cloud: true, startHp: 20, keepInvOnDeath: false }, JSON.parse(localStorage.getItem(CFG_KEY) || '{}')); } catch (e) { return { breakMul: 1, dropMul: 1, dayLen: 600, cloud: true }; } }
+  // 낮/밤 각 600초(총 1200초=20분, 마크와 동일). dayLen=전체 주기.
+  function loadCfg() { try { const c = Object.assign({ breakMul: 1, dropMul: 1, dayLen: 1200, cloud: true, startHp: 20, keepInvOnDeath: false }, JSON.parse(localStorage.getItem(CFG_KEY) || '{}')); if (!c.dayLen || c.dayLen < 1200) c.dayLen = 1200; return c; } catch (e) { return { breakMul: 1, dropMul: 1, dayLen: 1200, cloud: true }; } }
 
   /* ---------------- 노이즈/지형 ---------------- */
   let seed = WORLD_SEED;
@@ -194,13 +198,15 @@
     if (depth <= 3) return (b === 'desert' || sy <= SEA + 1) ? (b === 'desert' ? ID.sandstone : ID.sand) : ID.dirt;
     // 동굴
     if (caveCarve(x, y, z)) return ID.air;
-    // 광물
-    const r = hash3(x * 3 + 1, y * 5 + 2, z * 7 + 3);
-    if (r < 0.012) return ID.coal_ore;
-    if (r < 0.020 && y < 50) return ID.iron_ore;
-    if (r < 0.025 && y < 30) return ID.gold_ore;
-    if (r < 0.029 && y < 22) return ID.redstone_ore;
-    if (r < 0.032 && y < 16) return ID.diamond_ore;
+    // 광물 — 2×2×2 셀 해시로 미니 광맥(마크식 y분포). 깊을수록 귀한 광물.
+    const r = hash3((x >> 1) * 3 + 1, (y >> 1) * 5 + 2, (z >> 1) * 7 + 3);
+    if (r < 0.014) return ID.coal_ore;                                   // 석탄: 어디서나 흔함
+    if (r < 0.024 && y < 46) return ID.iron_ore;                         // 철: 지하 흔함
+    if (r < 0.030 && y >= 6 && y < 28) return ID.lapis_ore;              // 청금석: 중간 깊이
+    if (r < 0.036 && y < 22) return ID.gold_ore;                         // 금: 깊음
+    if (r < 0.041 && y < 15) return ID.redstone_ore;                     // 레드스톤: 매우 깊음
+    if (r < 0.045 && y < 14) return ID.diamond_ore;                      // 다이아: 최심부, 드묾
+    if (r < 0.030 && y >= 30 && surfaceH(x, z) > 64) return ID.emerald_ore;   // 에메랄드: 산악에만
     return ID.stone;
   }
   function caveCarve(x, y, z) {
@@ -430,12 +436,15 @@
       case 'log_top': { fillNoise('#b59b6a', '#a78c5b', '#c4aa79'); for (let i = 2; i <= 7; i += 2) { c.strokeStyle = '#8a724a'; c.strokeRect(ox + 8 - i + .5, oy + 8 - i + .5, i * 2 - 1, i * 2 - 1); } break; }
       case 'log_side': { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) f(x, y, ((x + (r() < .3 ? 1 : 0)) % 5 === 0) ? '#5b472d' : (r() < 0.5 ? '#6b5436' : '#7c6342')); break; }
       case 'planks': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { f(x, y, ((y >> 2) % 2) ? '#9c7a44' : '#b08a4f'); if (y % 4 === 0) f(x, y, '#7a5f34'); } break;
+      case 'birch_planks': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { f(x, y, ((y >> 2) % 2) ? '#c8b787' : '#d8c99a'); if (y % 4 === 0) f(x, y, '#b0a074'); } break;   // 자작 판자(밝은 크림색)
       case 'leaves': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.4 ? '#9a9a9a' : t < 0.75 ? '#b6b6b6' : '#cccccc'); if (t > 0.9) f(x, y, '#6e6e6e'); if (t < 0.08) f(x, y, '#5a5a5a'); } break;
-      case 'coal_ore': oreTex(c, ox, oy, '#1c1c1c'); break;
-      case 'iron_ore': oreTex(c, ox, oy, '#d2a282'); break;
-      case 'gold_ore': oreTex(c, ox, oy, '#f7d75c'); break;
+      case 'coal_ore': oreTex(c, ox, oy, '#26262a'); break;
+      case 'iron_ore': oreTex(c, ox, oy, '#d8a282'); break;
+      case 'gold_ore': oreTex(c, ox, oy, '#fbdb4b'); break;
       case 'diamond_ore': oreTex(c, ox, oy, '#5decd5'); break;
       case 'redstone_ore': oreTex(c, ox, oy, '#e8323b'); break;
+      case 'lapis_ore': oreTex(c, ox, oy, '#1a44a5'); break;
+      case 'emerald_ore': oreTex(c, ox, oy, '#17a94f'); break;
       case 'glass': { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) f(x, y, '#bfe6f2'); c.fillStyle = '#dff2f9'; c.fillRect(ox, oy, 16, 1); c.fillRect(ox, oy, 1, 16); c.fillStyle = '#9fd0e0'; c.fillRect(ox, oy + 15, 16, 1); c.fillRect(ox + 15, oy, 1, 16); break; }
       case 'bedrock': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.33 ? '#3a3a3a' : t < 0.66 ? '#565656' : '#6b6b6b'); } break;
       case 'snow': fillNoise('#f0f4f7', '#e2e8ec', '#ffffff'); break;
@@ -743,40 +752,61 @@
   };
   let mobs = [], mobMatCache = {}, _spawnT = 0;
   function mobMat(col) { if (!mobMatCache[col]) mobMatCache[col] = new THREE.MeshBasicMaterial({ color: col }); return mobMatCache[col]; }
+  function mkBox(w, h, d, col, x, y, z) { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mobMat(col)); if (x !== undefined) m.position.set(x, y, z); return m; }
   function buildMobMesh(type) {
     const md = MOB[type]; const g = new THREE.Group();
-    const bodyMat = mobMat(md.col);
+    const body = md.col, dark = shade(md.col, 0.78), light = shade(md.col, 1.12), W = md.w, H = md.h;
     if (md.biped) {
-      const body = new THREE.Mesh(new THREE.BoxGeometry(md.w, md.h * 0.55, md.w * 0.6), bodyMat); body.position.y = md.h * 0.5; g.add(body);
-      const head = new THREE.Mesh(new THREE.BoxGeometry(md.w * 0.9, md.w * 0.9, md.w * 0.9), mobMat(shade(md.col, 1.08))); head.position.y = md.h * 0.85; g.add(head);
-      const legGeo = new THREE.BoxGeometry(md.w * 0.35, md.h * 0.45, md.w * 0.35); const lm = mobMat(shade(md.col, 0.8));
-      [-1, 1].forEach(s => { const l = new THREE.Mesh(legGeo, lm); l.position.set(s * md.w * 0.22, md.h * 0.22, 0); g.add(l); });
+      g.add(mkBox(W, H * 0.5, W * 0.5, body, 0, H * 0.52, 0));                 // 몸통
+      g.add(mkBox(W * 0.85, W * 0.85, W * 0.85, light, 0, H * 0.85, 0));       // 머리
+      g.add(mkBox(W * 0.6, W * 0.22, 0.03, 0x20140c, 0, H * 0.9, W * 0.44));   // 눈(어두운 띠)
+      if (type === 'creeper') {
+        [[-1, 1], [1, 1], [-1, -1], [1, -1]].forEach(o => g.add(mkBox(W * 0.3, H * 0.28, W * 0.3, dark, o[0] * W * 0.22, H * 0.14, o[1] * W * 0.22)));   // 4다리
+        g.add(mkBox(W * 0.34, W * 0.34, 0.04, 0x0c160c, 0, H * 0.78, W * 0.44));    // 입(검정)
+      } else {
+        [-1, 1].forEach(s => g.add(mkBox(W * 0.32, H * 0.42, W * 0.32, dark, s * W * 0.2, H * 0.21, 0)));   // 2다리
+        if (type === 'zombie' || type === 'skeleton') [-1, 1].forEach(s => g.add(mkBox(W * 0.22, W * 0.22, H * 0.42, type === 'skeleton' ? 0xdedede : body, s * W * 0.55, H * 0.62, W * 0.22)));   // 앞으로 뻗은 팔
+      }
     } else {
-      const body = new THREE.Mesh(new THREE.BoxGeometry(md.w * 0.7, md.h * 0.7, md.w), bodyMat); body.position.y = md.h * 0.55; g.add(body);
-      const head = new THREE.Mesh(new THREE.BoxGeometry(md.w * 0.6, md.h * 0.55, md.w * 0.45), mobMat(shade(md.col, 1.08))); head.position.set(0, md.h * 0.6, md.w * 0.5); g.add(head);
-      const legGeo = new THREE.BoxGeometry(md.w * 0.22, md.h * 0.4, md.w * 0.22); const lm = mobMat(shade(md.col, 0.8));
-      [[-1, 1], [1, 1], [-1, -1], [1, -1]].forEach(o => { const l = new THREE.Mesh(legGeo, lm); l.position.set(o[0] * md.w * 0.28, md.h * 0.2, o[1] * md.w * 0.32); g.add(l); });
+      g.add(mkBox(W * 0.72, H * 0.6, W * 1.05, body, 0, H * 0.5, 0));          // 몸통
+      g.add(mkBox(W * 0.58, H * 0.5, W * 0.45, light, 0, H * 0.55, W * 0.58)); // 머리(앞)
+      [[-1, 1], [1, 1], [-1, -1], [1, -1]].forEach(o => g.add(mkBox(W * 0.2, H * 0.38, W * 0.2, dark, o[0] * W * 0.26, H * 0.19, o[1] * W * 0.32)));   // 4다리
+      if (type === 'pig') g.add(mkBox(W * 0.28, W * 0.22, 0.1, 0xd98a90, 0, H * 0.5, W * 0.82));   // 돼지 코
+      if (type === 'cow') { [-1, 1].forEach(s => g.add(mkBox(0.06, 0.16, 0.06, 0xe8e0cf, s * W * 0.16, H * 0.8, W * 0.55))); g.add(mkBox(W * 0.5, H * 0.28, 0.03, 0xf2f2f2, 0, H * 0.5, W * 0.58)); }   // 뿔+흰 얼룩
+      if (type === 'sheep') { g.add(mkBox(W * 0.9, H * 0.72, W * 1.12, 0xededed, 0, H * 0.5, 0)); g.add(mkBox(W * 0.45, H * 0.4, W * 0.4, 0x3a3a3a, 0, H * 0.52, W * 0.6)); }   // 양털+검은 얼굴
+      if (type === 'chicken') { g.add(mkBox(0.1, 0.08, 0.12, 0xf0a030, 0, H * 0.55, W * 0.82)); g.add(mkBox(0.09, 0.12, 0.14, 0xd23b32, 0, H * 0.78, W * 0.55)); }   // 부리+볏
     }
+    if (type === 'spider') [-1, 1].forEach(s => g.add(mkBox(0.09, 0.09, 0.03, 0xff2020, s * W * 0.16, H * 0.55, W * 0.5)));   // 거미 빨간 눈
     return g;
   }
   function shade(col, f) { const r = Math.min(255, ((col >> 16) & 255) * f) | 0, gr = Math.min(255, ((col >> 8) & 255) * f) | 0, b = Math.min(255, (col & 255) * f) | 0; return (r << 16) | (gr << 8) | b; }
   const PASSIVE = ['pig', 'cow', 'sheep', 'chicken'], HOSTILE = ['zombie', 'skeleton', 'creeper', 'spider'];
   function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
+  // 마크식 스폰 상수: 최소 24칸, 최대 128칸, 디스폰 128, 32칸 밖 무작위 디스폰
+  const SPAWN_MIN = 24, SPAWN_MAX = 96, DESPAWN = 128, RANDOM_DESPAWN = 32;
   function spawnMobs(dt) {
     _spawnT += dt; if (_spawnT < 2.0) return; _spawnT = 0;
     const night = dayFactor() < 0.45; let nH = 0, nP = 0;
     for (const m of mobs) { if (MOB[m.type].hostile) nH++; else nP++; }
-    // 밤: 적대몹 보충 / 낮·황혼: 수동동물 보충(마크 규칙)
-    if (night) { if (nH < 14 && Math.random() < 0.8) trySpawn(pick(HOSTILE), night); }
-    else { if (nP < 12 && Math.random() < 0.7) trySpawn(pick(PASSIVE), night); }
+    // 밤: 적대몹 무리(마크: 팩 4) / 낮·황혼: 수동동물 무리 보충
+    if (night) { if (nH < 16 && Math.random() < 0.8) trySpawnPack(pick(HOSTILE), night, 2 + (Math.random() * 3 | 0)); }
+    else { if (nP < 12 && Math.random() < 0.7) trySpawnPack(pick(PASSIVE), night, 3 + (Math.random() * 2 | 0)); }
   }
-  // 지정 종을 플레이어 주변 적절한 지면에 스폰 시도. 성공 true.
-  function trySpawn(type, night) {
-    const md = MOB[type];
-    const ang = Math.random() * Math.PI * 2, r = 14 + Math.random() * 30;
+  // 팩 단위 스폰(한 지점 주변에 여러 마리)
+  function trySpawnPack(type, night, n) {
+    const c = trySpawn(type, night, SPAWN_MIN, SPAWN_MAX); if (!c) return;
+    for (let i = 1; i < n; i++) trySpawnNear(type, night, c[0], c[1]);
+  }
+  function trySpawnNear(type, night, cx, cz) { const sx = cx + (Math.random() * 8 - 4 | 0), sz = cz + (Math.random() * 8 - 4 | 0); return placeMob(type, night, sx, sz); }
+  // 지정 종을 플레이어 주변 적절한 지면에 스폰. 성공하면 [sx,sz], 실패 null.
+  function trySpawn(type, night, rMin, rMax) {
+    const ang = Math.random() * Math.PI * 2, r = rMin + Math.random() * (rMax - rMin);
     const sx = Math.floor(P.x + Math.cos(ang) * r), sz = Math.floor(P.z + Math.sin(ang) * r);
-    const surf = surfaceH(sx, sz);
-    let y = Math.min(WORLD_H - 3, Math.floor(P.y + 10)); while (y > 2 && getBlock(sx, y, sz) === 0) y--;   // 지면 하강 탐색
+    return placeMob(type, night, sx, sz) ? [sx, sz] : null;
+  }
+  function placeMob(type, night, sx, sz) {
+    const md = MOB[type]; const surf = surfaceH(sx, sz);
+    let y = Math.min(WORLD_H - 3, Math.floor(surf + 2)); while (y > 2 && getBlock(sx, y, sz) === 0) y--;   // 지면 하강 탐색
     const ground = getBlock(sx, y, sz);
     if (!blockSolid(ground)) return false;
     if (getBlock(sx, y + 1, sz) !== 0 || getBlock(sx, y + 2, sz) !== 0) return false;   // 2칸 여유
@@ -786,9 +816,9 @@
     addMob(type, sx + 0.5, y + 1, sz + 0.5);
     return true;
   }
-  // 새 월드/입장 시 주변에 수동동물 무리 즉시 배치(마크처럼 빈 세계 방지)
+  // 새 월드/입장 시 주변에 수동동물 무리 즉시 배치(가까이, 바로 보이게)
   function spawnInitialMobs() {
-    let made = 0; for (let tries = 0; tries < 80 && made < 8; tries++) { if (trySpawn(pick(PASSIVE), false)) made++; }
+    let made = 0; for (let tries = 0; tries < 100 && made < 10; tries++) { if (trySpawn(pick(PASSIVE), false, 16, 44)) made++; }
   }
   function addMob(type, x, y, z, baby) {
     const md = MOB[type]; const g = buildMobMesh(type); if (baby) g.scale.setScalar(0.5); scene.add(g);
@@ -817,7 +847,8 @@
     for (let i = mobs.length - 1; i >= 0; i--) {
       const m = mobs[i]; const md = MOB[m.type];
       const dx = P.x - m.x, dz = P.z - m.z, dist = Math.hypot(dx, dz), distY = Math.abs(P.y - m.y);
-      if (dist > 120) { scene.remove(m.group); mobs.splice(i, 1); continue; }
+      if (dist > DESPAWN) { scene.remove(m.group); mobs.splice(i, 1); continue; }                                  // 128칸 밖 즉시 디스폰(마크)
+      if (dist > RANDOM_DESPAWN && !m.baby && m.loveT <= 0 && Math.random() < 0.0004) { scene.remove(m.group); mobs.splice(i, 1); continue; }   // 32칸 밖 무작위 디스폰
       // 좀비/스켈레톤 낮 화상
       if (md.burn && bright && exposedToSky(Math.floor(m.x), Math.floor(m.y), Math.floor(m.z))) { m.burnT = (m.burnT || 0) + dt; if (m.burnT > 0.5) { m.burnT = 0; m.hp -= 1; m.hurtT = 0.2; } }
       let dir = 0;
@@ -1047,8 +1078,11 @@
     const out = []; for (let r = r0; r <= r1; r++) { const row = []; for (let c = c0; c <= c1; c++) row.push(rows[r][c] || null); out.push(row); }
     return out;
   }
-  function patEq(a, b) { if (!a || !b || a.length !== b.length) return false; for (let r = 0; r < a.length; r++) { if (a[r].length !== b[r].length) return false; for (let c = 0; c < a[r].length; c++) if ((a[r][c] || null) !== (b[r][c] || null)) return false; } return true; }
+  // 셀 매칭: 레시피 셀(문자열 또는 태그배열)에 그리드 셀(문자열)이 부합하는가
+  function cellMatch(g, p) { if (!g && !p) return true; if (!g || !p) return false; return Array.isArray(p) ? p.indexOf(g) >= 0 : g === p; }
+  function patEq(a, b) { if (!a || !b || a.length !== b.length) return false; for (let r = 0; r < a.length; r++) { if (a[r].length !== b[r].length) return false; for (let c = 0; c < a[r].length; c++) if (!cellMatch(a[r][c], b[r][c])) return false; } return true; }
   function mirrorPat(p) { return p.map(row => row.slice().reverse()); }
+  const PLANKS = ['oak_planks', 'birch_planks'];   // 마크 #planks 태그(아무 판자나 가능)
   let _recipes = null;
   function recipes() {
     if (_recipes) return _recipes;
@@ -1057,14 +1091,14 @@
     const shapeless = (out, count, bag, table) => { R.push({ out, count, table: !!table, shaped: false, bag }); };
     shapeless('oak_planks', 4, { oak_log: 1 });
     shapeless('birch_planks', 4, { birch_log: 1 });
-    shaped('stick', 4, ['P', 'P'], { P: 'oak_planks' });
-    shaped('crafting_table', 1, ['PP', 'PP'], { P: 'oak_planks' });
+    shaped('stick', 4, ['P', 'P'], { P: PLANKS });
+    shaped('crafting_table', 1, ['PP', 'PP'], { P: PLANKS });
     shaped('torch', 4, ['O', 'S'], { O: 'coal', S: 'stick' });
-    shaped('chest', 1, ['PPP', 'P P', 'PPP'], { P: 'oak_planks' }, true);
+    shaped('chest', 1, ['PPP', 'P P', 'PPP'], { P: PLANKS }, true);
     shaped('furnace', 1, ['CCC', 'C C', 'CCC'], { C: 'cobblestone' }, true);
     shaped('ladder', 3, ['S S', 'SSS', 'S S'], { S: 'stick' }, true);
-    shaped('bowl', 4, ['P P', ' P '], { P: 'oak_planks' }, true);
-    shaped('bookshelf', 1, ['PPP', 'BBB', 'PPP'], { P: 'oak_planks', B: 'book' }, true);
+    shaped('bowl', 4, ['P P', ' P '], { P: PLANKS }, true);
+    shaped('bookshelf', 1, ['PPP', 'BBB', 'PPP'], { P: PLANKS, B: 'book' }, true);
     shaped('bricks', 1, ['BB', 'BB'], { B: 'brick_item' }, true);
     shaped('stone_bricks', 4, ['SS', 'SS'], { S: 'stone' }, true);
     shaped('bread', 1, ['WWW'], { W: 'wheat' }, true);
@@ -1077,10 +1111,10 @@
     shaped('flint_and_steel', 1, ['I ', ' F'], { I: 'iron_ingot', F: 'flint' });
     shaped('glowstone', 1, ['DD', 'DD'], { D: 'glowstone_dust' }, true);
     shaped('fishing_rod', 1, ['  J', ' JT', 'J T'], { J: 'stick', T: 'string' }, true);
-    shaped('bed', 1, ['WWW', 'PPP'], { W: 'wool', P: 'oak_planks' }, true);
+    shaped('bed', 1, ['WWW', 'PPP'], { W: 'wool', P: PLANKS }, true);
     shaped('paper', 3, ['UUU'], { U: 'sugar_cane' }, true);
     shaped('book', 1, ['AA', 'L '], { A: 'paper', L: 'leather' });
-    const TMAT = { wood: 'oak_planks', stone: 'cobblestone', iron: 'iron_ingot', gold: 'gold_ingot', diamond: 'diamond' };
+    const TMAT = { wood: PLANKS, stone: 'cobblestone', iron: 'iron_ingot', gold: 'gold_ingot', diamond: 'diamond' };
     for (const m in TMAT) { const M = TMAT[m]; const k = { M, S: 'stick' };
       shaped(m + '_pickaxe', 1, ['MMM', ' S ', ' S '], k, true);
       shaped(m + '_axe', 1, ['MM', 'MS', ' S'], k, true);
