@@ -31,7 +31,7 @@
     { key: 'gravel', tex: 'gravel' },
     { key: 'oak_log', tex: { top: 'log_top', side: 'log_side', bottom: 'log_top' } },
     { key: 'oak_planks', tex: 'planks' },
-    { key: 'oak_leaves', tex: 'leaves', opaque: false },
+    { key: 'oak_leaves', tex: 'leaves' },
     { key: 'coal_ore', tex: 'coal_ore' },
     { key: 'iron_ore', tex: 'iron_ore' },
     { key: 'gold_ore', tex: 'gold_ore' },
@@ -49,7 +49,7 @@
     { key: 'glowstone', tex: 'glow', light: true },
     { key: 'obsidian', tex: 'obsidian' },
     { key: 'birch_log', tex: { top: 'log_top', side: 'birch_side', bottom: 'log_top' } },
-    { key: 'birch_leaves', tex: 'leaves', opaque: false },
+    { key: 'birch_leaves', tex: 'leaves' },
     { key: 'cactus', tex: { top: 'cactus_top', side: 'cactus_side', bottom: 'cactus_top' } },
     { key: 'tall_grass', tex: 'tall_grass', opaque: false, solid: false, cross: true },
     { key: 'flower_red', tex: 'flower_red', opaque: false, solid: false, cross: true },
@@ -143,16 +143,27 @@
     return sy;
   }
   const treeCache = new Map();
+  // 나무 배치: 순수 셀당 확률(과거 방식)은 캐노피(반경2)가 서로 겹치는 밀집 클러스터를
+  // 만들어 '초록 벽'처럼 보이는 버그를 냄. 격자(지터드 그리드)로 후보 위치를 셀당 1곳만
+  // 두어 나무 사이 최소 간격을 보장(실제 마크 트리 피처 배치와 동일한 접근).
+  const TREE_CELL = 6, TREE_MARGIN = 1;   // 셀 안쪽으로만 지터링 → 이웃 셀 나무와 최소 간격 보장(캐노피 겹침 방지)
   function isTreeAt(x, z) {
     const k = x + ',' + z; const cv = treeCache.get(k); if (cv !== undefined) return cv;
-    let res = false; const b = biome(x, z);
-    if (b !== 'desert') {
-      const p = b === 'forest' ? 0.06 : b === 'savanna' ? 0.008 : b === 'snow' ? 0.018 : 0.013;
-      if (h2(x * 7 + 1, z * 13 + 3) < p) {
-        const sy = surfaceH(x, z);
-        if (sy > SEA + 1) {   // 물·해변엔 나무 X + 주변 완만할 때만(절벽 나무 방지)
-          const e = Math.abs(surfaceH(x + 1, z) - sy) + Math.abs(surfaceH(x - 1, z) - sy) + Math.abs(surfaceH(x, z + 1) - sy) + Math.abs(surfaceH(x, z - 1) - sy);
-          res = e <= 3;
+    let res = false;
+    const cx = Math.floor(x / TREE_CELL), cz = Math.floor(z / TREE_CELL);
+    const span = TREE_CELL - TREE_MARGIN * 2;
+    const jx = cx * TREE_CELL + TREE_MARGIN + (hash3(cx * 13 + 7, 0, cz * 13 + 3) * span | 0);
+    const jz = cz * TREE_CELL + TREE_MARGIN + (hash3(cx * 17 + 11, 1, cz * 17 + 5) * span | 0);
+    if (x === jx && z === jz) {   // 이 셀의 유일한 후보 좌표일 때만 검사(셀당 나무 최대 1그루)
+      const b = biome(x, z);
+      if (b !== 'desert') {
+        const p = b === 'forest' ? 0.55 : b === 'savanna' ? 0.10 : b === 'snow' ? 0.20 : 0.16;   // 셀당 확률(간격은 격자가 보장)
+        if (h2(x * 7 + 1, z * 13 + 3) < p) {
+          const sy = surfaceH(x, z);
+          if (sy > SEA + 1) {   // 물·해변엔 나무 X + 주변 완만할 때만(절벽 나무 방지)
+            const e = Math.abs(surfaceH(x + 1, z) - sy) + Math.abs(surfaceH(x - 1, z) - sy) + Math.abs(surfaceH(x, z + 1) - sy) + Math.abs(surfaceH(x, z - 1) - sy);
+            res = e <= 3;
+          }
         }
       }
     }
@@ -445,7 +456,7 @@
       case 'log_side': { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) f(x, y, ((x + (r() < .3 ? 1 : 0)) % 5 === 0) ? '#5b472d' : (r() < 0.5 ? '#6b5436' : '#7c6342')); break; }
       case 'planks': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { f(x, y, ((y >> 2) % 2) ? '#9c7a44' : '#b08a4f'); if (y % 4 === 0) f(x, y, '#7a5f34'); } break;
       case 'birch_planks': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { f(x, y, ((y >> 2) % 2) ? '#c8b787' : '#d8c99a'); if (y % 4 === 0) f(x, y, '#b0a074'); } break;   // 자작 판자(밝은 크림색)
-      case 'leaves': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.4 ? '#9a9a9a' : t < 0.75 ? '#b6b6b6' : '#cccccc'); if (t > 0.9) f(x, y, '#6e6e6e'); if (t < 0.08) f(x, y, '#5a5a5a'); } break;
+      case 'leaves': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.35 ? '#3f7a2e' : t < 0.7 ? '#4c8f38' : '#5aa042'); if (t > 0.92) f(x, y, '#16240e'); if (t < 0.05) f(x, y, '#0e1a09'); } break;   // 초록(바이옴 틴트로 곱) + 불투명(구멍은 어두운 색, 투명 X — 성능·8×8 변환 용이)
       case 'coal_ore': oreTex(c, ox, oy, r, '#26262a'); break;
       case 'iron_ore': oreTex(c, ox, oy, r, '#d8a282'); break;
       case 'gold_ore': oreTex(c, ox, oy, r, '#fbdb4b'); break;
@@ -487,9 +498,11 @@
     for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); px(c, ox + x, oy + y, t < 0.33 ? '#727272' : t < 0.66 ? '#7e7e7e' : '#8a8a8a'); }
     for (let i = 0; i < 6; i++) { const x = 2 + ((hash3(i, 1, 0) * 11) | 0), y = 2 + ((hash3(i, 2, 0) * 11) | 0); c.fillStyle = ore; c.fillRect(ox + x, oy + y, 3, 3); c.fillStyle = 'rgba(255,255,255,0.35)'; c.fillRect(ox + x, oy + y, 1, 1); c.fillStyle = 'rgba(0,0,0,0.25)'; c.fillRect(ox + x + 2, oy + y + 2, 1, 1); }
   }
-  // ★ 16×16 정밀 패턴 → 8×8 실효해상도로 변환: 2×2 픽셀 그룹(예 1,1·1,2·2,1·2,2)의
-  // 색을 평균해 그 값을 하나로 대입 → 결과적으로 16×16 캔버스에 2×2 크기 블록 64개(8×8)만 남음.
-  // 모든 텍스처(블록/아이템/식물)에 100% 동일하게 적용(atlas·texCanvas 등 drawTex의 모든 호출 경로).
+  // ★ 16×16 정밀 패턴 → 색은 8×8(2×2 블록 평균)로 단순화. 단, 십자(컷아웃) 식물처럼
+  // '꽉 차지 않은' 모양은 실루엣(알파)을 16×16 그대로 유지하고 채색만 8×8 팔레트를 써서
+  // 잎맥처럼 가느다란 형태가 뭉개지지 않게 함. 그 외(불투명 블록)는 2×2 블록 단위로 채워
+  // 동일한 결과를 더 적은 fillRect로 얻음. atlas·texCanvas 등 drawTex의 모든 호출 경로에 적용.
+  const CUTOUT_TEX = { tall_grass: 1, flower_red: 1, flower_yellow: 1, sugar_cane: 1 };
   let _dtOffCanvas = null;
   function drawTex(c, ox, oy, name) {
     if (!_dtOffCanvas) { _dtOffCanvas = document.createElement('canvas'); _dtOffCanvas.width = 16; _dtOffCanvas.height = 16; }
@@ -499,16 +512,32 @@
     drawTexFine(oc, 0, 0, name);
     let id;
     try { id = oc.getImageData(0, 0, 16, 16).data; } catch (e) { drawTexFine(c, ox, oy, name); return; }
+    // 8×8 팔레트(각 2×2 블록의 알파가중 평균색) 계산 — 공통
+    const pal = new Array(64);
     for (let by = 0; by < 8; by++) for (let bx = 0; bx < 8; bx++) {
       let sr = 0, sg = 0, sb = 0, sa = 0;
       for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) {
         const px2 = bx * 2 + dx, py2 = by * 2 + dy, idx = (py2 * 16 + px2) * 4, a = id[idx + 3];
-        sr += id[idx] * a; sg += id[idx + 1] * a; sb += id[idx + 2] * a; sa += a;   // 알파 가중 평균(투명 픽셀이 색을 어둡히지 않게)
+        sr += id[idx] * a; sg += id[idx + 1] * a; sb += id[idx + 2] * a; sa += a;
       }
-      const avgA = (sa / 4) | 0; if (avgA < 24) continue;   // 대부분 투명 → 비움(십자 스프라이트 컷아웃 유지)
-      const rr = Math.round(sr / sa), gg = Math.round(sg / sa), bb = Math.round(sb / sa);
-      c.fillStyle = avgA >= 248 ? `rgb(${rr},${gg},${bb})` : `rgba(${rr},${gg},${bb},${(avgA / 255).toFixed(3)})`;
-      c.fillRect(ox + bx * 2, oy + by * 2, 2, 2);
+      const avgA = (sa / 4) | 0;
+      pal[by * 8 + bx] = avgA < 24 ? null : [Math.round(sr / sa), Math.round(sg / sa), Math.round(sb / sa), avgA];
+    }
+    if (CUTOUT_TEX[name]) {
+      // 모양(알파)은 16×16 원본 그대로, 색만 8×8 팔레트 사용 — 가는 형태 보존
+      for (let py = 0; py < 16; py++) for (let px = 0; px < 16; px++) {
+        const idx = (py * 16 + px) * 4, a = id[idx + 3]; if (a < 8) continue;
+        const p = pal[(py >> 1) * 8 + (px >> 1)] || [id[idx], id[idx + 1], id[idx + 2]];
+        c.fillStyle = a >= 248 ? `rgb(${p[0]},${p[1]},${p[2]})` : `rgba(${p[0]},${p[1]},${p[2]},${(a / 255).toFixed(3)})`;
+        c.fillRect(ox + px, oy + py, 1, 1);
+      }
+    } else {
+      // 불투명/일반 블록: 2×2 블록 단위로 채우기(더 적은 fillRect, 결과 동일)
+      for (let by = 0; by < 8; by++) for (let bx = 0; bx < 8; bx++) {
+        const p = pal[by * 8 + bx]; if (!p) continue;
+        c.fillStyle = p[3] >= 248 ? `rgb(${p[0]},${p[1]},${p[2]})` : `rgba(${p[0]},${p[1]},${p[2]},${(p[3] / 255).toFixed(3)})`;
+        c.fillRect(ox + bx * 2, oy + by * 2, 2, 2);
+      }
     }
   }
   function hashStr(s) { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return h >>> 0; }
@@ -705,7 +734,7 @@
     const len = Math.hypot(dx, dz); if (len > 0) { dx /= len; dz /= len; }
     P.vx = dx * speed; P.vz = dz * speed;
     // 점프/중력
-    P.vy -= 26 * dt; if (P.vy < -55) P.vy = -55;
+    P.vy -= 32 * dt; if (P.vy < -78) P.vy = -78;   // 마크 실제 중력(≈32블록/s²)에 맞춤(예전 26은 점프가 미세하게 더 늘어짐)
     const wantJump = keys.Space || (move.active && (move.y - move.oy) < -34);
     const wasGround = P.onGround;
     if (wantJump && P.onGround && !invOpen) { P.vy = 8.5; P.onGround = false; addExhaustion(sprint ? 0.2 : 0.05); }   // 점프 탈진
@@ -745,7 +774,7 @@
     P.exh += v;
     while (P.exh >= 4) { P.exh -= 4; if (P.sat > 0) P.sat = Math.max(0, P.sat - 1); else P.hunger = Math.max(0, P.hunger - 1); }
   }
-  const FOOD_SAT = { bread: 6, cooked_porkchop: 12.8, cooked_beef: 12.8, cooked_chicken: 7.2, raw_porkchop: 1.8, raw_beef: 1.8, raw_chicken: 1.2, apple: 2.4, golden_apple: 9.6, carrot: 3.6, potato: 0.6, baked_potato: 6, cookie: 0.4, melon_slice: 1.2, raw_fish: 1.2, cooked_fish: 6, pumpkin_pie: 4.8, rotten_flesh: 0.8 };
+  const FOOD_SAT = { bread: 6, cooked_porkchop: 12.8, cooked_beef: 12.8, cooked_chicken: 7.2, raw_porkchop: 1.8, raw_beef: 1.8, raw_chicken: 1.2, apple: 2.4, golden_apple: 9.6, carrot: 3.6, potato: 0.6, baked_potato: 6, cookie: 0.4, melon_slice: 1.2, raw_fish: 0.4, cooked_fish: 6, pumpkin_pie: 4.8, rotten_flesh: 0.8 };
   function eatFood(slot) {
     const s = inv[slot]; if (!s) return false; const it = window.ADV_ITEMS[s.k]; if (!it || !it.food) return false;
     if (P.hunger >= 20 && !it.regen) return false;
@@ -792,7 +821,7 @@
     sheep:   { kor: '양', hostile: false, hp: 8, dmg: 0, speed: 3.4, w: 0.9, h: 1.3, col: 0xeceff0, drops: [{ i: 'raw_beef', min: 1, max: 2 }, { i: 'wool', min: 1, max: 1 }], breed: 'wheat', biped: false },
     chicken: { kor: '닭', hostile: false, hp: 4, dmg: 0, speed: 3.5, w: 0.4, h: 0.7, col: 0xf2f2f2, drops: [{ i: 'raw_chicken', min: 1, max: 1 }, { i: 'feather', min: 0, max: 2 }], breed: 'seeds', biped: true },
     zombie:  { kor: '좀비', hostile: true, hp: 20, dmg: 3, speed: 3.5, w: 0.6, h: 1.95, col: 0x3f7a4f, burn: true, drops: [{ i: 'rotten_flesh', min: 0, max: 2 }], biped: true },
-    skeleton:{ kor: '스켈레톤', hostile: true, hp: 20, dmg: 2, speed: 3.5, w: 0.6, h: 1.99, col: 0xd5d8d6, burn: true, ranged: true, drops: [{ i: 'bone', min: 0, max: 2 }, { i: 'arrow', min: 0, max: 2 }], biped: true },
+    skeleton:{ kor: '스켈레톤', hostile: true, hp: 20, dmg: 3, speed: 3.5, w: 0.6, h: 1.99, col: 0xd5d8d6, burn: true, ranged: true, drops: [{ i: 'bone', min: 0, max: 2 }, { i: 'arrow', min: 0, max: 2 }], biped: true },
     creeper: { kor: '크리퍼', hostile: true, hp: 20, dmg: 0, speed: 3.5, w: 0.6, h: 1.7, col: 0x5fa05f, explode: true, drops: [{ i: 'gunpowder', min: 0, max: 2 }], biped: true },
     spider:  { kor: '거미', hostile: true, hp: 16, dmg: 2, speed: 4.6, w: 1.4, h: 0.9, col: 0x39312e, climb: true, drops: [{ i: 'string', min: 0, max: 2 }], biped: false },
   };
@@ -881,7 +910,7 @@
     }
   }
   function entPhysics(e, dt) {
-    e.vy -= 26 * dt; if (e.vy < -55) e.vy = -55; e.blocked = false; e.onGround = false;
+    e.vy -= 32 * dt; if (e.vy < -78) e.vy = -78; e.blocked = false; e.onGround = false;
     const sy = e.y; entMoveAxis(e, 'x', e.vx * dt); entMoveAxis(e, 'z', e.vz * dt); entMoveAxis(e, 'y', e.vy * dt);
     if (e.onGround && e.fallStart != null) { const d = e.fallStart - e.y; const dm = Math.floor(d - 3); if (dm > 0) e.hp -= dm; e.fallStart = null; }
     if (!e.onGround) { if (e.vy <= 0 && e.fallStart == null) e.fallStart = sy; if (e.fallStart != null && e.y > e.fallStart) e.fallStart = e.y; }
@@ -1157,7 +1186,7 @@
     shapeless('birch_planks', 4, { birch_log: 1 });
     shaped('stick', 4, ['P', 'P'], { P: PLANKS });
     shaped('crafting_table', 1, ['PP', 'PP'], { P: PLANKS });
-    shaped('torch', 4, ['O', 'S'], { O: 'coal', S: 'stick' });
+    shaped('torch', 4, ['O', 'S'], { O: ['coal', 'charcoal'], S: 'stick' });
     shaped('chest', 1, ['PPP', 'P P', 'PPP'], { P: PLANKS }, true);
     shaped('furnace', 1, ['CCC', 'C C', 'CCC'], { C: 'cobblestone' }, true);
     shaped('ladder', 3, ['S S', 'SSS', 'S S'], { S: 'stick' }, true);
@@ -1177,7 +1206,7 @@
     shaped('fishing_rod', 1, ['  J', ' JT', 'J T'], { J: 'stick', T: 'string' }, true);
     shaped('bed', 1, ['WWW', 'PPP'], { W: 'wool', P: PLANKS }, true);
     shaped('paper', 3, ['UUU'], { U: 'sugar_cane' }, true);
-    shaped('book', 1, ['AA', 'L '], { A: 'paper', L: 'leather' });
+    shapeless('book', 1, { paper: 3, leather: 1 });
     const TMAT = { wood: PLANKS, stone: 'cobblestone', iron: 'iron_ingot', gold: 'gold_ingot', diamond: 'diamond' };
     for (const m in TMAT) { const M = TMAT[m]; const k = { M, S: 'stick' };
       shaped(m + '_pickaxe', 1, ['MMM', ' S ', ' S '], k, true);
@@ -1430,6 +1459,7 @@
     setInv: (i, v) => { inv[i] = v; }, setGrid: (i, v) => { grid[i] = v; }, setCarry: v => { carry = v; },
     setCraftTable: v => { craftTable = v; craftN = v ? 9 : 4; },
     setBlock, breakBlock, BLOCKS, icon2: icon, biome,
+    chunks: () => chunks, scene: () => scene, texCanvas,
   };
   window.adventure3dStart = start;
   window.adventure3dStop = stop;

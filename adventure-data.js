@@ -22,15 +22,15 @@
   def('granite',    { kor: '화강암', hard: 1.5, tool: PICK, level: 0, pal: ['#9a7163', '#8c6356', '#a87e6f'], tex: 'noise' });
   def('andesite',   { kor: '안산암', hard: 1.5, tool: PICK, level: 0, pal: ['#888a89', '#7c7e7d', '#9a9c9b'], tex: 'noise' });
   def('diorite',    { kor: '섬록암', hard: 1.5, tool: PICK, level: 0, pal: ['#bcbcbc', '#a8a8a8', '#d0d0d0'], tex: 'noise' });
-  def('dirt',       { kor: '흙', hard: 0.75, tool: SHOVEL, level: 0, pal: ['#866043', '#75543b', '#946a4a'], tex: 'noise' });
-  def('grass',      { kor: '잔디', hard: 0.9, tool: SHOVEL, level: 0, drops: [{ i: 'dirt', c: 1 }], pal: ['#866043', '#75543b', '#946a4a'], top: ['#6aa84f', '#5b9142', '#7bbf5c'], tex: 'grass' });
+  def('dirt',       { kor: '흙', hard: 0.5, tool: SHOVEL, level: 0, pal: ['#866043', '#75543b', '#946a4a'], tex: 'noise' });
+  def('grass',      { kor: '잔디', hard: 0.6, tool: SHOVEL, level: 0, drops: [{ i: 'dirt', c: 1 }], pal: ['#866043', '#75543b', '#946a4a'], top: ['#6aa84f', '#5b9142', '#7bbf5c'], tex: 'grass' });
   def('cobblestone',{ kor: '조약돌', hard: 2.0, tool: PICK, level: 0, pal: ['#7d7d7d', '#6b6b6b', '#919191'], tex: 'cobble' });
   def('mossy_cobblestone', { kor: '이끼 조약돌', hard: 2.0, tool: PICK, level: 0, pal: ['#6b7a5a', '#5c6b4d', '#7d8c6a'], tex: 'cobble' });
-  def('sand',       { kor: '모래', hard: 0.6, tool: SHOVEL, level: 0, gravity: true, pal: ['#e0d6a0', '#d4c98e', '#ece2b0'], tex: 'noise' });
-  def('sandstone',  { kor: '사암', hard: 0.9, tool: PICK, level: 0, pal: ['#d9cda0', '#cabf90', '#e6dab0'], tex: 'sandstone' });
-  def('gravel',     { kor: '자갈', hard: 0.7, tool: SHOVEL, level: 0, gravity: true, drops: [{ i: 'gravel', c: 1 }, { i: 'flint', c: 1, chance: 0.1 }], pal: ['#867f7e', '#76706f', '#999190'], tex: 'cobble' });
-  def('clay',       { kor: '점토', hard: 0.7, tool: SHOVEL, level: 0, drops: [{ i: 'clay_ball', c: 4 }], pal: ['#a4a8b6', '#9498a6', '#b4b8c6'], tex: 'noise' });
-  def('snow_block', { kor: '눈 블록', hard: 0.3, tool: SHOVEL, level: 0, pal: ['#f0f4f7', '#e2e8ec', '#ffffff'], tex: 'noise' });
+  def('sand',       { kor: '모래', hard: 0.5, tool: SHOVEL, level: 0, gravity: true, pal: ['#e0d6a0', '#d4c98e', '#ece2b0'], tex: 'noise' });
+  def('sandstone',  { kor: '사암', hard: 0.8, tool: PICK, level: 0, pal: ['#d9cda0', '#cabf90', '#e6dab0'], tex: 'sandstone' });
+  def('gravel',     { kor: '자갈', hard: 0.6, tool: SHOVEL, level: 0, gravity: true, drops: [{ i: 'gravel', c: 1 }, { i: 'flint', c: 1, chance: 0.1 }], pal: ['#867f7e', '#76706f', '#999190'], tex: 'cobble' });
+  def('clay',       { kor: '점토', hard: 0.6, tool: SHOVEL, level: 0, drops: [{ i: 'clay_ball', c: 4 }], pal: ['#a4a8b6', '#9498a6', '#b4b8c6'], tex: 'noise' });
+  def('snow_block', { kor: '눈 블록', hard: 0.2, tool: SHOVEL, level: 0, pal: ['#f0f4f7', '#e2e8ec', '#ffffff'], tex: 'noise' });
   def('ice',        { kor: '얼음', hard: 0.5, tool: PICK, level: 0, transparent: true, drops: [], pal: ['#83a0f0', '#7390e0', '#a0bcff'], tex: 'noise' });
   def('obsidian',   { kor: '흑요석', hard: 50, tool: PICK, level: 3, pal: ['#1a1326', '#120d1c', '#2a2040'], tex: 'noise' });
 
@@ -57,8 +57,8 @@
   def('birch_log',  { kor: '자작나무 원목', hard: 2.0, tool: AXE, level: 0, pal: ['#d7d3c8', '#c4c0b4', '#e7e3d8'], ring: '#5c5a4e', tex: 'log' });
   def('oak_planks', { kor: '참나무 판자', hard: 2.0, tool: AXE, level: 0, pal: ['#b08a4f', '#9c7a44', '#c49a5b'], tex: 'plank' });
   def('birch_planks', { kor: '자작나무 판자', hard: 2.0, tool: AXE, level: 0, pal: ['#d8cda0', '#c8bd90', '#e6dbb0'], tex: 'plank' });
-  def('oak_leaves', { kor: '참나무 잎', hard: 0.3, tool: SHEARS, level: 0, transparent: true, drops: [{ i: 'sapling', c: 1, chance: 0.06 }, { i: 'apple', c: 1, chance: 0.04 }], pal: ['#3f7a2e', '#356a26', '#4c8f38'], tex: 'leaves' });
-  def('birch_leaves', { kor: '자작나무 잎', hard: 0.3, tool: SHEARS, level: 0, transparent: true, drops: [{ i: 'sapling', c: 1, chance: 0.06 }], pal: ['#5c6b4d', '#4c5a3e', '#6d7c5c'], tex: 'leaves' });
+  def('oak_leaves', { kor: '참나무 잎', hard: 0.2, tool: SHEARS, level: 0, transparent: true, drops: [{ i: 'sapling', c: 1, chance: 0.06 }, { i: 'apple', c: 1, chance: 0.04 }], pal: ['#3f7a2e', '#356a26', '#4c8f38'], tex: 'leaves' });
+  def('birch_leaves', { kor: '자작나무 잎', hard: 0.2, tool: SHEARS, level: 0, transparent: true, drops: [{ i: 'sapling', c: 1, chance: 0.06 }], pal: ['#5c6b4d', '#4c5a3e', '#6d7c5c'], tex: 'leaves' });
   def('sapling',    { kor: '묘목', solid: false, transparent: true, hard: 0, plant: true, pal: ['#4c8f38'], tex: 'cross' });
   def('cactus',     { kor: '선인장', hard: 0.4, tool: AXE, level: 0, transparent: true, hurt: 1, pal: ['#3f7d3a', '#356a31', '#4c8f46'], tex: 'noise' });
   def('tall_grass', { kor: '키 큰 풀', solid: false, transparent: true, hard: 0, drops: [{ i: 'seeds', c: 1, chance: 0.12 }], pal: ['#5b9142', '#4f7f3a', '#6aa84f'], tex: 'cross' });
@@ -75,7 +75,7 @@
   def('bed',        { kor: '침대', solid: false, transparent: true, hard: 0.2, station: 'bed', drops: [{ i: 'bed', c: 1 }], pal: ['#c0392b', '#a93226', '#e74c3c'], tex: 'wool' });
 
   // ---- 가공/건축 ----
-  def('glass',      { kor: '유리', hard: 0.4, tool: null, level: 0, transparent: true, drops: [], pal: ['#aee3f0', '#9bd0e0'], tex: 'glass' });
+  def('glass',      { kor: '유리', hard: 0.3, tool: null, level: 0, transparent: true, drops: [], pal: ['#aee3f0', '#9bd0e0'], tex: 'glass' });
   def('bricks',     { kor: '벽돌', hard: 2.0, tool: PICK, level: 0, pal: ['#9a4f3f', '#8a4537', '#ad5e4c'], tex: 'bricks' });
   def('stone_bricks', { kor: '돌벽돌', hard: 2.0, tool: PICK, level: 0, pal: ['#7b7b7b', '#6e6e6e', '#888888'], tex: 'stonebrick' });
   def('wool',       { kor: '양털', hard: 0.8, tool: SHEARS, level: 0, pal: ['#e9ecec', '#dadddd', '#f6f9f9'], tex: 'wool' });
@@ -100,9 +100,12 @@
   const TIER = { wood: 0, stone: 1, iron: 2, diamond: 3, gold: 4 };
   const MAT_LEVEL = { wood: 0, gold: 0, stone: 1, iron: 2, diamond: 3 };  // 수확 가능 레벨
   const MAT_SPEED = { wood: 2, stone: 4, iron: 6, gold: 12, diamond: 8 }; // 채굴 속도 배수
-  const MAT_DMG = { wood: 1, stone: 2, iron: 3, gold: 1, diamond: 4 };    // 검 추가데미지 기준
+  const MAT_DMG = { wood: 1, stone: 2, iron: 3, gold: 1, diamond: 4 };    // 곡괭이/도끼 데미지 계산용
   const MAT_DUR = { wood: 59, stone: 131, iron: 250, gold: 32, diamond: 1561 };
   const MAT_KOR = { wood: '나무', stone: '돌', iron: '철', gold: '금', diamond: '다이아' };
+  // 검/삽 데미지는 재질별 배수가 아니라 실제 마크값을 직접 표(공식으로 못 뽑음)
+  const SWORD_DMG = { wood: 4, gold: 4, stone: 5, iron: 6, diamond: 7 };
+  const SHOVEL_DMG = { wood: 2.5, gold: 2.5, stone: 3.5, iron: 4.5, diamond: 5.5 };
   const tool = (mat, kind, kor, dmg) => item(mat + '_' + kind, {
     tool: kind, mat, level: MAT_LEVEL[mat], speed: MAT_SPEED[mat], dur: MAT_DUR[mat],
     dmg: dmg, kor: MAT_KOR[mat] + ' ' + kor, stack: 1, tier: TIER[mat],
@@ -110,8 +113,8 @@
   ['wood', 'stone', 'iron', 'gold', 'diamond'].forEach(m => {
     tool(m, 'pickaxe', '곡괭이', 1 + MAT_DMG[m]);
     tool(m, 'axe', '도끼', 2 + MAT_DMG[m]);
-    tool(m, 'shovel', '삽', 1 + MAT_DMG[m]);
-    tool(m, 'sword', '검', 3 + MAT_DMG[m] * 1.5 | 0);
+    tool(m, 'shovel', '삽', SHOVEL_DMG[m]);
+    tool(m, 'sword', '검', SWORD_DMG[m]);
     tool(m, 'hoe', '괭이', 1);
   });
   item('shears', { tool: 'shears', kor: '가위', dur: 238, stack: 1, dmg: 1 });
@@ -217,7 +220,7 @@
     oak_log: 'charcoal', birch_log: 'charcoal', iron_ore: 'iron_ingot', gold_ore: 'gold_ingot',
     raw_fish: 'cooked_fish',
   };
-  const FUEL = { coal: 8, charcoal: 8, oak_planks: 1.5, oak_log: 1.5, stick: 0.5, lava_bucket: 100, crafting_table: 1.5, chest: 1.5, bookshelf: 1.5, bowl: 1 };
+  const FUEL = { coal: 8, charcoal: 8, coal_block: 80, oak_planks: 1.5, oak_log: 1.5, birch_planks: 1.5, birch_log: 1.5, stick: 0.5, lava_bucket: 100, crafting_table: 1.5, chest: 1.5, bowl: 0.5 };   // 책장은 실제 마크에서 연료 아님(제거), 그릇은 막대와 동일(0.5)
 
   // ---------------- 몹 ----------------
   // hp, dmg, speed(타일/초), 적대(공격), drops, 크기
