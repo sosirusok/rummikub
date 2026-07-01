@@ -65,6 +65,7 @@ async function boot() {
 function handleAct(act, el) {
   if (act.indexOf('adv3_') === 0) { if (typeof adventure3dAct === 'function' && adventure3dAct(act, el)) return; }   // 3D 모험 위임
   if (act.indexOf('adv_') === 0) { if (typeof adventureAct === 'function' && adventureAct(act, el)) return; }   // 모험 탭 위임
+  if (act.indexOf('econ3d_') === 0) { if (typeof economy3dAct === 'function' && economy3dAct(act, el)) return; }   // 경제 3D 월드 위임
   if (act.indexOf('econ_') === 0) { if (typeof econAct === 'function' && econAct(act, el)) return; }   // 경제 탭 위임
   if (typeof chatOnAct === 'function' && chatOnAct(act)) return;   // 채팅 위임(모든 화면 공통)
   if (act.indexOf('eng_') === 0) { if (typeof engageAct === 'function' && engageAct(act, el)) return; }   // 흥미요소(코인/업적/상점/출석)

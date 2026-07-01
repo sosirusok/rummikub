@@ -1331,4 +1331,23 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .econ-puzzlebtns{display:flex; gap:8px;}
 .econ-secretdoor{display:flex; align-items:center; gap:6px; margin-top:6px;}
 .econ-secret{font-style:italic;}
+
+/* ---- 경제 탭 3D 월드(economy3d.js) ---- */
+.econ3d-screen{position:fixed; inset:0; overflow:hidden; background:#0a0e1a; touch-action:none; user-select:none; -webkit-user-select:none;}
+.econ3d-sky{position:absolute; inset:0; z-index:0; background:linear-gradient(#3f7fc8,#9fd0ea 55%,#dff0f8);}
+#econ3dCanvas{position:absolute; inset:0; width:100%; height:100%; z-index:1; background:transparent;}
+.econ3d-cross{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); color:#fff; font-size:22px; opacity:.55; pointer-events:none; text-shadow:0 0 2px #000; z-index:3; transition:opacity .1s,color .1s;}
+.econ3d-cross.is-active{opacity:1; color:#ffe066;}
+.econ3d-top{position:absolute; top:0; left:0; right:0; display:flex; justify-content:space-between; align-items:center; padding:8px 10px; z-index:5; pointer-events:none; gap:8px;}
+.econ3d-top .btn{pointer-events:auto; margin-left:auto;}
+.econ3d-gold{font-weight:800; font-size:15px; color:#facc15; filter:drop-shadow(0 1px 1px #000); background:rgba(0,0,0,.35); padding:4px 10px; border-radius:10px;}
+.econ3d-zone{color:#fff; font-size:13px; background:rgba(0,0,0,.35); padding:4px 10px; border-radius:10px;}
+.econ3d-hint,.econ3d-controlhint{position:absolute; left:50%; bottom:16px; transform:translateX(-50%); background:rgba(0,0,0,.45); color:#dfe7f3; font-size:12px; padding:4px 12px; border-radius:12px; z-index:5; pointer-events:none; white-space:nowrap;}
+.econ3d-jump{position:absolute; right:16px; bottom:90px; width:72px; height:72px; border-radius:50%; border:none; background:rgba(46,143,79,.78); color:#fff; font-size:30px; font-weight:900; display:flex; align-items:center; justify-content:center; z-index:5;}
+.econ3d-jump:active{transform:scale(.92);}
+.econ3d-panelwrap{position:absolute; inset:0; z-index:8; display:flex; flex-direction:column; background:rgba(8,10,16,.62);}
+.econ3d-panelbar{display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:rgba(10,12,20,.72); border-bottom:1px solid rgba(255,255,255,.12);}
+.econ3d-panelbar span{font-weight:800; color:#facc15;}
+.econ3d-body{flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; background:rgba(14,16,24,.58);}
+
 :root[data-theme="light"] .home-card--econ{background:linear-gradient(150deg,#fdf0c8,#fff);}

@@ -474,12 +474,12 @@
   function open() {
     P = loadLocal() || freshPlayer();
     dailySoldCheck();
-    if (typeof setScreen === 'function') setScreen('econ');
-    if (typeof app === 'function') app().innerHTML = screenHTML();
     tickMinions();
-    renderZone();
     running = true;
     tickTimer = setInterval(() => { tickMinions(); if (running) renderZone(); }, 3000);
+    // 화면 표시는 3D 프레젠테이션 레이어(economy3d.js)에 위임 — 상태/로직은 이 파일이 그대로 담당
+    if (typeof window.economy3dStart === 'function') window.economy3dStart();
+    else { if (typeof setScreen === 'function') setScreen('econ'); if (typeof app === 'function') app().innerHTML = screenHTML(); renderZone(); }
     // 클라우드 세이브가 로컬보다 최신이면 교체(로컬 미존재 시에도 클라우드 우선 적용) — 실패해도 로컬로 계속 동작
     loadCloud().then(cloudState => {
       if (!running || !cloudState) return;
@@ -490,11 +490,14 @@
     running = false;
     if (tickTimer) { clearInterval(tickTimer); tickTimer = null; }
     if (P) saveNow();
+    if (typeof window.economy3dStop === 'function') window.economy3dStop();
   }
 
   window.economyOpen = open;
   window.economyStop = stop;
   window.econAct = act;
+  // 3D 프레젠테이션 레이어(economy3d.js)가 상태를 읽기 위한 최소 공개 API(로직 변경 없음, 읽기 전용 노출)
+  window.econApi = { getP: () => P, hasActiveEncounter: () => !!(activeCombat || dungeonRun) };
 
   if (typeof window !== 'undefined' && window.__ECON_TEST) {
     window.__econ = {
