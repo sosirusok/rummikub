@@ -1271,6 +1271,14 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .mc-offwrap{margin-top:6px;}
 .mc-slot.mc-arm,.mc-slot.mc-off{background:#7d7d7d;}
 .mc-ph{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); font-size:calc(var(--sl)*.5); opacity:.32; pointer-events:none; filter:grayscale(1);}
+/* 화로 UI: 재료칸 위, 불꽃 게이지, 연료칸 아래 / 화살 진행바 / 결과칸 */
+.mc-frow{display:flex; align-items:center; justify-content:center; gap:14px; margin-bottom:12px;}
+.mc-fcol{display:flex; flex-direction:column; align-items:center; gap:4px;}
+.mc-fflame{position:relative; width:16px; height:calc(var(--sl)*0.7); background:#5a5a5a; border:2px solid #373737;}
+.mc-fflame-fill{position:absolute; bottom:0; left:0; right:0; background:linear-gradient(#ffd35e,#e8902a); transition:height .15s linear;}
+.mc-farrow{position:relative; width:44px; height:14px; background:#5a5a5a; border:2px solid #373737;}
+.mc-farrow-fill{position:absolute; left:0; top:0; bottom:0; background:#c8c840; transition:width .15s linear;}
+.mc-chestgrid{display:grid; grid-template-columns:repeat(9,var(--sl)); gap:3px; margin-bottom:10px;}
 /* 선택 아이템 이름(핫바 위 페이드) + 방어구 게이지 */
 .adv3-itemname{position:absolute; left:50%; bottom:62px; transform:translateX(-50%); z-index:6; color:#fff; font-size:14px; font-weight:700; text-shadow:0 1px 2px #000,0 0 6px #000; opacity:0; transition:opacity .25s; pointer-events:none; white-space:nowrap;}
 .adv3-itemname.show{opacity:1;}
