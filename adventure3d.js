@@ -107,6 +107,8 @@
   let canvas = null, atlasTex = null, atlasUV = {};
   const chunks = new Map();             // "cx,cz" -> {blocks:Uint8Array, mesh, waterMesh, dirty}
   const overlay = new Map();            // "x,y,z" -> id (사용자 편집, 영속)
+  const overlayByChunk = new Map();     // "cx,cz" -> Map("x,y,z"->id) — 청크 생성 시 전체 overlay 스캔 방지(성능 핵심)
+  const cropOverlay = new Map();        // "x,y,z" -> id, 아직 덜 자란 작물만(성장 tick이 전체 overlay 대신 이것만 순회)
   const furnaces = new Map();           // "x,y,z" -> {in,fuel,out,burnT,burnMax,cookT}(로컬 저장, 화로별 상태)
   const chests = new Map();             // "x,y,z" -> Array(27)(로컬 저장, 상자별 27칸)
   let pendingServer = new Map();
@@ -194,20 +196,25 @@
   // (주의) 원시 노이즈 등고선 임계값 방식은 파장 전체가 통째로 호수가 되어버려 "끝없는 늪"처럼 보이는
   // 버그를 냄(꽃밭/나무 배치에서 이미 겪은 것과 동일한 문제) — 지터드 셀(칸당 후보 1곳)로 작고 성긴 연못만 생성.
   const LAKE_CELL = 40, LAKE_MARGIN = 8;
+  const lakeCache = new Map();   // genBlock이 y(0~95)마다 매번 호출하므로 캐시 없으면 컬럼당 96배 중복 계산(렉 원인) — surfCache/biomeCache와 동일 패턴
   function lakeInfo(x, z) {
+    const ck = x + ',' + z; const c = lakeCache.get(ck); if (c !== undefined) return c;
+    let res = null;
     const cx = Math.floor(x / LAKE_CELL), cz = Math.floor(z / LAKE_CELL);
-    if (hash3(cx * 61 + 13, 30, cz * 61 + 29) >= 0.22) return null;   // 대부분 칸엔 호수 없음(성김)
-    const span = LAKE_CELL - LAKE_MARGIN * 2;
-    const jx = cx * LAKE_CELL + LAKE_MARGIN + (hash3(cx * 31 + 5, 31, cz * 31 + 9) * span | 0);
-    const jz = cz * LAKE_CELL + LAKE_MARGIN + (hash3(cx * 37 + 2, 32, cz * 37 + 7) * span | 0);
-    const d = Math.abs(x - jx) + Math.abs(z - jz);
-    const R = 3 + (hash3(cx * 43 + 8, 33, cz * 43 + 4) * 4 | 0);   // 반경 3~6(작은 연못)
-    if (d > R) return null;
-    const centerSy = surfaceH(jx, jz);
-    if (centerSy <= SEA + 4) return null;   // 해안 근처는 이미 바다로 연결되니 별도 호수 X
-    const b = biome(jx, jz);
-    if (b === 'mountains' || b === 'desert' || b === 'badlands' || b === 'snow') return null;   // 지형상 호수가 어울리지 않는 바이옴 제외
-    return { d, R };
+    if (hash3(cx * 61 + 13, 30, cz * 61 + 29) < 0.22) {   // 대부분 칸엔 호수 없음(성김)
+      const span = LAKE_CELL - LAKE_MARGIN * 2;
+      const jx = cx * LAKE_CELL + LAKE_MARGIN + (hash3(cx * 31 + 5, 31, cz * 31 + 9) * span | 0);
+      const jz = cz * LAKE_CELL + LAKE_MARGIN + (hash3(cx * 37 + 2, 32, cz * 37 + 7) * span | 0);
+      const d = Math.abs(x - jx) + Math.abs(z - jz);
+      const R = 3 + (hash3(cx * 43 + 8, 33, cz * 43 + 4) * 4 | 0);   // 반경 3~6(작은 연못)
+      if (d <= R) {
+        const centerSy = surfaceH(jx, jz);
+        const b = biome(jx, jz);
+        if (centerSy > SEA + 4 && b !== 'mountains' && b !== 'desert' && b !== 'badlands' && b !== 'snow') res = { d, R };
+      }
+    }
+    lakeCache.set(ck, res); if (lakeCache.size > 60000) lakeCache.clear();
+    return res;
   }
   function lakeDepth(x, z) {
     const info = lakeInfo(x, z); if (!info) return 0;
@@ -221,6 +228,16 @@
   }
   function waterAdjacent(x, y, z) { return isWaterAt(x + 1, y, z) || isWaterAt(x - 1, y, z) || isWaterAt(x, y, z + 1) || isWaterAt(x, y, z - 1); }
   const treeCache = new Map();
+  const treeNeighborCache = new Map();   // (x,z)에 영향을 주는 이웃 나무 목록 캐시 — treeBlock이 y(0~95)마다 매번 7×7 스캔하던 것을 컬럼당 1회로
+  function treeNeighbors(x, z) {
+    const ck = x + ',' + z; const c = treeNeighborCache.get(ck); if (c !== undefined) return c;
+    const list = [];
+    for (let dx = -3; dx <= 3; dx++) for (let dz = -3; dz <= 3; dz++) {
+      const ox = x - dx, oz = z - dz; if (isTreeAt(ox, oz)) list.push([dx, dz, ox, oz]);
+    }
+    treeNeighborCache.set(ck, list); if (treeNeighborCache.size > 60000) treeNeighborCache.clear();
+    return list;
+  }
   // 나무 배치: 순수 셀당 확률(과거 방식)은 캐노피(반경2)가 서로 겹치는 밀집 클러스터를
   // 만들어 '초록 벽'처럼 보이는 버그를 냄. 격자(지터드 그리드)로 후보 위치를 셀당 1곳만
   // 두어 나무 사이 최소 간격을 보장(실제 마크 트리 피처 배치와 동일한 접근).
@@ -366,8 +383,9 @@
     return false;
   }
   function treeBlock(x, y, z) {
-    for (let dx = -3; dx <= 3; dx++) for (let dz = -3; dz <= 3; dz++) {   // 정글 캐노피가 넓어 반경 3까지 스캔
-      const ox = x - dx, oz = z - dz; if (!isTreeAt(ox, oz)) continue;
+    const cands = treeNeighbors(x, z);   // 이웃 나무 목록(컬럼당 1회 계산·캐시) — 대부분 0~1개라 y마다 반복 스캔 불필요
+    for (let i = 0; i < cands.length; i++) {
+      const dx = cands[i][0], dz = cands[i][1], ox = cands[i][2], oz = cands[i][3];
       const sy = surfaceH(ox, oz); if (sy < SEA) continue;
       const b = biome(ox, oz);
       // 종: 설원/타이가/산악=가문비, 사바나=아카시아, 정글=정글나무, 자작나무숲=자작, 그 외 22%=자작·나머지 참나무
@@ -437,12 +455,11 @@
       const wx = cx * CHUNK + lx, wz = cz * CHUNK + lz;
       for (let y = 0; y < WORLD_H; y++) arr[idx(lx, y, lz)] = genBlock(wx, y, wz);
     }
-    // 오버레이(사용자 편집) 적용
-    overlay.forEach((id, key) => {
-      const p = key.split(',').map(Number); const ox = p[0], oy = p[1], oz = p[2];
-      if (Math.floor(ox / CHUNK) === cx && Math.floor(oz / CHUNK) === cz && oy >= 0 && oy < WORLD_H) {
-        arr[idx(mod(ox), oy, mod(oz))] = id;
-      }
+    // 오버레이(사용자 편집) 적용 — 이 청크에 해당하는 편집만(전체 overlay 스캔 X, 청크 스트리밍 렉의 핵심 원인이었음)
+    const om = overlayByChunk.get(ckey(cx, cz));
+    if (om) om.forEach((id, key) => {
+      const p = key.split(',').map(Number); const oy = p[1];
+      if (oy >= 0 && oy < WORLD_H) arr[idx(mod(p[0]), oy, mod(p[2]))] = id;
     });
     return arr;
   }
@@ -456,11 +473,21 @@
     const ov = overlay.get(x + ',' + y + ',' + z); if (ov !== undefined) return ov;
     return genBlock(x, y, z);
   }
+  // overlay 갱신 + 청크별/작물별 보조 인덱스 동기화(청크 생성·성장 tick이 전체 overlay를 매번 스캔하지 않도록)
+  function overlaySet(x, y, z, id) {
+    const key = x + ',' + y + ',' + z;
+    overlay.set(key, id);
+    const ck = ckey(Math.floor(x / CHUNK), Math.floor(z / CHUNK));
+    let m = overlayByChunk.get(ck); if (!m) { m = new Map(); overlayByChunk.set(ck, m); }
+    m.set(key, id);
+    const b = BYID[id];
+    if (b && CROP_RIPE[b.key]) cropOverlay.set(key, id); else cropOverlay.delete(key);
+  }
   function setBlock(x, y, z, id, fromNet) {
     if (y < 0 || y >= WORLD_H) return;
     const cx = Math.floor(x / CHUNK), cz = Math.floor(z / CHUNK);
     const c = getChunk(cx, cz, true); c.blocks[idx(mod(x), y, mod(z))] = id; c.dirty = true;
-    overlay.set(x + ',' + y + ',' + z, id);
+    overlaySet(x, y, z, id);
     // 이웃 청크 경계 갱신
     if (mod(x) === 0) markDirty(cx - 1, cz); if (mod(x) === CHUNK - 1) markDirty(cx + 1, cz);
     if (mod(z) === 0) markDirty(cx, cz - 1); if (mod(z) === CHUNK - 1) markDirty(cx, cz + 1);
@@ -1000,8 +1027,8 @@
   let _growT = 0;
   function growTick(dt) {
     _growT += dt; if (_growT < 1) return; _growT = 0;
-    overlay.forEach((id, key) => {
-      const b = BYID[id]; if (!b || !CROP_RIPE[b.key]) return;
+    cropOverlay.forEach((id, key) => {   // 전체 overlay 대신 미성숙 작물 위치만 순회(작물 외 블록 수가 압도적으로 많아지면 렉의 원인이 됨)
+      const b = BYID[id];
       const p = key.split(',').map(Number); const x = p[0], y = p[1], z = p[2];
       const cx = Math.floor(x / CHUNK), cz = Math.floor(z / CHUNK); if (!chunks.has(ckey(cx, cz))) return;   // 로드된 청크만(마크처럼 언로드 지역은 성장 정지)
       if (getBlock(x, y + 1, z) !== 0) return;                    // 위가 막히면 성장 불가(빛 차단 근사)
@@ -1149,11 +1176,12 @@
   function mkBox(w, h, d, col, x, y, z) { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mobMat(col)); if (x !== undefined) m.position.set(x, y, z); return m; }
   // 마인크래프트 블록 모델 비율(16px=1블록)에 맞춘 몹 메시. 머리는 +z(정면)에 두어 yaw로 플레이어를 바라봄.
   function buildMobMesh(type) {
-    const md = MOB[type]; const g = new THREE.Group();
+    const md = MOB[type]; const g = new THREE.Group(); const legs = [];   // legs: 걷기 애니메이션 대상(반대 위상으로 스윙)
+    const addLeg = (w, h, d, col, x, y, z) => { const m = mkBox(w, h, d, col, x, y, z); g.add(m); legs.push(m); return m; };
     const body = md.col, dark = shade(md.col, 0.75), light = shade(md.col, 1.14);
     if (type === 'creeper') {
       const legH = 0.375, bodyH = 0.75, headS = 0.5;
-      [[-1, 1], [1, 1], [-1, -1], [1, -1]].forEach(o => g.add(mkBox(0.24, legH, 0.24, dark, o[0] * 0.12, legH / 2, o[1] * 0.16)));   // 4다리(짧음)
+      [[-1, 1], [1, 1], [-1, -1], [1, -1]].forEach(o => addLeg(0.24, legH, 0.24, dark, o[0] * 0.12, legH / 2, o[1] * 0.16));   // 4다리(짧음)
       g.add(mkBox(0.26, bodyH, 0.5, body, 0, legH + bodyH / 2, 0));                     // 몸통(앞뒤로 얇고 좌우로 넓음)
       g.add(mkBox(headS, headS, headS, light, 0, legH + bodyH + headS / 2, 0));         // 머리
       const fy = legH + bodyH + headS * 0.6, fz = headS / 2;
@@ -1161,7 +1189,7 @@
       g.add(mkBox(0.2, 0.24, 0.02, 0x0c160c, 0, legH + bodyH + headS * 0.36, fz));      // 입(세로)
     } else if (type === 'zombie' || type === 'skeleton') {
       const skel = type === 'skeleton', legH = 0.75, bodyH = 0.75, headS = 0.5, limbW = skel ? 0.14 : 0.24;
-      [-1, 1].forEach(s => g.add(mkBox(limbW, legH, 0.24, dark, s * 0.12, legH / 2, 0)));               // 2다리
+      [-1, 1].forEach(s => addLeg(limbW, legH, 0.24, dark, s * 0.12, legH / 2, 0));               // 2다리
       g.add(mkBox(0.5, bodyH, 0.26, body, 0, legH + bodyH / 2, 0));                                     // 몸통
       g.add(mkBox(headS, headS, headS, light, 0, legH + bodyH + headS / 2, 0));                         // 머리
       const ey = legH + bodyH + headS * 0.58;
@@ -1172,7 +1200,7 @@
       const bodyLen = md.w * 1.3, bodyH = md.h * 0.42, bodyW = md.w * 0.85, bodyCy = md.h * 0.5;
       const legH = md.h * 0.46, legW = md.w * 0.24;
       g.add(mkBox(bodyW, bodyH, bodyLen, body, 0, bodyCy, 0));                                          // 몸통(가로로 긴 상자)
-      [[-1, 1], [1, 1], [-1, -1], [1, -1]].forEach(o => g.add(mkBox(legW, legH, legW, dark, o[0] * (bodyW / 2 - legW / 2), legH / 2, o[1] * (bodyLen / 2 - legW / 2))));   // 4다리
+      [[-1, 1], [1, 1], [-1, -1], [1, -1]].forEach(o => addLeg(legW, legH, legW, dark, o[0] * (bodyW / 2 - legW / 2), legH / 2, o[1] * (bodyLen / 2 - legW / 2)));   // 4다리
       const headS = md.w * 0.62, headCy = md.h * 0.6, headZ = bodyLen / 2 + headS * 0.35;
       g.add(mkBox(headS, headS, headS, light, 0, headCy, headZ));                                       // 머리(앞)
       if (type === 'pig') g.add(mkBox(headS * 0.5, headS * 0.34, 0.06, 0xd98a90, 0, headCy - 0.04, headZ + headS / 2));   // 코
@@ -1186,7 +1214,7 @@
       g.add(mkBox(0.1, 0.06, 0.12, 0xf0a030, 0, bodyCy + 0.26, headZ + 0.15));                          // 부리
       g.add(mkBox(0.1, 0.12, 0.06, 0xd23b32, 0, bodyCy + 0.46, headZ + 0.02));                          // 볏
       g.add(mkBox(0.1, 0.1, 0.06, 0xd23b32, 0, bodyCy + 0.16, headZ + 0.12));                           // 볼살
-      [-1, 1].forEach(s => g.add(mkBox(0.05, 0.22, 0.05, 0xf0a030, s * 0.08, 0.11, 0)));                // 2다리
+      [-1, 1].forEach(s => addLeg(0.05, 0.22, 0.05, 0xf0a030, s * 0.08, 0.11, 0));                      // 2다리
       [-1, 1].forEach(s => g.add(mkBox(0.04, 0.3, 0.28, light, s * (bodyW / 2 + 0.02), bodyCy, -0.02)));// 날개
       g.add(mkBox(0.08, 0.24, 0.12, light, 0, bodyCy + 0.12, -bodyLen * 0.55));                         // 꼬리
     } else if (type === 'spider') {
@@ -1205,7 +1233,7 @@
       const tCol = shade(md.col, 0.85);
       for (let i = 0; i < 6; i++) { const ang = (i / 6) * Math.PI * 2; g.add(mkBox(0.08, 0.4, 0.08, tCol, Math.sin(ang) * 0.16, 0.18, Math.cos(ang) * 0.16)); }   // 다리(촉수) 6개(아래로 늘어짐)
     }
-    return g;
+    return { group: g, legs };
   }
   function shade(col, f) { const r = Math.min(255, ((col >> 16) & 255) * f) | 0, gr = Math.min(255, ((col >> 8) & 255) * f) | 0, b = Math.min(255, (col & 255) * f) | 0; return (r << 16) | (gr << 8) | b; }
   const PASSIVE = ['pig', 'cow', 'sheep', 'chicken'], HOSTILE = ['zombie', 'skeleton', 'creeper', 'spider'], AQUATIC = ['cod', 'squid'];
@@ -1266,8 +1294,8 @@
     let madeA = 0; for (let tries = 0; tries < 60 && madeA < 4; tries++) { const ang = Math.random() * Math.PI * 2, r = 16 + Math.random() * 28; if (placeAquaticMob(pick(AQUATIC), Math.floor(P.x + Math.cos(ang) * r), Math.floor(P.z + Math.sin(ang) * r))) madeA++; }
   }
   function addMob(type, x, y, z, baby) {
-    const md = MOB[type]; const g = buildMobMesh(type); if (baby) g.scale.setScalar(0.5); scene.add(g);
-    mobs.push({ type, x, y, z, vx: 0, vy: 0, vz: 0, yaw: 0, hp: md.hp, onGround: false, group: g, w: md.w, h: md.h, baby: baby ? 1 : 0, growT: baby ? 1200 : 0, loveT: 0, fleeT: 0, fuse: 0, atkT: 0, wT: 0, wdir: 0, hurtT: 0, fallStart: null });
+    const md = MOB[type]; const built = buildMobMesh(type); const g = built.group; if (baby) g.scale.setScalar(0.5); scene.add(g);
+    mobs.push({ type, x, y, z, vx: 0, vy: 0, vz: 0, yaw: 0, hp: md.hp, onGround: false, group: g, legs: built.legs, walkAmp: 0, walkT: 0, w: md.w, h: md.h, baby: baby ? 1 : 0, growT: baby ? 1200 : 0, loveT: 0, fleeT: 0, fuse: 0, atkT: 0, wT: 0, wdir: 0, hurtT: 0, fallStart: null });
   }
   function entBoxBlocked(e, x0, z0, y0) {
     const minX = x0 - e.w / 2, maxX = x0 + e.w / 2, minZ = z0 - e.w / 2, maxZ = z0 + e.w / 2, minY = y0, maxY = y0 + e.h;
@@ -1344,6 +1372,14 @@
       // 메시 갱신
       m.group.position.set(m.x, m.y, m.z); m.group.rotation.y = m.yaw;
       if (m.hurtT > 0) m.group.scale.setScalar((m.baby ? 0.5 : 1) * 1.05); else if (!m.baby) m.group.scale.setScalar(1);
+      // 걷기 애니메이션: 이동 속도에 비례해 다리가 서로 반대 위상으로 스윙(정지 상태 유지 대신 실제 움직임처럼)
+      if (m.legs && m.legs.length) {
+        const speed = Math.hypot(m.vx, m.vz), moving = speed > 0.05;
+        m.walkAmp += ((moving ? Math.min(0.7, 0.25 + speed * 0.1) : 0) - m.walkAmp) * Math.min(1, dt * 6);
+        m.walkT += dt * (6 + speed);
+        const swing = Math.sin(m.walkT) * m.walkAmp;
+        for (let li = 0; li < m.legs.length; li++) m.legs[li].rotation.x = (li % 2 === 0 ? 1 : -1) * swing;
+      }
     }
   }
   function wander(m, dt, md) { m.wT -= dt; if (m.wT <= 0) { m.wT = 1.5 + Math.random() * 2.5; m.wdir = Math.random() < 0.4 ? 0 : (Math.random() * Math.PI * 2); m.wmove = Math.random() < 0.6; } if (m.wmove) { m.vx = Math.sin(m.wdir) * md.speed * 0.4; m.vz = Math.cos(m.wdir) * md.speed * 0.4; m.yaw = m.wdir; } else { m.vx = 0; m.vz = 0; } }
@@ -1375,12 +1411,16 @@
   function tryBreed(m) { for (const o of mobs) { if (o !== m && o.type === m.type && o.loveT > 0 && !o.baby && Math.hypot(o.x - m.x, o.z - m.z) < 6) { addMob(m.type, m.x, m.y, m.z, true); m.loveT = 0; o.loveT = 0; toast('새끼가 태어났어요!', true); return; } } }
 
   /* ---------------- 청크 스트리밍 ---------------- */
+  function nowMs() { return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(); }
   function streamChunks() {
     const pcx = Math.floor(P.x / CHUNK), pcz = Math.floor(P.z / CHUNK);
+    const t0 = nowMs(), budgetMs = 8;   // 프레임당 청크 생성 시간 예산(개수 고정이 아니라 시간 기준) — 넘으면 나머지는 다음 프레임으로 미뤄 순간 끊김 완화
     let built = 0;
-    for (let r = 0; r <= RENDER && built < 2; r++) {
-      for (let dx = -r; dx <= r && built < 2; dx++) for (let dz = -r; dz <= r && built < 2; dz++) {
+    outer:
+    for (let r = 0; r <= RENDER; r++) {
+      for (let dx = -r; dx <= r; dx++) for (let dz = -r; dz <= r; dz++) {
         if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
+        if (built > 0 && nowMs() - t0 > budgetMs) break outer;   // 최소 1개는 보장(진행 정체 방지), 이후엔 예산 초과 시 다음 프레임으로
         const cx = pcx + dx, cz = pcz + dz; const c = getChunk(cx, cz, true);
         if (c.dirty) { buildChunkMesh(c); built++; }
       }
@@ -1449,7 +1489,7 @@
       if (!lastT) lastT = ts; let dt = (ts - lastT) / 1000; lastT = ts; if (dt > 0.1) dt = 0.1;
       world.time += dt;
       streamChunks();
-      if (loaded) { collide(dt); netTick(dt); processMining(dt); updateVitals(dt); updateMobs(dt); growTick(dt); furnaceTick(dt); }   // 로드 완료 전엔 물리 정지(지형에 박히는 버그 방지)
+      if (loaded) { collide(dt); netTick(dt); updateAvatars(dt); processMining(dt); updateVitals(dt); updateMobs(dt); growTick(dt); furnaceTick(dt); }   // 로드 완료 전엔 물리 정지(지형에 박히는 버그 방지)
       // 카메라
       camera.position.set(P.x, P.y + P.eye, P.z);
       const d = lookDir(); camera.lookAt(P.x + d.x, P.y + P.eye + d.y, P.z + d.z);
@@ -1949,9 +1989,67 @@
   /* ---------------- 멀티 ---------------- */
   let _posT = 0;
   function netStart() { if (typeof sb === 'undefined' || !sb || !cfg.cloud) return; try { const ch = sb.channel('adv3-world', { config: { broadcast: { self: false } } }); ch.on('broadcast', { event: 'a' }, p => onNet(p.payload)); ch.subscribe(); netCh = ch; netSend = (m) => { try { m.id = (ME && ME.id) || 'me'; ch.send({ type: 'broadcast', event: 'a', payload: m }); } catch (e) {} }; } catch (e) {} }
-  function onNet(m) { if (!m || m.id === ((ME && ME.id) || 'me')) return; if (m.t === 'b') { setBlock(m.x, m.y, m.z, m.i, true); } else if (m.t === 'p') { let o = others[m.id]; if (!o) { o = others[m.id] = makeAvatar(m.name); } o.mesh.position.set(m.x, m.y, m.z); o.mesh.rotation.y = m.yaw || 0; o.t = Date.now(); } else if (m.t === 'leave') { removeAvatar(m.id); } }
-  function makeAvatar(name) { const g = new THREE.BoxGeometry(0.6, 1.8, 0.6); const mat = new THREE.MeshBasicMaterial({ color: 0x3b7fd4 }); const mesh = new THREE.Mesh(g, mat); scene.add(mesh); return { mesh }; }
-  function removeAvatar(id) { const o = others[id]; if (o) { scene.remove(o.mesh); o.mesh.geometry.dispose(); delete others[id]; } }
+  function onNet(m) {
+    if (!m || m.id === ((ME && ME.id) || 'me')) return;
+    if (m.t === 'b') { setBlock(m.x, m.y, m.z, m.i, true); }
+    else if (m.t === 'p') {
+      let o = others[m.id];
+      if (!o) { o = others[m.id] = makeAvatar(m.name); o.mesh.position.set(m.x, m.y, m.z); }
+      o.tx = m.x; o.ty = m.y; o.tz = m.z; o.tyaw = m.yaw || 0; o.t = Date.now();
+    } else if (m.t === 'leave') { removeAvatar(m.id); }
+  }
+  // 다른 플레이어 아바타: 사람 형체(검정 스킨) + 실제 이름 뜨는 이름표(항상 카메라를 향함)
+  function makeNameTag(name) {
+    const cv = document.createElement('canvas'); cv.width = 256; cv.height = 64;
+    const c = cv.getContext('2d');
+    c.fillStyle = 'rgba(0,0,0,0.5)'; c.fillRect(0, 0, 256, 64);
+    c.fillStyle = '#ffffff'; c.font = 'bold 30px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillText(String(name || 'Player').slice(0, 16), 128, 32);
+    const tex = new THREE.CanvasTexture(cv); tex.needsUpdate = true;
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
+    spr.scale.set(1.6, 0.4, 1);
+    return spr;
+  }
+  function makeAvatar(name) {
+    const g = new THREE.Group();
+    const skin = 0x1a1a1a, dark = shade(skin, 0.7), light = shade(skin, 1.2);
+    const legH = 0.75, bodyH = 0.75, headS = 0.5, limbW = 0.24;
+    const legL = mkBox(limbW, legH, 0.24, dark, -0.12, legH / 2, 0), legR = mkBox(limbW, legH, 0.24, dark, 0.12, legH / 2, 0);
+    g.add(legL); g.add(legR);
+    g.add(mkBox(0.5, bodyH, 0.26, skin, 0, legH + bodyH / 2, 0));                     // 몸통
+    g.add(mkBox(headS, headS, headS, light, 0, legH + bodyH + headS / 2, 0));         // 머리
+    const armL = mkBox(limbW, bodyH, limbW, skin, -(0.25 + limbW / 2), legH + bodyH * 0.7, 0);
+    const armR = mkBox(limbW, bodyH, limbW, skin, (0.25 + limbW / 2), legH + bodyH * 0.7, 0);
+    g.add(armL); g.add(armR);
+    const tag = makeNameTag(name); tag.position.set(0, legH + bodyH + headS + 0.35, 0); g.add(tag);
+    scene.add(g);
+    return { mesh: g, legL, legR, armL, armR, tag, walkT: 0, tx: null, ty: null, tz: null, tyaw: 0 };
+  }
+  function removeAvatar(id) {
+    const o = others[id]; if (!o) return;
+    scene.remove(o.mesh);
+    o.mesh.children.forEach(c => { if (c.geometry) c.geometry.dispose(); if (c.material && c.material.map && c.material.map.dispose) c.material.map.dispose(); });
+    delete others[id];
+  }
+  // 다른 플레이어 보간 이동(스냅 방지) + 걷는 속도에 비례한 팔다리 스윙(자연스러운 움직임)
+  function updateAvatars(dt) {
+    for (const id in others) {
+      const o = others[id]; if (o.tx == null) continue;
+      const dx = o.tx - o.mesh.position.x, dz = o.tz - o.mesh.position.z, dist = Math.hypot(dx, dz);
+      const k = 1 - Math.exp(-dt * 12);   // 프레임레이트 무관 지수 감쇠(절대 한번에 목표로 스냅되지 않음, 부드러운 보간)
+      o.mesh.position.x += (o.tx - o.mesh.position.x) * k;
+      o.mesh.position.y += (o.ty - o.mesh.position.y) * k;
+      o.mesh.position.z += (o.tz - o.mesh.position.z) * k;
+      let dyaw = o.tyaw - o.mesh.rotation.y; dyaw = Math.atan2(Math.sin(dyaw), Math.cos(dyaw));
+      o.mesh.rotation.y += dyaw * k;
+      const moving = dist > 0.02;
+      o.walkAmp = o.walkAmp || 0; o.walkAmp += ((moving ? 0.6 : 0) - o.walkAmp) * Math.min(1, dt * 6);   // 멈추면 스윙 진폭이 서서히 잦아듦(뚝 끊기지 않게)
+      o.walkT += dt * 8;
+      const swing = Math.sin(o.walkT) * o.walkAmp;
+      o.legL.rotation.x = swing; o.legR.rotation.x = -swing;
+      o.armL.rotation.x = -swing; o.armR.rotation.x = swing;
+    }
+  }
   function netTick(dt) { _posT += dt; if (_posT > 0.12 && netSend) { _posT = 0; netSend({ t: 'p', x: P.x, y: P.y, z: P.z, yaw: P.yaw, name: P.name }); } const now = Date.now(); for (const id in others) if (now - others[id].t > 4000) removeAvatar(id); }
   function netStop() { if (netSend) netSend({ t: 'leave' }); if (netCh && typeof leaveChannel === 'function') leaveChannel(netCh); netCh = null; netSend = null; for (const id in others) removeAvatar(id); }
 
@@ -1982,9 +2080,10 @@
       let loadedOverlay = null, hasSaved = false;
       if (cloudReady()) { const w = await cloudLoadWorld(); if (w) { loadedOverlay = w; } const pd = await cloudLoadPlayer(); if (pd) { applyPlayer(pd); hasSaved = true; } else newPlayer(); }
       else { const ls = loadLocal(); if (ls) { applyPlayer(ls); hasSaved = true; } else newPlayer(); }
-      if (loadedOverlay) { for (const k in loadedOverlay) overlay.set(k, Number(loadedOverlay[k])); }
-      else { const ls = loadLocal(); if (ls && ls.overlay) for (const k in ls.overlay) overlay.set(k, ls.overlay[k]); }
+      if (loadedOverlay) { for (const k in loadedOverlay) { const p = k.split(',').map(Number); overlaySet(p[0], p[1], p[2], Number(loadedOverlay[k])); } }
+      else { const ls = loadLocal(); if (ls && ls.overlay) for (const k in ls.overlay) { const p = k.split(',').map(Number); overlaySet(p[0], p[1], p[2], Number(ls.overlay[k])); } }
       findSafeSpawn(hasSaved);             // 안전 지면에 안착(지형 박힘/추락 방지)
+      try { P.name = (typeof ME !== 'undefined' && ME && (ME.real_name || ME.username)) || 'Player'; } catch (e) {}   // 다른 플레이어에게 실제 이름으로 표시
       loaded = true;                       // 이제부터 물리 시작
       refreshHotbar(); updateHUD(); netStart();
       try { spawnInitialMobs(); } catch (e) {}   // 주변에 동물 무리 즉시 배치
@@ -2063,6 +2162,7 @@
     openStation, openFurnace, openChest, getFurnace, getChest, furnaceTick,
     furnaces: () => furnaces, chests: () => chests, uiMode: () => uiMode, curContainerPos: () => curContainerPos,
     checkUnsupported, lakeDepth, waterAdjacent, isWaterAt, mining: v => { mining = v; }, breakProg: () => breakProg,
+    onNet, others: () => others, makeAvatar, updateAvatars, setName: v => { P.name = v; }, updateMobs,
   };
   window.adventure3dStart = start;
   window.adventure3dStop = stop;
