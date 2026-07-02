@@ -1303,6 +1303,332 @@
 
   window.economy3dDungeon = floor => { try { return startDungeon3d(floor); } catch (e) { console.error('econ3d dungeon', e); return false; } };
 
+  /* ---------------- 테마 월드 생성기 ---------------- */
+  function genBlobIsland(cx, cz, r, top, opt) {
+    opt = opt || {};
+    for (let x = 0; x < W; x++) for (let z = 0; z < Dp; z++) {
+      let d = Math.hypot(x - cx, z - cz) / r;
+      d += (hash3(x, 7, z) - 0.5) * 0.14;
+      if (d >= 1) continue;
+      const t = Math.min(1, (1 - d) * 2.4); const sm = t * t * (3 - 2 * t);
+      const y0 = opt.flat ? top : Math.round(top - 2 + sm * 3);
+      for (let y = y0; y >= Math.max(2, y0 - 6 - Math.round(sm * 10)); y--) {
+        let id = opt.fill || ID.stone;
+        if (y === y0) id = opt.surf || ID.grass;
+        else if (y >= y0 - 3) id = opt.sub || ID.dirt;
+        setW(x, y, z, id);
+      }
+    }
+  }
+  function scatterOre(cx, cz, r, yMin, yMax, oreId, n, seed) {
+    let placed = 0;
+    for (let i = 0; i < n * 14 && placed < n; i++) {
+      const x = Math.floor(cx - r + hash3(i, seed, 1) * r * 2), z = Math.floor(cz - r + hash3(i, seed, 2) * r * 2);
+      const y = yMin + Math.floor(hash3(i, seed, 3) * (yMax - yMin + 1));
+      if (getBlockLocal(x, y, z) !== ID.stone) continue;
+      if (!(getBlockLocal(x + 1, y, z) === 0 || getBlockLocal(x - 1, y, z) === 0 || getBlockLocal(x, y, z + 1) === 0 || getBlockLocal(x, y, z - 1) === 0 || getBlockLocal(x, y + 1, z) === 0 || getBlockLocal(x, y - 1, z) === 0)) continue;
+      setW(x, y, z, oreId);
+      if (hash3(i, seed, 4) < 0.5) setW(x, y + 1, z, oreId);
+      placed++;
+    }
+  }
+  function plantDarkOak(x, z) {
+    const y0 = surfaceTop(x, z);
+    for (let i = 0; i < 6; i++) { setW(x, y0 + i, z, ID.dark_oak_log); setW(x + 1, y0 + i, z, ID.dark_oak_log); }
+    for (let dx = -3; dx <= 4; dx++) for (let dz = -3; dz <= 3; dz++) for (let dy = 5; dy <= 7; dy++) {
+      if (Math.abs(dx - 0.5) + Math.abs(dz) <= 4.2 - (dy - 5)) { if (!getBlockLocal(x + dx, y0 + dy, z + dz)) setW(x + dx, y0 + dy, z + dz, ID.dark_oak_leaves); }
+    }
+  }
+  function plantJungle(x, z) {
+    const y0 = surfaceTop(x, z);
+    const th = 8 + Math.floor(hash3(x, 41, z) * 4);
+    for (let i = 0; i < th; i++) setW(x, y0 + i, z, ID.jungle_log);
+    for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) for (let dy = th - 2; dy <= th + 1; dy++) {
+      if (Math.abs(dx) + Math.abs(dz) <= 3) { if (!getBlockLocal(x + dx, y0 + dy, z + dz)) setW(x + dx, y0 + dy, z + dz, ID.jungle_leaves); }
+    }
+  }
+  function plantAcacia(x, z) {
+    const y0 = surfaceTop(x, z);
+    for (let i = 0; i < 5; i++) setW(x + (i > 2 ? 1 : 0), y0 + i, z, ID.acacia_log);
+    for (let dx = -2; dx <= 3; dx++) for (let dz = -2; dz <= 2; dz++) {
+      if (Math.abs(dx - 0.5) + Math.abs(dz) <= 3.4) { if (!getBlockLocal(x + dx, y0 + 5, z + dz)) setW(x + 1 + dx, y0 + 5, z + dz, ID.acacia_leaves); }
+    }
+  }
+  function plantMegaSpruce(x, z) {
+    const y0 = surfaceTop(x, z);
+    const th = 11 + Math.floor(hash3(x, 42, z) * 4);
+    for (let i = 0; i < th; i++) { setW(x, y0 + i, z, ID.spruce_log); setW(x + 1, y0 + i, z, ID.spruce_log); }
+    for (let dy = 3; dy <= th; dy++) {
+      const rad = Math.max(1, Math.round((th - dy) * 0.45));
+      for (let dx = -rad; dx <= rad + 1; dx++) for (let dz = -rad; dz <= rad; dz++) {
+        if (Math.abs(dx - 0.5) + Math.abs(dz) <= rad + 0.5 && !getBlockLocal(x + dx, y0 + dy, z + dz)) setW(x + dx, y0 + dy, z + dz, ID.spruce_leaves);
+      }
+    }
+    setW(x, y0 + th, z, ID.spruce_leaves);
+  }
+  // 🌲 더 파크: 실제 The Park처럼 수종별 구역(7종: 참나무/자작/가문비/다크오크/정글/아카시아/메가가문비)
+  function genPark() {
+    world = new Uint8Array(W * H * Dp);
+    genBlobIsland(72, 72, 62, 16);
+    const species = [plantOak, plantBirch, plantSpruce, plantDarkOak, plantJungle, plantAcacia, plantMegaSpruce];
+    for (let gx = 0; gx < 16; gx++) for (let gz = 0; gz < 16; gz++) {
+      const x = 12 + gx * 8 + Math.floor(hash3(gx, 51, gz) * 4), z = 12 + gz * 8 + Math.floor(hash3(gx, 52, gz) * 4);
+      if (Math.hypot(x - 72, z - 72) > 56 || Math.hypot(x - 72, z - 128) < 10) continue;
+      const wedge = Math.floor(((Math.atan2(z - 72, x - 72) + Math.PI) / (Math.PI * 2)) * 7) % 7;   // 방위별 수종 구역
+      if (hash3(x, 53, z) < 0.62) species[wedge](x, z);
+    }
+    buildWarpPads();
+  }
+  // 🌾 더 반: 대형 농장(밀/당근/감자/호박/수박/사탕수수 대구획)
+  function genBarn() {
+    world = new Uint8Array(W * H * Dp);
+    genBlobIsland(72, 72, 62, 15, { flat: true });
+    const crops = [ID.wheat_ripe, ID.carrot_ripe, ID.potato_ripe, ID.sugar_cane, ID.pumpkin, ID.melon];
+    for (let ci = 0; ci < 6; ci++) {
+      const px = 22 + (ci % 3) * 34, pz = 24 + Math.floor(ci / 3) * 40;
+      for (let x = px; x < px + 26; x++) for (let z = pz; z < pz + 30; z++) {
+        if (Math.hypot(x - 72, z - 72) > 58) continue;
+        setW(x, 15, z, ID.farmland);
+        if (crops[ci] === ID.pumpkin || crops[ci] === ID.melon) { if ((x + z * 3) % 4 === 0) setW(x, 16, z, crops[ci]); }
+        else setW(x, 16, z, crops[ci]);
+        if ((x + z) % 9 === 0) { setW(x, 15, z, ID.water); }   // 관개수로
+      }
+    }
+    buildHouse(66, 60, 9, 8, 16, ID.wool_red, ID.spruce_planks);   // 대형 헛간
+    lampPost(64, 90); lampPost(90, 64);
+    buildWarpPads();
+  }
+  // ⛏️ 골드 광산: 노천 금광 산
+  function genGoldMine() {
+    world = new Uint8Array(W * H * Dp);
+    genBlobIsland(56, 56, 48, 14, { surf: ID.stone, sub: ID.stone });
+    // 산(계단식 노천광)
+    for (let ring = 0; ring < 6; ring++) {
+      const rr = 34 - ring * 5;
+      for (let x = 56 - rr; x <= 56 + rr; x++) for (let z = 46 - rr; z <= 46 + rr; z++) {
+        if (Math.hypot(x - 56, z - 46) <= rr) for (let y = 15; y <= 15 + ring * 2; y++) setW(x, y, z, ID.stone);
+      }
+    }
+    scatterOre(56, 46, 34, 14, 26, ID.gold_ore, 40, 61);
+    scatterOre(56, 46, 34, 14, 24, ID.iron_ore, 30, 62);
+    scatterOre(56, 46, 34, 14, 22, ID.coal_ore, 24, 63);
+    [[42, 40], [70, 52], [56, 30]].forEach(p2 => { const y = surfaceTop(p2[0], p2[1]); setW(p2[0], y, p2[1], ID.glowstone); });
+    buildWarpPads();
+  }
+  // 💎 딥 캐번: 실제처럼 층별 광물(위→아래: 석탄/철/금·청금/레드스톤/에메랄드·슬라임/다이아/흑요석) + 리프트
+  function genDeepCaverns() {
+    world = new Uint8Array(W * H * Dp);
+    for (let x = 6; x < W - 6; x++) for (let z = 6; z < Dp - 6; z++) for (let y = 2; y <= 40; y++) setW(x, y, z, ID.stone);
+    // 층 챔버(y대역별 대형 공동)
+    const layers = [
+      { y: 34, ore: ID.coal_ore, n: 40 }, { y: 29, ore: ID.iron_ore, n: 36 }, { y: 24, ore: ID.gold_ore, n: 30 },
+      { y: 24, ore: ID.lapis_ore, n: 24 }, { y: 19, ore: ID.redstone_ore, n: 30 }, { y: 14, ore: ID.emerald_ore, n: 20 },
+      { y: 9, ore: ID.diamond_ore, n: 22 }, { y: 5, ore: ID.obsidian, n: 16 },
+    ];
+    const uniq = [34, 29, 24, 19, 14, 9, 5];
+    uniq.forEach(ly => {
+      for (let x = 14; x < W - 14; x++) for (let z = 14; z < Dp - 14; z++) {
+        const d = Math.hypot(x - 48, z - 48) / 34 + (hash3(x, ly, z) - 0.5) * 0.2;
+        if (d < 1) for (let y = ly - 2; y <= ly + 1; y++) setW(x, y, z, 0);
+      }
+      [[30, 34], [64, 60], [48, 30], [36, 62]].forEach((p2, i) => setW(p2[0], ly - 2, p2[1] + i, ID.glowstone));
+    });
+    layers.forEach((L, i) => { scatterOre(48, 48, 34, L.y - 2, L.y + 1, L.ore, L.n, 71 + i); });
+    // 중앙 리프트 수직 통로 + 층별 착지대(계단식)
+    for (let y = 3; y <= 40; y++) for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) setW(48 + dx, y, 48 + dz, 0);
+    let py = 40;
+    uniq.forEach(ly => { for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) setW(48 + dx, ly - 3, 48 + dz, ID.stone_bricks); });
+    // 나선 계단(리프트 대용 — 층 사이 이동)
+    const ring = [[-3, -3], [-1, -3], [1, -3], [3, -3], [3, -1], [3, 1], [3, 3], [1, 3], [-1, 3], [-3, 3], [-3, 1], [-3, -1]];
+    let sy = 3; let ri = 0;
+    while (sy <= 38) { const o = ring[ri % ring.length]; setW(48 + o[0], sy, 48 + o[1], ID.stone_bricks); clearAbove(48 + o[0], 48 + o[1], sy + 1, 3); ri++; if (ri % 2 === 0) sy++; }
+    // 입구 방(스폰)
+    for (let x = 42; x <= 54; x++) for (let z = 80; z <= 92; z++) for (let y = 36; y <= 41; y++) setW(x, y, z, y === 36 ? ID.stone_bricks : 0);
+    for (let z = 52; z <= 80; z++) { for (let dx = -1; dx <= 1; dx++) { setW(48 + dx, 36, z, ID.stone_bricks); clearAbove(48 + dx, z, 37, 4); } }
+    [[44, 82], [52, 90], [48, 86]].forEach(p2 => setW(p2[0], 37, p2[1], ID.glowstone));
+    buildWarpPads();
+  }
+  // 🕷️ 스파이더 덴
+  function genSpiderDen() {
+    world = new Uint8Array(W * H * Dp);
+    genBlobIsland(64, 64, 56, 15, { surf: ID.dirt });
+    // 죽은 나무 + 거미줄(양털)
+    for (let i = 0; i < 26; i++) {
+      const x = 16 + Math.floor(hash3(i, 81, 1) * 96), z = 14 + Math.floor(hash3(i, 82, 2) * 88);
+      if (Math.hypot(x - 64, z - 64) > 50 || Math.hypot(x - 64, z - 116) < 12) continue;
+      const y = surfaceTop(x, z), th = 3 + Math.floor(hash3(i, 83, 3) * 4);
+      for (let j = 0; j < th; j++) setW(x, y + j, z, ID.spruce_log);
+      if (hash3(i, 84, 4) < 0.5) setW(x, y + th, z, ID.wool_white);
+    }
+    // 중앙 거미 언덕(브루드마더 둥지)
+    for (let dx = -12; dx <= 12; dx++) for (let dz = -12; dz <= 12; dz++) {
+      const hgt = Math.max(0, 9 - Math.hypot(dx, dz) * 0.8);
+      const y0 = surfaceTop(64 + dx, 52 + dz);
+      for (let y = 0; y < hgt; y++) setW(64 + dx, y0 + y, 52 + dz, hash3(dx, 85, dz) < 0.3 ? ID.wool_white : ID.stone);
+    }
+    buildWarpPads();
+  }
+  // 🔥 블레이징 포트리스: 용암 바다 위 네더락 + 요새 통로
+  function genNether() {
+    world = new Uint8Array(W * H * Dp);
+    for (let x = 0; x < W; x++) for (let z = 0; z < Dp; z++) for (let y = 2; y <= SEA - 1; y++) setW(x, y, z, ID.lava);   // 용암 바다
+    genBlobIsland(64, 64, 54, 16, { surf: ID.netherrack, sub: ID.netherrack, fill: ID.netherrack });
+    for (let i = 0; i < 60; i++) {   // 소울샌드 패치
+      const x = 20 + Math.floor(hash3(i, 91, 1) * 88), z = 20 + Math.floor(hash3(i, 92, 2) * 88);
+      const y = surfaceTop(x, z) - 1;
+      if (getBlockLocal(x, y, z) === ID.netherrack && hash3(i, 93, 3) < 0.8) setW(x, y, z, ID.soul_sand);
+    }
+    // 요새 다리(십자) + 블레이즈 스폰 플랫폼
+    for (let x = 24; x <= 104; x++) { for (let o = -1; o <= 1; o++) { setW(x, 20, 64 + o, ID.nether_bricks); clearAbove(x, 64 + o, 21, 4); } if (x % 8 === 0) { setW(x, 21, 62, ID.nether_bricks); setW(x, 21, 66, ID.nether_bricks); } }
+    for (let z = 24; z <= 104; z++) { for (let o = -1; o <= 1; o++) { setW(64 + o, 20, z, ID.nether_bricks); clearAbove(64 + o, z, 21, 4); } }
+    for (let dx = -5; dx <= 5; dx++) for (let dz = -5; dz <= 5; dz++) setW(64 + dx, 20, 40 + dz, ID.nether_bricks);
+    [[60, 40], [68, 40], [64, 36], [64, 44]].forEach(p2 => setW(p2[0], 21, p2[1], ID.glowstone));
+    // 용암 웅덩이
+    [[40, 80], [88, 52]].forEach(p2 => { for (let dx = -3; dx <= 3; dx++) for (let dz = -2; dz <= 2; dz++) { const y = surfaceTop(p2[0] + dx, p2[1] + dz) - 1; setW(p2[0] + dx, y, p2[1] + dz, ID.lava); } });
+    buildWarpPads();
+  }
+  // 🌌 디 엔드: 공허 위 엔드스톤 + 흑요석 기둥
+  function genEnd() {
+    world = new Uint8Array(W * H * Dp);
+    genBlobIsland(64, 64, 56, 16, { surf: ID.end_stone, sub: ID.end_stone, fill: ID.end_stone });
+    for (let i = 0; i < 8; i++) {   // 흑요석 기둥
+      const a = i / 8 * Math.PI * 2;
+      const x = 64 + Math.round(Math.cos(a) * 32), z = 64 + Math.round(Math.sin(a) * 32);
+      const hgt = 10 + Math.floor(hash3(i, 95, 1) * 8), y0 = surfaceTop(x, z);
+      for (let y = 0; y < hgt; y++) for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) {
+        if (Math.abs(dx) + Math.abs(dz) < 2) setW(x + dx, y0 + y, z + dz, ID.obsidian);
+      }
+      setW(x, y0 + hgt, z, ID.glowstone);
+    }
+    // 젤롯 둥지(북쪽 구덩이)
+    for (let dx = -8; dx <= 8; dx++) for (let dz = -8; dz <= 8; dz++) {
+      if (Math.hypot(dx, dz) < 8) { const y0 = surfaceTop(64 + dx, 30 + dz) - 1; setW(64 + dx, y0, 30 + dz, hash3(dx, 96, dz) < 0.25 ? ID.obsidian : ID.end_stone); }
+    }
+    buildWarpPads();
+  }
+  // 워프 패드 지형(흑요석 링 + 글로우스톤 심)
+  function buildWarpPads() {
+    const list = WARPS[worldMode] || [];
+    for (const wp of list) {
+      const y = surfaceTop(wp.x, wp.z) - 1;
+      for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) setW(wp.x + dx, y, wp.z + dz, (dx === 0 && dz === 0) ? ID.glowstone : ID.obsidian);
+      clearAbove(wp.x, wp.z, y + 1, 4);
+      wp._y = y + 1;
+    }
+  }
+  function warpTo(dest) {
+    if (!WORLD_DEFS[dest]) return;
+    if (typeof toast === 'function') toast(`🚀 ${WORLD_DEFS[dest].name}(으)로 워프!`, true);
+    P.vy = 13;   // 슈퍼 점프 연출
+    warpCharge = null;
+    setTimeout(() => { if (running) travelTo(dest); }, 420);
+  }
+  function tickWarpPads(dt) {
+    const list = WARPS[worldMode] || [];
+    for (const wp of list) {
+      if (Math.abs(P.x - (wp.x + 0.5)) < 1.2 && Math.abs(P.z - (wp.z + 0.5)) < 1.2 && Math.abs(P.y - wp._y) < 1.5) {
+        if (!warpCharge || warpCharge.dest !== wp.dest) warpCharge = { dest: wp.dest, t: 0 };
+        warpCharge.t += dt;
+        const cross = document.getElementById('econ3dCross');
+        if (cross) cross.textContent = '🚀' + Math.ceil(0.9 - warpCharge.t) ;
+        if (warpCharge.t >= 0.9) warpTo(wp.dest);
+        return;
+      }
+    }
+    if (warpCharge) { warpCharge = null; const cross = document.getElementById('econ3dCross'); if (cross && !fishing && !breaking) cross.textContent = '+'; }
+  }
+
+  /* ---------------- 3D 카타콤 던전: 직접 돌아다니며 몬스터를 잡고 보스까지 ---------------- */
+  let dungeonState = null;   // {floor, fd, rooms:[{x0,x1,gateX,kills,need,cleared}], t0, deaths, kills, bossSpawned}
+  function genDungeon() {
+    world = new Uint8Array(W * H * Dp);
+    const ROOM_W = 22, ROOMS = 5;
+    // 바닥/외벽(개방형 천장 — 카타콤 폐허 분위기, 하늘은 자정 고정)
+    for (let x = 0; x < W; x++) for (let z = 8; z < 40; z++) setW(x, 2, z, ID.stone_bricks);
+    const wallTo = 9;
+    for (let x = 0; x < W; x++) for (let y = 3; y <= wallTo; y++) { setW(x, y, 8, ID.stone_bricks); setW(x, y, 39, ID.stone_bricks); }
+    for (let y = 3; y <= wallTo; y++) for (let z = 8; z < 40; z++) { setW(0, y, z, ID.stone_bricks); setW(W - 1, y, z, ID.stone_bricks); }
+    // 방 구분 게이트 벽(중앙 2×3 흑요석 게이트 — 방 클리어 시 개방)
+    for (let i = 1; i <= ROOMS; i++) {
+      const gx = i * ROOM_W;
+      for (let y = 3; y <= wallTo; y++) for (let z = 8; z < 40; z++) setW(gx, y, z, ID.stone_bricks);
+      for (let y = 3; y <= 5; y++) for (let z = 22; z <= 25; z++) setW(gx, y, z, ID.obsidian);   // 게이트
+    }
+    // 조명 + 폐허 기둥
+    for (let i = 0; i <= ROOMS; i++) {
+      const cx = i * ROOM_W + 11;
+      [[cx - 6, 14], [cx + 6, 14], [cx - 6, 33], [cx + 6, 33]].forEach(p2 => {
+        if (p2[0] > 1 && p2[0] < W - 1) { for (let y = 3; y <= 5; y++) setW(p2[0], y, p2[1], ID.stone_bricks); setW(p2[0], 6, p2[1], ID.glowstone); }
+      });
+    }
+    buildWarpPads();
+  }
+  function startDungeon3d(floor) {
+    if (!running || !scene) return false;
+    const api = econApi();
+    if (api.hasActiveEncounter && api.hasActiveEncounter()) return false;
+    if (api.canEnterFloor && !api.canEnterFloor(floor)) { if (typeof toast === 'function') toast('이전 층을 먼저 클리어하세요', false); return true; }
+    const fd = api.dungeonFloorInfo ? api.dungeonFloorInfo(floor) : null;
+    if (!fd) return false;
+    dungeonState = { floor, fd, rooms: [], t0: performance.now(), deaths: 0, kills: 0, bossSpawned: false, done: false };
+    hidePanel();
+    travelTo('dungeon', true);
+    // 방 5개: 몬스터 배치(방마다 4마리, 층 몹 이름/스탯)
+    const ROOM_W = 22;
+    for (let i = 0; i < 5; i++) {
+      const room = { x0: i * ROOM_W + 2, x1: (i + 1) * ROOM_W - 2, gateX: (i + 1) * ROOM_W, kills: 0, need: 4, cleared: false };
+      dungeonState.rooms.push(room);
+      for (let k = 0; k < room.need; k++) {
+        const name = fd.mobList[k % fd.mobList.length];
+        const hp = Math.max(40, Math.round(fd.bossHp / 40));
+        spawnDungeonMob({
+          name, hp, dmg: Math.round(fd.bossDmg / 3), lv: floor * 5 + k,
+          x: room.x0 + 4 + Math.random() * (room.x1 - room.x0 - 8), z: 14 + Math.random() * 20,
+          color: [0x3a7d3a, 0x8a8a8a, 0x5a4327, 0x7d3a3a][k % 4], roomIdx: i,
+        });
+      }
+    }
+    if (typeof toast === 'function') toast(`🗝️ 카타콤 ${floor}층 입장! 몬스터를 모두 잡아 게이트를 열고 보스까지 전진하세요`, true);
+    return true;
+  }
+  function spawnDungeonMob(opt) {
+    const def = { name: opt.name, kind: opt.kind || 'humanoid', color: opt.color || 0x3a7d3a, hp: opt.hp, dmg: opt.dmg, xp: 10 + opt.lv, coins: 8 + opt.lv, speed: 2.0, drops: [{ key: 'dungeon_essence', n: 1, chance: 0.25 }], tierCap: Math.min(6, dungeonState ? dungeonState.floor : 2) };
+    const area = { x: opt.x, z: opt.z, r: 6, world: 'dungeon' };
+    const mob = spawnMob(area, '_custom', opt.lv, def);
+    if (mob) { mob.dungeonRoom = opt.roomIdx; mob.isBoss = !!opt.isBoss; }
+    return mob;
+  }
+  function onDungeonMobDead(m) {
+    if (!dungeonState || dungeonState.done) return;
+    dungeonState.kills++;
+    if (m.isBoss) {
+      dungeonState.done = true;
+      const api = econApi();
+      if (api.dungeonComplete) api.dungeonComplete(dungeonState.floor, { timeSec: (performance.now() - dungeonState.t0) / 1000, deaths: dungeonState.deaths, kills: dungeonState.kills });
+      setTimeout(() => { if (running) { dungeonState = null; travelTo('hub'); } }, 1500);
+      return;
+    }
+    if (m.dungeonRoom == null) return;
+    const room = dungeonState.rooms[m.dungeonRoom];
+    if (!room || room.cleared) return;
+    room.kills++;
+    if (room.kills >= room.need) {
+      room.cleared = true;
+      for (let y = 3; y <= 5; y++) for (let z = 22; z <= 25; z++) setW(room.gateX, y, z, 0);   // 게이트 개방
+      markBlockDirty(room.gateX, 22); markBlockDirty(room.gateX, 25);
+      if (typeof toast === 'function') toast(`⚔️ ${m.dungeonRoom + 1}번 방 클리어! 게이트가 열렸다`, true);
+      // 마지막 방이면 보스 소환
+      if (m.dungeonRoom === dungeonState.rooms.length - 1 && !dungeonState.bossSpawned) {
+        dungeonState.bossSpawned = true;
+        const fd = dungeonState.fd;
+        const boss = spawnDungeonMob({ name: fd.bossName, hp: fd.bossHp, dmg: fd.bossDmg, lv: dungeonState.floor * 10, x: 122, z: 24, color: 0x6a1a8a, isBoss: true });
+        if (boss) { boss.mesh.scale.multiplyScalar(1.8); drawMobLabel(boss); }
+        if (typeof toast === 'function') toast(`👹 ${fd.bossName}이(가) 깨어났다!`, false);
+      }
+    }
+  }
+  window.economy3dDungeon = floor => { try { return startDungeon3d(floor); } catch (e) { console.error('econ3d dungeon', e); return false; } };
+
   /* ---------------- 텍스처 아틀라스 ---------------- */
   function px(c, x, y, col) { c.fillStyle = col; c.fillRect(x, y, 1, 1); }
   function rngFrom(n) { let s = (n >>> 0) || 1; return function () { s ^= s << 13; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; }; }
