@@ -28,23 +28,30 @@
 
   function findShop(key) { return (D().SHOP || []).find(s => s.key === key); }
 
-  // 외부 스프라이트 시트(assets/econ_items.png, 8열×6행 고정 그리드) — 있으면 자동 활성화, 없으면 절차 생성 아이콘 폴백
-  const SPRITE_COLS = 8, SPRITE_ROWS = 6;
-  // 셀 좌표 [col,row] — 이미지 생성 프롬프트의 번호 순서(1번=0,0 … 48번=7,5)와 1:1
+  // 외부 스프라이트 시트(assets/econ_items.png) — 있으면 자동 활성화, 없으면 절차 생성 아이콘 폴백.
+  // 현재 시트: 마크 픽셀풍 9열×6행(사용자 제공 이미지의 실제 배치에 맞춰 매핑).
+  // 실제 스카이블럭 방식대로 "같은 등급 = 같은 외형"이라 이름만 다른 무기(AOTE/미다스/AOTD/히페리온 등)는 등급 셀을 공유.
+  const SPRITE_COLS = 9, SPRITE_ROWS = 6;
   const SPRITE_CELLS = {
-    weapon_common: [0, 0], weapon_uncommon: [1, 0], weapon_rare: [2, 0], weapon_epic: [3, 0], weapon_legendary: [4, 0], weapon_mythic: [5, 0], weapon_ancient: [6, 0], necron_blade: [7, 0],
-    bow_common: [0, 1], bow_uncommon: [1, 1], bow_rare: [2, 1], bow_epic: [3, 1], bow_legendary: [4, 1], bow_mythic: [5, 1], bow_ancient: [6, 1], spirit_bow: [7, 1],
-    staff_common: [0, 2], staff_uncommon: [1, 2], staff_rare: [2, 2], staff_epic: [3, 2], staff_legendary: [4, 2], staff_mythic: [5, 2], staff_ancient: [6, 2], bonzo_staff: [7, 2],
-    armor_common: [0, 3], armor_uncommon: [1, 3], armor_rare: [2, 3], armor_epic: [3, 3], armor_legendary: [4, 3], armor_mythic: [5, 3], armor_ancient: [6, 3], wither_armor: [7, 3],
-    wooden_pickaxe: [0, 4], iron_pickaxe: [1, 4], diamond_pickaxe: [2, 4], ancient_pickaxe: [3, 4], iron_axe: [4, 4], iron_hoe: [5, 4], fishing_rod: [6, 4], livid_dagger: [7, 4],
-    enchant_book: [0, 5], reforge_stone: [1, 5], pet_egg: [2, 5], minion_item: [3, 5], talisman: [4, 5], talisman_dragon_heart: [5, 5], fairy_soul: [6, 5], dungeon_essence: [7, 5],
-    // 유사 아이템 별칭(같은 도상 공유)
-    giant_sword: [5, 0], adaptive_armor: [2, 3], shadow_assassin_armor: [3, 3],
-    stone_pickaxe: [1, 4], wooden_axe: [4, 4], stone_axe: [4, 4], diamond_axe: [4, 4], ancient_axe: [4, 4],
-    wooden_hoe: [5, 4], stone_hoe: [5, 4], diamond_hoe: [5, 4], ancient_hoe: [5, 4],
-    stone_rod: [6, 4], iron_rod: [6, 4], diamond_rod: [6, 4], ancient_rod: [6, 4],
-    essence_reforge_stone: [1, 5], minion_slot_expander: [3, 5], auto_shipping_module: [3, 5], diamond_spreading: [3, 5],
-    skin_diamond_steve: [3, 5], minion_fuel_coal: [1, 5],
+    // 1행: 검 9자루(0~3: 일반~희귀 계열, 4:영웅 보라, 5:전설 금, 6:신화 마젠타, 7:고대 청록, 8:흑암=네크론)
+    weapon_common: [0, 0], weapon_uncommon: [1, 0], weapon_rare: [3, 0], weapon_epic: [4, 0], weapon_legendary: [5, 0], weapon_mythic: [6, 0], weapon_ancient: [7, 0], necron_blade: [8, 0],
+    aspect_of_the_end: [3, 0], livid_dagger: [5, 0], midas_sword: [5, 0], aspect_of_the_dragons: [5, 0], giant_sword: [6, 0], hyperion: [6, 0],
+    // 2행: 활 9개(같은 색 순서)
+    bow_common: [0, 1], bow_uncommon: [2, 1], bow_rare: [3, 1], bow_epic: [4, 1], bow_legendary: [5, 1], bow_mythic: [6, 1], bow_ancient: [7, 1], spirit_bow: [8, 1],
+    // 3행: 흉갑 7개(0~6) + 특수 지팡이 2(7:광대=본조, 8:흑암 지팡이)
+    armor_common: [0, 2], armor_uncommon: [1, 2], armor_rare: [3, 2], armor_epic: [4, 2], armor_legendary: [5, 2], armor_mythic: [6, 2], armor_ancient: [6, 2],
+    adaptive_armor: [3, 2], shadow_assassin_armor: [4, 2], bonzo_staff: [7, 2],
+    // 4행: 지팡이/메이스 9개
+    staff_common: [0, 3], staff_uncommon: [1, 3], staff_rare: [3, 3], staff_epic: [4, 3], staff_legendary: [5, 3], staff_mythic: [5, 3], staff_ancient: [6, 3],
+    // 5행: 곡괭이 5(0~4) + 망치/도끼(5) + 낚싯대(6,7) + 흑암 갑주(8=위더)
+    wooden_pickaxe: [0, 4], stone_pickaxe: [1, 4], iron_pickaxe: [2, 4], diamond_pickaxe: [3, 4], ancient_pickaxe: [3, 4],
+    iron_axe: [5, 4], wooden_axe: [5, 4], stone_axe: [5, 4], diamond_axe: [5, 4], ancient_axe: [5, 4],
+    iron_hoe: [5, 4], wooden_hoe: [5, 4], stone_hoe: [5, 4], diamond_hoe: [5, 4], ancient_hoe: [5, 4],
+    fishing_rod: [6, 4], stone_rod: [6, 4], iron_rod: [7, 4], diamond_rod: [7, 4], ancient_rod: [7, 4],
+    wither_armor: [8, 4],
+    // 6행: 인챈트북/금덩이/알/스티브 미니언/반지/심장/요정/주머니/물약
+    enchant_book: [0, 5], reforge_stone: [1, 5], pet_egg: [2, 5], minion_item: [3, 5], talisman: [4, 5], talisman_dragon_heart: [5, 5], fairy_soul: [6, 5], minion_fuel_coal: [7, 5], dungeon_essence: [8, 5],
+    essence_reforge_stone: [1, 5], minion_slot_expander: [3, 5], auto_shipping_module: [3, 5], diamond_spreading: [3, 5], skin_diamond_steve: [3, 5],
   };
   function spriteCellFor(key) {
     if (SPRITE_CELLS[key]) return SPRITE_CELLS[key];

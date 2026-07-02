@@ -167,14 +167,14 @@
     ]) },
     { key: 'enderman_slayer', name: '엔더맨 슬레이어', flavor: '보이드글룸 세라프', dropResource: 'ender_pearl', tiers: mkSlayerTiers(1200, 45, 8, 600, 1.6, [
       ['ender_pearl', 'reforge_stone_rare', 'talisman_deep_pearl'],
-      ['ender_pearl', 'enchant_book_giant_killer', 'talisman_hourglass'],
+      ['ender_pearl', 'aspect_of_the_end', 'talisman_hourglass'],
       ['ender_pearl', 'armor_mythic', 'enchant_book_protection'],
-      ['ender_pearl', 'talisman_void_eye', 'pet_egg_enderman'],
+      ['ender_pearl', 'aspect_of_the_dragons', 'pet_egg_enderman'],
     ]) },
     { key: 'blaze_slayer', name: '블레이즈 슬레이어', flavor: '인페르노 데몬로드', dropResource: 'blaze_rod', tiers: mkSlayerTiers(2000, 60, 10, 900, 2.0, [
       ['blaze_rod', 'reforge_stone_rare', 'talisman_lava_charm'],
       ['blaze_rod', 'enchant_book_looting', 'talisman_wealth_rune'],
-      ['blaze_rod', 'weapon_mythic', 'enchant_book_sharpness'],
+      ['blaze_rod', 'midas_sword', 'enchant_book_sharpness'],
       ['blaze_rod', 'talisman_primal_shard', 'pet_egg_ender_dragon'],
     ]) },
   ];
@@ -188,7 +188,7 @@
       { floor: 4, mobList: ['유령 늑대 무리', '영혼 결계병'], bossName: '쏜 (유령 수호자)', bossHp: 150000, bossDmg: 140, lootTable: ['spirit_bow', 'enchant_book_critical', 'pet_egg_ocelot'], essenceReward: 32 },
       { floor: 5, mobList: ['그림자 암살단', '분신 환영'], bossName: '리비드 (그림자 군주)', bossHp: 300000, bossDmg: 200, lootTable: ['livid_dagger', 'shadow_assassin_armor', 'enchant_book_giant_killer'], essenceReward: 45 },
       { floor: 6, mobList: ['거인 병사', '왕의 근위대'], bossName: '사단 (거인왕)', bossHp: 600000, bossDmg: 280, lootTable: ['giant_sword', 'enchant_book_looting', 'pet_egg_blue_whale'], essenceReward: 60 },
-      { floor: 7, mobList: ['위더 기사', '지배자의 사도'], bossName: '네크론 (마지막 지배자)', bossHp: 1200000, bossDmg: 400, lootTable: ['necron_blade', 'wither_armor', 'pet_egg_ender_dragon'], essenceReward: 85 },
+      { floor: 7, mobList: ['위더 기사', '지배자의 사도'], bossName: '네크론 (마지막 지배자)', bossHp: 1200000, bossDmg: 400, lootTable: ['necron_blade', 'hyperion', 'wither_armor', 'pet_egg_ender_dragon'], essenceReward: 85 },
     ],
     scoreThresholds: [ ['F', -Infinity], ['D', 0], ['C', 100], ['B', 160], ['A', 230], ['S', 270], ['S+', 300] ],
     roomTypes: ['전투방', '퍼즐방', '함정방', '미니보스방', '보물방'],
@@ -217,14 +217,23 @@
     EQUIPMENT.weapons.push({ key: `staff_${t.key}`, name: STAFF_NAMES[i], wclass: 'staff', tierKey: t.key, dmg, buyPrice: baseBuy, sellPrice: Math.round(baseBuy * 0.2) });
     EQUIPMENT.armor.push({ key: `armor_${t.key}`, name: ARMOR_NAMES[i], tierKey: t.key, defense: Math.round(6 * t.statMultiplier), buyPrice: Math.round(baseBuy * 1.3), sellPrice: Math.round(baseBuy * 1.3 * 0.2) });
   });
-  // 던전 전용 무기/방어구(상점 판매 X, 던전 보스 드롭 전용)
+  // 던전/보스 전용 무기(상점 판매 X, 드롭 전용).
+  // 실제 스카이블럭 방식: 같은 등급이면 외형(스프라이트)은 같고 이름·수치만 다른 무기가 여럿 존재
+  // (예: Midas' Sword와 Aspect of the Dragons는 다른 무기지만 각자 등급 외형을 공유).
   const DUNGEON_WEAPONS = [
     { key: 'bonzo_staff', name: '본조의 지팡이', wclass: 'staff', tierKey: 'rare', dmg: 18, buyPrice: 0, sellPrice: 800 },
+    { key: 'aspect_of_the_end', name: '종말의 형상(AOTE)', wclass: 'sword', tierKey: 'rare', dmg: 21, buyPrice: 0, sellPrice: 1500 },
     { key: 'spirit_bow', name: '영혼의 활', wclass: 'bow', tierKey: 'epic', dmg: 23, buyPrice: 0, sellPrice: 2500 },
     { key: 'livid_dagger', name: '리비드 대거', wclass: 'sword', tierKey: 'legendary', dmg: 26, buyPrice: 0, sellPrice: 7000 },
+    { key: 'midas_sword', name: '미다스의 검', wclass: 'sword', tierKey: 'legendary', dmg: 28, buyPrice: 0, sellPrice: 12000 },
+    { key: 'aspect_of_the_dragons', name: '용의 형상(AOTD)', wclass: 'sword', tierKey: 'legendary', dmg: 30, buyPrice: 0, sellPrice: 14000 },
     { key: 'giant_sword', name: '거인의 대검', wclass: 'sword', tierKey: 'mythic', dmg: 31, buyPrice: 0, sellPrice: 15000 },
+    { key: 'hyperion', name: '히페리온', wclass: 'sword', tierKey: 'mythic', dmg: 33, buyPrice: 0, sellPrice: 25000 },
     { key: 'necron_blade', name: '네크론의 검', wclass: 'sword', tierKey: 'ancient', dmg: 36, buyPrice: 0, sellPrice: 40000 },
   ];
+  // 아이템 초기 능력치 무작위 롤(실제 스카이블럭 감성): 같은 이름의 장비라도 획득 시
+  // 기본 수치가 ±8% 범위에서 굴려져 고정됨(인챈트/리포지/스타포스와 완전 별개의 "생 초기치").
+  const ITEM_ROLL = { pct: 0.08 };
   const DUNGEON_ARMORS = [
     { key: 'adaptive_armor', name: '적응형 갑옷', tierKey: 'epic', defense: 13, buyPrice: 0, sellPrice: 2500 },
     { key: 'shadow_assassin_armor', name: '그림자 암살자 갑옷', tierKey: 'legendary', defense: 15, buyPrice: 0, sellPrice: 7000 },
@@ -427,7 +436,7 @@
     ITEM_TIERS, COLLECTIONS, SKILLS, GATHER_TABLE, TOOLS, MINIONS, MINION_STORAGE_BASE, MINION_STORAGE_UPGRADED,
     MINION_STORAGE_UPGRADE_COST, MINION_OFFLINE_CAP_HOURS, MINION_SLOT_MAX, MINION_SLOT_COST_BASE, MINION_SLOT_COST_MUL,
     MINION_FUEL, SLAYERS, DUNGEON, DUNGEON_ROOM_SCORE, ESSENCE_SHOP, SHOP, DAILY_SELL_LIMIT_PER_STACK,
-    EQUIPMENT, STARFORCE, REFORGES,
+    EQUIPMENT, STARFORCE, REFORGES, ITEM_ROLL,
     TALISMANS, MAGICAL_POWER, PETS, PET_XP_BASE, PET_XP_EXP, PET_MAX_LEVEL,
     ENCHANTS, CHAOS_ENCHANT, RECIPES,
     FAIRY_SOULS, BANK, DAILY_DEALS, DUNGEON_CLASSES, ZONES, EASTER_EGGS,
