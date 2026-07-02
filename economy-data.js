@@ -209,9 +209,12 @@
   const STAFF_NAMES = ['견습생 지팡이', '마도사의 지팡이', '현자의 스태프', '용언 지팡이', '여명의 마봉', '천공의 룬 스태프', '태초의 지팡이'];
   const ARMOR_NAMES = ['누더기 갑옷', '가죽 갑옷', '기사단 갑옷', '용비늘 갑옷', '여명의 갑옷', '천공의 신성 갑옷', '태초의 갑옷'];
   const EQUIPMENT = { weapons: [], armor: [], accessories: [] };
+  // 티어별 상점 무기는 해당 티어 생성 무기 대역(base+0~14)의 상위권 값 — "그 티어의 확실한 선택지"
+  const TIER_WEAPON_DMG = [20, 38, 55, 73, 91, 109, 126];
+  const TIER_ARMOR_DEF = [12, 26, 38, 50, 60, 70, 76];
   ITEM_TIERS.forEach((t, i) => {
     const baseBuy = Math.round(60 * Math.pow(3.1, i));
-    const dmg = Math.round(4 * t.statMultiplier * 3);
+    const dmg = TIER_WEAPON_DMG[i];
     EQUIPMENT.weapons.push({ key: `weapon_${t.key}`, name: WEAPON_NAMES[i], wclass: 'sword', tierKey: t.key, dmg, buyPrice: baseBuy, sellPrice: Math.round(baseBuy * 0.2) });
     EQUIPMENT.weapons.push({ key: `bow_${t.key}`, name: BOW_NAMES[i], wclass: 'bow', tierKey: t.key, dmg, buyPrice: baseBuy, sellPrice: Math.round(baseBuy * 0.2) });
     EQUIPMENT.weapons.push({ key: `staff_${t.key}`, name: STAFF_NAMES[i], wclass: 'staff', tierKey: t.key, dmg, buyPrice: baseBuy, sellPrice: Math.round(baseBuy * 0.2) });
@@ -221,15 +224,15 @@
   // 실제 스카이블럭 방식: 같은 등급이면 외형(스프라이트)은 같고 이름·수치만 다른 무기가 여럿 존재
   // (예: Midas' Sword와 Aspect of the Dragons는 다른 무기지만 각자 등급 외형을 공유).
   const DUNGEON_WEAPONS = [
-    { key: 'bonzo_staff', name: '본조의 지팡이', wclass: 'staff', tierKey: 'rare', dmg: 18, buyPrice: 0, sellPrice: 800 },
-    { key: 'aspect_of_the_end', name: '종말의 형상(AOTE)', wclass: 'sword', tierKey: 'rare', dmg: 21, buyPrice: 0, sellPrice: 1500 },
-    { key: 'spirit_bow', name: '영혼의 활', wclass: 'bow', tierKey: 'epic', dmg: 23, buyPrice: 0, sellPrice: 2500 },
-    { key: 'livid_dagger', name: '리비드 대거', wclass: 'sword', tierKey: 'legendary', dmg: 26, buyPrice: 0, sellPrice: 7000 },
-    { key: 'midas_sword', name: '미다스의 검', wclass: 'sword', tierKey: 'legendary', dmg: 28, buyPrice: 0, sellPrice: 12000 },
-    { key: 'aspect_of_the_dragons', name: '용의 형상(AOTD)', wclass: 'sword', tierKey: 'legendary', dmg: 30, buyPrice: 0, sellPrice: 14000 },
-    { key: 'giant_sword', name: '거인의 대검', wclass: 'sword', tierKey: 'mythic', dmg: 31, buyPrice: 0, sellPrice: 15000 },
-    { key: 'hyperion', name: '히페리온', wclass: 'sword', tierKey: 'mythic', dmg: 33, buyPrice: 0, sellPrice: 25000 },
-    { key: 'necron_blade', name: '네크론의 검', wclass: 'sword', tierKey: 'ancient', dmg: 36, buyPrice: 0, sellPrice: 40000 },
+    { key: 'bonzo_staff', name: '본조의 지팡이', wclass: 'staff', tierKey: 'rare', dmg: 58, buyPrice: 0, sellPrice: 800 },
+    { key: 'aspect_of_the_end', name: '종말의 형상(AOTE)', wclass: 'sword', tierKey: 'rare', dmg: 62, buyPrice: 0, sellPrice: 1500 },
+    { key: 'spirit_bow', name: '영혼의 활', wclass: 'bow', tierKey: 'epic', dmg: 80, buyPrice: 0, sellPrice: 2500 },
+    { key: 'livid_dagger', name: '리비드 대거', wclass: 'sword', tierKey: 'legendary', dmg: 95, buyPrice: 0, sellPrice: 7000 },
+    { key: 'midas_sword', name: '미다스의 검', wclass: 'sword', tierKey: 'legendary', dmg: 98, buyPrice: 0, sellPrice: 12000 },
+    { key: 'aspect_of_the_dragons', name: '용의 형상(AOTD)', wclass: 'sword', tierKey: 'legendary', dmg: 102, buyPrice: 0, sellPrice: 14000 },
+    { key: 'giant_sword', name: '거인의 대검', wclass: 'sword', tierKey: 'mythic', dmg: 118, buyPrice: 0, sellPrice: 15000 },
+    { key: 'hyperion', name: '히페리온', wclass: 'sword', tierKey: 'mythic', dmg: 128, buyPrice: 0, sellPrice: 25000 },
+    { key: 'necron_blade', name: '네크론의 검', wclass: 'sword', tierKey: 'ancient', dmg: 140, buyPrice: 0, sellPrice: 40000 },
   ];
   // 아이템 초기 능력치 무작위 롤(실제 스카이블럭 감성): 같은 이름의 장비라도 획득 시
   // 기본 수치가 ±8% 범위에서 굴려져 고정됨(인챈트/리포지/스타포스와 완전 별개의 "생 초기치").
@@ -269,6 +272,58 @@
     // 리포지 스톤 전용(확정 최상급): reforge_stone_rare 소모
     premium: { weapon: { key: 'fabled', name: '전설의(Fabled)', dmgPct: 16 }, armor: { key: 'ancient_r', name: '고대의(Ancient)', def: 14, hp: 20 } },
   };
+
+
+  /* ---------------- 대량 장비 생성 — 계열별 100종 이상(쓰레기~신급) ----------------
+     실제 스카이블럭처럼: 같은 등급이면 외형(스프라이트)은 등급 셀을 공유하고,
+     이름과 수치만 다른 장비가 티어당 15종씩 존재. 티어 내 하위 5종만 상점 구매 가능,
+     나머지 10종은 슬레이어/던전/보물방 드롭 전용(파밍 동기). */
+  const GEN_TIER_PREFIX = ['낡은', '견습', '정예', '용맹한', '찬란한', '초월한', '태초의'];
+  const GEN_SWORD_BASES = ['단검', '소검', '직검', '곡검', '대검', '세이버', '레이피어', '클레이모어', '카타나', '팔치온', '글라디우스', '츠바이핸더', '바스타드 소드', '전투검', '처형검'];
+  const GEN_BOW_BASES = ['숏보우', '사냥활', '장궁', '곡궁', '합성궁', '연사궁', '강궁', '저격궁', '섬멸궁', '폭풍궁', '유성궁', '섬광궁', '천궁', '용골궁', '심판의 활'];
+  const GEN_STAFF_BASES = ['나무 지팡이', '수정 지팡이', '룬 지팡이', '마도 지팡이', '현자 지팡이', '원소 지팡이', '뇌전 지팡이', '빙결 지팡이', '화염 지팡이', '공허 지팡이', '별빛 지팡이', '월광 지팡이', '태양 지팡이', '용언 지팡이', '창세 지팡이'];
+  const GEN_ARMOR_BASES = ['튜닉', '가죽조끼', '사슬갑옷', '스케일 아머', '판금갑옷', '기사갑주', '중장갑주', '수호갑주', '용린갑주', '성기사갑주', '룬 갑주', '심연갑주', '천상갑주', '불멸갑주', '창세갑주'];
+  const GEN_WEAPON_DMG_BASE = [10, 28, 46, 64, 82, 100, 118];   // 티어별 시작 위력(+0~14)
+  const GEN_ARMOR_DEF_BASE = [6, 16, 26, 36, 46, 56, 66];
+  function genFamily(prefix, bases, wclass) {
+    const out = [];
+    ITEM_TIERS.forEach((t, ti) => {
+      bases.forEach((bn, i) => {
+        const dmg = GEN_WEAPON_DMG_BASE[ti] + i;
+        const buyable = i < 5;
+        const price = Math.round(60 * Math.pow(3.1, ti) * (0.5 + i * 0.18));
+        out.push({ key: `g_${prefix}_${t.key}_${i}`, name: `${GEN_TIER_PREFIX[ti]} ${bn}`, wclass, tierKey: t.key,
+          dmg, buyPrice: buyable ? price : 0, sellPrice: Math.round(price * 0.2) });
+      });
+    });
+    return out;
+  }
+  EQUIPMENT.weapons = EQUIPMENT.weapons
+    .concat(genFamily('sw', GEN_SWORD_BASES, 'sword'), genFamily('bw', GEN_BOW_BASES, 'bow'), genFamily('st', GEN_STAFF_BASES, 'staff'))
+    .sort((a, b) => a.dmg - b.dmg || (a.key < b.key ? -1 : 1));
+  const GEN_ARMORS = [];
+  ITEM_TIERS.forEach((t, ti) => {
+    GEN_ARMOR_BASES.forEach((bn, i) => {
+      const def = GEN_ARMOR_DEF_BASE[ti] + i;
+      const buyable = i < 5;
+      const price = Math.round(78 * Math.pow(3.1, ti) * (0.5 + i * 0.18));
+      GEN_ARMORS.push({ key: `g_ar_${t.key}_${i}`, name: `${GEN_TIER_PREFIX[ti]} ${bn}`, tierKey: t.key,
+        defense: def, buyPrice: buyable ? price : 0, sellPrice: Math.round(price * 0.2) });
+    });
+  });
+  EQUIPMENT.armor = EQUIPMENT.armor.concat(GEN_ARMORS).sort((a, b) => a.defense - b.defense || (a.key < b.key ? -1 : 1));
+  // 도구도 계열별 105종 추가(전부 드롭 전용) — 배율 0.6~2.6, 기존 5종 사다리는 그대로 유지
+  const GEN_TOOL_BASES = ['공구', '연장', '장비', '명품', '걸작', '비장의 도구', '유물 공구', '고대 연장', '전설의 공구', '신화의 연장', '용의 도구', '별의 공구', '태초의 연장', '창세의 공구', '신의 연장'];
+  Object.keys(TOOL_FAMILY_NAMES).forEach(fam => {
+    const gen = [];
+    ITEM_TIERS.forEach((t, ti) => {
+      GEN_TOOL_BASES.forEach((bn, i) => {
+        const mul = +(0.6 + (ti * 15 + i) * 0.019).toFixed(2);   // 0.6 ~ 2.58
+        gen.push({ key: `g_t_${fam}_${t.key}_${i}`, name: `${GEN_TIER_PREFIX[ti]} ${TOOL_FAMILY_NAMES[fam]} ${bn}`, tierKey: t.key, mul, price: 0 });
+      });
+    });
+    TOOLS[fam] = TOOLS[fam].concat(gen).sort((a, b) => a.mul - b.mul);
+  });
 
   /* ---------------- 장신구(부적) 20종 — 마력(Magical Power) 시스템 ---------------- */
   // 보유한 모든 부적의 마력 합계가 전역 스탯 보너스로 작동(스카이블럭 MP 방식).
@@ -323,18 +378,43 @@
   // maxLvl = 인챈트북으로 도달 가능한 상한(위키: 예리함 7·치명 7·선제공격 5·거인사냥꾼 7·약탈 5·보호 7·성장 7).
   // 그 위로는 "혼돈의 마법부여"(골드+북 소모, 확률 성공/실패 시 레벨 하락 위험)로 +5레벨까지 돌파 가능 — 노가다·운빨 초월 강화.
   const ENCHANTS = [
-    { key: 'sharpness', name: '예리함', target: 'weapon', maxLvl: 7, desc: '레벨당 최종 피해 +5%', bookBasePrice: 500 },
-    { key: 'critical', name: '치명', target: 'weapon', maxLvl: 7, desc: '레벨당 최종 피해 +4%', bookBasePrice: 600 },
-    { key: 'first_strike', name: '선제공격', target: 'weapon', maxLvl: 5, desc: '전투 첫 공격 피해 +25%/레벨', bookBasePrice: 900 },
-    { key: 'giant_killer', name: '거인 사냥꾼', target: 'weapon', maxLvl: 7, desc: '보스 최대체력 10만 이상일 때 피해 +8%/레벨', bookBasePrice: 1500 },
-    { key: 'looting', name: '약탈', target: 'weapon', maxLvl: 5, desc: '전투 보상 골드 +15%/레벨', bookBasePrice: 1200 },
-    { key: 'execute', name: '처형', target: 'weapon', maxLvl: 5, desc: '보스 체력 50% 이하일 때 피해 +6%/레벨', bookBasePrice: 1400 },
-    { key: 'vampirism', name: '흡혈', target: 'weapon', maxLvl: 5, desc: '공격 시 가한 피해의 1%/레벨 회복', bookBasePrice: 1600 },
-    { key: 'experience', name: '경험', target: 'weapon', maxLvl: 4, desc: '전투 스킬 XP +10%/레벨', bookBasePrice: 1000 },
-    { key: 'protection', name: '보호', target: 'armor', maxLvl: 7, desc: '레벨당 방어 +4', bookBasePrice: 500 },
-    { key: 'growth', name: '성장', target: 'armor', maxLvl: 7, desc: '레벨당 체력 +15', bookBasePrice: 700 },
-    { key: 'thorns', name: '가시', target: 'armor', maxLvl: 3, desc: '받는 피해의 10%/레벨 반사', bookBasePrice: 1300 },
-    { key: 'vitality', name: '활력', target: 'armor', maxLvl: 5, desc: '전투 중 공격할 때마다 HP +2/레벨 회복', bookBasePrice: 1100 },
+    // ── 무기 20종 ──  fx: dmg(상시%), first(첫타%), dmgBig(체력10만+%), dmgLow(적HP50%↓), dmgHigh(적HP50%↑),
+    //                  dmgVs(특정 슬레이어%), dmgBoss(던전보스%), third(3타마다%), coin(골드%), xp(전투XP%),
+    //                  lifesteal(가한 피해%회복), healHit(타격당 고정회복)
+    { key: 'sharpness', name: '예리함', target: 'weapon', maxLvl: 7, fx: { dmg: 5 }, desc: '레벨당 최종 피해 +5%', bookBasePrice: 500 },
+    { key: 'critical', name: '치명', target: 'weapon', maxLvl: 7, fx: { dmg: 4 }, desc: '레벨당 최종 피해 +4%', bookBasePrice: 600 },
+    { key: 'first_strike', name: '선제공격', target: 'weapon', maxLvl: 5, fx: { first: 25 }, desc: '첫 공격 피해 +25%/레벨', bookBasePrice: 900 },
+    { key: 'triple_strike', name: '삼연격', target: 'weapon', maxLvl: 5, fx: { firstThree: 10 }, desc: '처음 3회 공격 +10%/레벨', bookBasePrice: 950 },
+    { key: 'giant_killer', name: '거인 사냥꾼', target: 'weapon', maxLvl: 7, fx: { dmgBig: 8 }, desc: '최대체력 10만+ 적에게 +8%/레벨', bookBasePrice: 1500 },
+    { key: 'titan_killer', name: '타이탄 킬러', target: 'weapon', maxLvl: 7, fx: { dmgBig: 6 }, desc: '최대체력 10만+ 적에게 +6%/레벨', bookBasePrice: 1300 },
+    { key: 'execute', name: '처형', target: 'weapon', maxLvl: 5, fx: { dmgLow: 6 }, desc: '적 체력 50% 이하 +6%/레벨', bookBasePrice: 1400 },
+    { key: 'prosecute', name: '기소', target: 'weapon', maxLvl: 7, fx: { dmgHigh: 4 }, desc: '적 체력 50% 이상 +4%/레벨', bookBasePrice: 1200 },
+    { key: 'smite', name: '강타', target: 'weapon', maxLvl: 7, fx: { dmgVs: 'zombie_slayer', v: 8 }, desc: '좀비 슬레이어 +8%/레벨', bookBasePrice: 800 },
+    { key: 'bane_of_arthropods', name: '살충', target: 'weapon', maxLvl: 7, fx: { dmgVs: 'spider_slayer', v: 8 }, desc: '거미 슬레이어 +8%/레벨', bookBasePrice: 800 },
+    { key: 'ender_slayer', name: '엔더 슬레이어', target: 'weapon', maxLvl: 7, fx: { dmgVs: 'enderman_slayer', v: 12 }, desc: '엔더맨 슬레이어 +12%/레벨', bookBasePrice: 1600 },
+    { key: 'cubism', name: '큐비즘', target: 'weapon', maxLvl: 5, fx: { dmgVs: 'blaze_slayer', v: 10 }, desc: '블레이즈 슬레이어 +10%/레벨', bookBasePrice: 1400 },
+    { key: 'dragon_hunter', name: '용 사냥꾼', target: 'weapon', maxLvl: 5, fx: { dmgBoss: 8 }, desc: '던전 보스 +8%/레벨', bookBasePrice: 1800 },
+    { key: 'thunderlord', name: '뇌제', target: 'weapon', maxLvl: 7, fx: { third: 15 }, desc: '3번째 공격마다 +15%/레벨', bookBasePrice: 1700 },
+    { key: 'fire_aspect', name: '발화', target: 'weapon', maxLvl: 3, fx: { dmg: 3 }, desc: '레벨당 최종 피해 +3%', bookBasePrice: 700 },
+    { key: 'venomous', name: '맹독', target: 'weapon', maxLvl: 5, fx: { dmgHigh: 3 }, desc: '적 체력 50% 이상 +3%/레벨', bookBasePrice: 900 },
+    { key: 'looting', name: '약탈', target: 'weapon', maxLvl: 5, fx: { coin: 15 }, desc: '전투 보상 골드 +15%/레벨', bookBasePrice: 1200 },
+    { key: 'experience', name: '경험', target: 'weapon', maxLvl: 4, fx: { xp: 10 }, desc: '전투 스킬 XP +10%/레벨', bookBasePrice: 1000 },
+    { key: 'vampirism', name: '흡혈', target: 'weapon', maxLvl: 5, fx: { lifesteal: 1 }, desc: '가한 피해의 1%/레벨 회복', bookBasePrice: 1600 },
+    { key: 'life_steal', name: '생명 강탈', target: 'weapon', maxLvl: 5, fx: { healHit: 3 }, desc: '공격마다 HP +3/레벨', bookBasePrice: 1500 },
+    // ── 방어구 12종 ──  fx: def(방어), hp(체력), thorns(반사%), healHit, lastStand(HP30%↓ 방어),
+    //                    roomHeal(던전 방이동 회복%p), speed(이동속도%), sell(판매가%), coin
+    { key: 'protection', name: '보호', target: 'armor', maxLvl: 7, fx: { def: 4 }, desc: '레벨당 방어 +4', bookBasePrice: 500 },
+    { key: 'growth', name: '성장', target: 'armor', maxLvl: 7, fx: { hp: 15 }, desc: '레벨당 체력 +15', bookBasePrice: 700 },
+    { key: 'true_protection', name: '진정한 보호', target: 'armor', maxLvl: 1, fx: { def: 15 }, desc: '방어 +15', bookBasePrice: 4000 },
+    { key: 'hardened', name: '경화', target: 'armor', maxLvl: 5, fx: { def: 2, hp: 5 }, desc: '레벨당 방어 +2, 체력 +5', bookBasePrice: 900 },
+    { key: 'thorns', name: '가시', target: 'armor', maxLvl: 3, fx: { thorns: 10 }, desc: '받는 피해의 10%/레벨 반사', bookBasePrice: 1300 },
+    { key: 'cactus', name: '선인장', target: 'armor', maxLvl: 3, fx: { thorns: 5 }, desc: '받는 피해의 5%/레벨 반사', bookBasePrice: 800 },
+    { key: 'vitality', name: '활력', target: 'armor', maxLvl: 5, fx: { healHit: 2 }, desc: '공격마다 HP +2/레벨', bookBasePrice: 1100 },
+    { key: 'rejuvenate', name: '재생', target: 'armor', maxLvl: 5, fx: { roomHeal: 3 }, desc: '던전 방 이동 회복 +3%p/레벨', bookBasePrice: 1200 },
+    { key: 'last_stand', name: '최후의 저항', target: 'armor', maxLvl: 5, fx: { lastStand: 8 }, desc: '내 HP 30% 이하일 때 방어 +8/레벨', bookBasePrice: 1500 },
+    { key: 'sugar_rush', name: '슈가 러시', target: 'armor', maxLvl: 3, fx: { speed: 4 }, desc: '이동속도 +4%/레벨(3D 월드)', bookBasePrice: 1000 },
+    { key: 'big_brain', name: '빅 브레인', target: 'armor', maxLvl: 5, fx: { xp: 5 }, desc: '전투 XP +5%/레벨', bookBasePrice: 1000 },
+    { key: 'magnet', name: '자석', target: 'armor', maxLvl: 5, fx: { coin: 5 }, desc: '전투 보상 골드 +5%/레벨', bookBasePrice: 900 },
   ];
   // 인챈트북 부여 비용 = bookBasePrice × 현재 레벨(첫 부여는 무료)
   const CHAOS_ENCHANT = {
@@ -373,7 +453,7 @@
   /* ---------------- 상점 ---------------- */
   const SHOP = [
     // 도구 4계열 × 5티어
-    ...Object.keys(TOOLS).flatMap(fam => TOOLS[fam].map(t => ({ key: t.key, name: t.name, category: '도구', buyPrice: t.price, sellPrice: Math.round(t.price * 0.2), stackSize: 1 }))),
+    ...Object.keys(TOOLS).flatMap(fam => TOOLS[fam].map(t => ({ key: t.key, name: t.name, category: '도구', tierKey: t.tierKey, buyPrice: t.price, sellPrice: Math.round((t.price || 900 * t.mul) * 0.2), stackSize: 1 }))),
     // 강화/일꾼/인챈트
     { key: 'reforge_stone_common', name: '리포지 스톤(일반)', category: '강화재료', buyPrice: 250, sellPrice: 50, stackSize: 64 },
     { key: 'reforge_stone_rare', name: '리포지 스톤(희귀)', category: '강화재료', buyPrice: 1000, sellPrice: 200, stackSize: 64 },

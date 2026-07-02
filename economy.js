@@ -193,6 +193,40 @@
   function enchantDef(key) { return D().ENCHANTS.find(e => e.key === key); }
   function enchantLvl(slot, key) { return (P.enchants[slot] && P.enchants[slot][key]) || 0; }
   function enchantHardCap(def) { return def.maxLvl + D().CHAOS_ENCHANT.overcapLevels; }
+  // ── 범용 인챈트 효과 엔진: 32종 인챈트의 fx 서술자를 종류별로 합산 ──
+  function enchSum(fxKey) {
+    let s = 0;
+    for (const def of D().ENCHANTS) {
+      const v = def.fx && def.fx[fxKey]; if (!v) continue;
+      const lv = enchantLvl(def.target, def.key); if (lv) s += v * lv;
+    }
+    return s;
+  }
+  function enchVsSum(slayerKey) {
+    let s = 0;
+    for (const def of D().ENCHANTS) {
+      if (!def.fx || def.fx.dmgVs !== slayerKey) continue;
+      const lv = enchantLvl(def.target, def.key); if (lv) s += (def.fx.v || 0) * lv;
+    }
+    return s;
+  }
+  // 조건부 전투 배율 — ctx: { hitIdx, targetHp, targetMaxHp, slayerKey, isBoss }
+  function enchCondMul(ctx) {
+    let pct = 0;
+    if (ctx.hitIdx === 0) pct += enchSum('first');
+    if (ctx.hitIdx < 3) pct += enchSum('firstThree');
+    if ((ctx.hitIdx + 1) % 3 === 0) pct += enchSum('third');
+    if (ctx.targetMaxHp >= 100000) pct += enchSum('dmgBig');
+    if (ctx.targetHp < ctx.targetMaxHp * 0.5) pct += enchSum('dmgLow');
+    else pct += enchSum('dmgHigh');
+    if (ctx.slayerKey) pct += enchVsSum(ctx.slayerKey);
+    if (ctx.isBoss) pct += enchSum('dmgBoss');
+    return 1 + pct / 100;
+  }
+  function enchHitHeal(dmg) { return dmg * enchSum('lifesteal') / 100 + enchSum('healHit'); }
+  function enchThornsPct() { return enchSum('thorns') / 100; }
+  function enchCoinMul() { return 1 + enchSum('coin') / 100; }
+  function enchXpMul() { return 1 + enchSum('xp') / 100; }
   function applyEnchant(key) {
     const def = enchantDef(key); if (!def) return false;
     const slot = def.target;
@@ -257,21 +291,22 @@
   function playerStr() { return skillLevel('foraging') + talismanStats().str + petStats().str + fairyBonus().str; }
   function playerAttackPower() {
     const flat = 5 + playerStr() * 0.5 + equippedWeaponDmg();
-    const mul = (1 + skillLevel('combat') * 0.04 + enchantLvl('weapon', 'sharpness') * 0.05 + enchantLvl('weapon', 'critical') * 0.04
+    const mul = (1 + skillLevel('combat') * 0.04 + enchSum('dmg') / 100
       + (reforgeOf('weapon').dmgPct || 0) / 100 + P.starForce.weapon * D().STARFORCE.atkPctPerStar / 100) * mpStatMul();
     return flat * mul;
   }
-  function playerDefensePct() {
+  function playerDefensePct(lowHp) {
     let def = skillLevel('mining') + talismanStats().def + petStats().def;
     const a = equippedArmor(); if (a) def += rolledStat(a.key, a.defense);
-    def += enchantLvl('armor', 'protection') * 4;
+    def += enchSum('def');
+    if (lowHp) def += enchSum('lastStand');   // 최후의 저항: 내 HP 30% 이하일 때만
     def += (reforgeOf('armor').def || 0) + P.starForce.armor * D().STARFORCE.defPerStar;
     def *= mpStatMul();
     return Math.min(0.85, def * 0.02);
   }
   function playerMaxHp() {
     return Math.round(100 + skillLevel('farming') * 2 + skillLevel('fishing')
-      + enchantLvl('armor', 'growth') * 15 + talismanStats().hp + petStats().hp + fairyBonus().hp
+      + enchSum('hp') + talismanStats().hp + petStats().hp + fairyBonus().hp
       + (reforgeOf('weapon').hp || 0) + (reforgeOf('armor').hp || 0) + P.starForce.armor * D().STARFORCE.hpPerStar);
   }
 
@@ -506,6 +541,20 @@
   /* ---------------- 슬레이어 ---------------- */
   function slayerDef(key) { return D().SLAYERS.find(s => s.key === key); }
   function itemName(key) { const s = shopDef(key); return s ? s.name : key; }
+  // 보너스 장비 드롭: 상점에서 못 사는(드롭 전용) 무기/방어구 풀에서 무작위 지급 — 파밍의 재미
+  function randomEquipDrop(maxTierIdx) {
+    const E = D().EQUIPMENT; const tiers = D().ITEM_TIERS;
+    const pool = [];
+    for (const list of [E.weapons, E.armor]) for (const it of list) {
+      if (it.buyPrice !== 0) continue;
+      const ti = tiers.findIndex(t => t.key === it.tierKey);
+      if (ti >= 0 && ti <= maxTierIdx) pool.push(it);
+    }
+    if (!pool.length) return null;
+    const it = pool[Math.floor(Math.random() * pool.length)];
+    addItem(it.key, 1);
+    return it;
+  }
   function startSlayer(key, tier) {
     const def = slayerDef(key); const tinfo = def.tiers.find(t => t.tier === tier); if (!tinfo) return;
     if (skillLevel('combat') < tinfo.minCombatLevel) { toastFn(`전투 스킬 레벨 ${tinfo.minCombatLevel} 필요`, false); return; }
@@ -513,10 +562,10 @@
     addGold(-tinfo.turnInGold); saveNow();
     activeCombat = {
       kind: 'slayer', label: `${def.flavor} T${tier}`, hp: tinfo.hp, maxHp: tinfo.hp, dmg: tinfo.dmg,
-      playerHp: playerMaxHp(), maxPlayerHp: playerMaxHp(), _hits: 0,
+      playerHp: playerMaxHp(), maxPlayerHp: playerMaxHp(), _hits: 0, slayerKey: key,
       onWin: () => {
-        addSkillXp('combat', Math.round(tinfo.xpReward * (1 + enchantLvl('weapon', 'experience') * 0.10)));
-        const coin = Math.round(tinfo.coinReward * (1 + enchantLvl('weapon', 'looting') * 0.15));
+        addSkillXp('combat', Math.round(tinfo.xpReward * enchXpMul()));
+        const coin = Math.round(tinfo.coinReward * enchCoinMul());
         addGold(coin);
         // 기본 전리품(자원) + 희귀 드롭(실제 아이템 지급)
         const resN = 2 + Math.floor(Math.random() * 3);
@@ -525,6 +574,11 @@
         const itemKey = loot[roll < 0.6 ? 0 : (roll < 0.9 ? Math.min(1, loot.length - 1) : loot.length - 1)];
         addItem(itemKey, 1);
         toastFn(`${def.flavor} 처치! +${fmtGold(coin)}, ${itemName(def.dropResource)} ×${resN}, 전리품: ${itemName(itemKey)}`, true);
+        // 보너스 장비 드롭(드롭 전용 풀) — 슬레이어 티어가 높을수록 좋은 티어까지 등장
+        if (Math.random() < 0.25) {
+          const bonus = randomEquipDrop(Math.min(6, tier + 1));
+          if (bonus) toastFn(`🎁 희귀 장비 드롭! ${bonus.name}`, true);
+        }
         P.slayerBest[key] = Math.max(P.slayerBest[key] || 0, tier);
         saveNow();
       },
@@ -576,8 +630,8 @@
     const fd = dungeonFloorDef(dungeonRun.floor);
     dungeonRun.mobs = mkRoomMobs(fd, dungeonRoomType());
     dungeonRun._treasureLooted = false;
-    // 방 이동 시 회복(기본 15%, 힐러는 30%)
-    const healPct = (dungeonRun.cls && dungeonRun.cls.roomHealPct) || 0.15;
+    // 방 이동 시 회복(기본 15%, 힐러는 30%, 재생 인챈트로 추가)
+    const healPct = ((dungeonRun.cls && dungeonRun.cls.roomHealPct) || 0.15) + enchSum('roomHeal') / 100;
     dungeonRun.playerHp = Math.min(dungeonRun.maxPlayerHp, dungeonRun.playerHp + Math.round(dungeonRun.maxPlayerHp * healPct));
   }
   function dungeonAdvance(outcome) {
@@ -589,6 +643,7 @@
     else if (rt === 'treasure') dungeonRun.score += S.treasure;
     dungeonRun.roomIdx++;
     dungeonEnterRoom();
+    partySync();
     renderZone();
   }
   function dungeonLootTreasure() {
@@ -606,6 +661,10 @@
       addItem(`enchant_book_${e.key}`, 1);
       msg += ` + 인챈트북(${e.name})!`;
     }
+    if (Math.random() < 0.30) {
+      const bonus = randomEquipDrop(Math.min(6, dungeonRun.floor));
+      if (bonus) msg += ` + 🎁 ${bonus.name}!`;
+    }
     toastFn(msg, true);
     saveNow(); renderZone();
   }
@@ -616,11 +675,12 @@
     const cls = dungeonRun.cls || {};
     let dmg = playerAttackPower() * (cls.dmgMul || 1);
     if (cls.firstHitMul && target.hp === target.maxHp) dmg *= cls.firstHitMul;   // 아처: 첫 타격 보너스
-    if (target.hp < target.maxHp * 0.5) dmg *= 1 + enchantLvl('weapon', 'execute') * 0.06;   // 처형
-    if (target.maxHp >= 100000) dmg *= 1 + enchantLvl('weapon', 'giant_killer') * 0.08;       // 거인 사냥꾼
+    const hitIdx = target._hits || 0;
+    dmg *= enchCondMul({ hitIdx, targetHp: target.hp, targetMaxHp: target.maxHp, isBoss: !!target.isBoss });
+    target._hits = hitIdx + 1;
     target.hp = Math.max(0, target.hp - dmg);
     // 흡혈/활력/힐러 회복
-    const heal = dmg * enchantLvl('weapon', 'vampirism') * 0.01 + enchantLvl('armor', 'vitality') * 2 + (cls.healPerHit || 0);
+    const heal = enchHitHeal(dmg) + (cls.healPerHit || 0);
     dungeonRun.playerHp = Math.min(dungeonRun.maxPlayerHp, dungeonRun.playerHp + heal);
     if (target.hp <= 0) toastFn(`⚔️ ${target.name} 처치!`, true);
     const alive = dungeonRun.mobs.filter(m => m.hp > 0);
@@ -633,15 +693,16 @@
     const attackers = alive.slice(0, 2);
     let taken = 0;
     for (const a of attackers) taken += a.dmg * (0.5 + Math.random() * 0.4);
-    taken *= (1 - playerDefensePct()) * ((dungeonRun.cls && dungeonRun.cls.dmgTakenMul) || 1);   // 탱크: 받는 피해 감소
-    const thorns = enchantLvl('armor', 'thorns') * 0.10;
+    taken *= (1 - playerDefensePct(dungeonRun.playerHp <= dungeonRun.maxPlayerHp * 0.3)) * ((dungeonRun.cls && dungeonRun.cls.dmgTakenMul) || 1);   // 탱크: 받는 피해 감소
+    const thorns = enchThornsPct();
     if (thorns > 0) { attackers[0].hp = Math.max(0, attackers[0].hp - taken * thorns); }
     dungeonRun.playerHp = Math.max(0, dungeonRun.playerHp - taken);
     if (dungeonRun.playerHp <= 0) {
       P.dungeonBest[dungeonRun.floor] = gradeMax(P.dungeonBest[dungeonRun.floor], 'F');
       toastFn('던전에서 전멸했어요... (등급 F)', false);
+      if (dungeonRun.party && net()) net().partyEnd({ floor: dungeonRun.floor, grade: 'F' });
       saveNow(); dungeonRun = null;
-    }
+    } else partySync();
     renderZone();
   }
   function dungeonBossKilled() {
@@ -652,8 +713,14 @@
     addItem('dungeon_essence', fd.essenceReward);
     const itemKey = fd.lootTable[Math.floor(Math.random() * fd.lootTable.length)];
     addItem(itemKey, 1);
-    addSkillXp('combat', Math.round(fd.essenceReward * (1 + enchantLvl('weapon', 'experience') * 0.10) * 10));
-    toastFn(`🏆 ${fd.bossName} 처치! 등급 ${grade}, 던전 정수 +${fd.essenceReward}, 전리품: ${itemName(itemKey)}`, true);
+    addSkillXp('combat', Math.round(fd.essenceReward * enchXpMul() * 10));
+    let bonusMsg = '';
+    if (Math.random() < 0.40) {
+      const bonus = randomEquipDrop(Math.min(6, dungeonRun.floor));
+      if (bonus) bonusMsg = ` + 🎁 ${bonus.name}`;
+    }
+    toastFn(`🏆 ${fd.bossName} 처치! 등급 ${grade}, 던전 정수 +${fd.essenceReward}, 전리품: ${itemName(itemKey)}${bonusMsg}`, true);
+    if (dungeonRun.party && net()) net().partyEnd({ floor: dungeonRun.floor, grade });
     saveNow(); dungeonRun = null;
     renderZone();
   }
@@ -668,27 +735,94 @@
     renderZone();
   }
 
+  /* ---------------- 파티 던전(호스트 권위) — economy-net.js 연결부 ---------------- */
+  function partySnapshot() {
+    if (!dungeonRun) return null;
+    return {
+      floor: dungeonRun.floor, roomIdx: dungeonRun.roomIdx, rooms: dungeonRun.rooms, score: dungeonRun.score,
+      playerHp: dungeonRun.playerHp, maxPlayerHp: dungeonRun.maxPlayerHp,
+      mobs: dungeonRun.mobs.map(m => ({ name: m.name, hp: m.hp, maxHp: m.maxHp, isBoss: !!m.isBoss })),
+    };
+  }
+  function partySync() {
+    const n = net(); if (!n) return;
+    const pt = n.party(); if (!pt || pt.role !== 'host' || pt.stage !== 'active') return;
+    if (dungeonRun) n.partyBroadcastState(partySnapshot());
+  }
+  function partyStartDungeon(floor) {
+    if (dungeonRun || activeCombat) return;
+    startDungeon(floor);   // canEnterFloor 검사 포함
+    if (!dungeonRun) { const n = net(); if (n) n.partyLeave(); return; }
+    dungeonRun.party = true;
+    toastFn('⚔️ 파티 던전 시작! 파티원의 공격이 실시간으로 함께 반영돼요', true);
+    partySync();
+  }
+  // 게스트가 보낸 공격을 호스트 던전에 적용(게스트의 공격력 그대로 — 각자 장비/인챈트가 의미 있음)
+  function partyRemoteAttack(atk) {
+    if (!dungeonRun) return;
+    const target = dungeonRun.mobs.find(m => m.hp > 0); if (!target) return;
+    target.hp = Math.max(0, target.hp - Math.max(0, atk));
+    if (target.hp <= 0) toastFn('⚔️ 파티원이 몬스터를 처치했어요!', true);
+    const alive = dungeonRun.mobs.filter(m => m.hp > 0);
+    if (!alive.length) {
+      if (dungeonRoomType() === 'boss') { dungeonBossKilled(); return; }
+      dungeonAdvance(); return;
+    }
+    partySync(); renderZone();
+  }
+  function partyGuestReward(result) {
+    if (!P) return;
+    if (!result || result.grade === 'F') { toastFn('파티 던전에서 전멸했어요...', false); renderZone(); return; }
+    const fd = dungeonFloorDef(result.floor || 1); if (!fd) return;
+    addItem('dungeon_essence', fd.essenceReward);
+    addSkillXp('combat', Math.round(fd.essenceReward * enchXpMul() * 10));
+    P.dungeonBest[result.floor] = gradeMax(P.dungeonBest[result.floor], result.grade);
+    let bonusMsg = '';
+    if (Math.random() < 0.40) {
+      const bonus = randomEquipDrop(Math.min(6, result.floor || 1));
+      if (bonus) bonusMsg = ` + 🎁 ${bonus.name}`;
+    }
+    toastFn(`🏆 파티 던전 클리어! 등급 ${result.grade} · 던전 정수 +${fd.essenceReward}${bonusMsg}`, true);
+    saveNow(); renderZone();
+  }
+  /* ---- 거래 적용(각자 자기 세이브만 변경 — 양측 확정 후 economy-net.js가 호출) ---- */
+  function tradeCanGive(items, gold) {
+    if (!P) return false;
+    if ((gold || 0) > P.gold) return false;
+    for (const it of items || []) if ((P.inv[it.key] || 0) < it.n) return false;
+    return true;
+  }
+  function tradeApply(give, get) {
+    if (!tradeCanGive(give.items, give.gold)) { toastFn('거래 실패: 내 보유가 부족해요', false); return false; }
+    for (const it of give.items || []) removeItem(it.key, it.n);
+    addGold(-(give.gold || 0));
+    for (const it of get.items || []) addItem(it.key, it.n);
+    addGold(get.gold || 0);
+    saveNow(); renderZone(); return true;
+  }
+
   /* ---------------- 전투(슬레이어 보스전 — 처형/흡혈/가시/활력 인챈트 반영) ---------------- */
   function combatAttack() {
     if (!activeCombat) return;
     const c = activeCombat;
     let dmg = playerAttackPower();
-    if (c._hits === 0) dmg *= 1 + enchantLvl('weapon', 'first_strike') * 0.25;   // 선제공격
-    if (c.maxHp >= 100000) dmg *= 1 + enchantLvl('weapon', 'giant_killer') * 0.08;   // 거인 사냥꾼
-    if (c.hp < c.maxHp * 0.5) dmg *= 1 + enchantLvl('weapon', 'execute') * 0.06;   // 처형
+    dmg *= enchCondMul({ hitIdx: c._hits, targetHp: c.hp, targetMaxHp: c.maxHp, slayerKey: c.slayerKey });
     c._hits++;
     c.hp = Math.max(0, c.hp - dmg);
-    const heal = dmg * enchantLvl('weapon', 'vampirism') * 0.01 + enchantLvl('armor', 'vitality') * 2;   // 흡혈+활력
+    const heal = enchHitHeal(dmg);   // 흡혈+활력+생명강탈
     c.playerHp = Math.min(c.maxPlayerHp, c.playerHp + heal);
     if (c.hp <= 0) { const onWin = c.onWin; activeCombat = null; onWin(); renderZone(); return; }
-    let dmgTaken = c.dmg * (0.7 + Math.random() * 0.6) * (1 - playerDefensePct());
-    const thorns = enchantLvl('armor', 'thorns') * 0.10;   // 가시 반사
+    let dmgTaken = c.dmg * (0.7 + Math.random() * 0.6) * (1 - playerDefensePct(c.playerHp <= c.maxPlayerHp * 0.3));
+    const thorns = enchThornsPct();   // 가시 반사
     if (thorns > 0) c.hp = Math.max(1, c.hp - dmgTaken * thorns);
     c.playerHp = Math.max(0, c.playerHp - dmgTaken);
     if (c.playerHp <= 0) { const onLose = c.onLose; activeCombat = null; onLose(); renderZone(); return; }
     renderZone();
   }
-  function combatFlee() { activeCombat = null; dungeonRun = null; renderZone(); }
+  function combatFlee() {
+    if (dungeonRun && dungeonRun.party && net()) net().partyLeave();   // 호스트 이탈 = 파티 해산
+    activeCombat = null; dungeonRun = null; renderZone();
+  }
 
   /* ---------------- 리포지(실제 스카이블럭식: 무작위 명명 리포지 + 스톤 확정 리포지) ---------------- */
   function reforgeSlotCost(slot) {
@@ -769,6 +903,7 @@
     ['shop', '🛒 상점'], ['bank', '🏦 은행'], ['minions', '⚙️ 일꾼'], ['pets', '🐾 펫'],
     ['talismans', '📿 장신구'], ['enchant', '✨ 인챈트'], ['star', '⭐ 강화'], ['reforge', '🔨 리포지'],
     ['craft', '⚒️ 제작'], ['deals', '🎪 특가'], ['collections', '📚 컬렉션'], ['stats', '📊 스탯'],
+    ['multi', '🌐 멀티'],
   ];
   function iconImg(key) { return (typeof window.econIcon === 'function') ? `<img class="econ-icon" src="${window.econIcon(key)}" alt="">` : ''; }
   function hubHTML() {
@@ -792,9 +927,90 @@
       case 'deals': return dealsHTML();
       case 'collections': return collectionsHTML();
       case 'stats': return statsHTML();
+      case 'multi': return multiHTML();
     }
     return '';
   }
+  /* ---- 멀티(온라인 플레이어 목록 · 거래 · 파티 던전 · 섬 방문) ---- */
+  function net() { return window.econNet || null; }
+  function multiHTML() {
+    const n = net();
+    if (!n || !n.isActive()) {
+      return `<h4>🌐 멀티플레이</h4>
+        <p class="econ-note">지금은 오프라인이에요. 로그인 + 클라우드 연결 상태에서 다른 플레이어와<br>
+        <b>아이템·골드 거래</b>, <b>파티 던전</b>, <b>섬 방문</b>이 가능해요.<br>
+        허브 군도는 서버의 모두와 공유되는 공용 월드예요. (프라이빗 섬만 나만의 공간!)</p>`;
+    }
+    const t = n.trade(), pt = n.party();
+    if (t) return tradeHTML(t);
+    if (pt) return partyHTML(pt);
+    const list = n.peerList();
+    return `<h4>🌐 멀티플레이 — 접속 중인 플레이어 ${list.length}명</h4>
+      ${list.length === 0 ? '<p class="econ-note">지금 허브에 다른 플레이어가 없어요. 친구를 초대해보세요!</p>' : ''}
+      <div class="econ-shopgrid">${list.map(p => `
+        <div class="econ-shopitem">
+          <span>👤 <b>${escHtml(p.name)}</b> <span class="muted">${p.world === 'hub' ? '허브' : '자기 섬'}</span></span>
+          <button class="btn btn--sm" data-act="econ_mp_trade" data-id="${p.id}">🤝 거래</button>
+          <button class="btn btn--sm" data-act="econ_mp_party" data-id="${p.id}">⚔️ 파티 던전</button>
+          <button class="btn btn--sm btn--ghost" data-act="econ_mp_visit" data-name="${escHtml(p.name)}">🏝️ 섬 방문</button>
+        </div>`).join('')}</div>
+      <h4 style="margin-top:12px">🏝️ 이름으로 섬 방문</h4>
+      <div class="econ-tierbtns">
+        <input id="econVisitName" class="econ-input" placeholder="플레이어 이름" maxlength="16">
+        <button class="btn btn--sm" data-act="econ_mp_visit_input">방문하기</button>
+      </div>
+      <p class="muted">허브 군도는 모두와 공유돼요 — 다른 플레이어의 아바타가 월드에 보여요. 파티 던전은 호스트 기준으로 진행돼요.</p>`;
+  }
+  function offerListHTML(offer, mine) {
+    const items = (offer.items || []).map(it => `<button class="btn btn--sm ${mine ? '' : 'btn--ghost'}" ${mine ? `data-act="econ_mp_offer_rm" data-key="${it.key}"` : 'disabled'}>${itemName(it.key)} ×${it.n}${mine ? ' ✕' : ''}</button>`).join(' ');
+    return `${items || '<span class="muted">아이템 없음</span>'} ${offer.gold > 0 ? `<b style="color:#facc15">+ ${fmtGold(offer.gold)}</b>` : ''}`;
+  }
+  function tradeHTML(t) {
+    if (t.stage === 'request_sent') return `<h4>🤝 거래</h4><p>${escHtml(t.peerName)}님의 수락을 기다리는 중...</p><button class="btn btn--sm btn--ghost" data-act="econ_mp_trade_cancel">취소</button>`;
+    if (t.stage === 'incoming') return `<h4>🤝 거래 요청</h4><p><b>${escHtml(t.peerName)}</b>님이 거래를 요청했어요!</p>
+      <button class="btn btn--sm" data-act="econ_mp_trade_acc">수락</button>
+      <button class="btn btn--sm btn--ghost" data-act="econ_mp_trade_dec">거절</button>`;
+    // stage 'open' — 오퍼 편집 + 잠금 + 확정
+    const invKeys = Object.keys(P.inv).filter(k => (P.inv[k] || 0) > 0).slice(0, 40);
+    return `<h4>🤝 ${escHtml(t.peerName)}님과 거래 중</h4>
+      <div class="econ-shopgrid">
+        <div class="econ-shopitem"><span><b>내 오퍼</b> ${t.myLock ? '🔒' : ''}${t.myConfirm ? ' ✅' : ''}</span><span>${offerListHTML(t.my, !t.myLock)}</span>
+          ${t.myLock ? '' : `<div class="econ-tierbtns">${[100, 1000, 10000].map(g => `<button class="btn btn--sm btn--ghost" data-act="econ_mp_gold" data-amt="${g}">골드 +${fmtGold(g)}</button>`).join('')}<button class="btn btn--sm btn--ghost" data-act="econ_mp_gold" data-amt="0">골드 초기화</button></div>`}
+        </div>
+        <div class="econ-shopitem"><span><b>${escHtml(t.peerName)}의 오퍼</b> ${t.theirLock ? '🔒' : ''}${t.theirConfirm ? ' ✅' : ''}</span><span>${offerListHTML(t.their, false)}</span></div>
+      </div>
+      ${t.myLock ? '' : `<h4>내 인벤토리에서 추가 (클릭 = 1개)</h4><div class="econ-tierbtns">${invKeys.map(k => `<button class="btn btn--sm btn--ghost" data-act="econ_mp_offer_add" data-key="${k}">${itemName(k)} ×${P.inv[k]}</button>`).join('') || '<span class="muted">보유 아이템 없음</span>'}</div>`}
+      <div class="econ-tierbtns" style="margin-top:10px">
+        ${t.myLock ? '' : '<button class="btn btn--sm" data-act="econ_mp_lock">🔒 오퍼 잠금</button>'}
+        ${t.myLock && t.theirLock && !t.myConfirm ? '<button class="btn btn--sm" data-act="econ_mp_confirm">✅ 최종 확정</button>' : ''}
+        ${t.myLock && !t.theirLock ? '<span class="muted">상대의 잠금을 기다리는 중...</span>' : ''}
+        ${t.myConfirm && !t.theirConfirm ? '<span class="muted">상대의 확정을 기다리는 중...</span>' : ''}
+        <button class="btn btn--sm btn--ghost" data-act="econ_mp_trade_cancel">거래 취소</button>
+      </div>
+      <p class="muted">양쪽 모두 잠금 → 확정하면 교환돼요. 오퍼가 바뀌면 잠금이 풀려요(안전장치).</p>`;
+  }
+  function partyHTML(pt) {
+    if (pt.stage === 'invited') return `<h4>⚔️ 파티 던전</h4><p>${escHtml(pt.peerName)}님의 수락을 기다리는 중... (던전 ${pt.floor}층)</p><button class="btn btn--sm btn--ghost" data-act="econ_mp_pt_leave">취소</button>`;
+    if (pt.stage === 'incoming') return `<h4>⚔️ 파티 던전 초대</h4><p><b>${escHtml(pt.peerName)}</b>님이 던전 <b>${pt.floor}층</b> 파티에 초대했어요!</p>
+      <button class="btn btn--sm" data-act="econ_mp_pt_acc">수락</button>
+      <button class="btn btn--sm btn--ghost" data-act="econ_mp_pt_dec">거절</button>`;
+    if (pt.stage === 'waiting') return `<h4>⚔️ 파티 던전</h4><p>호스트(${escHtml(pt.peerName)})가 던전을 시작하길 기다리는 중...</p><button class="btn btn--sm btn--ghost" data-act="econ_mp_pt_leave">파티 떠나기</button>`;
+    if (pt.role === 'host') return `<h4>⚔️ 파티 던전 진행 중 (호스트)</h4><p class="econ-note">던전 화면에서 전투를 진행하세요 — 파티원 ${escHtml(pt.peerName)}의 공격이 실시간 반영돼요.</p><button class="btn btn--sm btn--ghost" data-act="econ_mp_pt_leave">파티 해산</button>`;
+    // 게스트: 호스트 스냅샷으로 전투 화면 렌더 + 공격 버튼
+    const run = pt.run;
+    if (!run) return `<h4>⚔️ 파티 던전</h4><p>호스트의 던전 상태를 기다리는 중...</p><button class="btn btn--sm btn--ghost" data-act="econ_mp_pt_leave">파티 떠나기</button>`;
+    return `<h4>⚔️ 파티 던전 ${run.floor}층 — ${run.roomIdx + 1}/${run.rooms.length}번 방 (${escHtml(pt.peerName)} 호스트)</h4>
+      <p>호스트 HP: <b style="color:#4ade80">${Math.round(run.playerHp)}</b> / ${run.maxPlayerHp} · 점수 ${run.score}</p>
+      <div class="econ-moblist">${(run.mobs || []).map(m => `
+        <div class="econ-mobrow ${m.hp <= 0 ? 'is-dead' : ''}"><span>${m.isBoss ? '👹' : '🧟'} ${escHtml(m.name)}</span>
+          <div class="econ-hpbar"><div class="econ-hpbar__fill" style="width:${Math.max(0, m.hp / m.maxHp * 100)}%"></div><span>${Math.max(0, Math.round(m.hp))}/${m.maxHp}</span></div></div>`).join('')}</div>
+      <div class="econ-tierbtns" style="margin-top:10px">
+        <button class="btn" data-act="econ_mp_pt_attack">⚔️ 공격! (내 공격력 ${Math.round(playerAttackPower())})</button>
+        <button class="btn btn--sm btn--ghost" data-act="econ_mp_pt_leave">파티 떠나기</button>
+      </div>
+      <p class="muted">호스트가 방을 이동하면 화면이 자동 갱신돼요. 클리어 보상은 던전 종료 시 지급!</p>`;
+  }
+  function escHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
   function shopHTML() {
     const cats = [];
     for (const s of D().SHOP) if (cats.indexOf(s.category) < 0) cats.push(s.category);
@@ -1084,6 +1300,23 @@
       case 'essence_buy': { const e = D().ESSENCE_SHOP.find(x => x.key === el.dataset.key); if (e && (P.inv.dungeon_essence || 0) >= e.cost) { removeItem('dungeon_essence', e.cost); if (e.kind === 'gold') addGold(e.goldAmount); else addItem(e.key, 1); saveNow(); renderZone(); } break; }
       case 'combat_attack': combatAttack(); break;
       case 'combat_flee': combatFlee(); break;
+      /* ---- 멀티 ---- */
+      case 'mp_trade': if (net()) net().tradeRequest(el.dataset.id); renderZone(); break;
+      case 'mp_trade_acc': if (net()) net().tradeAccept(); renderZone(); break;
+      case 'mp_trade_dec': if (net()) net().tradeDecline(); renderZone(); break;
+      case 'mp_trade_cancel': if (net()) net().tradeCancel(); renderZone(); break;
+      case 'mp_offer_add': if (net()) net().tradeAddItem(el.dataset.key); renderZone(); break;
+      case 'mp_offer_rm': if (net()) net().tradeRemoveItem(el.dataset.key); renderZone(); break;
+      case 'mp_gold': { const n0 = net(); if (n0 && n0.trade()) { const amt = Number(el.dataset.amt); n0.tradeSetGold(amt === 0 ? 0 : n0.trade().my.gold + amt); } renderZone(); break; }
+      case 'mp_lock': if (net()) net().tradeLock(); renderZone(); break;
+      case 'mp_confirm': if (net()) net().tradeConfirm(); renderZone(); break;
+      case 'mp_party': { const n0 = net(); if (n0) { let f = 1; for (let i = 7; i >= 1; i--) if (canEnterFloor(i)) { f = i; break; } n0.partyInvite(el.dataset.id, f); } renderZone(); break; }
+      case 'mp_pt_acc': if (net()) net().partyAccept(); renderZone(); break;
+      case 'mp_pt_dec': if (net()) net().partyDecline(); renderZone(); break;
+      case 'mp_pt_leave': if (net()) net().partyLeave(); renderZone(); break;
+      case 'mp_pt_attack': if (net()) net().partySendAttack(playerAttackPower()); break;
+      case 'mp_visit': if (net()) net().visit(el.dataset.name); break;
+      case 'mp_visit_input': { const inp = document.getElementById('econVisitName'); if (inp && inp.value.trim() && net()) net().visit(inp.value.trim()); break; }
       default: return false;
     }
     return true;
@@ -1097,6 +1330,11 @@
     tickMinions();
     running = true;
     tickTimer = setInterval(() => { tickMinions(); if (running) renderZone(); }, 3000);
+    // 멀티플레이 채널 접속(오프라인이면 조용히 비활성)
+    if (window.econNet) {
+      window.econNet.start();
+      if (!window.__econNetBound) { window.__econNetBound = true; window.econNet.onUpdate(() => { if (running) renderZone(); }); }
+    }
     // 화면 표시는 3D 프레젠테이션 레이어(economy3d.js)에 위임 — 상태/로직은 이 파일이 그대로 담당
     if (typeof window.economy3dStart === 'function') window.economy3dStart();
     else { if (typeof setScreen === 'function') setScreen('econ'); if (typeof app === 'function') app().innerHTML = screenHTML(); renderZone(); }
@@ -1110,6 +1348,7 @@
     running = false;
     if (tickTimer) { clearInterval(tickTimer); tickTimer = null; }
     if (P) saveNow();
+    if (window.econNet) window.econNet.stop();
     if (typeof window.economy3dStop === 'function') window.economy3dStop();
   }
 
@@ -1131,6 +1370,11 @@
       P.homeEdits[`${x},${y},${z}`] = id;
       saveNow(); return true;
     },
+    // 슈가 러시 등 이동속도 인챈트(%): economy3d.js가 매 프레임 참조
+    moveSpeedPct: () => (P ? enchSum('speed') : 0),
+    // 멀티(economy-net.js가 호출): 거래 검증/적용 + 파티 던전 훅
+    tradeCanGive, tradeApply,
+    partyStartDungeon, partyRemoteAttack, partyGuestReward,
   };
 
   if (typeof window !== 'undefined' && window.__ECON_TEST) {
@@ -1146,6 +1390,8 @@
       hatchPet, activatePet, petLevel, petStats, petDef,
       talismanStats, magicalPower, mpStatMul, fairyBonus, collectFairySoul,
       applyEnchant, chaosEnchant, enchantLvl, enchantHardCap, enchantDef,
+      enchSum, enchVsSum, enchCondMul, enchHitHeal, enchCoinMul, enchXpMul, randomEquipDrop,
+      tradeCanGive, tradeApply, partyStartDungeon, partyRemoteAttack, partyGuestReward, partySnapshot,
       enhanceStar, starCost, starRate,
       craft, canCraft, recipeUnlocked, rolledStat, rollItemStat, equipBase,
       dungeonAttack, dungeonLootTreasure,
