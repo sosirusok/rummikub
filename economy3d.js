@@ -110,7 +110,7 @@
   const NPCS = [
     { key: 'shopkeeper', name: '상점 주인', zone: 'hub', tab: 'shop', x: 86, z: 88, color: 0x3a6ee0 },
     { key: 'bankTeller', name: '은행원', zone: 'hub', tab: 'bank', x: 106, z: 88, color: 0xf2d75c },
-    { key: 'minionManager', name: '일꾼 관리소장', zone: 'hub', tab: 'minions', x: 86, z: 104, color: 0x6aa84f },
+    { key: 'minionManager', name: '미니언 관리소장', zone: 'hub', tab: 'minions', x: 86, z: 104, color: 0x6aa84f },
     { key: 'petKeeper', name: '펫 상인', zone: 'hub', tab: 'pets', x: 106, z: 104, color: 0xe048c4 },
     { key: 'enchanter', name: '마법부여사', zone: 'hub', tab: 'enchant', x: 96, z: 82, color: 0x9365b8 },
     { key: 'auctioneer', name: '경매인', zone: 'hub', tab: 'deals', x: 90, z: 96, color: 0xc0392b },
@@ -286,7 +286,7 @@
         if (!getBlockLocal(tx + dx, ty + dy, tz + dz)) setW(tx + dx, ty + dy, tz + dz, ID.oak_leaves);
       }
     }
-    // 일꾼 받침대 15자리(동쪽 정렬)
+    // 미니언 받침대 15자리(동쪽 정렬)
     HOME_MINION_SLOTS.forEach(s => { const y = surfaceTop(s[0], s[1]); setW(s[0], y - 1, s[1], ID.stone_bricks); });
     // 허브 귀환 포털 + 꽃 장식
     buildPortalFrame(PORTALS.home.x, PORTALS.home.z);
@@ -409,10 +409,10 @@
     for (let x = 90; x <= 102; x++) for (let z = 90; z <= 102; z++) setW(x, 15, z, ID.stone_bricks);
     for (let x = 94; x <= 98; x++) for (let z = 94; z <= 98; z++) { setW(x, 16, z, ID.stone_bricks); if (x > 94 && x < 98 && z > 94 && z < 98) { setW(x, 16, z, ID.water); } }
     setW(96, 16, 96, ID.stone_bricks); setW(96, 17, 96, ID.stone_bricks); setW(96, 18, 96, ID.glowstone);   // 분수 기둥
-    // 건물 6채(북서: 상점, 북동: 은행, 서: 일꾼, 동: 펫, 북: 인챈트 탑, 남: 훈련소)
+    // 건물 6채(북서: 상점, 북동: 은행, 서: 미니언, 동: 펫, 북: 인챈트 탑, 남: 훈련소)
     buildHouse(80, 82, 7, 7, 16, ID.bricks, ID.oak_planks);          // 상점
     buildHouse(105, 82, 7, 7, 16, ID.sandstone, ID.oak_planks);      // 은행
-    buildHouse(80, 100, 7, 7, 16, ID.oak_planks, ID.spruce_planks);  // 일꾼 관리소
+    buildHouse(80, 100, 7, 7, 16, ID.oak_planks, ID.spruce_planks);  // 미니언 관리소
     buildHouse(105, 100, 7, 7, 16, ID.birch_planks, ID.oak_planks);  // 펫 상점
     buildHouse(92, 74, 9, 7, 16, ID.stone_bricks, ID.stone_bricks);  // 인챈트 탑(1층)
     for (let y = 21; y < 26; y++) for (let x = 94; x < 100; x++) for (let z = 76; z < 80; z++) {   // 탑 2층
@@ -848,7 +848,7 @@
     const g = new THREE.Group();
     const mat = new THREE.MeshBasicMaterial({ color: 0x88ccff, transparent: true, opacity: 0.35 });
     const pedestal = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.15, 0.6), mat); pedestal.position.set(0, 0.08, 0); g.add(pedestal);
-    const label = makeLabel('+ 일꾼 배치'); label.position.set(0, 1.0, 0); g.add(label);
+    const label = makeLabel('+ 미니언 배치'); label.position.set(0, 1.0, 0); g.add(label);
     return g;
   }
   function buildNodeMarker(zoneKey) {

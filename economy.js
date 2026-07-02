@@ -1,7 +1,7 @@
 /* =========================================================================
    economy.js — "경제" 탭 게임 로직 V2 (하이픽셀 스카이블럭 x 메이플스토리)
    상태/규칙/패널 렌더링 담당. 3D 월드 표현은 economy3d.js(프레젠테이션 레이어).
-   V2 신규: 펫·부적(마력)·인챈트·은행 이자·페어리 소울·일일 특가·도구 티어·일꾼 연료.
+   V2 신규: 펫·부적(마력)·인챈트·은행 이자·페어리 소울·일일 특가·도구 티어·미니언 연료.
    ========================================================================= */
 (function () {
   const D = () => window.ECON_DATA;
@@ -15,7 +15,7 @@
   /* ---------------- 저장/불러오기 ---------------- */
   function freshPlayer() {
     return {
-      gold: 500, dungeonClass: 'berserk', reforgeBonus: {}, inv: {}, minions: [], maxMinionSlots: 5,
+      gold: 0, dungeonClass: 'berserk', reforgeBonus: {}, inv: {}, minions: [], maxMinionSlots: 5, minionCrafts: {},
       skillsXp: { combat: 0, mining: 0, farming: 0, foraging: 0, fishing: 0, enchanting: 0, taming: 0, social: 0 },
       collections: {}, collectionTier: {},
       slayerBest: {}, dungeonBest: {},
@@ -90,9 +90,16 @@
   function skillDef(key) { return D().SKILLS.find(s => s.key === key); }
   function skillLevel(key) {
     const def = skillDef(key); if (!def) return 0;
+    const T = D().SKILL_XP_TABLE, MAX = D().SKILL_MAX_LEVEL;
     let xp = P.skillsXp[key] || 0, lvl = 0;
-    while (lvl < 30) { const req = def.xpBase * Math.pow(lvl + 1, def.xpExp); if (xp < req) break; xp -= req; lvl++; }
+    while (lvl < MAX) { const req = T[lvl]; if (xp < req) break; xp -= req; lvl++; }
     return lvl;
+  }
+  function skillXpProgress(key) {   // {cur, need} — 현재 레벨 내 진행도(UI 표시용)
+    const T = D().SKILL_XP_TABLE, MAX = D().SKILL_MAX_LEVEL;
+    let xp = P.skillsXp[key] || 0, lvl = 0;
+    while (lvl < MAX && xp >= T[lvl]) { xp -= T[lvl]; lvl++; }
+    return { cur: Math.floor(xp), need: lvl >= MAX ? 0 : T[lvl] };
   }
   function addSkillXp(key, n) {
     if (!P.skillsXp[key] && P.skillsXp[key] !== 0) P.skillsXp[key] = 0;
@@ -288,27 +295,50 @@
     return rolledStat(w.key, w.dmg) + (P.reforgeBonus[w.key] || 0);
   }
   function reforgeOf(slot) { return P.reforgeSlots[slot] || {}; }
-  function playerStr() { return skillLevel('foraging') + talismanStats().str + petStats().str + fairyBonus().str; }
+  // ── 실제 스카이블럭 스탯 시트: 기본 HP100/방어0/힘0/속도100/크리확률30/크리피해50/지능100 ──
+  function playerStats() {
+    const B = D().BASE_STATS;
+    const ts = talismanStats(), ps = petStats(), fb = fairyBonus();
+    const a = equippedArmor();
+    const st = {
+      hp: B.hp + skillLevel('farming') * 2 + skillLevel('fishing') + enchSum('hp') + ts.hp + ps.hp + fb.hp
+        + (reforgeOf('weapon').hp || 0) + (reforgeOf('armor').hp || 0) + P.starForce.armor * D().STARFORCE.hpPerStar,
+      defense: B.defense + skillLevel('mining') + ts.def + ps.def + enchSum('def')
+        + (reforgeOf('armor').def || 0) + P.starForce.armor * D().STARFORCE.defPerStar
+        + (a ? rolledStat(a.key, a.defense) : 0),
+      strength: B.strength + skillLevel('foraging') + ts.str + ps.str + fb.str,
+      speed: B.speed + enchSum('speed'),
+      critChance: Math.min(100, B.critChance + skillLevel('combat') * 0.5),
+      critDamage: B.critDamage + skillLevel('combat'),
+      intelligence: B.intelligence + skillLevel('enchanting') * 2,
+    };
+    st.defense = Math.round(st.defense * mpStatMul());
+    st.hp = Math.round(st.hp);
+    return st;
+  }
+  function playerStr() { return playerStats().strength; }
+  // 실제 공식: 피해 = (5 + 무기공격 + 힘/5) × (1 + 힘/100) × (배율들) — 크리티컬은 타격마다 별도 굴림
   function playerAttackPower() {
-    const flat = 5 + playerStr() * 0.5 + equippedWeaponDmg();
-    const mul = (1 + skillLevel('combat') * 0.04 + enchSum('dmg') / 100
-      + (reforgeOf('weapon').dmgPct || 0) / 100 + P.starForce.weapon * D().STARFORCE.atkPctPerStar / 100) * mpStatMul();
+    const st = playerStats();
+    const flat = 5 + equippedWeaponDmg() + st.strength / 5;
+    const mul = (1 + st.strength / 100)
+      * (1 + skillLevel('combat') * 0.04 + enchSum('dmg') / 100
+        + (reforgeOf('weapon').dmgPct || 0) / 100 + P.starForce.weapon * D().STARFORCE.atkPctPerStar / 100)
+      * mpStatMul();
     return flat * mul;
   }
+  // 크리티컬 굴림: 확률 critChance%, 성공 시 ×(1 + critDamage/100)
+  function playerCritRoll() {
+    const st = playerStats();
+    return Math.random() * 100 < st.critChance ? 1 + st.critDamage / 100 : 1;
+  }
+  // 실제 공식: 피해 감소 = 방어 / (방어 + 100)
   function playerDefensePct(lowHp) {
-    let def = skillLevel('mining') + talismanStats().def + petStats().def;
-    const a = equippedArmor(); if (a) def += rolledStat(a.key, a.defense);
-    def += enchSum('def');
+    let def = playerStats().defense;
     if (lowHp) def += enchSum('lastStand');   // 최후의 저항: 내 HP 30% 이하일 때만
-    def += (reforgeOf('armor').def || 0) + P.starForce.armor * D().STARFORCE.defPerStar;
-    def *= mpStatMul();
-    return Math.min(0.85, def * 0.02);
+    return Math.min(0.9, def / (def + 100));
   }
-  function playerMaxHp() {
-    return Math.round(100 + skillLevel('farming') * 2 + skillLevel('fishing')
-      + enchSum('hp') + talismanStats().hp + petStats().hp + fairyBonus().hp
-      + (reforgeOf('weapon').hp || 0) + (reforgeOf('armor').hp || 0) + P.starForce.armor * D().STARFORCE.hpPerStar);
-  }
+  function playerMaxHp() { return playerStats().hp; }
 
   /* ---------------- 스타포스(메이플식 성 강화: 성공/실패/하락) ---------------- */
   function starCost(slot) { const SF = D().STARFORCE; return Math.round(SF.costBase * Math.pow(SF.costMul, P.starForce[slot])); }
@@ -393,13 +423,13 @@
   function minionSlotCost() { return Math.round(D().MINION_SLOT_COST_BASE * Math.pow(D().MINION_SLOT_COST_MUL, P.minionSlotsBought)); }
   function buyItem(key) {
     const def = shopDef(key); if (!def || def.buyPrice <= 0) return;
-    // 특수: 일꾼 슬롯 확장권(즉시 적용, 가격 누진)
+    // 특수: 미니언 슬롯 확장권(즉시 적용, 가격 누진)
     if (key === 'minion_slot_expander') {
-      if (P.maxMinionSlots >= D().MINION_SLOT_MAX) { toastFn('일꾼 슬롯이 최대예요', false); return; }
+      if (P.maxMinionSlots >= D().MINION_SLOT_MAX) { toastFn('미니언 슬롯이 최대예요', false); return; }
       const cost = minionSlotCost();
       if (P.gold < cost) { toastFn('골드가 부족해요', false); return; }
       addGold(-cost); P.maxMinionSlots++; P.minionSlotsBought++;
-      toastFn(`일꾼 슬롯 확장! (${P.maxMinionSlots}칸)`, true);
+      toastFn(`미니언 슬롯 확장! (${P.maxMinionSlots}칸)`, true);
       saveNow(); renderZone(); return;
     }
     if (P.gold < def.buyPrice) { toastFn('골드가 부족해요', false); return; }
@@ -466,7 +496,7 @@
   /* ---------------- 미니언 ---------------- */
   function minionDef(key) { return D().MINIONS.find(m => m.key === key); }
   function minionTierInfo(key, tier) { return minionDef(key).tiers.find(t => t.tier === tier); }
-  function nextMinionCost(key, curTier) { const t = minionTierInfo(key, curTier + 1); return t ? t.cost : null; }
+  function nextMinionCost(key, curTier) { const t = minionTierInfo(key, curTier + 1); return t ? t.craftCost : null; }
   function minionSpeedMul() {
     let mul = 1 + talismanStats().minionSpeed / 100;
     if (P.minionFuelUntil > Date.now()) mul *= D().MINION_FUEL.speedMul;
@@ -477,22 +507,42 @@
     removeItem(D().MINION_FUEL.key, 1);
     const base = Math.max(Date.now(), P.minionFuelUntil || 0);
     P.minionFuelUntil = base + D().MINION_FUEL.durationHours * 3600 * 1000;
-    toastFn(`연료 주입! 모든 일꾼 +25% (${D().MINION_FUEL.durationHours}시간)`, true);
+    toastFn(`연료 주입! 모든 미니언 +25% (${D().MINION_FUEL.durationHours}시간)`, true);
     saveNow(); renderZone();
   }
+  // 실제 스카이블럭: 미니언은 자원으로 "조합"해서 배치한다(골드 구매 아님).
+  //   컬렉션 티어 1 이상이어야 해금, 조합할 때마다 고유 조합 수가 쌓여 슬롯이 늘어난다.
+  function minionUnlocked(key) {
+    const def = minionDef(key); if (!def) return false;
+    return collectionTierIdx(def.unlockCollection || def.resource) >= 1;
+  }
+  function recordMinionCraft(key, tier) {
+    if (!P.minionCrafts) P.minionCrafts = {};
+    P.minionCrafts[`${key}:${tier}`] = 1;
+    const uniq = Object.keys(P.minionCrafts).length;
+    const slots = Math.min(D().MINION_SLOT_MAX, 5 + Math.floor(uniq / 2) + (P.minionSlotsBought || 0));
+    if (slots > P.maxMinionSlots) { P.maxMinionSlots = slots; toastFn(`🎉 고유 미니언 조합 ${uniq}개 — 미니언 슬롯 ${slots}칸으로 확장!`, true); }
+  }
   function placeMinion(key) {
-    if (P.minions.length >= P.maxMinionSlots) { toastFn('일꾼 슬롯이 가득 찼어요', false); return; }
-    const cost = minionTierInfo(key, 1).cost;
-    if (P.gold < cost) { toastFn('골드가 부족해요', false); return; }
-    addGold(-cost);
+    if (P.minions.length >= P.maxMinionSlots) { toastFn('미니언 슬롯이 가득 찼어요 (새 미니언을 조합하면 슬롯이 늘어나요)', false); return; }
+    if (!minionUnlocked(key)) { toastFn('먼저 해당 자원 컬렉션 티어 1을 달성하세요', false); return; }
+    const cost = minionTierInfo(key, 1).craftCost;
+    if (!hasItem(cost.key, cost.n)) { toastFn(`조합 재료 부족: ${itemName(cost.key)} ×${cost.n}`, false); return; }
+    removeItem(cost.key, cost.n);
+    recordMinionCraft(key, 1);
     P.minions.push({ key, tier: 1, lastCollectAt: Date.now(), storage: 0, storageUpgraded: false });
+    toastFn('⚙️ 미니언 조합 완료! 섬에 배치됐어요', true);
     saveNow(); renderZone();
   }
   function upgradeMinion(idx) {
     const m = P.minions[idx]; if (!m) return;
     const def = minionDef(m.key); if (m.tier >= def.maxTier) { toastFn('이미 최고 등급이에요', false); return; }
-    const cost = nextMinionCost(m.key, m.tier); if (P.gold < cost) { toastFn('골드가 부족해요', false); return; }
-    addGold(-cost); m.tier++; saveNow(); renderZone();
+    const cost = minionTierInfo(m.key, m.tier + 1).craftCost;
+    if (!hasItem(cost.key, cost.n)) { toastFn(`업그레이드 재료 부족: ${itemName(cost.key)} ×${cost.n}`, false); return; }
+    removeItem(cost.key, cost.n);
+    m.tier++;
+    recordMinionCraft(m.key, m.tier);
+    saveNow(); renderZone();
   }
   function upgradeMinionStorage(idx) {
     const m = P.minions[idx]; if (!m || m.storageUpgraded) return;
@@ -673,7 +723,7 @@
     if (!dungeonRun || !dungeonRun.mobs.length) return;
     const target = dungeonRun.mobs.find(m => m.hp > 0); if (!target) return;
     const cls = dungeonRun.cls || {};
-    let dmg = playerAttackPower() * (cls.dmgMul || 1);
+    let dmg = playerAttackPower() * (cls.dmgMul || 1) * playerCritRoll();
     if (cls.firstHitMul && target.hp === target.maxHp) dmg *= cls.firstHitMul;   // 아처: 첫 타격 보너스
     const hitIdx = target._hits || 0;
     dmg *= enchCondMul({ hitIdx, targetHp: target.hp, targetMaxHp: target.maxHp, isBoss: !!target.isBoss });
@@ -805,7 +855,7 @@
   function combatAttack() {
     if (!activeCombat) return;
     const c = activeCombat;
-    let dmg = playerAttackPower();
+    let dmg = playerAttackPower() * playerCritRoll();
     dmg *= enchCondMul({ hitIdx: c._hits, targetHp: c.hp, targetMaxHp: c.maxHp, slayerKey: c.slayerKey });
     c._hits++;
     c.hp = Math.max(0, c.hp - dmg);
@@ -883,11 +933,14 @@
     const body = document.getElementById('econBody'); if (!body) return;
     if (activeCombat) { body.innerHTML = combatHTML(); return; }
     if (dungeonRun) { body.innerHTML = dungeonRoomHTML(); return; }
-    body.innerHTML = zoneNavHTML() + zoneBodyHTML(zone);
+    body.innerHTML = selfMenuHTML() + zoneBodyHTML(zone);
   }
 
-  function zoneNavHTML() {
-    return `<div class="econ-zonenav">${D().ZONES.map(z => `<button class="econ-zonebtn ${z.key === zone ? 'is-active' : ''}" data-act="econ_zone" data-key="${z.key}">${z.emoji} ${z.name}</button>`).join('')}</div>`;
+  // 스카이블럭 메뉴(셀프 서비스): 스탯/컬렉션/인벤토리/펫/장신구/멀티 — 나머지는 해당 NPC를 직접 찾아가야 함
+  const SELF_TABS = [['stats', '📊 스탯'], ['collections', '📚 컬렉션'], ['inv', '🎒 인벤토리'], ['pets', '🐾 펫'], ['talismans', '📿 장신구'], ['multi', '🌐 멀티']];
+  function selfMenuHTML() {
+    return `<div class="econ-zonenav">${SELF_TABS.map(([k, label]) => `<button class="econ-zonebtn ${zone === 'hub' && hubTab === k ? 'is-active' : ''}" data-act="econ_menu" data-key="${k}">${label}</button>`).join('')}
+      <span class="muted" style="margin-left:auto">상점·은행·강화·인챈트 등은 마을의 해당 NPC에게!</span></div>`;
   }
 
   function zoneBodyHTML(z) {
@@ -898,9 +951,9 @@
     return '';
   }
 
-  /* ---- 허브(서브탭: 상점/은행/일꾼/펫/장신구/인챈트/리포지/특가/컬렉션/스탯) ---- */
+  /* ---- 허브(서브탭: 상점/은행/미니언/펫/장신구/인챈트/리포지/특가/컬렉션/스탯) ---- */
   const HUB_TABS = [
-    ['shop', '🛒 상점'], ['bank', '🏦 은행'], ['minions', '⚙️ 일꾼'], ['pets', '🐾 펫'],
+    ['shop', '🛒 상점'], ['bank', '🏦 은행'], ['minions', '⚙️ 미니언'], ['pets', '🐾 펫'],
     ['talismans', '📿 장신구'], ['enchant', '✨ 인챈트'], ['star', '⭐ 강화'], ['reforge', '🔨 리포지'],
     ['craft', '⚒️ 제작'], ['deals', '🎪 특가'], ['collections', '📚 컬렉션'], ['stats', '📊 스탯'],
     ['multi', '🌐 멀티'],
@@ -908,7 +961,6 @@
   function iconImg(key) { return (typeof window.econIcon === 'function') ? `<img class="econ-icon" src="${window.econIcon(key)}" alt="">` : ''; }
   function hubHTML() {
     return `<div class="econ-panel">
-      <div class="econ-hubtabs">${HUB_TABS.map(([k, label]) => `<button class="econ-zonebtn ${hubTab === k ? 'is-active' : ''}" data-act="econ_hubtab" data-key="${k}">${label}</button>`).join('')}</div>
       ${hubTabBodyHTML()}
       ${bankSecretHTML()}
     </div>`;
@@ -928,8 +980,40 @@
       case 'collections': return collectionsHTML();
       case 'stats': return statsHTML();
       case 'multi': return multiHTML();
+      case 'inv': return invHTML();
     }
     return '';
+  }
+  /* ---- 인벤토리(전체 보유 아이템 + 판매) ---- */
+  function invHTML() {
+    const keys = Object.keys(P.inv).filter(k => (P.inv[k] || 0) > 0);
+    if (!keys.length) return `<h4>🎒 인벤토리</h4><p class="econ-note">아직 아이템이 없어요. 섬을 돌아다니며 채굴·벌목·낚시·전투로 모아보세요!</p>`;
+    return `<h4>🎒 인벤토리 (${keys.length}종)</h4>
+      <div class="econ-shopgrid">${keys.map(k => {
+        const sdef = shopDef(k);
+        const sell = sdef && sdef.sellPrice > 0 ? sdef.sellPrice : 0;
+        return `<div class="econ-shopitem">
+          ${iconImg(k)}<span>${sdef && sdef.tierKey ? `<span style="color:${tierColorByKey(sdef.tierKey)}">${itemName(k)}</span>` : itemName(k)} <b>×${P.inv[k]}</b></span>
+          <span class="muted econ-idesc">${shopItemDesc(sdef || { key: k })}</span>
+          ${sell ? `<span><button class="btn btn--sm btn--ghost" data-act="econ_sell" data-key="${k}">1개 판매 ${fmtGold(sell)}</button></span>` : '<span class="muted">판매 불가</span>'}
+        </div>`;
+      }).join('')}</div>`;
+  }
+  // 아이템 자동 설명(상점/인벤토리 카드용)
+  function shopItemDesc(sdef) {
+    if (!sdef) return '';
+    const k = sdef.key || '';
+    const e = D().ENCHANTS.find(x => `enchant_book_${x.key}` === k);
+    if (e) return `${e.desc} · 최대 ${e.maxLvl}레벨(혼돈 +${D().CHAOS_ENCHANT.overcapLevels})`;
+    if (k.indexOf('pet_egg_') === 0) { const pd = D().PETS.find(x => `pet_egg_${x.key}` === k); if (pd) return `부화 시 ${pd.name} 획득`; }
+    if (k.indexOf('enchanted_') === 0 && k.indexOf('_block') > 0) return '인챈티드 160개 조합 — 최고가 판매품';
+    if (k.indexOf('enchanted_') === 0) return '원자재 160개(32×5) 조합 — 고가 판매·상위 조합 재료';
+    for (const fam in D().TOOLS) { const t = D().TOOLS[fam].find(x => x.key === k); if (t) return `채집 효율 ×${t.mul}`; }
+    if (sdef.dmg) return `공격 +${sdef.dmg} 무기`;
+    if (sdef.defense) return `방어 +${sdef.defense} 방어구`;
+    if (sdef.category === '재료') return '조합·미니언·판매용 자원';
+    if (sdef.category === '제작품') return '제작 전용 아이템';
+    return sdef.category || '';
   }
   /* ---- 멀티(온라인 플레이어 목록 · 거래 · 파티 던전 · 섬 방문) ---- */
   function net() { return window.econNet || null; }
@@ -1020,6 +1104,7 @@
       return `<h4>${cat}</h4><div class="econ-shopgrid">${items.map(s => `
         <div class="econ-shopitem">
           ${iconImg(s.key)}<span>${s.tierKey ? `<span style="color:${tierColorByKey(s.tierKey)}">${s.name}</span>` : s.name}${s.dmg ? ` <span class="muted">공격 ${hasItem(s.key) ? rolledStat(s.key, s.dmg) + ' (내 롤)' : rollRangeText(s.dmg)}</span>` : ''}${s.defense ? ` <span class="muted">방어 ${hasItem(s.key) ? rolledStat(s.key, s.defense) + ' (내 롤)' : rollRangeText(s.defense)}</span>` : ''}</span>
+          <span class="muted econ-idesc">${shopItemDesc(s)}</span>
           <span class="muted">${hasItem(s.key) ? '보유 ' + P.inv[s.key] : ''}</span>
           ${s.buyPrice > 0 ? `<button class="btn btn--sm" data-act="econ_buy" data-key="${s.key}">구매 ${fmtGold(s.key === 'minion_slot_expander' ? minionSlotCost() : s.buyPrice)}</button>` : ''}
           ${s.sellPrice > 0 ? `<button class="btn btn--sm btn--ghost" data-act="econ_sell" data-key="${s.key}" ${hasItem(s.key) ? '' : 'disabled'}>판매 ${fmtGold(s.sellPrice)}</button>` : ''}
@@ -1037,14 +1122,18 @@
   }
   function minionsHTML() {
     const fuelLeft = P.minionFuelUntil > Date.now() ? Math.ceil((P.minionFuelUntil - Date.now()) / 3600000) : 0;
-    return `<h4>⚙️ 일꾼 관리소 (슬롯 ${P.minions.length}/${P.maxMinionSlots})</h4>
+    return `<h4>⚙️ 미니언 (슬롯 ${P.minions.length}/${P.maxMinionSlots})</h4>
       <div class="econ-tierbtns">
         <button class="btn btn--sm" data-act="econ_buy" data-key="minion_slot_expander" ${P.maxMinionSlots >= D().MINION_SLOT_MAX ? 'disabled' : ''}>슬롯 확장(${fmtGold(minionSlotCost())})</button>
         <button class="btn btn--sm" data-act="econ_minion_fuel" ${hasItem(D().MINION_FUEL.key) ? '' : 'disabled'}>연료 주입(보유 ${P.inv[D().MINION_FUEL.key] || 0})</button>
         ${fuelLeft ? `<span class="muted">🔥 연료 가동 중(~${fuelLeft}시간)</span>` : ''}
       </div>
-      <div class="econ-minionplace">${D().MINIONS.map(m => `<button class="btn btn--sm" data-act="econ_minion_place" data-key="${m.key}">${m.name}(${fmtGold(m.tiers[0].cost)})</button>`).join('')}</div>
-      <div class="econ-minionlist">${P.minions.map((m, i) => minionRowHTML(m, i)).join('') || '<p class="muted">설치된 일꾼이 없어요</p>'}</div>`;
+      <p class="muted">실제 스카이블럭처럼 미니언은 <b>자원으로 조합</b>해요. 컬렉션 티어 1 달성 시 해금, 고유 조합 2개마다 슬롯 +1!</p>
+      <div class="econ-minionplace">${D().MINIONS.map(m => {
+        const c = m.tiers[0].craftCost; const un = minionUnlocked(m.key); const have = (P.inv[c.key] || 0);
+        return `<button class="btn btn--sm ${un ? '' : 'btn--ghost'}" data-act="econ_minion_place" data-key="${m.key}" ${un ? '' : 'disabled'}>${m.name}<br><span class="muted">${un ? `${itemName(c.key)} ${have}/${c.n}` : '컬렉션 티어1 필요'}</span></button>`;
+      }).join('')}</div>
+      <div class="econ-minionlist">${P.minions.map((m, i) => minionRowHTML(m, i)).join('') || '<p class="muted">배치된 미니언이 없어요 (자원을 모아 조합하세요)</p>'}</div>`;
   }
   function petsHTML() {
     const eggs = D().SHOP.filter(s => s.category === '펫' && hasItem(s.key));
@@ -1069,7 +1158,7 @@
           <span class="muted">${t.desc}</span>
           ${!hasItem(t.key) && t.buyPrice > 0 ? `<button class="btn btn--sm" data-act="econ_buy" data-key="${t.key}">구매 ${fmtGold(t.buyPrice)}</button>` : ''}
         </div>`).join('')}</div>
-      <p class="muted">합계 보너스: 힘 +${ts.str} · 방어 +${ts.def} · 체력 +${ts.hp} · 판매가 +${ts.sellBonus}% · 일꾼속도 +${ts.minionSpeed}%</p>`;
+      <p class="muted">합계 보너스: 힘 +${ts.str} · 방어 +${ts.def} · 체력 +${ts.hp} · 판매가 +${ts.sellBonus}% · 미니언속도 +${ts.minionSpeed}%</p>`;
   }
   function enchantHTML() {
     return `<h4>✨ 인챈트 탑 — 북으로 상한까지, 그 위는 혼돈의 마법부여(운빨 돌파!)</h4>
@@ -1155,11 +1244,17 @@
   }
   function statsHTML() {
     const w = equippedWeapon(), a = equippedArmor();
-    return `<h4>📊 내 스탯</h4>
+    const st = playerStats();
+    return `<h4>📊 내 스탯 (실제 스카이블럭 공식)</h4>
       <div class="econ-colgrid">
-        <div class="econ-colrow"><span>공격력</span><span>${playerAttackPower().toFixed(1)}</span><span class="muted">무기: ${w ? w.name : '없음'}</span></div>
-        <div class="econ-colrow"><span>피해 감소</span><span>${(playerDefensePct() * 100).toFixed(1)}%</span><span class="muted">방어구: ${a ? a.name : '없음'}</span></div>
-        <div class="econ-colrow"><span>최대 체력</span><span>${playerMaxHp()}</span><span class="muted">힘 ${playerStr().toFixed(0)} · 마력 ${magicalPower()}</span></div>
+        <div class="econ-colrow"><span>❤ 체력</span><span>${st.hp}</span><span class="muted">기본 100 + 농사/낚시/인챈트/부적/펫</span></div>
+        <div class="econ-colrow"><span>🛡 방어</span><span>${st.defense}</span><span class="muted">피해 감소 ${(playerDefensePct() * 100).toFixed(1)}% = 방어/(방어+100)</span></div>
+        <div class="econ-colrow"><span>💪 힘</span><span>${st.strength}</span><span class="muted">피해 ×(1+힘/100)</span></div>
+        <div class="econ-colrow"><span>⚔ 공격력</span><span>${playerAttackPower().toFixed(1)}</span><span class="muted">무기: ${w ? w.name : '없음'}</span></div>
+        <div class="econ-colrow"><span>☠ 크리 확률</span><span>${st.critChance.toFixed(1)}%</span><span class="muted">크리 피해 +${st.critDamage.toFixed(0)}%</span></div>
+        <div class="econ-colrow"><span>✦ 이동속도</span><span>${st.speed}</span><span class="muted">100 = 기준(슈가 러시로 증가)</span></div>
+        <div class="econ-colrow"><span>✎ 지능(마나)</span><span>${st.intelligence}</span><span class="muted">마법부여 레벨당 +2</span></div>
+        <div class="econ-colrow"><span>🛡 방어구</span><span>${a ? a.name : '없음'}</span><span class="muted">마력 ${magicalPower()}</span></div>
       </div>
       <h4>스킬</h4>
       <div class="econ-colgrid">${D().SKILLS.map(s => `<div class="econ-colrow"><span>${s.name}</span><span>Lv.${skillLevel(s.key)}</span><span class="muted">${s.bonusText}</span></div>`).join('')}</div>
@@ -1176,7 +1271,7 @@
     return `<div class="econ-minionrow">
       <span>${def.name} T${m.tier} — ${resourceDef(def.resource).name} 저장 ${m.storage}/${cap}</span>
       <button class="btn btn--sm" data-act="econ_minion_collect" data-idx="${i}" ${m.storage > 0 ? '' : 'disabled'}>수거</button>
-      ${m.tier < def.maxTier ? `<button class="btn btn--sm" data-act="econ_minion_upgrade" data-idx="${i}">업그레이드(${fmtGold(nextMinionCost(m.key, m.tier))})</button>` : '<span class="muted">최고 등급</span>'}
+      ${m.tier < def.maxTier ? (() => { const c = nextMinionCost(m.key, m.tier); return `<button class="btn btn--sm" data-act="econ_minion_upgrade" data-idx="${i}">T${m.tier + 1} 조합(${itemName(c.key)} ${P.inv[c.key] || 0}/${c.n})</button>`; })() : '<span class="muted">최고 등급</span>'}
       ${!m.storageUpgraded ? `<button class="btn btn--sm btn--ghost" data-act="econ_minion_storage" data-idx="${i}">저장고 확장(${fmtGold(D().MINION_STORAGE_UPGRADE_COST)})</button>` : ''}
     </div>`;
   }
@@ -1269,6 +1364,7 @@
     switch (k) {
       case 'zone': zone = el.dataset.key; renderZone(); break;
       case 'hubtab': hubTab = el.dataset.key; renderZone(); break;
+      case 'menu': zone = 'hub'; hubTab = el.dataset.key; renderZone(); break;
       case 'gather': gather(el.dataset.key); break;
       case 'buy': buyItem(el.dataset.key); break;
       case 'sell': sellItem(el.dataset.key, 1); break;
@@ -1385,7 +1481,7 @@
       placeMinion, upgradeMinion, upgradeMinionStorage, collectMinion, tickMinions, minionStorageCap, minionSpeedMul, useMinionFuel,
       startSlayer, combatAttack, combatFlee, getActiveCombat: () => activeCombat,
       startDungeon, dungeonAdvance, dungeonSecretClick, getDungeonRun: () => dungeonRun, dungeonGrade, canEnterFloor,
-      reforge, reforgeSlot, reforgePremium, playerAttackPower, playerDefensePct, playerMaxHp, playerStr,
+      reforge, reforgeSlot, reforgePremium, playerAttackPower, playerDefensePct, playerMaxHp, playerStr, playerStats, playerCritRoll, skillXpProgress, minionUnlocked, recordMinionCraft,
       equippedWeapon, dungeonClassDef,
       hatchPet, activatePet, petLevel, petStats, petDef,
       talismanStats, magicalPower, mpStatMul, fairyBonus, collectFairySoul,

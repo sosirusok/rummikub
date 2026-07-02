@@ -16,7 +16,8 @@
   ];
 
   /* ---------------- 컬렉션(자원 31종, 5개 카테고리) ---------------- */
-  function res(key, name, sell, th0) { return { key, name, stackSize: 64, sellPrice: sell, tierThresholds: [th0, th0 * 5, th0 * 20, th0 * 80, th0 * 240, th0 * 800] }; }
+  // 실제 스카이블럭 컬렉션 티어 임계값 패턴(조약돌 I~IX: 50/100/250/1,000/2,500/5,000/10,000/25,000/50,000)
+  function res(key, name, sell, th0) { return { key, name, stackSize: 64, sellPrice: sell, tierThresholds: [th0, th0 * 2, th0 * 5, th0 * 20, th0 * 50, th0 * 100, th0 * 200, th0 * 500, th0 * 1000] }; }
   const COLLECTIONS = [
     { category: '채굴', key: 'mining', resources: [
       res('stone', '조약돌', 2, 50), res('coal', '석탄', 3, 40), res('iron', '철 주괴', 6, 60),
@@ -42,17 +43,30 @@
     ] },
   ];
 
-  const SKILLS = [
-    { key: 'combat', name: '전투', xpBase: 50, xpExp: 1.9, bonusText: '레벨당 최종 피해 +4%' },
-    { key: 'mining', name: '채광', xpBase: 40, xpExp: 1.8, bonusText: '레벨당 방어력 +1' },
-    { key: 'farming', name: '농사', xpBase: 40, xpExp: 1.8, bonusText: '레벨당 체력 +2' },
-    { key: 'foraging', name: '벌목', xpBase: 45, xpExp: 1.8, bonusText: '레벨당 힘 +1' },
-    { key: 'fishing', name: '낚시', xpBase: 50, xpExp: 1.85, bonusText: '레벨당 체력 +1' },
-    { key: 'enchanting', name: '마법부여', xpBase: 60, xpExp: 1.9, bonusText: '레벨당 지력 +2' },
-    { key: 'taming', name: '조련', xpBase: 45, xpExp: 1.85, bonusText: '레벨당 펫 경험치 +1%' },
-    { key: 'social', name: '사교', xpBase: 30, xpExp: 1.7, bonusText: '5레벨마다 상점 판매가 +1%(최대 +10%)' },
+  // 실제 하이픽셀 스카이블럭 스킬 XP 테이블(위키): 레벨 n→n+1 필요 XP. 최대 50레벨.
+  const SKILL_XP_TABLE = [
+    50, 125, 200, 300, 500, 750, 1000, 1500, 2000, 3500,
+    5000, 7500, 10000, 15000, 20000, 30000, 50000, 75000, 100000, 200000,
+    300000, 400000, 500000, 600000, 700000, 800000, 900000, 1000000, 1100000, 1200000,
+    1300000, 1400000, 1500000, 1600000, 1700000, 1800000, 1900000, 2000000, 2100000, 2200000,
+    2300000, 2400000, 2500000, 2600000, 2750000, 2900000, 3100000, 3400000, 3700000, 4000000,
   ];
-  // xpToLevel(n) = xpBase * n^xpExp  (n=현재 레벨, 다음 레벨까지 필요한 증분 XP)
+  const SKILL_MAX_LEVEL = 50;
+  const SKILLS = [
+    { key: 'combat', name: '전투', bonusText: '레벨당 최종 피해 +4%, 크리 확률 +0.5%' },
+    { key: 'mining', name: '채광', bonusText: '레벨당 방어력 +1' },
+    { key: 'farming', name: '농사', bonusText: '레벨당 체력 +2' },
+    { key: 'foraging', name: '벌목', bonusText: '레벨당 힘 +1' },
+    { key: 'fishing', name: '낚시', bonusText: '레벨당 체력 +1' },
+    { key: 'enchanting', name: '마법부여', bonusText: '레벨당 지력(마나) +2' },
+    { key: 'taming', name: '조련', bonusText: '레벨당 펫 경험치 +1%' },
+    { key: 'social', name: '사교', bonusText: '5레벨마다 상점 판매가 +1%(최대 +10%)' },
+  ];
+
+  /* ---------------- 기본 스탯(실제 스카이블럭 기본값 그대로) ---------------- */
+  // 피해 = (5+무기공격)×(1+힘/100)×(스킬/인챈트/리포지/스타포스 배율)×크리티컬
+  // 피해 감소 = 방어/(방어+100), 이동속도 100 = 기준 속도
+  const BASE_STATS = { hp: 100, defense: 0, strength: 0, speed: 100, critChance: 30, critDamage: 50, intelligence: 100 };
 
   /* ---------------- 채집(4개 존: 광산/농장/숲/부둣가) ---------------- */
   const GATHER_TABLE = {
@@ -98,33 +112,39 @@
 
   /* ---------------- 미니언 20종 ---------------- */
   // 실제 스카이블럭처럼 11티어(위키: 미니언은 최대 11~12티어) — 고티어는 기하급수 골드 싱크
-  function mkMinionTiers(baseInterval, baseCost) {
+  // 실제 스카이블럭식: 미니언은 골드 구매가 아니라 "자원으로 조합"한다.
+  //   T1 = 원자재 80개 · T2~T6 = 원자재 160/320/512/1024/2048 · T7~T11 = 인챈티드 자원 8/16/32/64/128
+  function mkMinionTiers(baseInterval, resource) {
+    const rawCost = [80, 160, 320, 512, 1024, 2048];
     const tiers = [];
-    for (let t = 1; t <= 11; t++) tiers.push({ tier: t, intervalSec: +(baseInterval * Math.pow(0.9, t - 1)).toFixed(1), cost: Math.round(baseCost * Math.pow(2, t - 1)) });
+    for (let t = 1; t <= 11; t++) {
+      const mat = t <= 6 ? { key: resource, n: rawCost[t - 1] } : { key: `enchanted_${resource}`, n: 8 * Math.pow(2, t - 7) };
+      tiers.push({ tier: t, intervalSec: +(baseInterval * Math.pow(0.9, t - 1)).toFixed(1), craftCost: mat });
+    }
     return tiers;
   }
-  function minion(key, name, resource, baseInterval, baseCost) { return { key, name, resource, tiers: mkMinionTiers(baseInterval, baseCost), maxTier: 11 }; }
+  function minion(key, name, resource, baseInterval, baseCost) { return { key, name, resource, tiers: mkMinionTiers(baseInterval, resource), maxTier: 11, unlockCollection: resource }; }
   const MINIONS = [
-    minion('cobblestone_minion', '채석 일꾼', 'stone', 27, 80),
-    minion('coal_minion', '석탄 일꾼', 'coal', 27, 80),
-    minion('iron_minion', '철 일꾼', 'iron', 28, 80),
-    minion('gold_minion', '금 일꾼', 'gold', 29, 120),
-    minion('lapis_minion', '청금석 일꾼', 'lapis', 29, 120),
-    minion('redstone_minion', '레드스톤 일꾼', 'redstone', 29, 120),
-    minion('diamond_minion', '다이아 일꾼', 'diamond', 32, 400),
-    minion('emerald_minion', '에메랄드 일꾼', 'emerald', 33, 400),
-    minion('obsidian_minion', '흑요석 일꾼', 'obsidian', 36, 500),
-    minion('wheat_minion', '밀 일꾼', 'wheat', 25, 80),
-    minion('carrot_minion', '당근 일꾼', 'carrot', 25, 80),
-    minion('potato_minion', '감자 일꾼', 'potato', 25, 80),
-    minion('pumpkin_minion', '호박 일꾼', 'pumpkin', 30, 150),
-    minion('melon_minion', '수박 일꾼', 'melon', 28, 150),
-    minion('sugarcane_minion', '사탕수수 일꾼', 'sugarcane', 24, 80),
-    minion('oak_minion', '참나무 일꾼', 'oaklog', 26, 80),
-    minion('birch_minion', '자작나무 일꾼', 'birchlog', 26, 80),
-    minion('spruce_minion', '가문비 일꾼', 'sprucelog', 27, 100),
-    minion('fishing_minion', '어부 일꾼', 'rawfish', 30, 60),
-    minion('clay_minion', '점토 일꾼', 'clay', 26, 60),
+    minion('cobblestone_minion', '조약돌 미니언', 'stone', 27, 80),
+    minion('coal_minion', '석탄 미니언', 'coal', 27, 80),
+    minion('iron_minion', '철 미니언', 'iron', 28, 80),
+    minion('gold_minion', '금 미니언', 'gold', 29, 120),
+    minion('lapis_minion', '청금석 미니언', 'lapis', 29, 120),
+    minion('redstone_minion', '레드스톤 미니언', 'redstone', 29, 120),
+    minion('diamond_minion', '다이아 미니언', 'diamond', 32, 400),
+    minion('emerald_minion', '에메랄드 미니언', 'emerald', 33, 400),
+    minion('obsidian_minion', '흑요석 미니언', 'obsidian', 36, 500),
+    minion('wheat_minion', '밀 미니언', 'wheat', 25, 80),
+    minion('carrot_minion', '당근 미니언', 'carrot', 25, 80),
+    minion('potato_minion', '감자 미니언', 'potato', 25, 80),
+    minion('pumpkin_minion', '호박 미니언', 'pumpkin', 30, 150),
+    minion('melon_minion', '수박 미니언', 'melon', 28, 150),
+    minion('sugarcane_minion', '사탕수수 미니언', 'sugarcane', 24, 80),
+    minion('oak_minion', '참나무 미니언', 'oaklog', 26, 80),
+    minion('birch_minion', '자작나무 미니언', 'birchlog', 26, 80),
+    minion('spruce_minion', '가문비 미니언', 'sprucelog', 27, 100),
+    minion('fishing_minion', '낚시 미니언', 'rawfish', 30, 60),
+    minion('clay_minion', '점토 미니언', 'clay', 26, 60),
   ];
   const MINION_STORAGE_BASE = 15, MINION_STORAGE_UPGRADED = 24, MINION_STORAGE_UPGRADE_COST = 5000;
   const MINION_OFFLINE_CAP_HOURS = 48;
@@ -346,7 +366,7 @@
     tali('talisman_scarf_studies', '스카프의 연구록', 'rare', 0, { str: 4, def: 4 }, '힘 +4, 방어 +4 (던전 2층 전리품)'),
     tali('talisman_dragon_claw', '드래곤 발톱', 'epic', 15000, { str: 10 }, '힘 +10'),
     tali('talisman_dawn_seal', '여명의 인장', 'epic', 16000, { def: 12 }, '방어 +12'),
-    tali('talisman_hourglass', '시간의 모래시계', 'epic', 20000, { minionSpeed: 5 }, '모든 일꾼 생산속도 +5%'),
+    tali('talisman_hourglass', '시간의 모래시계', 'epic', 20000, { minionSpeed: 5 }, '모든 미니언 생산속도 +5%'),
     tali('talisman_dragon_heart', '용의 심장', 'legendary', 45000, { hp: 40 }, '체력 +40'),
     tali('talisman_wealth_rune', '재물의 룬', 'legendary', 50000, { sellBonus: 5 }, '판매가 +5%'),
     tali('talisman_void_eye', '공허의 눈', 'mythic', 120000, { str: 18, def: 10 }, '힘 +18, 방어 +10'),
@@ -426,11 +446,25 @@
 
   /* ---------------- 제작 레시피(컬렉션 티어로 해금 — 실제 스카이블럭 방식) ---------------- */
   // 인챈티드 자원: 원자재 160개 → 1개(판매가 20% 프리미엄 = 제작 노가다 보상)
-  const ENCHANTED_RES = ['stone', 'coal', 'iron', 'gold', 'diamond', 'wheat', 'oaklog', 'rawfish'];
+  // 인챈티드 아이템: 모든 컬렉션 자원 — 원자재 160개(32×5 십자 배열) → 인챈티드 1개
+  const ENCHANTED_RES = COLLECTIONS.reduce((a, c) => a.concat(c.resources.map(r => r.key)), []);
+  // 광물은 한 단계 더: 인챈티드 160개 → 인챈티드 블록
+  const ENCHANTED_BLOCK_RES = ['stone', 'coal', 'iron', 'gold', 'lapis', 'redstone', 'diamond', 'emerald'];
   const RECIPES = [
     ...ENCHANTED_RES.map(rk => ({
-      key: `enchanted_${rk}`, needs: { [rk]: 160 }, gives: 1, unlock: { resource: rk, tier: 3 },
+      key: `enchanted_${rk}`, needs: { [rk]: 160 }, gives: 1, unlock: { resource: rk, tier: 2 },
     })),
+    ...ENCHANTED_BLOCK_RES.map(rk => ({
+      key: `enchanted_${rk}_block`, needs: { [`enchanted_${rk}`]: 160 }, gives: 1, unlock: { resource: rk, tier: 5 },
+    })),
+    // 스타터 도구(실제처럼 자원 조합 — 시작 골드 0이어도 진행 가능)
+    { key: 'wooden_pickaxe', needs: { oaklog: 12 }, gives: 1, unlock: null },
+    { key: 'wooden_axe', needs: { oaklog: 12 }, gives: 1, unlock: null },
+    { key: 'wooden_hoe', needs: { oaklog: 10 }, gives: 1, unlock: null },
+    { key: 'fishing_rod', needs: { oaklog: 8, string: 2 }, gives: 1, unlock: null },
+    { key: 'stone_pickaxe', needs: { stone: 16, oaklog: 4 }, gives: 1, unlock: { resource: 'stone', tier: 1 } },
+    { key: 'stone_axe', needs: { stone: 16, oaklog: 4 }, gives: 1, unlock: { resource: 'oaklog', tier: 1 } },
+    { key: 'stone_hoe', needs: { stone: 12, oaklog: 4 }, gives: 1, unlock: { resource: 'wheat', tier: 1 } },
     { key: 'iron_pickaxe', needs: { iron: 24, oaklog: 8 }, gives: 1, unlock: { resource: 'iron', tier: 2 } },
     { key: 'iron_axe', needs: { iron: 24, oaklog: 8 }, gives: 1, unlock: { resource: 'oaklog', tier: 2 } },
     { key: 'minion_fuel_coal', needs: { coal: 32 }, gives: 1, unlock: { resource: 'coal', tier: 2 } },
@@ -454,16 +488,20 @@
   const SHOP = [
     // 도구 4계열 × 5티어
     ...Object.keys(TOOLS).flatMap(fam => TOOLS[fam].map(t => ({ key: t.key, name: t.name, category: '도구', tierKey: t.tierKey, buyPrice: t.price, sellPrice: Math.round((t.price || 900 * t.mul) * 0.2), stackSize: 1 }))),
-    // 강화/일꾼/인챈트
+    // 강화/미니언/인챈트
     { key: 'reforge_stone_common', name: '리포지 스톤(일반)', category: '강화재료', buyPrice: 250, sellPrice: 50, stackSize: 64 },
     { key: 'reforge_stone_rare', name: '리포지 스톤(희귀)', category: '강화재료', buyPrice: 1000, sellPrice: 200, stackSize: 64 },
     { key: 'essence_reforge_stone', name: '던전 정수 리포지 스톤', category: '강화재료', buyPrice: 0, sellPrice: 400, stackSize: 64 },
     { key: 'essence_cosmetic_cape', name: '지배자의 망토(장식)', category: '장식', buyPrice: 0, sellPrice: 5000, stackSize: 1 },
-    { key: 'minion_slot_expander', name: '일꾼 슬롯 확장권', category: '일꾼', buyPrice: MINION_SLOT_COST_BASE, sellPrice: 0, stackSize: 1 },
-    { key: 'auto_shipping_module', name: '자동출하 모듈', category: '일꾼', buyPrice: 3000, sellPrice: 500, stackSize: 1 },
-    { key: 'diamond_spreading', name: '다이아 살포기(생산 시 10% 다이아 추가)', category: '일꾼', buyPrice: 0, sellPrice: 2000, stackSize: 1 },
-    { key: MINION_FUEL.key, name: MINION_FUEL.name, category: '일꾼', buyPrice: MINION_FUEL.price, sellPrice: 100, stackSize: 64 },
+    { key: 'minion_slot_expander', name: '미니언 슬롯 확장권', category: '미니언', buyPrice: MINION_SLOT_COST_BASE, sellPrice: 0, stackSize: 1 },
+    { key: 'auto_shipping_module', name: '자동출하 모듈', category: '미니언', buyPrice: 3000, sellPrice: 500, stackSize: 1 },
+    { key: 'diamond_spreading', name: '다이아 살포기(생산 시 10% 다이아 추가)', category: '미니언', buyPrice: 0, sellPrice: 2000, stackSize: 1 },
+    { key: MINION_FUEL.key, name: MINION_FUEL.name, category: '미니언', buyPrice: MINION_FUEL.price, sellPrice: 100, stackSize: 64 },
     // 인챈티드 자원(제작 전용, 판매가 20% 프리미엄)
+    ...ENCHANTED_BLOCK_RES.map(rk => {
+      const r = COLLECTIONS.flatMap(c => c.resources).find(x => x.key === rk);
+      return { key: `enchanted_${rk}_block`, name: `인챈티드 ${r.name} 블록`, category: '제작품', buyPrice: 0, sellPrice: Math.round(r.sellPrice * 160 * 1.2 * 160 * 1.1), stackSize: 64 };
+    }),
     ...ENCHANTED_RES.map(rk => {
       const r = COLLECTIONS.flatMap(c => c.resources).find(x => x.key === rk);
       return { key: `enchanted_${rk}`, name: `인챈티드 ${r.name}`, category: '제작품', buyPrice: 0, sellPrice: Math.round(r.sellPrice * 160 * 1.2), stackSize: 64 };
@@ -492,7 +530,7 @@
   ];
 
   const ZONES = [
-    { key: 'hub', name: '중앙 마을', emoji: '🏘️', desc: '상점·은행·일꾼 관리소·펫 상점·인챈트 탑이 모인 허브.' },
+    { key: 'hub', name: '중앙 마을', emoji: '🏘️', desc: '상점·은행·미니언 관리소·펫 상점·인챈트 탑이 모인 허브.' },
     { key: 'mine', name: '깊은 동굴', emoji: '⛏️', desc: '돌부터 흑요석까지 9종 광물을 캐는 대형 광산.' },
     { key: 'farm', name: '농장 벌판', emoji: '🌾', desc: '6종 작물이 자라는 너른 들판. 풍차가 돈다.' },
     { key: 'forest', name: '속삭이는 숲', emoji: '🌲', desc: '참나무·자작나무·가문비를 벌목하는 울창한 숲.' },
@@ -520,5 +558,6 @@
     TALISMANS, MAGICAL_POWER, PETS, PET_XP_BASE, PET_XP_EXP, PET_MAX_LEVEL,
     ENCHANTS, CHAOS_ENCHANT, RECIPES,
     FAIRY_SOULS, BANK, DAILY_DEALS, DUNGEON_CLASSES, ZONES, EASTER_EGGS,
+    SKILL_XP_TABLE, SKILL_MAX_LEVEL, BASE_STATS, ENCHANTED_RES, ENCHANTED_BLOCK_RES,
   };
 })();
