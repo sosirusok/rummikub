@@ -101,6 +101,9 @@
       case 'trade_cancel':
         if (trade && trade.peer === m.id) endTrade('상대가 거래를 취소했어요');
         break;
+      case 'announce':   // V10: 보스 처치 등 전서버 알림
+        toast(`📣 ${m.nm}: ${m.txt}`, true);
+        return;
       /* ---- 파티 던전 ---- */
       case 'pt_inv':
         if (trade || party) { send({ t: 'pt_dec', to: m.id }); return; }
@@ -306,6 +309,7 @@
     party: () => party,
     partyInvite, partyAccept, partyDecline, partyLeave, partyBroadcastState, partyEnd, partySendAttack,
     partyD3Start, partySendMobs, partySendAttack3,
+    announce: txt => { if (active) send({ t: 'announce', txt: String(txt).slice(0, 120) }); },
     visit,
     // 테스트 훅: 채널 없이 수신/송신 경로를 직접 구동
     _test: { onMsg, setActive: v => { active = v; }, setSend: f => { sendHook = f; }, setId: (id, nm) => { myId = id; myName = nm; } },

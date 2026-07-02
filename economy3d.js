@@ -124,6 +124,8 @@
     oaklog: 'forest', birchlog: 'forest', sprucelog: 'forest',
     rawfish: 'dock', clay: 'dock',
     rotten_flesh: 'hub', bone: 'hub', string: 'hub', slime_ball: 'hub', blaze_rod: 'hub', ghast_tear: 'hub', leather: 'farm', feather: 'farm',
+    apple: 'forest', salmon: 'dock', clownfish: 'dock', pufferfish: 'dock', prismarine: 'dock', sponge: 'dock',
+    magma_cream: 'hub', spider_eye: 'hub', gunpowder: 'hub', ender_pearl: 'hub', ender_shard: 'hub',
   };
   const MINION_COLORS = {
     stone: 0x9a9a9a, coal: 0x2a2a2e, iron: 0xd8a282, gold: 0xf2d75c, lapis: 0x1f4fc0, redstone: 0xc81f28,
@@ -212,7 +214,7 @@
   let others = {};                          // peerId -> {mesh, tx,ty,tz,tyaw, walkT, walkAmp, legL, legR}
   let visitData = null;                     // {name, homeEdits, minions} — 방문 중인 섬 데이터
   const HOME_MINION_SLOTS = [];
-  for (let r = 0; r < 3; r++) for (let cIdx = 0; cIdx < 5; cIdx++) HOME_MINION_SLOTS.push([100 + cIdx * 3, 90 + r * 5]);
+  for (let r = 0; r < 6; r++) for (let cIdx = 0; cIdx < 5; cIdx++) HOME_MINION_SLOTS.push([100 + cIdx * 3, 90 + r * 4]);   // V10: 30칸(6×5)
   /* ---------------- 테마 월드 정의(실제 스카이블럭 섬 구성) ----------------
      허브를 중심으로 워프 패드로 이동하는 독립 월드들. 각 월드는 시간대가 고정. */
   const WORLD_DEFS = {
@@ -2214,6 +2216,10 @@
     slime: { name: '슬라임', kind: 'slime', color: 0x5ac26a, hp: 120, dmg: 14, xp: 8, coins: 2, speed: 1.4, books: ['magnet', 'big_brain'], drops: [{ key: 'emerald', n: 1, chance: 0.08 }], tierCap: 2 },
     miner_zombie: { name: '광부 좀비', kind: 'humanoid', color: 0x7a6a4a, hp: 200, dmg: 28, xp: 15, coins: 5, speed: 1.8, books: ['efficiency'], drops: [{ key: 'iron', n: 1, chance: 0.4 }, { key: 'coal', n: 2, chance: 0.5 }], tierCap: 2 },
     lapis_zombie: { name: '청금석 좀비', kind: 'humanoid', color: 0x2a4fc0, hp: 260, dmg: 32, xp: 18, coins: 6, speed: 1.8, books: ['fortune'], drops: [{ key: 'lapis', n: 3 }], tierCap: 3 },
+    // V10 ⑱: 필드 미니보스 3종 — 고정 레벨 + 유니크 전리품(희귀)
+    yeti: { name: '❄ 예티', kind: 'tall', color: 0xe8f2f6, hp: 2400, dmg: 31, xp: 150, coins: 200, speed: 2.2, scale: 1.9, fixedLv: 40, miniboss: true, books: ['giant_killer', 'protection'], drops: [{ key: 'yeti_fur', n: 1, chance: 0.34 }, { key: 'diamond', n: 3, chance: 0.5 }, { key: 'emerald', n: 2, chance: 0.3 }], tierCap: 5 },
+    gold_golem: { name: '⛏ 골드 골렘', kind: 'tall', color: 0xd8b23a, hp: 2200, dmg: 29, xp: 130, coins: 240, speed: 1.6, scale: 1.7, fixedLv: 35, miniboss: true, books: ['fortune', 'efficiency'], drops: [{ key: 'golem_core', n: 1, chance: 0.34 }, { key: 'gold', n: 6 }, { key: 'emerald', n: 2, chance: 0.4 }], tierCap: 5 },
+    mushroom_king: { name: '🍄 무쉬룸 킹', kind: 'quad', color: 0xa83232, hp: 1500, dmg: 21, xp: 90, coins: 120, speed: 2.0, scale: 1.8, fixedLv: 25, miniboss: true, books: ['growth', 'magnet'], drops: [{ key: 'mushroom_crown', n: 1, chance: 0.34 }, { key: 'pumpkin', n: 4 }, { key: 'melon', n: 5 }], tierCap: 4 },
     redstone_pigman: { name: '레드스톤 피그맨', kind: 'humanoid', color: 0xc86a6a, hp: 400, dmg: 42, xp: 24, coins: 8, speed: 2.0, books: ['fortune', 'efficiency'], drops: [{ key: 'redstone', n: 3 }], tierCap: 3 },
     diamond_zombie: { name: '다이아 좀비', kind: 'humanoid', color: 0x5decd5, hp: 700, dmg: 60, xp: 40, coins: 12, speed: 2.0, books: ['area_mining'], drops: [{ key: 'diamond', n: 1, chance: 0.5 }], tierCap: 4 },
     diamond_skeleton: { name: '다이아 스켈레톤', kind: 'humanoid', color: 0x8aeade, hp: 650, dmg: 65, xp: 40, coins: 12, speed: 2.1, books: ['area_mining', 'critical'], drops: [{ key: 'diamond', n: 1, chance: 0.5 }], tierCap: 4 },
@@ -2345,6 +2351,10 @@
     // 파크/버섯 사막
     { world: 'park', x: 72, z: 72, r: 60, rMin: 24, types: ['wolf'], lv: [8, 15], cap: 4, respawn: 15 },
     { world: 'mushroom', x: 50, z: 72, r: 34, types: ['mushroom_cow'], lv: [1, 3], cap: 6, respawn: 10 },
+    // V10 ⑱: 필드 미니보스(고정 레벨 1마리씩)
+    { world: 'hub', x: 224, z: 110, r: 14, types: ['yeti'], lv: [40, 40], cap: 1, respawn: 90 },          // 설산 정상
+    { world: 'gold', x: 56, z: 46, r: 16, types: ['gold_golem'], lv: [35, 35], cap: 1, respawn: 90 },     // 골드 광산 심부
+    { world: 'mushroom', x: 72, z: 72, r: 20, types: ['mushroom_king'], lv: [25, 25], cap: 1, respawn: 90 },   // 버섯 사막 중앙
   ]);
   let mobs = [];               // {type,def,lv,elite,hp,maxHp,dmg,mesh,label,labelCv,area,state,tx,tz,atkCd,hitIdx,dead}
   let _spawnT = 0;
@@ -2451,7 +2461,7 @@
     const x = area.x + Math.cos(a) * rr, z = area.z + Math.sin(a) * rr;
     const y = area.y != null ? groundBelow(Math.floor(x), Math.floor(z), area.y + 2) : surfaceTop(Math.floor(x), Math.floor(z));
     if (y <= SEA + 1 && worldMode === 'hub') return null;   // 물 위 스폰 방지
-    const elite = !customDef && Math.random() < 0.05;
+    const elite = !customDef && !def.miniboss && Math.random() < 0.05;   // 미니보스는 정예 중첩 제외(설계 난이도 고정)
     const mul = 1 + (lv - 1) * 0.35;
     const mob = {
       type: typeKey, def, lv, elite,
@@ -2462,6 +2472,14 @@
     mob.hp = mob.maxHp;
     const h = buildMobMesh(def, elite);
     mob.mesh = h.group; mob.legs = h.legs || []; mob.legL = h.legL; mob.legR = h.legR; mob.rods = h.rods; mob.wings = h.wings;
+    if (elite || def.miniboss) {   // V10 ⑲: 정예·미니보스 발밑 오라 링
+      const ring = new THREE.Mesh(
+        new THREE.TorusGeometry(def.miniboss ? 1.5 : 0.9, 0.07, 6, 20),
+        new THREE.MeshBasicMaterial({ color: def.miniboss ? 0xd83a3a : 0xf6c945, transparent: true, opacity: 0.75 })
+      );
+      ring.rotation.x = Math.PI / 2; ring.position.y = 0.12;
+      mob.mesh.add(ring); mob.auraRing = ring;
+    }
     mob.mesh.position.set(x, y, z);
     const lbl = mkMobLabel(mob);
     lbl.position.set(0, def.kind === 'tall' ? 3.2 : 2.4, 0);
@@ -2482,12 +2500,20 @@
     _spawnT += dt;
     if (_spawnT > 2.5) {
       _spawnT = 0;
+      const apiS = econApi();
+      const quest = apiS.slayerQuest ? apiS.slayerQuest() : null;   // V10 ⑰: 퀘스트 중 계열 스폰 +50%
       for (const area of SPAWN_AREAS) {
         if (area.world !== worldMode) continue;
+        if (area._cd > 0) { area._cd -= 2.5; continue; }   // V10: 보스 구역 리스폰 쿨다운
+        let cap = area.cap;
+        if (quest && apiS.slayerMobMap && area.types.some(t => apiS.slayerMobMap[t] === quest.key)) cap = Math.ceil(cap * 1.5);
         const cur = mobs.filter(m => m.area === area && !m.dead).length;
-        if (cur < area.cap) {
-          const t = area.types[Math.floor(Math.random() * area.types.length)];
-          spawnMob(area, t, area.lv[0] + Math.floor(Math.random() * (area.lv[1] - area.lv[0] + 1)));
+        if (cur < cap) {
+          const n = Math.min(cap - cur, cur === 0 ? 2 : 1);   // V10 ⑳: 빈 구역은 2마리씩 빠르게 채움
+          for (let si = 0; si < n; si++) {
+            const t = area.types[Math.floor(Math.random() * area.types.length)];
+            spawnMob(area, t, area.lv[0] + Math.floor(Math.random() * (area.lv[1] - area.lv[0] + 1)));
+          }
         }
       }
     }
@@ -2545,6 +2571,7 @@
       m.walkT += dt * 2;
       if (m.rods) for (let ri = 0; ri < m.rods.length; ri++) { const a = m.walkT * 1.5 + ri / 6 * Math.PI * 2; m.rods[ri].position.x = Math.cos(a) * 0.55; m.rods[ri].position.z = Math.sin(a) * 0.55; }
       if (m.wings) { const fl = Math.sin(m.walkT * 3) * 0.5; m.wings[0].rotation.z = fl; m.wings[1].rotation.z = -fl; }
+      if (m.auraRing) { const pu = 1 + Math.sin(m.walkT * 2.2) * 0.12; m.auraRing.scale.setScalar(pu); m.auraRing.rotation.z += dt * 1.2; }
       if (false) {
       }
     }
@@ -2559,7 +2586,7 @@
       const along = vx * d.x + vy * d.y + vz * d.z;
       if (along < 0.2 || along > 3.8) continue;
       const px = vx - d.x * along, py = vy - d.y * along, pz = vz - d.z * along;
-      if (Math.hypot(px, py, pz) < (m.elite ? 1.2 : 0.95) && along < bestAlong) { best = m; bestAlong = along; }
+      if (Math.hypot(px, py, pz) < (m.def && m.def.miniboss ? 2.0 : m.elite ? 1.2 : 0.95) && along < bestAlong) { best = m; bestAlong = along; }
     }
     return best;
   }
@@ -2593,6 +2620,11 @@
         books: m.def.books || [], elite: m.elite, lv: m.lv,
         equipChance: m.def.equipChance,   // 몹별 상이(없으면 economy.js가 레벨·티어로 산출)
       });
+      if (m.area && m.area.cap === 1 && m.area.respawn) m.area._cd = m.area.respawn;   // V10: 단일 보스 리스폰 대기
+      // V10 ㉑: 보스급 처치는 전서버 알림(멀티 접속 시)
+      if ((m.isBoss || m.def.miniboss || m.def.kind === 'dragon' || m.type === 'arachne' || m.type === 'broodmother') && window.econNet && window.econNet.announce) {
+        window.econNet.announce(`⚔ [Lv ${m.lv}] ${m.def.name} 처치!`);
+      }
       scene.remove(m.mesh); disposeGroup(m.mesh);
       mobs.splice(mobs.indexOf(m), 1);
       if (worldMode === 'dungeon') onDungeonMobDead(m);
@@ -2659,10 +2691,12 @@
     const api = econApi();
     if (row && api.hudStats) {
       const st = api.hudStats();
+      const buffs = api.activeBuffs ? api.activeBuffs() : [];   // V10 ㉖: 물약 버프 잔여시간
       row.innerHTML = `<span style="color:#ff5555">❤ ${php ? Math.max(0, Math.ceil(php.hp)) : st.hp}/${st.hp}</span>`
         + `<span style="color:#55ff55">❈ 방어 ${st.def}</span>`
         + `<span style="color:#55aaff">✎ 마나 ${st.mana}</span>`
-        + `<span style="color:#f2f2f2">✦ 속도 ${st.speed}</span>`;
+        + `<span style="color:#f2f2f2">✦ 속도 ${st.speed}</span>`
+        + buffs.map(bf => `<span style="color:#c084fc">🧪 ${bf.name} ${Math.floor(bf.left / 60)}:${String(bf.left % 60).padStart(2, '0')}</span>`).join('');
     }
   }
 
@@ -3151,7 +3185,7 @@
   window.economy3dAct = act;
   window.economy3dVisit = travelVisit;   // 멀티: 다른 플레이어 섬 방문(economy-net.js가 호출)
   window.economy3dWarp = dest => { if (running && WORLD_DEFS[dest]) { hidePanel(); warpTo(dest); return true; } return false; };
-  window.economy3dWorlds = () => Object.keys(WORLD_DEFS).filter(k => k !== 'visit' && k !== 'dungeon').map(k => ({ key: k, name: WORLD_DEFS[k].name }));
+  window.economy3dWorlds = () => Object.keys(WORLD_DEFS).filter(k => k !== 'visit' && k !== 'dungeon').map(k => ({ key: k, name: WORLD_DEFS[k].name, req: WARP_REQ[k] || null }));
 
   if (typeof window !== 'undefined' && window.__ECON3D_TEST) {
     window.__econ3d = {

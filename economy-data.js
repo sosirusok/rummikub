@@ -161,56 +161,77 @@
     minion('cow_minion', '소 미니언', 'leather', 26, 80),
     minion('chicken_minion', '닭 미니언', 'feather', 26, 80),
     minion('ghast_minion', '가스트 미니언', 'ghast_tear', 36, 500),
+    // V10: 컬렉션 수(39)와 동일하게 — 나머지 11종
+    minion('apple_minion', '사과 미니언', 'apple', 30, 80),
+    minion('salmon_minion', '연어 미니언', 'salmon', 30, 100),
+    minion('clownfish_minion', '광대어 미니언', 'clownfish', 34, 200),
+    minion('pufferfish_minion', '복어 미니언', 'pufferfish', 32, 150),
+    minion('prismarine_minion', '프리즈마린 미니언', 'prismarine', 31, 150),
+    minion('sponge_minion', '스펀지 미니언', 'sponge', 36, 300),
+    minion('magma_cube_minion', '마그마 큐브 미니언', 'magma_cream', 31, 200),
+    minion('cave_spider_minion', '동굴 거미 미니언', 'spider_eye', 27, 90),
+    minion('creeper_minion', '크리퍼 미니언', 'gunpowder', 29, 120),
+    minion('endermite_minion', '엔더마이트 미니언', 'ender_shard', 34, 300),
+    minion('enderman_minion', '엔더맨 미니언', 'ender_pearl', 33, 300),
   ];
   const MINION_STORAGE_BASE = 15, MINION_STORAGE_UPGRADED = 24, MINION_STORAGE_UPGRADE_COST = 5000;
   const MINION_OFFLINE_CAP_HOURS = 48;
-  const MINION_SLOT_MAX = 15, MINION_SLOT_COST_BASE = 6000, MINION_SLOT_COST_MUL = 1.6;
+  const MINION_SLOT_MAX = 30, MINION_SLOT_COST_BASE = 6000, MINION_SLOT_COST_MUL = 1.6;
+  // V10 ⑱: 필드 미니보스 유니크 전리품(드롭 전용)
+  const MINIBOSS_LOOT = [
+    { key: 'yeti_fur', name: '예티의 모피', category: '전리품', buyPrice: 0, sellPrice: 2800 },
+    { key: 'golem_core', name: '골렘의 코어', category: '전리품', buyPrice: 0, sellPrice: 2200 },
+    { key: 'mushroom_crown', name: '무쉬룸 킹의 왕관', category: '전리품', buyPrice: 0, sellPrice: 1500 },
+  ];
   const MINION_FUEL = { key: 'minion_fuel_coal', name: '석탄 연료(24시간 +25%)', speedMul: 1.25, durationHours: 24, price: 800 };
+  const MINION_FUEL2 = { key: 'minion_fuel_lava', name: '인챈티드 용암 양동이(72시간 +40%)', speedMul: 1.4, durationHours: 72 };   // V10
 
   /* ---------------- 슬레이어 5종(실제 스카이블럭 라인업) ---------------- */
   // rareDropTable: 실제 아이템 키 배열(승리 시 인벤토리에 실제 지급). [자주(60%), 가끔(30%), 희귀(10%)]
+  // V10: 실제처럼 기하급수 난이도 — 티어당 HP ×6, 피해 ×2.6. mulScale(계열 배율)이 ×6.9씩 커져서
+  //       "다음 계열 T(n)"이 "이전 계열 T(n+1)"보다 딱 15% 더 어렵다(요청 규칙).
   function mkSlayerTiers(baseHp, baseDmg, baseXp, baseCoin, mulScale, lootByTier) {
-    const costMul = [1, 4, 16, 60], hpMul = [1, 7.5, 50, 375], dmgMul = [1, 3, 7.5, 20], xpMul = [1, 5, 40, 100], coinMul = [1, 8.67, 16.7, 60];
+    const costMul = [1, 4, 16, 60, 200], hpMul = [1, 6, 36, 216, 1296], dmgMul = [1, 2.6, 6.8, 17.6, 45.7], xpMul = [1, 5, 20, 100, 300], coinMul = [1, 8, 24, 80, 240];
     return lootByTier.map((loot, i) => ({
       tier: i + 1,
-      turnInGold: Math.round(500 * costMul[i] * mulScale),
-      hp: Math.round(baseHp * hpMul[i]),
-      dmg: Math.round(baseDmg * dmgMul[i]),
+      turnInGold: Math.round(500 * costMul[i] * Math.pow(mulScale, 0.5)),
+      hp: Math.round(baseHp * hpMul[i] * mulScale),
+      dmg: Math.round(baseDmg * dmgMul[i] * Math.pow(mulScale, 0.45)),
       xpReward: Math.round(baseXp * xpMul[i]),
-      coinReward: Math.round(baseCoin * coinMul[i] * mulScale),
+      coinReward: Math.round(baseCoin * coinMul[i] * Math.pow(mulScale, 0.6)),
       rareDropTable: loot,
-      minCombatLevel: Math.min(28, Math.round(i * 8 * mulScale)),
+      minCombatLevel: Math.min(30, Math.round(i * 6 + Math.log(mulScale) / Math.log(6.9) * 5)),
     }));
   }
   // V9: 슬레이어 레벨 XP(계열별 누적: 실제 스카이블럭 5/15/200/1000/5000/20000/100000/400000/1000000)
   const SLAYER_XP_LEVELS = [5, 15, 200, 1000, 5000, 20000, 100000, 400000, 1000000];
   const SLAYER_QUEST = { killsNeeded: [5, 10, 15, 20, 25], xpPerTier: [5, 25, 100, 500, 1500] };   // 티어별 처치 수/보스 XP
   const SLAYERS = [
-    { key: 'zombie_slayer', name: '좀비 슬레이어', flavor: '리븐넌트 호러', dropResource: 'rotten_flesh', tiers: mkSlayerTiers(400, 20, 5, 300, 1, [
+    { key: 'zombie_slayer', uniqueDrop: 'revenant_falchion', name: '좀비 슬레이어', flavor: '리븐넌트 호러', dropResource: 'rotten_flesh', tiers: mkSlayerTiers(800, 25, 5, 300, 1, [
       ['rotten_flesh', 'reforge_stone_common', 'talisman_zombie'],
       ['rotten_flesh', 'enchant_book_sharpness', 'talisman_campfire'],
       ['rotten_flesh', 'weapon_epic', 'enchant_book_growth'],
       ['rotten_flesh', 'talisman_dragon_claw', 'pet_egg_enderman'],
     ]) },
-    { key: 'spider_slayer', name: '거미 슬레이어', flavor: '타란튤라 브루드파더', dropResource: 'string', tiers: mkSlayerTiers(500, 25, 5, 300, 1.1, [
+    { key: 'spider_slayer', uniqueDrop: 'scorpion_foil', name: '거미 슬레이어', flavor: '타란튤라 브루드파더', dropResource: 'string', tiers: mkSlayerTiers(800, 25, 5, 300, 6.9, [
       ['string', 'reforge_stone_common', 'talisman_spider_ring'],
       ['string', 'enchant_book_critical', 'talisman_wolf_claw'],
       ['string', 'armor_epic', 'enchant_book_protection'],
       ['string', 'talisman_lava_charm', 'pet_egg_wolf'],
     ]) },
-    { key: 'wolf_slayer', name: '늑대 슬레이어', flavor: '스벤 팩마스터', dropResource: 'bone', tiers: mkSlayerTiers(700, 32, 6, 400, 1.3, [
+    { key: 'wolf_slayer', uniqueDrop: 'pooch_sword', name: '늑대 슬레이어', flavor: '스벤 팩마스터', dropResource: 'bone', tiers: mkSlayerTiers(800, 25, 6, 400, 47.6, [
       ['bone', 'reforge_stone_rare', 'talisman_wolf_claw'],
       ['bone', 'enchant_book_first_strike', 'talisman_fisher_anklet'],
       ['bone', 'weapon_legendary', 'enchant_book_growth'],
       ['bone', 'talisman_dragon_heart', 'pet_egg_wolf'],
     ]) },
-    { key: 'enderman_slayer', name: '엔더맨 슬레이어', flavor: '보이드글룸 세라프', dropResource: 'ender_pearl', tiers: mkSlayerTiers(1200, 45, 8, 600, 1.6, [
+    { key: 'enderman_slayer', uniqueDrop: 'voidedge_katana', name: '엔더맨 슬레이어', flavor: '보이드글룸 세라프', dropResource: 'ender_pearl', tiers: mkSlayerTiers(800, 25, 8, 600, 328, [
       ['ender_pearl', 'reforge_stone_rare', 'talisman_deep_pearl'],
       ['ender_pearl', 'aspect_of_the_end', 'talisman_hourglass'],
       ['ender_pearl', 'armor_mythic', 'enchant_book_protection'],
       ['ender_pearl', 'aspect_of_the_dragons', 'pet_egg_enderman'],
     ]) },
-    { key: 'blaze_slayer', name: '블레이즈 슬레이어', flavor: '인페르노 데몬로드', dropResource: 'blaze_rod', tiers: mkSlayerTiers(2000, 60, 10, 900, 2.0, [
+    { key: 'blaze_slayer', uniqueDrop: 'fire_fury_staff', name: '블레이즈 슬레이어', flavor: '인페르노 데몬로드', dropResource: 'blaze_rod', tiers: mkSlayerTiers(800, 25, 10, 900, 2266, [
       ['blaze_rod', 'reforge_stone_rare', 'talisman_lava_charm'],
       ['blaze_rod', 'enchant_book_looting', 'talisman_wealth_rune'],
       ['blaze_rod', 'midas_sword', 'enchant_book_sharpness'],
@@ -275,6 +296,12 @@
     { key: 'giant_sword', name: '거인의 대검', wclass: 'sword', tierKey: 'mythic', dmg: 118, buyPrice: 0, sellPrice: 15000 },
     { key: 'hyperion', name: '히페리온', wclass: 'sword', tierKey: 'mythic', dmg: 128, buyPrice: 0, sellPrice: 25000 },
     { key: 'necron_blade', name: '네크론의 검', wclass: 'sword', tierKey: 'ancient', dmg: 140, buyPrice: 0, sellPrice: 40000 },
+    // V10: 슬레이어 계열 전용 유니크 무기(보스 티어2+ 희귀 드롭)
+    { key: 'revenant_falchion', name: '리븐넌트 팔션', wclass: 'sword', tierKey: 'epic', dmg: 84, buyPrice: 0, sellPrice: 3200 },
+    { key: 'scorpion_foil', name: '스콜피온 포일', wclass: 'sword', tierKey: 'epic', dmg: 88, buyPrice: 0, sellPrice: 4200 },
+    { key: 'pooch_sword', name: '푸치 소드', wclass: 'sword', tierKey: 'legendary', dmg: 100, buyPrice: 0, sellPrice: 9000 },
+    { key: 'voidedge_katana', name: '보이드엣지 카타나', wclass: 'sword', tierKey: 'mythic', dmg: 120, buyPrice: 0, sellPrice: 18000 },
+    { key: 'fire_fury_staff', name: '화염 분노 지팡이', wclass: 'staff', tierKey: 'mythic', dmg: 126, buyPrice: 0, sellPrice: 22000 },
   ];
   // 아이템 초기 능력치 무작위 롤(실제 스카이블럭 감성): 같은 이름의 장비라도 획득 시
   // 기본 수치가 ±8% 범위에서 굴려져 고정됨(인챈트/리포지/스타포스와 완전 별개의 "생 초기치").
@@ -496,7 +523,7 @@
   // 인챈티드 아이템: 모든 컬렉션 자원 — 원자재 160개(32×5 십자 배열) → 인챈티드 1개
   const ENCHANTED_RES = COLLECTIONS.reduce((a, c) => a.concat(c.resources.map(r => r.key)), []);
   // 광물은 한 단계 더: 인챈티드 160개 → 인챈티드 블록
-  const ENCHANTED_BLOCK_RES = ['stone', 'coal', 'iron', 'gold', 'lapis', 'redstone', 'diamond', 'emerald'];
+  const ENCHANTED_BLOCK_RES = ['stone', 'coal', 'iron', 'gold', 'lapis', 'redstone', 'diamond', 'emerald', 'bone', 'slime_ball', 'gunpowder', 'ender_pearl'];   // V10: 12종
   const RECIPES = [
     ...ENCHANTED_RES.map(rk => ({
       key: `enchanted_${rk}`, needs: { [rk]: 160 }, gives: 1, unlock: { resource: rk, tier: 2 },
@@ -547,6 +574,8 @@
     { key: 'weapon_legendary', needs: { diamond: 48, obsidian: 12, dungeon_essence: 40 }, gives: 1, unlock: { skill: 'combat', lv: 14 } },
     { key: 'armor_legendary', needs: { diamond: 64, obsidian: 16, dungeon_essence: 50 }, gives: 1, unlock: { skill: 'combat', lv: 14 } },
     // 마인크래프트 기본 조합(해금 없음)
+    { key: 'minion_fuel_lava', needs: { magma_cream: 32, iron: 16 }, gives: 1, unlock: { resource: 'magma_cream', tier: 2 } },
+    { key: 'super_compactor', needs: { enchanted_redstone: 1, iron: 64 }, gives: 1, unlock: { resource: 'redstone', tier: 4 } },
     { key: 'potion_strength', needs: { blaze_rod: 2, spider_eye: 4 }, gives: 1, unlock: { resource: 'spider_eye', tier: 2 } },
     { key: 'potion_speed', needs: { sugarcane: 16, feather: 4 }, gives: 1, unlock: { resource: 'sugarcane', tier: 2 } },
     { key: 'potion_healing', needs: { melon: 12, ghast_tear: 1 }, gives: 1, unlock: { resource: 'melon', tier: 2 } },
@@ -568,13 +597,14 @@
   /* ---------------- 은행 ---------------- */
   const BANK = { interestPctPerDay: 2, interestCapBalance: 100000,
     // V9: 잔고 상한 업그레이드(골드 싱크): 10만 → 50만 → 250만 → 1000만
-    upgrades: [{ cap: 100000, cost: 0 }, { cap: 500000, cost: 50000 }, { cap: 2500000, cost: 400000 }, { cap: 10000000, cost: 2500000 }] };
+    upgrades: [{ cap: 100000, cost: 0, pct: 2 }, { cap: 500000, cost: 50000, pct: 2.5 }, { cap: 2500000, cost: 400000, pct: 3 }, { cap: 10000000, cost: 2500000, pct: 3.5 }] };   // V10: 티어별 이자율
 
   /* ---------------- 일일 특가(경매인) ---------------- */
   const DAILY_DEALS = { count: 5, jackpotMul: 5, normalMul: 2.5 };   // V9: 수집상 5종 + 잭팟 1종(시세 ×5)
 
   /* ---------------- 상점 ---------------- */
   const SHOP = [
+    ...MINIBOSS_LOOT,
     // 도구 4계열 × 5티어
     ...Object.keys(TOOLS).flatMap(fam => TOOLS[fam].map(t => ({ key: t.key, name: t.name, category: '도구', tierKey: t.tierKey, buyPrice: t.price, sellPrice: Math.round((t.price || 900 * t.mul) * 0.2), stackSize: 1 }))),
     // 강화/미니언/인챈트
@@ -584,9 +614,9 @@
     { key: 'essence_cosmetic_cape', name: '지배자의 망토(장식)', category: '장식', buyPrice: 0, sellPrice: 5000, stackSize: 1 },
     { key: 'dungeon_essence', name: '던전 정수', category: '재료', buyPrice: 0, sellPrice: 120, stackSize: 64 },
     { key: 'arachne_crystal', name: '아라크네 크리스탈', category: '재료', buyPrice: 0, sellPrice: 900, stackSize: 16 },
-    { key: 'potion_strength', name: '힘의 물약(3분 힘 +25)', category: '물약', buyPrice: 0, sellPrice: 150, stackSize: 16 },
-    { key: 'potion_speed', name: '신속의 물약(3분 속도 +20)', category: '물약', buyPrice: 0, sellPrice: 120, stackSize: 16 },
-    { key: 'potion_healing', name: '재생의 물약(3분 체력 +40)', category: '물약', buyPrice: 0, sellPrice: 150, stackSize: 16 },
+    { key: 'potion_strength', name: '힘의 물약(5분 힘 +25)', category: '물약', buyPrice: 0, sellPrice: 150, stackSize: 16 },
+    { key: 'potion_speed', name: '신속의 물약(5분 속도 +20)', category: '물약', buyPrice: 0, sellPrice: 120, stackSize: 16 },
+    { key: 'potion_healing', name: '재생의 물약(5분 체력 +40)', category: '물약', buyPrice: 0, sellPrice: 150, stackSize: 16 },
     ...['magma_cream', 'ghast_tear', 'spider_eye', 'slime_ball', 'gunpowder', 'ender_shard', 'feather', 'leather'].map(k => {
       const names = { magma_cream: '마그마 크림', ghast_tear: '가스트의 눈물', spider_eye: '거미 눈', slime_ball: '슬라임볼', gunpowder: '화약', ender_shard: '엔더 조각', feather: '깃털', leather: '가죽' };
       const sells = { magma_cream: 8, ghast_tear: 40, spider_eye: 5, slime_ball: 4, gunpowder: 6, ender_shard: 22, feather: 3, leather: 5 };
@@ -598,6 +628,8 @@
     { key: 'auto_shipping_module', name: '자동출하 모듈', category: '미니언', buyPrice: 0, sellPrice: 500, stackSize: 1 },
     { key: 'diamond_spreading', name: '다이아 살포기(생산 시 10% 다이아 추가)', category: '미니언', buyPrice: 0, sellPrice: 2000, stackSize: 1 },
     { key: MINION_FUEL.key, name: MINION_FUEL.name, category: '미니언', buyPrice: 0, sellPrice: 100, stackSize: 64 },
+    { key: MINION_FUEL2.key, name: MINION_FUEL2.name, category: '미니언', buyPrice: 0, sellPrice: 800, stackSize: 16 },
+    { key: 'super_compactor', name: '슈퍼 컴팩터(미니언 산출 압축 — 판매가치 +50%)', category: '미니언', buyPrice: 0, sellPrice: 3000, stackSize: 1 },
     // 인챈티드 자원(제작 전용, 판매가 20% 프리미엄)
     ...ENCHANTED_BLOCK_RES.map(rk => {
       const r = COLLECTIONS.flatMap(c => c.resources).find(x => x.key === rk);
@@ -653,7 +685,7 @@
   window.ECON_DATA = {
     ITEM_TIERS, COLLECTIONS, SKILLS, GATHER_TABLE, TOOLS, MINIONS, MINION_STORAGE_BASE, MINION_STORAGE_UPGRADED,
     MINION_STORAGE_UPGRADE_COST, MINION_OFFLINE_CAP_HOURS, MINION_SLOT_MAX, MINION_SLOT_COST_BASE, MINION_SLOT_COST_MUL,
-    MINION_FUEL, SLAYERS, DUNGEON, DUNGEON_ROOM_SCORE, ESSENCE_SHOP, SHOP, DAILY_SELL_LIMIT_PER_STACK,
+    MINION_FUEL, MINION_FUEL2, SLAYERS, DUNGEON, DUNGEON_ROOM_SCORE, ESSENCE_SHOP, SHOP, DAILY_SELL_LIMIT_PER_STACK,
     EQUIPMENT, STARFORCE, REFORGES, ITEM_ROLL,
     TALISMANS, MAGICAL_POWER, PETS, PET_XP_BASE, PET_XP_EXP, PET_MAX_LEVEL,
     ENCHANTS, CHAOS_ENCHANT, RECIPES, MASTER_MODE,
