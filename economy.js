@@ -857,6 +857,27 @@
     saveNow();
   }
 
+  // 3D 카타콤 완주 보상(economy3d.js가 보스 처치 시 호출) — 점수/등급/정수/전리품
+  function dungeon3dComplete(floor, stats) {
+    const fd = dungeonFloorDef(floor); if (!fd || !P) return null;
+    let score = 230 + Math.max(0, 120 - Math.floor((stats.timeSec || 0) / 5)) - (stats.deaths || 0) * 60 + (stats.kills || 0) * 2;
+    score = Math.max(10, score);
+    const grade = dungeonGrade(score);
+    P.dungeonBest[floor] = gradeMax(P.dungeonBest[floor], grade);
+    addItem('dungeon_essence', fd.essenceReward);
+    const itemKey = fd.lootTable[Math.floor(Math.random() * fd.lootTable.length)];
+    addItem(itemKey, 1);
+    addSkillXp('combat', Math.round(fd.essenceReward * enchXpMul() * 10));
+    let bonusMsg = '';
+    if (Math.random() < 0.40) {
+      const bonus = randomEquipDrop(Math.min(6, floor));
+      if (bonus) bonusMsg = ` + 🎁 ${bonus.name}`;
+    }
+    toastFn(`🏆 ${fd.bossName} 처치! 등급 ${grade} (점수 ${score}) · 정수 +${fd.essenceReward} · ${itemName(itemKey)}${bonusMsg}`, true);
+    saveNow(); renderZone();
+    return grade;
+  }
+
   /* ---------------- 파티 던전(호스트 권위) — economy-net.js 연결부 ---------------- */
   function partySnapshot() {
     if (!dungeonRun) return null;
@@ -1465,7 +1486,13 @@
       case 'reforge': reforge(el.dataset.key); break;
       case 'slayer_start': startSlayer(el.dataset.key, Number(el.dataset.tier)); break;
       case 'dungeon_class': P.dungeonClass = el.dataset.key; saveNow(); renderZone(); break;
-      case 'dungeon_start': startDungeon(Number(el.dataset.floor)); break;
+      case 'dungeon_start': {
+        const f = Number(el.dataset.floor);
+        // 파티 중이 아니면 3D 카타콤(직접 돌아다니며 전투) — 3D 미가동 시 패널 웨이브로 폴백
+        const inParty = net() && net().party();
+        if (!inParty && typeof window.economy3dDungeon === 'function' && window.economy3dDungeon(f)) break;
+        startDungeon(f); break;
+      }
       case 'dungeon_advance': dungeonAdvance(); break;
       case 'dungeon_puzzle': { if (dungeonRun.cls && dungeonRun.cls.autoPuzzle) { toastFn('🔮 메이지의 통찰 — 퍼즐 자동 해결!', true); dungeonAdvance('correct'); break; } const correct = dungeonRun._correctIdx == null ? (dungeonRun._correctIdx = Math.floor(Math.random() * 3)) : dungeonRun._correctIdx; dungeonAdvance(Number(el.dataset.i) === correct ? 'correct' : 'wrong'); dungeonRun._correctIdx = null; break; }
       case 'dungeon_secret': dungeonSecretClick(el.dataset.dir); break;
@@ -1558,6 +1585,9 @@
     defensePct: lowHp => playerDefensePct(lowHp),
     maxHp: () => playerMaxHp(),
     statSpeed: () => playerStats().speed,
+    canEnterFloor,
+    dungeonFloorInfo: f => { const fd = dungeonFloorDef(f); return fd ? { floor: fd.floor, bossName: fd.bossName, bossHp: fd.bossHp, bossDmg: fd.bossDmg, mobList: fd.mobList, essenceReward: fd.essenceReward } : null; },
+    dungeonComplete: dungeon3dComplete,
     isFresh: () => !!P && Object.keys(P.collections).length === 0 && P.minions.length === 0 && Object.keys(P.homeEdits).length === 0,
   };
 

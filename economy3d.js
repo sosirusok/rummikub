@@ -186,6 +186,7 @@
     spider: { name: '🕷️ 스파이더 덴', size: [128, 48, 128], spawn: [64, 100], gen: () => genSpiderDen() },
     nether: { name: '🔥 블레이징 포트리스', size: [128, 48, 128], spawn: [64, 96], gen: () => genNether() },
     end:    { name: '🌌 디 엔드', size: [128, 48, 128], spawn: [64, 100], gen: () => genEnd() },
+    dungeon: { name: '🗝️ 카타콤', size: [144, 32, 48], spawn: [8, 24], gen: () => genDungeon() },
   };
   // 워프 패드: 밟거나 클릭하면 슈퍼 점프 후 자동 워프(실제 스카이블럭 런치패드)
   const WARPS = {
@@ -205,6 +206,7 @@
     spider: [{ x: 64, z: 106, dest: 'hub', label: '🏘️ 허브' }],
     nether: [{ x: 64, z: 102, dest: 'hub', label: '🏘️ 허브' }],
     end: [{ x: 64, z: 106, dest: 'hub', label: '🏘️ 허브' }],
+    dungeon: [{ x: 4, z: 24, dest: 'hub', label: '🚪 포기하고 나가기' }],
   };
   let worldCache = {};          // 월드 키 → 지형 버퍼(왕복 시 재생성 방지)
   let warpCharge = null;        // {dest, t} — 패드 위 0.6초 차지 후 발사
@@ -348,6 +350,7 @@
   function travelTo(mode, force) {
     if (mode === worldMode && !force) return;
     restoreAllRegen(); clearMobs(); stopFishing(); mouseHeld = false; warpCharge = null;
+    if (worldMode === 'dungeon' && mode !== 'dungeon') dungeonState = null;
     if (worldMode !== 'visit' && worldMode !== 'dungeon') worldCache[worldMode] = { world, W, H, Dp };   // 현재 월드 캐시
     worldMode = mode;
     if (mode !== 'visit') visitData = null;
@@ -912,6 +915,97 @@
     }
     if (warpCharge) { warpCharge = null; const cross = document.getElementById('econ3dCross'); if (cross && !fishing && !breaking) cross.textContent = '+'; }
   }
+
+  /* ---------------- 3D 카타콤 던전: 직접 돌아다니며 몬스터를 잡고 보스까지 ---------------- */
+  let dungeonState = null;   // {floor, fd, rooms:[{x0,x1,gateX,kills,need,cleared}], t0, deaths, kills, bossSpawned}
+  function genDungeon() {
+    world = new Uint8Array(W * H * Dp);
+    const ROOM_W = 22, ROOMS = 5;
+    // 바닥/외벽(개방형 천장 — 카타콤 폐허 분위기, 하늘은 자정 고정)
+    for (let x = 0; x < W; x++) for (let z = 8; z < 40; z++) setW(x, 2, z, ID.stone_bricks);
+    const wallTo = 9;
+    for (let x = 0; x < W; x++) for (let y = 3; y <= wallTo; y++) { setW(x, y, 8, ID.stone_bricks); setW(x, y, 39, ID.stone_bricks); }
+    for (let y = 3; y <= wallTo; y++) for (let z = 8; z < 40; z++) { setW(0, y, z, ID.stone_bricks); setW(W - 1, y, z, ID.stone_bricks); }
+    // 방 구분 게이트 벽(중앙 2×3 흑요석 게이트 — 방 클리어 시 개방)
+    for (let i = 1; i <= ROOMS; i++) {
+      const gx = i * ROOM_W;
+      for (let y = 3; y <= wallTo; y++) for (let z = 8; z < 40; z++) setW(gx, y, z, ID.stone_bricks);
+      for (let y = 3; y <= 5; y++) for (let z = 22; z <= 25; z++) setW(gx, y, z, ID.obsidian);   // 게이트
+    }
+    // 조명 + 폐허 기둥
+    for (let i = 0; i <= ROOMS; i++) {
+      const cx = i * ROOM_W + 11;
+      [[cx - 6, 14], [cx + 6, 14], [cx - 6, 33], [cx + 6, 33]].forEach(p2 => {
+        if (p2[0] > 1 && p2[0] < W - 1) { for (let y = 3; y <= 5; y++) setW(p2[0], y, p2[1], ID.stone_bricks); setW(p2[0], 6, p2[1], ID.glowstone); }
+      });
+    }
+    buildWarpPads();
+  }
+  function startDungeon3d(floor) {
+    if (!running || !scene) return false;
+    const api = econApi();
+    if (api.hasActiveEncounter && api.hasActiveEncounter()) return false;
+    if (api.canEnterFloor && !api.canEnterFloor(floor)) { if (typeof toast === 'function') toast('이전 층을 먼저 클리어하세요', false); return true; }
+    const fd = api.dungeonFloorInfo ? api.dungeonFloorInfo(floor) : null;
+    if (!fd) return false;
+    dungeonState = { floor, fd, rooms: [], t0: performance.now(), deaths: 0, kills: 0, bossSpawned: false, done: false };
+    hidePanel();
+    travelTo('dungeon', true);
+    // 방 5개: 몬스터 배치(방마다 4마리, 층 몹 이름/스탯)
+    const ROOM_W = 22;
+    for (let i = 0; i < 5; i++) {
+      const room = { x0: i * ROOM_W + 2, x1: (i + 1) * ROOM_W - 2, gateX: (i + 1) * ROOM_W, kills: 0, need: 4, cleared: false };
+      dungeonState.rooms.push(room);
+      for (let k = 0; k < room.need; k++) {
+        const name = fd.mobList[k % fd.mobList.length];
+        const hp = Math.max(40, Math.round(fd.bossHp / 40));
+        spawnDungeonMob({
+          name, hp, dmg: Math.round(fd.bossDmg / 3), lv: floor * 5 + k,
+          x: room.x0 + 4 + Math.random() * (room.x1 - room.x0 - 8), z: 14 + Math.random() * 20,
+          color: [0x3a7d3a, 0x8a8a8a, 0x5a4327, 0x7d3a3a][k % 4], roomIdx: i,
+        });
+      }
+    }
+    if (typeof toast === 'function') toast(`🗝️ 카타콤 ${floor}층 입장! 몬스터를 모두 잡아 게이트를 열고 보스까지 전진하세요`, true);
+    return true;
+  }
+  function spawnDungeonMob(opt) {
+    const def = { name: opt.name, kind: opt.kind || 'humanoid', color: opt.color || 0x3a7d3a, hp: opt.hp, dmg: opt.dmg, xp: 10 + opt.lv, coins: 8 + opt.lv, speed: 2.0, drops: [{ key: 'dungeon_essence', n: 1, chance: 0.25 }], tierCap: Math.min(6, dungeonState ? dungeonState.floor : 2) };
+    const area = { x: opt.x, z: opt.z, r: 6, world: 'dungeon' };
+    const mob = spawnMob(area, '_custom', opt.lv, def);
+    if (mob) { mob.dungeonRoom = opt.roomIdx; mob.isBoss = !!opt.isBoss; }
+    return mob;
+  }
+  function onDungeonMobDead(m) {
+    if (!dungeonState || dungeonState.done) return;
+    dungeonState.kills++;
+    if (m.isBoss) {
+      dungeonState.done = true;
+      const api = econApi();
+      if (api.dungeonComplete) api.dungeonComplete(dungeonState.floor, { timeSec: (performance.now() - dungeonState.t0) / 1000, deaths: dungeonState.deaths, kills: dungeonState.kills });
+      setTimeout(() => { if (running) { dungeonState = null; travelTo('hub'); } }, 1500);
+      return;
+    }
+    if (m.dungeonRoom == null) return;
+    const room = dungeonState.rooms[m.dungeonRoom];
+    if (!room || room.cleared) return;
+    room.kills++;
+    if (room.kills >= room.need) {
+      room.cleared = true;
+      for (let y = 3; y <= 5; y++) for (let z = 22; z <= 25; z++) setW(room.gateX, y, z, 0);   // 게이트 개방
+      markBlockDirty(room.gateX, 22); markBlockDirty(room.gateX, 25);
+      if (typeof toast === 'function') toast(`⚔️ ${m.dungeonRoom + 1}번 방 클리어! 게이트가 열렸다`, true);
+      // 마지막 방이면 보스 소환
+      if (m.dungeonRoom === dungeonState.rooms.length - 1 && !dungeonState.bossSpawned) {
+        dungeonState.bossSpawned = true;
+        const fd = dungeonState.fd;
+        const boss = spawnDungeonMob({ name: fd.bossName, hp: fd.bossHp, dmg: fd.bossDmg, lv: dungeonState.floor * 10, x: 122, z: 24, color: 0x6a1a8a, isBoss: true });
+        if (boss) { boss.mesh.scale.multiplyScalar(1.8); drawMobLabel(boss); }
+        if (typeof toast === 'function') toast(`👹 ${fd.bossName}이(가) 깨어났다!`, false);
+      }
+    }
+  }
+  window.economy3dDungeon = floor => { try { return startDungeon3d(floor); } catch (e) { console.error('econ3d dungeon', e); return false; } };
 
   /* ---------------- 텍스처 아틀라스 ---------------- */
   function px(c, x, y, col) { c.fillStyle = col; c.fillRect(x, y, 1, 1); }
@@ -1727,13 +1821,13 @@
     if (elite) h.group.scale.multiplyScalar(1.25);
     return h;
   }
-  function spawnMob(area, typeKey, lv) {
-    const def = MOB_TYPES[typeKey]; if (!def) return null;
+  function spawnMob(area, typeKey, lv, customDef) {
+    const def = customDef || MOB_TYPES[typeKey]; if (!def) return null;
     const a = Math.random() * Math.PI * 2, rr = Math.random() * area.r * 0.8;
     const x = area.x + Math.cos(a) * rr, z = area.z + Math.sin(a) * rr;
     const y = surfaceTop(Math.floor(x), Math.floor(z));
     if (y <= SEA + 1 && worldMode === 'hub') return null;   // 물 위 스폰 방지
-    const elite = Math.random() < 0.05;
+    const elite = !customDef && Math.random() < 0.05;
     const mul = 1 + (lv - 1) * 0.35;
     const mob = {
       type: typeKey, def, lv, elite,
@@ -1846,6 +1940,7 @@
       });
       scene.remove(m.mesh); disposeGroup(m.mesh);
       mobs.splice(mobs.indexOf(m), 1);
+      if (worldMode === 'dungeon') onDungeonMobDead(m);
     } else drawMobLabel(m);
   }
   // 떠오르는 피해 숫자
@@ -1887,6 +1982,7 @@
       const api = econApi();
       if (api.playerDied) api.playerDied();
       php.hp = php.max;
+      if (worldMode === 'dungeon' && dungeonState) dungeonState.deaths++;
       respawnAtHub('');
     }
     updateHpHud();
@@ -2369,6 +2465,7 @@
       getDims: () => ({ W, H, Dp }),
       spawnMobForTest: (area, type, lv) => spawnMob(area, type, lv),
       progressBreaking, tickRegen, pickMob, mobs: () => mobs,
+      startDungeon3d, getDungeonState: () => dungeonState, onDungeonMobDead, spawnDungeonMob,
     };
   }
 })();
