@@ -123,6 +123,7 @@
     wheat: 'farm', carrot: 'farm', potato: 'farm', pumpkin: 'farm', melon: 'farm', sugarcane: 'farm',
     oaklog: 'forest', birchlog: 'forest', sprucelog: 'forest',
     rawfish: 'dock', clay: 'dock',
+    rotten_flesh: 'hub', bone: 'hub', string: 'hub', slime_ball: 'hub', blaze_rod: 'hub', ghast_tear: 'hub', leather: 'farm', feather: 'farm',
   };
   const MINION_COLORS = {
     stone: 0x9a9a9a, coal: 0x2a2a2e, iron: 0xd8a282, gold: 0xf2d75c, lapis: 0x1f4fc0, redstone: 0xc81f28,
@@ -173,6 +174,19 @@
     { id: 9, x: 322, z: 328, y: null, hint: '낚시터 오두막 지붕' },
     { id: 10, x: 224, z: 356, y: null, hint: '콜로세움 관중석' },
     { id: 11, x: 148, z: 124, y: null, hint: '숲 큰 나무 옆' },
+    // V9: 테마 월드 소울 12개
+    { id: 12, world: 'park', x: 72, z: 72, y: null, hint: '파크 중앙섬' },
+    { id: 13, world: 'park', x: 72, z: 26, y: null, hint: '설원 가문비 부속섬' },
+    { id: 14, world: 'barn', x: 70, z: 64, y: null, hint: '헛간 뒤' },
+    { id: 15, world: 'mushroom', x: 40, z: 72, y: null, hint: '거대 버섯 아래' },
+    { id: 16, world: 'gold', x: 56, z: 30, y: null, hint: '노천광 꼭대기' },
+    { id: 17, world: 'deep', x: 48, z: 48, y: 8, hint: '다이아 심층' },
+    { id: 18, world: 'spider', x: 64, z: 64, y: null, hint: '거미산 정상' },
+    { id: 19, world: 'spider', x: 96, z: 40, y: null, hint: '아라크네 성소' },
+    { id: 20, world: 'nether', x: 64, z: 40, y: 22, hint: '위더 홀' },
+    { id: 21, world: 'nether', x: 40, z: 40, y: 34, hint: '블레이즈 첨탑' },
+    { id: 22, world: 'end', x: 64, z: 64, y: 6, hint: '드래곤 둥지 제단' },
+    { id: 23, world: 'end', x: 64, z: 98, y: null, hint: '보이드 세펄처 꼭대기' },
   ];
 
   /* ---------------- 상태 ---------------- */
@@ -647,8 +661,9 @@
     else { const sp = def.spawn || [W >> 1, Dp >> 1]; P.x = sp[0] + 0.5; P.z = sp[1] + 0.5; P.y = surfaceTop(sp[0], sp[1]) + 0.02; P.yaw = Math.PI; }
     P.vx = P.vy = P.vz = 0;
     buildIslandMesh((mode === 'home' || mode === 'visit') ? HOME_BOUNDS : null);   // 플레이어 주변 청크부터 즉시 빌드
-    if (mode === 'hub') { buildNpcMeshes(); buildNodeMeshes(); buildFairyMeshes(); buildAmbientMobs(); refreshFairyVisibility(); }
+    if (mode === 'hub') { buildNpcMeshes(); buildNodeMeshes(); buildAmbientMobs(); }
     else { propGroup = new THREE.Group(); scene.add(propGroup); }
+    buildFairyMeshes(); refreshFairyVisibility();   // V9: 소울은 모든 월드에
     buildStaticInteractables();
     rebuildMinionVisuals(true);
     buildMinimapBase();
@@ -1183,14 +1198,16 @@
     }
     buildWarpPads();
   }
-  function startDungeon3d(floor) {
+  function startDungeon3d(floor, master) {
     if (!running || !scene) return false;
     const api = econApi();
     if (api.hasActiveEncounter && api.hasActiveEncounter()) return false;
     if (api.canEnterFloor && !api.canEnterFloor(floor)) { if (typeof toast === 'function') toast('이전 층을 먼저 클리어하세요', false); return true; }
     const fd = api.dungeonFloorInfo ? api.dungeonFloorInfo(floor) : null;
     if (!fd) return false;
-    dungeonState = { floor, fd, rooms: [], t0: performance.now(), deaths: 0, kills: 0, bossSpawned: false, done: false };
+    const MM = window.ECON_DATA.MASTER_MODE;
+    if (master && !(api.canEnterFloor && api.canEnterFloor(MM.unlockFloor + 1))) { if (typeof toast === 'function') toast('☠ 마스터 모드는 F7 클리어 후 해금!', false); return true; }
+    dungeonState = { floor, fd, rooms: [], t0: performance.now(), deaths: 0, kills: 0, bossSpawned: false, done: false, master: !!master };
     hidePanel();
     travelTo('dungeon', true);
     // 방 5개: 몬스터 배치(방마다 4마리, 층 몹 이름/스탯)
@@ -1198,11 +1215,19 @@
     for (let i = 0; i < 5; i++) {
       const room = { x0: i * ROOM_W + 2, x1: (i + 1) * ROOM_W - 2, gateX: (i + 1) * ROOM_W, kills: 0, need: 4, cleared: false };
       dungeonState.rooms.push(room);
+      // V9: 방마다 숨겨진 시크릿 상자 1개(구석 — 찾으면 점수+정수+북 확률)
+      const sx = Math.random() < 0.5 ? room.x0 + 1 : room.x1 - 1, sz = Math.random() < 0.5 ? 10 : 37;
+      setW(sx, 3, sz, ID.oak_planks); setW(sx, 4, sz, ID.glowstone);
+      markBlockDirty(sx, sz);
+      dynamicInteractables.push({ type: 'dgSecret', ref: { room: i, done: false }, x: sx + 0.5, y: 4, z: sz + 0.5 });
       for (let k = 0; k < room.need; k++) {
         // V8: 층별 던전 몹 15종 풀에서 랜덤(총 105종) — 방마다 조합이 다르다
-        const typeKey = `dg_f${floor}_${Math.floor(Math.random() * 15)}`;
+        const typeKey = `dg_f${Math.max(1, floor)}_${Math.floor(Math.random() * 15)}`;
         const area = { x: room.x0 + 4 + Math.random() * (room.x1 - room.x0 - 8), z: 14 + Math.random() * 20, r: 3, world: 'dungeon' };
-        const mob = spawnMob(area, typeKey, floor * 4 + 1 + Math.floor(Math.random() * 4));
+        let def0 = MOB_TYPES[typeKey];
+        if (floor === 0) def0 = Object.assign({}, def0, { hp: Math.round(def0.hp * 0.4), dmg: Math.round(def0.dmg * 0.5), name: def0.name.replace(/F\d+/, 'F0') });
+        if (master) def0 = Object.assign({}, def0, { name: '☠ ' + def0.name.replace('F' + floor, 'M' + floor), hp: Math.round(def0.hp * MM.hpMul), dmg: Math.round(def0.dmg * MM.dmgMul) });
+        const mob = spawnMob(area, typeKey, floor * 4 + 1 + Math.floor(Math.random() * 4), (floor === 0 || master) ? def0 : null);
         if (mob) mob.dungeonRoom = i;
       }
     }
@@ -1241,7 +1266,8 @@
       if (m.dungeonRoom === dungeonState.rooms.length - 1 && !dungeonState.bossSpawned) {
         dungeonState.bossSpawned = true;
         const fd = dungeonState.fd;
-        const boss = spawnDungeonMob({ name: fd.bossName, hp: fd.bossHp, dmg: fd.bossDmg, lv: dungeonState.floor * 10, x: 122, z: 24, color: 0x6a1a8a, isBoss: true });
+        const mmul = dungeonState.master ? window.ECON_DATA.MASTER_MODE : null;
+        const boss = spawnDungeonMob({ name: (mmul ? '☠ ' : '') + fd.bossName, hp: Math.round(fd.bossHp * (mmul ? mmul.hpMul : 1)), dmg: Math.round(fd.bossDmg * (mmul ? mmul.dmgMul : 1)), lv: Math.max(1, dungeonState.floor) * 10, x: 122, z: 24, color: 0x6a1a8a, isBoss: true });
         if (boss) { boss.mesh.scale.multiplyScalar(1.8); drawMobLabel(boss); }
         if (typeof toast === 'function') toast(`👹 ${fd.bossName}이(가) 깨어났다!`, false);
       }
@@ -1332,7 +1358,7 @@
   window.economy3dApplyPartyAttack = applyPartyAttack;
   window.economy3dPartyDungeonEnded = () => { if (running && worldMode === 'dungeon') { dungeonState = null; partyGuestMode = false; setTimeout(() => { if (running) travelTo('hub'); }, 1200); } };
 
-  window.economy3dDungeon = floor => { try { return startDungeon3d(floor); } catch (e) { console.error('econ3d dungeon', e); return false; } };
+  window.economy3dDungeon = (floor, master) => { try { return startDungeon3d(floor, master); } catch (e) { console.error('econ3d dungeon', e); return false; } };
 
   /* ---------------- 텍스처 아틀라스 ---------------- */
   function px(c, x, y, col) { c.fillStyle = col; c.fillRect(x, y, 1, 1); }
@@ -2181,7 +2207,7 @@
     skeleton: { name: '스켈레톤', kind: 'humanoid', color: 0xcccccc, hp: 90, dmg: 15, xp: 7, coins: 1, speed: 1.8, books: ['critical', 'prosecute'], drops: [{ key: 'bone', n: 1 }, { key: 'bone', n: 2, chance: 0.4 }], tierCap: 1 },
     crypt_ghoul: { name: '크립트 구울', kind: 'humanoid', color: 0x5a8a5a, hp: 180, dmg: 31, xp: 25, coins: 15, speed: 2.2, books: ['giant_killer', 'execute'], drops: [{ key: 'rotten_flesh', n: 3 }, { key: 'gold', n: 1, chance: 0.25 }], tierCap: 3 },
     golden_ghoul: { name: '골든 구울', kind: 'humanoid', color: 0xd8b23a, hp: 320, dmg: 45, xp: 45, coins: 60, speed: 2.3, books: ['looting'], drops: [{ key: 'gold', n: 3 }, { key: 'talisman_wealth_rune', n: 1, chance: 0.02 }], tierCap: 4 },
-    wraith: { name: '레이스', kind: 'tall', color: 0x8a94b8, hp: 250, dmg: 38, xp: 30, coins: 10, speed: 2.6, books: ['life_steal'], drops: [{ key: 'bone', n: 2 }, { key: 'lapis', n: 2, chance: 0.3 }], tierCap: 3 },
+    wraith: { name: '레이스', kind: 'tall', color: 0x8a94b8, hp: 250, dmg: 38, xp: 30, coins: 10, speed: 2.6, books: ['life_steal'], drops: [{ key: 'gunpowder', n: 1 }, { key: 'bone', n: 2 }, { key: 'lapis', n: 2, chance: 0.3 }], tierCap: 3 },
     rat: { name: '쥐', kind: 'quad', color: 0x6a6258, hp: 40, dmg: 8, xp: 3, coins: 1, speed: 3.0, scale: 0.45, books: [], drops: [{ key: 'rawfish', n: 1, chance: 0.3 }], tierCap: 0 },
     wolf: { name: '늑대', kind: 'quad', color: 0x9a9a9a, hp: 160, dmg: 20, xp: 10, coins: 4, speed: 2.8, books: ['first_strike', 'looting'], drops: [{ key: 'bone', n: 2 }, { key: 'talisman_wolf_claw', n: 1, chance: 0.015 }], tierCap: 2 },
     old_wolf: { name: '올드 울프', kind: 'quad', color: 0x5a5a62, hp: 900, dmg: 80, xp: 60, coins: 25, speed: 3.0, scale: 1.4, books: ['first_strike', 'experience'], drops: [{ key: 'bone', n: 4 }], tierCap: 4 },
@@ -2191,8 +2217,8 @@
     redstone_pigman: { name: '레드스톤 피그맨', kind: 'humanoid', color: 0xc86a6a, hp: 400, dmg: 42, xp: 24, coins: 8, speed: 2.0, books: ['fortune', 'efficiency'], drops: [{ key: 'redstone', n: 3 }], tierCap: 3 },
     diamond_zombie: { name: '다이아 좀비', kind: 'humanoid', color: 0x5decd5, hp: 700, dmg: 60, xp: 40, coins: 12, speed: 2.0, books: ['area_mining'], drops: [{ key: 'diamond', n: 1, chance: 0.5 }], tierCap: 4 },
     diamond_skeleton: { name: '다이아 스켈레톤', kind: 'humanoid', color: 0x8aeade, hp: 650, dmg: 65, xp: 40, coins: 12, speed: 2.1, books: ['area_mining', 'critical'], drops: [{ key: 'diamond', n: 1, chance: 0.5 }], tierCap: 4 },
-    spider: { name: '거미', kind: 'spider', color: 0x3a3040, hp: 80, dmg: 11, xp: 6, coins: 2, speed: 2.4, books: ['bane_of_arthropods', 'triple_strike'], drops: [{ key: 'string', n: 1 }, { key: 'string', n: 2, chance: 0.35 }], tierCap: 1 },
-    gravel_skeleton: { name: '자갈 스켈레톤', kind: 'humanoid', color: 0x7d7873, hp: 220, dmg: 30, xp: 16, coins: 5, speed: 1.9, books: ['prosecute'], drops: [{ key: 'bone', n: 2 }, { key: 'string', n: 2, chance: 0.3 }, { key: 'arachne_crystal', n: 1, chance: 1 / 120 }], tierCap: 2 },
+    spider: { name: '거미', kind: 'spider', color: 0x3a3040, hp: 80, dmg: 11, xp: 6, coins: 2, speed: 2.4, books: ['bane_of_arthropods', 'triple_strike'], drops: [{ key: 'spider_eye', n: 1 }, { key: 'string', n: 1 }, { key: 'string', n: 2, chance: 0.35 }], tierCap: 1 },
+    gravel_skeleton: { name: '자갈 스켈레톤', kind: 'humanoid', color: 0x7d7873, hp: 220, dmg: 30, xp: 16, coins: 5, speed: 1.9, books: ['prosecute'], drops: [{ key: 'gunpowder', n: 1 }, { key: 'bone', n: 2 }, { key: 'string', n: 2, chance: 0.3 }, { key: 'arachne_crystal', n: 1, chance: 1 / 120 }], tierCap: 2 },
     broodmother: { name: '브루드마더', kind: 'spider', color: 0x4a2050, hp: 6000, dmg: 90, xp: 150, coins: 80, speed: 2.2, scale: 2.4, books: ['bane_of_arthropods', 'rejuvenate'], drops: [{ key: 'string', n: 8 }, { key: 'talisman_spider_ring', n: 1, chance: 0.08 }], tierCap: 5 },
     arachne: { name: '아라크네', kind: 'spider', color: 0x8a1a30, hp: 20000, dmg: 160, xp: 300, coins: 150, speed: 2.5, scale: 3.0, books: ['bane_of_arthropods', 'thunderlord'], drops: [{ key: 'string', n: 16 }, { key: 'talisman_spider_ring', n: 1, chance: 0.25 }, { key: 'pet_egg_wolf', n: 1, chance: 0.05 }], tierCap: 6 },
     blaze: { name: '블레이즈', kind: 'blaze', color: 0xe8a020, hp: 600, dmg: 50, xp: 35, coins: 8, speed: 2.0, books: ['fire_aspect', 'thunderlord'], drops: [{ key: 'blaze_rod', n: 1, chance: 0.6 }, { key: 'talisman_lava_charm', n: 1, chance: 0.02 }], tierCap: 4 },
@@ -2200,30 +2226,30 @@
     magma_cube: { name: '마그마 큐브', kind: 'slime', color: 0xd2541f, hp: 350, dmg: 35, xp: 22, coins: 6, speed: 1.5, books: ['hardened', 'thorns'], drops: [{ key: 'blaze_rod', n: 1, chance: 0.15 }], tierCap: 3 },
     pigman: { name: '피그맨', kind: 'humanoid', color: 0xe6a8ad, hp: 450, dmg: 48, xp: 28, coins: 8, speed: 2.1, books: ['vitality'], drops: [{ key: 'gold', n: 2, chance: 0.6 }], tierCap: 3 },
     enderman: { name: '엔더맨', kind: 'tall', color: 0x1a1a22, hp: 800, dmg: 60, xp: 40, coins: 8, speed: 2.6, books: ['ender_slayer', 'sugar_rush'], drops: [{ key: 'ender_pearl', n: 1, chance: 0.5 }], tierCap: 4 },
-    endermite: { name: '엔더마이트', kind: 'quad', color: 0x5a3a6a, hp: 320, dmg: 66, xp: 20, coins: 5, speed: 3.2, scale: 0.5, books: [], drops: [{ key: 'ender_pearl', n: 1, chance: 0.15 }], tierCap: 3 },
-    zealot: { name: '젤롯', kind: 'tall', color: 0x2a1a3a, hp: 655, dmg: 63, xp: 6, coins: 2, speed: 2.6, books: ['ender_slayer', 'last_stand', 'true_protection'], drops: [{ key: 'ender_pearl', n: 2 }, { key: 'talisman_void_eye', n: 1, chance: 0.01 }], tierCap: 5 },
+    endermite: { name: '엔더마이트', kind: 'quad', color: 0x5a3a6a, hp: 320, dmg: 66, xp: 20, coins: 5, speed: 3.2, scale: 0.5, books: [], drops: [{ key: 'ender_shard', n: 1 }, { key: 'ender_pearl', n: 1, chance: 0.15 }], tierCap: 3 },
+    zealot: { name: '젤롯', kind: 'tall', color: 0x2a1a3a, hp: 655, dmg: 63, xp: 6, coins: 2, speed: 2.6, books: ['ender_slayer', 'last_stand', 'true_protection'], drops: [{ key: 'ender_shard', n: 2 }, { key: 'ender_pearl', n: 2 }, { key: 'talisman_void_eye', n: 1, chance: 0.01 }], tierCap: 5 },
     obsidian_defender: { name: '흑요석 수호자', kind: 'tall', color: 0x2a2040, hp: 500, dmg: 29, xp: 30, coins: 8, speed: 1.8, books: ['protection', 'hardened'], drops: [{ key: 'obsidian', n: 2 }], tierCap: 5 },
-    watcher: { name: '워처', kind: 'tall', color: 0x3a2a52, hp: 480, dmg: 72, xp: 32, coins: 8, speed: 2.4, books: ['venomous'], drops: [{ key: 'ender_pearl', n: 1, chance: 0.4 }], tierCap: 5 },
+    watcher: { name: '워처', kind: 'tall', color: 0x3a2a52, hp: 480, dmg: 72, xp: 32, coins: 8, speed: 2.4, books: ['venomous'], drops: [{ key: 'ender_shard', n: 1 }, { key: 'ender_pearl', n: 1, chance: 0.4 }], tierCap: 5 },
     ender_dragon: { name: '엔더 드래곤', kind: 'dragon', color: 0x1a0a2a, hp: 45000, dmg: 220, xp: 500, coins: 300, scale: 1.0, books: ['dragon_hunter', 'growth', 'venomous'], drops: [{ key: 'ender_pearl', n: 8 }, { key: 'aspect_of_the_dragons', n: 1, chance: 0.08 }, { key: 'pet_egg_ender_dragon', n: 1, chance: 0.04 }, { key: 'talisman_dragon_claw', n: 1, chance: 0.06 }, { key: 'talisman_dragon_heart', n: 1, chance: 0.03 }], tierCap: 6 },
     sea_walker: { name: '바다 보행자', kind: 'humanoid', color: 0x2a6a8a, hp: 300, dmg: 25, xp: 20, coins: 6, speed: 1.6, books: ['vampirism', 'protection'], drops: [{ key: 'prismarine', n: 2 }, { key: 'talisman_deep_pearl', n: 1, chance: 0.02 }, { key: 'pet_egg_squid', n: 1, chance: 0.01 }], tierCap: 3 },
-    cow: { name: '소', kind: 'quad', color: 0x4a3a2c, hp: 50, dmg: 0, xp: 4, coins: 2, speed: 1.0, passive: true, books: [], drops: [{ key: 'wheat', n: 1, chance: 0.3 }], tierCap: 0 },
-    pig: { name: '돼지', kind: 'quad', color: 0xe6a8ad, hp: 45, dmg: 0, xp: 4, coins: 2, speed: 1.0, passive: true, books: [], drops: [{ key: 'carrot', n: 1, chance: 0.3 }], tierCap: 0 },
-    chicken: { name: '닭', kind: 'quad', color: 0xf2f2f2, hp: 30, dmg: 0, xp: 3, coins: 1, speed: 1.2, scale: 0.5, passive: true, books: [], drops: [{ key: 'talisman_feather', n: 1, chance: 0.005 }], tierCap: 0 },
+    cow: { name: '소', kind: 'quad', color: 0x4a3a2c, hp: 50, dmg: 0, xp: 4, coins: 2, speed: 1.0, passive: true, books: [], drops: [{ key: 'leather', n: 1 }, { key: 'wheat', n: 1, chance: 0.3 }], tierCap: 0 },
+    pig: { name: '돼지', kind: 'quad', color: 0xe6a8ad, hp: 45, dmg: 0, xp: 4, coins: 2, speed: 1.0, passive: true, books: [], drops: [{ key: 'leather', n: 1 }, { key: 'carrot', n: 1, chance: 0.3 }], tierCap: 0 },
+    chicken: { name: '닭', kind: 'quad', color: 0xf2f2f2, hp: 30, dmg: 0, xp: 3, coins: 1, speed: 1.2, scale: 0.5, passive: true, books: [], drops: [{ key: 'feather', n: 2 }, { key: 'talisman_feather', n: 1, chance: 0.005 }], tierCap: 0 },
     sheep: { name: '양', kind: 'quad', color: 0xe9ecec, hp: 45, dmg: 0, xp: 4, coins: 2, speed: 1.0, passive: true, books: [], drops: [{ key: 'string', n: 1, chance: 0.4 }], tierCap: 0 },
     mushroom_cow: { name: '무쉬룸', kind: 'quad', color: 0xa83232, hp: 50, dmg: 0, xp: 4, coins: 3, speed: 1.0, passive: true, books: [], drops: [{ key: 'wheat', n: 1, chance: 0.4 }, { key: 'pet_egg_elephant', n: 1, chance: 0.004 }], tierCap: 0 },
   };
   /* ── V8 몹 대확장: 지역 변종을 "별도 종"으로 + 개별 드롭률(전부 다름, 위키식 1/N) ── */
   // 스파이더 덴 6종(실제 로스터)
-  MOB_TYPES.splitter_spider = { name: '스플리터 거미', kind: 'spider', color: 0x4a3a52, hp: 70, dmg: 10, xp: 5, coins: 2, speed: 2.3, drops: [{ key: 'string', n: 1 }, { key: 'enchant_book_bane_of_arthropods', n: 1, chance: 1 / 90 }], tierCap: 1 };
-  MOB_TYPES.weaver_spider = { name: '위버 거미', kind: 'spider', color: 0x2a4a3a, hp: 110, dmg: 14, xp: 7, coins: 3, speed: 2.5, drops: [{ key: 'string', n: 2 }, { key: 'enchant_book_triple_strike', n: 1, chance: 1 / 140 }], tierCap: 1 };
-  MOB_TYPES.dasher_spider = { name: '대셔 거미', kind: 'spider', color: 0x30303a, hp: 160, dmg: 19, xp: 9, coins: 4, speed: 3.4, drops: [{ key: 'string', n: 2 }, { key: 'enchant_book_sugar_rush', n: 1, chance: 1 / 220 }], tierCap: 2 };
-  MOB_TYPES.voracious_spider = { name: '보라시어스 거미', kind: 'spider', color: 0x5a2030, hp: 420, dmg: 33, xp: 18, coins: 8, speed: 2.8, drops: [{ key: 'string', n: 3 }, { key: 'enchant_book_execute', n: 1, chance: 1 / 350 }], tierCap: 3 };
+  MOB_TYPES.splitter_spider = { name: '스플리터 거미', kind: 'spider', color: 0x4a3a52, hp: 70, dmg: 10, xp: 5, coins: 2, speed: 2.3, drops: [{ key: 'spider_eye', n: 1 }, { key: 'string', n: 1 }, { key: 'enchant_book_bane_of_arthropods', n: 1, chance: 1 / 90 }], tierCap: 1 };
+  MOB_TYPES.weaver_spider = { name: '위버 거미', kind: 'spider', color: 0x2a4a3a, hp: 110, dmg: 14, xp: 7, coins: 3, speed: 2.5, drops: [{ key: 'spider_eye', n: 1 }, { key: 'string', n: 2 }, { key: 'enchant_book_triple_strike', n: 1, chance: 1 / 140 }], tierCap: 1 };
+  MOB_TYPES.dasher_spider = { name: '대셔 거미', kind: 'spider', color: 0x30303a, hp: 160, dmg: 19, xp: 9, coins: 4, speed: 3.4, drops: [{ key: 'spider_eye', n: 1 }, { key: 'string', n: 2 }, { key: 'enchant_book_sugar_rush', n: 1, chance: 1 / 220 }], tierCap: 2 };
+  MOB_TYPES.voracious_spider = { name: '보라시어스 거미', kind: 'spider', color: 0x5a2030, hp: 420, dmg: 33, xp: 18, coins: 8, speed: 2.8, drops: [{ key: 'spider_eye', n: 1 }, { key: 'string', n: 3 }, { key: 'enchant_book_execute', n: 1, chance: 1 / 350 }], tierCap: 3 };
   MOB_TYPES.spider_jockey = { name: '스파이더 자키', kind: 'jockey', color: 0x3a3040, hp: 260, dmg: 26, xp: 14, coins: 6, speed: 2.9, drops: [{ key: 'string', n: 2 }, { key: 'bone', n: 2 }, { key: 'enchant_book_critical', n: 1, chance: 1 / 180 }], tierCap: 2 };
   MOB_TYPES.tarantula_vermin = { name: '타란튤라 버민', kind: 'spider', color: 0x6a1a1a, hp: 900, dmg: 55, xp: 35, coins: 14, speed: 3.0, scale: 1.3, drops: [{ key: 'string', n: 4 }, { key: 'arachne_crystal', n: 1, chance: 1 / 40 }, { key: 'enchant_book_bane_of_arthropods', n: 1, chance: 1 / 60 }], tierCap: 4 };
   // 네더 7종(가스트/좀비 피글린/화염 거미 추가 — 가스트는 부유)
-  MOB_TYPES.ghast = { name: '가스트', kind: 'ghast', color: 0xe8e8e8, hp: 1200, dmg: 90, xp: 55, coins: 18, speed: 1.6, fly: true, drops: [{ key: 'blaze_rod', n: 1, chance: 1 / 8 }, { key: 'enchant_book_dragon_hunter', n: 1, chance: 1 / 600 }], tierCap: 4 };
+  MOB_TYPES.ghast = { name: '가스트', kind: 'ghast', color: 0xe8e8e8, hp: 1200, dmg: 90, xp: 55, coins: 18, speed: 1.6, fly: true, drops: [{ key: 'ghast_tear', n: 1, chance: 1 / 6 }, { key: 'gunpowder', n: 2 }, { key: 'blaze_rod', n: 1, chance: 1 / 8 }, { key: 'enchant_book_dragon_hunter', n: 1, chance: 1 / 600 }], tierCap: 4 };
   MOB_TYPES.zombie_pigman = { name: '좀비 피글린', kind: 'humanoid', color: 0xd8909a, hp: 550, dmg: 52, xp: 30, coins: 9, speed: 2.1, drops: [{ key: 'gold', n: 2, chance: 1 / 2 }, { key: 'enchant_book_vitality', n: 1, chance: 1 / 240 }], tierCap: 3 };
-  MOB_TYPES.flaming_spider = { name: '화염 거미', kind: 'spider', color: 0xc84a1a, hp: 800, dmg: 70, xp: 42, coins: 12, speed: 3.1, drops: [{ key: 'blaze_rod', n: 1, chance: 1 / 5 }, { key: 'string', n: 3 }, { key: 'enchant_book_fire_aspect', n: 1, chance: 1 / 150 }], tierCap: 4 };
+  MOB_TYPES.flaming_spider = { name: '화염 거미', kind: 'spider', color: 0xc84a1a, hp: 800, dmg: 70, xp: 42, coins: 12, speed: 3.1, drops: [{ key: 'spider_eye', n: 1 }, { key: 'blaze_rod', n: 1, chance: 1 / 5 }, { key: 'string', n: 3 }, { key: 'enchant_book_fire_aspect', n: 1, chance: 1 / 150 }], tierCap: 4 };
   // 늑대 5종(하울링 케이브 계열)
   MOB_TYPES.pack_spirit = { name: '팩 스피릿', kind: 'quad', color: 0xb8c4d8, hp: 700, dmg: 60, xp: 35, coins: 10, speed: 3.0, drops: [{ key: 'bone', n: 3 }, { key: 'enchant_book_first_strike', n: 1, chance: 1 / 200 }], tierCap: 3 };
   MOB_TYPES.howling_spirit = { name: '하울링 스피릿', kind: 'quad', color: 0x8a9ab8, hp: 1100, dmg: 75, xp: 45, coins: 14, speed: 3.2, drops: [{ key: 'bone', n: 4 }, { key: 'enchant_book_experience', n: 1, chance: 1 / 260 }], tierCap: 4 };
@@ -2646,7 +2672,6 @@
     if (worldMode === 'hub') {
       NPCS.forEach(n => interactables.push({ type: 'npc', ref: n, x: n.x + 0.5, y: n._y + 1.0, z: n.z + 0.5 }));
       NODES.forEach(n => interactables.push({ type: 'node', ref: n, x: n.x + 0.5, y: n._y + 0.6, z: n.z + 0.5 }));
-      FAIRY_SPOTS.forEach(fs => interactables.push({ type: 'fairy', ref: fs, x: fs.x + 0.5, y: fs._y + 0.6, z: fs.z + 0.5 }));
     }
     const portal = PORTALS[worldMode];
     if (portal) {
@@ -2657,6 +2682,12 @@
       const ay = surfaceTop(96, 40);
       interactables.push({ type: 'arachneAltar', ref: {}, x: 96.5, y: ay + 0.8, z: 40.5 });
     }
+    FAIRY_SPOTS.forEach(fs => {   // V9: 소울은 각 월드에 분산(24개)
+      if ((fs.world || 'hub') !== worldMode) return;
+      const fy = fs.y != null ? fs.y : surfaceTop(fs.x, fs.z);
+      fs._y = fy;
+      interactables.push({ type: 'fairy', ref: fs, x: fs.x + 0.5, y: fy + 0.6, z: fs.z + 0.5 });
+    });
     for (const wp of (WARPS[worldMode] || [])) {
       const wy = wp._y || surfaceTop(wp.x, wp.z);
       interactables.push({ type: 'warp', ref: wp, x: wp.x + 0.5, y: wy + 0.8, z: wp.z + 0.5 });
@@ -2749,6 +2780,21 @@
     else if (t.type === 'player') openPanelForZone('hub', 'multi');
     else if (t.type === 'warp') warpTo(t.ref.dest);
     else if (t.type === 'arachneAltar') tryArachneSummon(t);
+    else if (t.type === 'dgSecret') {
+      if (t.ref.done) return;
+      t.ref.done = true;
+      if (dungeonState) dungeonState.secrets = (dungeonState.secrets || 0) + 1;
+      const api2 = econApi();
+      if (api2.gatherBlock) {}
+      if (window.__econ && window.__econ.addItem) {}
+      if (api2.consumeItems) {}   // no-op guards
+      if (typeof window.econAct === 'function') {}
+      if (api2 && api2.getP && api2.getP()) {
+        const P2 = api2.getP();
+        P2.inv.dungeon_essence = (P2.inv.dungeon_essence || 0) + 3;
+        if (typeof toast === 'function') toast(`🗝️ 시크릿 발견! 던전 정수 +3 (점수 보너스)${Math.random() < 0.15 ? ' + 📖 인챈트북!' : ''}`, true);
+      }
+    }
     else if (t.type === 'portal') travelTo(t.ref.target);
   }
   function showPanel() {

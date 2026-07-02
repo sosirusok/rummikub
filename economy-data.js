@@ -40,6 +40,12 @@
     { category: '전투', key: 'combat', resources: [
       res('rotten_flesh', '썩은 살점', 2, 0, [50, 150, 400, 1000, 2500, 5000, 15000, 50000]), res('bone', '뼈', 3, 40), res('string', '거미줄', 4, 30),
       res('ender_pearl', '엔더 진주', 15, 0, [10, 25, 50, 100, 250, 1000, 2500, 10000]), res('blaze_rod', '블레이즈 막대', 20, 0, [10, 25, 50, 100, 250, 500, 1500, 5000]),
+      res('magma_cream', '마그마 크림', 8, 0, [10, 25, 100, 250, 1000, 2500, 10000]), res('ghast_tear', '가스트의 눈물', 40, 0, [5, 10, 25, 100, 250, 1000]),
+      res('spider_eye', '거미 눈', 5, 0, [25, 50, 100, 250, 1000, 2500, 10000]), res('slime_ball', '슬라임볼', 4, 0, [20, 50, 150, 400, 1000, 5000]),
+      res('gunpowder', '화약', 6, 0, [25, 50, 100, 500, 1500, 5000, 10000]), res('ender_shard', '엔더 조각', 22, 0, [10, 25, 75, 250, 1000]),
+    ] },
+    { category: '축산', key: 'husbandry', resources: [
+      res('feather', '깃털', 3, 0, [50, 100, 250, 1000, 2500, 10000]), res('leather', '가죽', 5, 0, [30, 75, 200, 500, 1500, 5000]),
     ] },
   ];
 
@@ -146,6 +152,15 @@
     minion('spruce_minion', '가문비 미니언', 'sprucelog', 27, 100),
     minion('fishing_minion', '낚시 미니언', 'rawfish', 30, 60),
     minion('clay_minion', '점토 미니언', 'clay', 26, 60),
+    // V9: 전투/축산 미니언(실제 스카이블럭 로스터)
+    minion('zombie_minion', '좀비 미니언', 'rotten_flesh', 26, 80),
+    minion('skeleton_minion', '스켈레톤 미니언', 'bone', 26, 80),
+    minion('spider_minion', '거미 미니언', 'string', 26, 80),
+    minion('slime_minion', '슬라임 미니언', 'slime_ball', 26, 120),
+    minion('blaze_minion', '블레이즈 미니언', 'blaze_rod', 33, 400),
+    minion('cow_minion', '소 미니언', 'leather', 26, 80),
+    minion('chicken_minion', '닭 미니언', 'feather', 26, 80),
+    minion('ghast_minion', '가스트 미니언', 'ghast_tear', 36, 500),
   ];
   const MINION_STORAGE_BASE = 15, MINION_STORAGE_UPGRADED = 24, MINION_STORAGE_UPGRADE_COST = 5000;
   const MINION_OFFLINE_CAP_HOURS = 48;
@@ -167,6 +182,9 @@
       minCombatLevel: Math.min(28, Math.round(i * 8 * mulScale)),
     }));
   }
+  // V9: 슬레이어 레벨 XP(계열별 누적: 실제 스카이블럭 5/15/200/1000/5000/20000/100000/400000/1000000)
+  const SLAYER_XP_LEVELS = [5, 15, 200, 1000, 5000, 20000, 100000, 400000, 1000000];
+  const SLAYER_QUEST = { killsNeeded: [5, 10, 15, 20, 25], xpPerTier: [5, 25, 100, 500, 1500] };   // 티어별 처치 수/보스 XP
   const SLAYERS = [
     { key: 'zombie_slayer', name: '좀비 슬레이어', flavor: '리븐넌트 호러', dropResource: 'rotten_flesh', tiers: mkSlayerTiers(400, 20, 5, 300, 1, [
       ['rotten_flesh', 'reforge_stone_common', 'talisman_zombie'],
@@ -201,8 +219,11 @@
   ];
 
   /* ---------------- 던전 — 카타콤 7층(F1~F7, 실제 보스 라인업) ---------------- */
+  // V9: 던전 15개 난이도 = 엔트런스(F0) + 카타콤 F1~F7 + 마스터 모드 M1~M7(F7 클리어 해금)
+  const MASTER_MODE = { hpMul: 3.5, dmgMul: 3.0, rewardMul: 3, unlockFloor: 7 };
   const DUNGEON = {
     floors: [
+      { floor: 0, mobList: ['크립트 입구 좀비', '허약한 스켈레톤'], bossName: '수문장(입구)', bossHp: 4000, bossDmg: 25, lootTable: ['enchant_book_protection', 'enchant_book_sharpness', 'reforge_stone_common'], essenceReward: 4 },
       { floor: 1, mobList: ['좀비 견습생', '해골 파수병', '거미 새끼'], bossName: '본조 (광대)', bossHp: 12000, bossDmg: 35, lootTable: ['bonzo_staff', 'enchant_book_sharpness', 'reforge_stone_common'], essenceReward: 8 },
       { floor: 2, mobList: ['강화 좀비 기사', '저주받은 사제 부하'], bossName: '스카프 (해골 군주)', bossHp: 30000, bossDmg: 60, lootTable: ['talisman_scarf_studies', 'enchant_book_protection', 'reforge_stone_rare'], essenceReward: 14 },
       { floor: 3, mobList: ['수문장 골렘', '방벽 기사단'], bossName: '교수 (미치광이 연금술사)', bossHp: 70000, bossDmg: 95, lootTable: ['adaptive_armor', 'enchant_book_growth', 'pet_egg_silverfish'], essenceReward: 22 },
@@ -384,6 +405,11 @@
     tali('talisman_wealth_rune', '재물의 룬', 'legendary', 50000, { sellBonus: 5 }, '판매가 +5%'),
     tali('talisman_void_eye', '공허의 눈', 'mythic', 120000, { str: 18, def: 10 }, '힘 +18, 방어 +10'),
     tali('talisman_primal_shard', '태초의 파편', 'ancient', 300000, { str: 15, def: 15, hp: 50 }, '힘 +15, 방어 +15, 체력 +50'),
+      tali('talisman_revenant', '리븐넌트 부적', 'rare', 8000, { str: 3, hp: 10 }, '힘 +3, 체력 +10 (좀비 슬레이어 Lv3 보상)'),
+    tali('talisman_tarantula', '타란튤라 부적', 'rare', 9000, { str: 4 }, '힘 +4 (거미 슬레이어 Lv3 보상)'),
+    tali('talisman_sven', '스벤 부적', 'epic', 15000, { def: 5, hp: 15 }, '방어 +5, 체력 +15 (늑대 슬레이어 Lv3 보상)'),
+    tali('talisman_voidgloom', '보이드글룸 부적', 'epic', 22000, { str: 6 }, '힘 +6 (엔더맨 슬레이어 Lv3 보상)'),
+    tali('talisman_inferno', '인페르노 부적', 'legendary', 30000, { str: 7, hp: 20 }, '힘 +7, 체력 +20 (블레이즈 슬레이어 Lv3 보상)'),
   ];
   const MAGICAL_POWER = { statPctPer10MP: 1.5 };   // 마력 10당 최종 공격/방어 +1.5%
 
@@ -403,6 +429,9 @@
     pet('enderman', '엔더맨', 'legendary', 'combat', { str: 0.8 }, '레벨당 힘 +0.8', 0),
     pet('ender_dragon', '엔더 드래곤', 'mythic', 'combat', { str: 0.7, def: 0.5, hp: 1.0 }, '레벨당 힘 +0.7, 방어 +0.5, 체력 +1', 0),
     pet('griffin', '그리핀', 'ancient', 'combat', { str: 1.0, def: 0.7, hp: 1.5 }, '레벨당 힘 +1, 방어 +0.7, 체력 +1.5', 0),
+      { key: 'spider', name: '거미 펫', tierKey: 'rare', skill: 'combat', eggPrice: 0, statsPerLv: { str: 0.4, def: 0.1 }, bonusText: '레벨당 힘 +0.4' },
+    { key: 'blaze', name: '블레이즈 펫', tierKey: 'epic', skill: 'combat', eggPrice: 0, statsPerLv: { str: 0.5, hp: 0.5 }, bonusText: '레벨당 힘 +0.5, 체력 +0.5' },
+    { key: 'enderman', name: '엔더맨 펫', tierKey: 'legendary', skill: 'combat', eggPrice: 0, statsPerLv: { str: 0.7 }, bonusText: '레벨당 힘 +0.7' },
   ];
   const PET_XP_BASE = 60, PET_XP_EXP = 1.7, PET_MAX_LEVEL = 100;   // xpToLevel(n) = base * n^exp
 
@@ -518,6 +547,9 @@
     { key: 'weapon_legendary', needs: { diamond: 48, obsidian: 12, dungeon_essence: 40 }, gives: 1, unlock: { skill: 'combat', lv: 14 } },
     { key: 'armor_legendary', needs: { diamond: 64, obsidian: 16, dungeon_essence: 50 }, gives: 1, unlock: { skill: 'combat', lv: 14 } },
     // 마인크래프트 기본 조합(해금 없음)
+    { key: 'potion_strength', needs: { blaze_rod: 2, spider_eye: 4 }, gives: 1, unlock: { resource: 'spider_eye', tier: 2 } },
+    { key: 'potion_speed', needs: { sugarcane: 16, feather: 4 }, gives: 1, unlock: { resource: 'sugarcane', tier: 2 } },
+    { key: 'potion_healing', needs: { melon: 12, ghast_tear: 1 }, gives: 1, unlock: { resource: 'melon', tier: 2 } },
     { key: 'weapon_common', needs: { oaklog: 10, stone: 4 }, gives: 1, unlock: null },
     { key: 'bow_common', needs: { oaklog: 6, string: 6 }, gives: 1, unlock: null },
     { key: 'armor_common', needs: { rotten_flesh: 24, string: 12 }, gives: 1, unlock: null },
@@ -531,13 +563,15 @@
   ];
 
   /* ---------------- 페어리 소울(3D 월드 12개 은닉) ---------------- */
-  const FAIRY_SOULS = { total: 12, goldPerSoul: 200, mpPerSoul: 2, per5Bonus: { hp: 10, str: 2 } };
+  const FAIRY_SOULS = { total: 24, goldPerSoul: 200, mpPerSoul: 2, per5Bonus: { hp: 10, str: 2 } };   // V9: 테마 월드 12개 추가
 
   /* ---------------- 은행 ---------------- */
-  const BANK = { interestPctPerDay: 2, interestCapBalance: 100000 };   // 하루 1회, 잔고 10만G까지 2% 이자
+  const BANK = { interestPctPerDay: 2, interestCapBalance: 100000,
+    // V9: 잔고 상한 업그레이드(골드 싱크): 10만 → 50만 → 250만 → 1000만
+    upgrades: [{ cap: 100000, cost: 0 }, { cap: 500000, cost: 50000 }, { cap: 2500000, cost: 400000 }, { cap: 10000000, cost: 2500000 }] };
 
   /* ---------------- 일일 특가(경매인) ---------------- */
-  const DAILY_DEALS = { count: 3, discountMin: 0.30, discountMax: 0.60 };   // 정가의 30~60% 할인
+  const DAILY_DEALS = { count: 5, jackpotMul: 5, normalMul: 2.5 };   // V9: 수집상 5종 + 잭팟 1종(시세 ×5)
 
   /* ---------------- 상점 ---------------- */
   const SHOP = [
@@ -550,6 +584,14 @@
     { key: 'essence_cosmetic_cape', name: '지배자의 망토(장식)', category: '장식', buyPrice: 0, sellPrice: 5000, stackSize: 1 },
     { key: 'dungeon_essence', name: '던전 정수', category: '재료', buyPrice: 0, sellPrice: 120, stackSize: 64 },
     { key: 'arachne_crystal', name: '아라크네 크리스탈', category: '재료', buyPrice: 0, sellPrice: 900, stackSize: 16 },
+    { key: 'potion_strength', name: '힘의 물약(3분 힘 +25)', category: '물약', buyPrice: 0, sellPrice: 150, stackSize: 16 },
+    { key: 'potion_speed', name: '신속의 물약(3분 속도 +20)', category: '물약', buyPrice: 0, sellPrice: 120, stackSize: 16 },
+    { key: 'potion_healing', name: '재생의 물약(3분 체력 +40)', category: '물약', buyPrice: 0, sellPrice: 150, stackSize: 16 },
+    ...['magma_cream', 'ghast_tear', 'spider_eye', 'slime_ball', 'gunpowder', 'ender_shard', 'feather', 'leather'].map(k => {
+      const names = { magma_cream: '마그마 크림', ghast_tear: '가스트의 눈물', spider_eye: '거미 눈', slime_ball: '슬라임볼', gunpowder: '화약', ender_shard: '엔더 조각', feather: '깃털', leather: '가죽' };
+      const sells = { magma_cream: 8, ghast_tear: 40, spider_eye: 5, slime_ball: 4, gunpowder: 6, ender_shard: 22, feather: 3, leather: 5 };
+      return { key: k, name: names[k], category: '재료', buyPrice: 0, sellPrice: sells[k], stackSize: 64 };
+    }),
     { key: 'treecapitator', name: '트리캐피테이터(나무 통째 벌목)', category: '특수 도구', buyPrice: 0, sellPrice: 20000, stackSize: 1 },
     { key: 'stonk', name: '스통크(채굴 가속 곡괭이)', category: '특수 도구', buyPrice: 0, sellPrice: 25000, stackSize: 1 },
     { key: 'minion_slot_expander', name: '미니언 슬롯 확장권', category: '미니언', buyPrice: 0, sellPrice: 0, stackSize: 1 },
@@ -614,8 +656,8 @@
     MINION_FUEL, SLAYERS, DUNGEON, DUNGEON_ROOM_SCORE, ESSENCE_SHOP, SHOP, DAILY_SELL_LIMIT_PER_STACK,
     EQUIPMENT, STARFORCE, REFORGES, ITEM_ROLL,
     TALISMANS, MAGICAL_POWER, PETS, PET_XP_BASE, PET_XP_EXP, PET_MAX_LEVEL,
-    ENCHANTS, CHAOS_ENCHANT, RECIPES,
+    ENCHANTS, CHAOS_ENCHANT, RECIPES, MASTER_MODE,
     FAIRY_SOULS, BANK, DAILY_DEALS, DUNGEON_CLASSES, ZONES, EASTER_EGGS,
-    SKILL_XP_TABLE, SKILL_MAX_LEVEL, BASE_STATS, ENCHANTED_RES, ENCHANTED_BLOCK_RES,
+    SKILL_XP_TABLE, SKILL_MAX_LEVEL, BASE_STATS, ENCHANTED_RES, ENCHANTED_BLOCK_RES, SLAYER_XP_LEVELS, SLAYER_QUEST,
   };
 })();

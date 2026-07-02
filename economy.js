@@ -316,12 +316,12 @@
     const a = equippedArmor();
     const st = {
       hp: B.hp + skillLevel('farming') * 2 + skillLevel('fishing') + enchSum('hp') + ts.hp + ps.hp + fb.hp
-        + (reforgeOf('weapon').hp || 0) + (reforgeOf('armor').hp || 0) + starHpFlat(),
+        + (reforgeOf('weapon').hp || 0) + (reforgeOf('armor').hp || 0) + starHpFlat() + buffBonus('hp'),
       defense: B.defense + skillLevel('mining') + ts.def + ps.def + enchSum('def')
         + (reforgeOf('armor').def || 0) + starDefFlat()
         + (a ? rolledStat(a.key, a.defense) : 0),
-      strength: B.strength + skillLevel('foraging') + ts.str + ps.str + fb.str,
-      speed: B.speed + enchSum('speed'),
+      strength: B.strength + skillLevel('foraging') + ts.str + ps.str + fb.str + buffBonus('strength'),
+      speed: B.speed + enchSum('speed') + buffBonus('speed'),
       critChance: Math.min(100, B.critChance + skillLevel('combat') * 0.5),
       critDamage: B.critDamage + skillLevel('combat'),
       intelligence: B.intelligence + skillLevel('enchanting') * 2,
@@ -336,7 +336,7 @@
     const st = playerStats();
     const flat = 5 + equippedWeaponDmg() + st.strength / 5;
     const mul = (1 + st.strength / 100)
-      * (1 + skillLevel('combat') * 0.04 + enchSum('dmg') / 100
+      * (1 + skillLevel('combat') * 0.04 + enchSum('dmg') / 100 + bestiaryBonusPct() / 100
         + (reforgeOf('weapon').dmgPct || 0) / 100 + starAtkPct() / 100)
       * mpStatMul();
     return flat * mul;
@@ -520,7 +520,8 @@
     if (!sd || owned <= 0) { toastFn('팔 물건이 없어요', false); return; }
     const n = Math.min(64, owned);
     removeItem(d.key, n);
-    const gain = Math.round(sd.sellPrice * 2.5) * n;
+    const mul = i === 0 ? D().DAILY_DEALS.jackpotMul : D().DAILY_DEALS.normalMul;   // 0번 = 오늘의 잭팟(×5)
+    const gain = Math.round(sd.sellPrice * mul) * n;
     addGold(gain);
     if (!P.dealsBought) P.dealsBought = [];
     P.dealsBought.push(i);
@@ -533,7 +534,7 @@
     const day = todayStr();
     if (P.lastInterestDay === day) return;
     if (P.lastInterestDay && P.bank > 0) {
-      const interest = Math.round(Math.min(P.bank, D().BANK.interestCapBalance) * D().BANK.interestPctPerDay / 100);
+      const interest = Math.round(Math.min(P.bank, bankTierInfo().cap) * D().BANK.interestPctPerDay / 100);
       if (interest > 0) { P.bank += interest; toastFn(`🏦 은행 이자 +${fmtGold(interest)} 입금!`, true); }
     }
     P.lastInterestDay = day;
@@ -644,7 +645,45 @@
     m.storage = 0; saveNow(); renderZone();
   }
 
-  /* ---------------- 슬레이어 ---------------- */
+  /* ---------------- 슬레이어(V9 마덕스식: 퀘스트 → 게이지 → 보스 소환 → 슬레이어 레벨) ---------------- */
+  const SLAYER_MOB_MAP = {   // 3D 몹 종 → 슬레이어 계열(퀘스트 게이지)
+    zombie: 'zombie_slayer', zombie_villager: 'zombie_slayer', crypt_ghoul: 'zombie_slayer', golden_ghoul: 'zombie_slayer', miner_zombie: 'zombie_slayer', lapis_zombie: 'zombie_slayer', diamond_zombie: 'zombie_slayer', zombie_pigman: 'zombie_slayer',
+    spider: 'spider_slayer', splitter_spider: 'spider_slayer', weaver_spider: 'spider_slayer', dasher_spider: 'spider_slayer', voracious_spider: 'spider_slayer', spider_jockey: 'spider_slayer', tarantula_vermin: 'spider_slayer', flaming_spider: 'spider_slayer',
+    wolf: 'wolf_slayer', old_wolf: 'wolf_slayer', pack_spirit: 'wolf_slayer', howling_spirit: 'wolf_slayer', soul_of_the_alpha: 'wolf_slayer',
+    enderman: 'enderman_slayer', zealot: 'enderman_slayer', endermite: 'enderman_slayer', watcher: 'enderman_slayer', obsidian_defender: 'enderman_slayer',
+    blaze: 'blaze_slayer', magma_cube: 'blaze_slayer', ghast: 'blaze_slayer', wither_skeleton: 'blaze_slayer',
+  };
+  function slayerXpOf(key) { return (P.slayerXp || {})[key] || 0; }
+  function slayerLevel(key) {
+    const T = D().SLAYER_XP_LEVELS; const xp = slayerXpOf(key);
+    let lv = 0; for (let i = 0; i < T.length; i++) if (xp >= T[i]) lv = i + 1;
+    return lv;
+  }
+  function startSlayerQuest(key, tier) {
+    const def = slayerDef(key); const tinfo = def.tiers.find(t => t.tier === tier); if (!tinfo) return;
+    if (skillLevel('combat') < tinfo.minCombatLevel) { toastFn(`전투 스킬 레벨 ${tinfo.minCombatLevel} 필요`, false); return; }
+    if (P.gold < tinfo.turnInGold) { toastFn(`퀘스트 의뢰비 ${fmtGold(tinfo.turnInGold)} 부족`, false); return; }
+    if (P.slayerQuest) { toastFn('이미 진행 중인 슬레이어 퀘스트가 있어요', false); return; }
+    addGold(-tinfo.turnInGold);
+    const needed = D().SLAYER_QUEST.killsNeeded[tier - 1] || 10;
+    P.slayerQuest = { key, tier, kills: 0, needed };
+    toastFn(`💀 ${def.name} T${tier} 퀘스트 시작! ${def.flavor} 계열 몬스터를 ${needed}마리 처치하면 보스가 소환됩니다`, true);
+    saveNow(); renderZone();
+  }
+  function slayerQuestProgress(mobType) {
+    if (!P || !P.slayerQuest) return;
+    const cat = SLAYER_MOB_MAP[mobType];
+    if (cat !== P.slayerQuest.key) return;
+    P.slayerQuest.kills++;
+    if (P.slayerQuest.kills < P.slayerQuest.needed) {
+      if (P.slayerQuest.kills % 5 === 0 || P.slayerQuest.needed - P.slayerQuest.kills <= 3) toastFn(`💀 슬레이어 게이지 ${P.slayerQuest.kills}/${P.slayerQuest.needed}`, true);
+      return;
+    }
+    const q = P.slayerQuest; P.slayerQuest = null;
+    toastFn('💀💀 게이지 완충!! 슬레이어 보스가 나타났다!', false);
+    startSlayer(q.key, q.tier);
+  }
+  /* ---------------- 슬레이어 보스전 ---------------- */
   function slayerDef(key) { return D().SLAYERS.find(s => s.key === key); }
   function itemName(key) { const s = shopDef(key); return s ? s.name : key; }
   // 보너스 장비 드롭: 상점에서 못 사는(드롭 전용) 무기/방어구 풀에서 무작위 지급 — 파밍의 재미
@@ -686,6 +725,16 @@
           if (bonus) toastFn(`🎁 희귀 장비 드롭! ${bonus.name}`, true);
         }
         P.slayerBest[key] = Math.max(P.slayerBest[key] || 0, tier);
+        // V9: 슬레이어 XP + 레벨업 보상
+        if (!P.slayerXp) P.slayerXp = {};
+        const before = slayerLevel(key);
+        P.slayerXp[key] = (P.slayerXp[key] || 0) + (D().SLAYER_QUEST.xpPerTier[tier - 1] || 5);
+        const after = slayerLevel(key);
+        if (after > before) {
+          toastFn(`💀 ${def.name} 레벨 ${after} 달성!`, true);
+          const rewardTali = { zombie_slayer: 'talisman_revenant', spider_slayer: 'talisman_tarantula', wolf_slayer: 'talisman_sven', enderman_slayer: 'talisman_voidgloom', blaze_slayer: 'talisman_inferno' }[key];
+          if (after >= 3 && rewardTali && !hasItem(rewardTali)) { addItem(rewardTali, 1); toastFn(`🎁 슬레이어 Lv3 보상: ${itemName(rewardTali)}!`, true); }
+        }
         saveNow();
       },
       onLose: () => { toastFn('보스에게 패배했어요...', false); },
@@ -700,7 +749,7 @@
     for (const [name, min] of th) if (score >= min) g = name;
     return g;
   }
-  function canEnterFloor(f) { if (f === 1) return true; const prev = P.dungeonBest[f - 1]; return !!prev && prev !== 'F'; }
+  function canEnterFloor(f) { if (f <= 1) return true; const prev = P.dungeonBest[f - 1]; return !!prev && prev !== 'F'; }   // F0/F1 상시 개방
   // V3: "지나가며 몬스터 처치" 웨이브 던전 — 방마다 실제 몬스터 무리가 나오고, 한 마리씩 처치하며 전진.
   // 플레이어 HP는 층 전체에서 이어짐(방 클리어 시 15% 회복) — 진짜 던전 공략감.
   function mkRoomMobs(fd, type) {
@@ -847,7 +896,7 @@
     wheat: 4, carrot: 4, potato: 4, pumpkin: 5, melon: 5, sugarcane: 4,
     oaklog: 6, birchlog: 6, sprucelog: 7, apple: 4,
     rawfish: 25, salmon: 28, clownfish: 40, pufferfish: 32, prismarine: 30, sponge: 45, clay: 20 };
-  function resSkill(key) { for (const cat of D().COLLECTIONS) if (cat.resources.some(r => r.key === key)) return cat.key; return 'mining'; }
+  function resSkill(key) { for (const cat of D().COLLECTIONS) if (cat.resources.some(r => r.key === key)) return cat.key === 'husbandry' ? 'farming' : cat.key; return 'mining'; }
   let _gatherSaveN = 0;
   function gatherBlock3d(resKey, family) {
     if (!P) return 0;
@@ -893,9 +942,12 @@
     const coins = Math.round((mob.coins || 0) * enchCoinMul());
     if (coins) addGold(coins);
     addSkillXp('combat', Math.round((mob.xp || 5) * enchXpMul()));
+    const lootLv = enchantLvl('weapon', 'looting');
     for (const d of mob.drops || []) {
-      if (d.chance != null && Math.random() > d.chance) continue;
-      const n = d.n || 1;
+      if (d.chance != null && Math.random() > d.chance * (1 + lootLv * 0.15)) continue;   // 약탈: 희귀 드롭 확률도 +15%/레벨
+      // V9: 기본 드롭은 약탈 0 기준 0~n개 랜덤(마인크래프트식), 약탈 레벨당 최대 +1
+      let n = d.chance != null ? (d.n || 1) : Math.floor(Math.random() * ((d.n || 1) + 1 + lootLv));
+      if (n <= 0) continue;
       addItem(d.key, n); addCollection(d.key, n);
       if ((d.chance == null ? 1 : d.chance) <= 0.25) msgs.push(`✨ ${itemName(d.key)} ×${n}`);
     }
@@ -911,8 +963,21 @@
       msgs.push(`📖 인챈트북: ${bdef ? bdef.name : bk}!`);
     }
     if (msgs.length) toastFn(`${mob.name} 처치! ${msgs.join(' · ')}`, true);
+    // V9: 도감(베스티어리) 기록 + 슬레이어 퀘스트 게이지
+    if (mob.type) {
+      if (!P.bestiary) P.bestiary = {};
+      P.bestiary[mob.type] = (P.bestiary[mob.type] || 0) + 1;
+      slayerQuestProgress(mob.type);
+    }
     saveLocal();
     return coins;
+  }
+  // 도감 마일스톤: 종별 처치 100마리당 전투 피해 +0.5%(최대 +20%)
+  function bestiaryBonusPct() {
+    if (!P || !P.bestiary) return 0;
+    let m = 0;
+    for (const k in P.bestiary) m += Math.floor(P.bestiary[k] / 100);
+    return Math.min(20, m * 0.5);
   }
   function playerDied3d() {
     if (!P) return;
@@ -923,24 +988,44 @@
   }
 
   // 3D 카타콤 완주 보상(economy3d.js가 보스 처치 시 호출) — 점수/등급/정수/전리품
-  function dungeon3dComplete(floor, stats) {
+  function dungeon3dComplete(floor, stats, master) {
     const fd = dungeonFloorDef(floor); if (!fd || !P) return null;
     let score = 230 + Math.max(0, 120 - Math.floor((stats.timeSec || 0) / 5)) - (stats.deaths || 0) * 60 + (stats.kills || 0) * 2;
     score = Math.max(10, score);
     const grade = dungeonGrade(score);
     P.dungeonBest[floor] = gradeMax(P.dungeonBest[floor], grade);
-    addItem('dungeon_essence', fd.essenceReward);
+    const rewardMul = master ? D().MASTER_MODE.rewardMul : 1;
+    if (master) P.dungeonMasterBest = Object.assign(P.dungeonMasterBest || {}, { [floor]: gradeMax((P.dungeonMasterBest || {})[floor], grade) });
+    addItem('dungeon_essence', fd.essenceReward * rewardMul);
     const itemKey = fd.lootTable[Math.floor(Math.random() * fd.lootTable.length)];
     addItem(itemKey, 1);
-    addSkillXp('combat', Math.round(fd.essenceReward * enchXpMul() * 10));
+    addSkillXp('combat', Math.round(fd.essenceReward * rewardMul * enchXpMul() * 10));
     let bonusMsg = '';
-    if (Math.random() < 0.40) {
-      const bonus = randomEquipDrop(Math.min(6, floor));
+    if (Math.random() < (master ? 0.8 : 0.40)) {
+      const bonus = randomEquipDrop(Math.min(6, Math.max(1, floor) + (master ? 0 : 0)));
       if (bonus) bonusMsg = ` + 🎁 ${bonus.name}`;
     }
-    toastFn(`🏆 ${fd.bossName} 처치! 등급 ${grade} (점수 ${score}) · 정수 +${fd.essenceReward} · ${itemName(itemKey)}${bonusMsg}`, true);
+    toastFn(`🏆 ${master ? '☠M' + floor + ' ' : ''}${fd.bossName} 처치! 등급 ${grade} (점수 ${score}) · 정수 +${fd.essenceReward * rewardMul} · ${itemName(itemKey)}${bonusMsg}`, true);
     saveNow(); renderZone();
     return grade;
+  }
+
+  /* ---------------- V9 물약 버프(3분 지속 — 스탯에 합산) ---------------- */
+  const POTION_FX = { potion_strength: { stat: 'strength', v: 25 }, potion_speed: { stat: 'speed', v: 20 }, potion_healing: { stat: 'hp', v: 40 } };
+  function usePotion(key) {
+    const fx = POTION_FX[key]; if (!fx) return false;
+    if (!hasItem(key)) { toastFn('물약이 없어요(조합으로 제작)', false); return false; }
+    removeItem(key, 1);
+    if (!P.buffs) P.buffs = {};
+    P.buffs[key] = Date.now() + 180000;
+    toastFn(`🧪 ${itemName(key)} 사용! (3분)`, true);
+    saveNow(); renderZone(); return true;
+  }
+  function buffBonus(stat) {
+    if (!P || !P.buffs) return 0;
+    let v = 0;
+    for (const k in P.buffs) { if (P.buffs[k] > Date.now() && POTION_FX[k] && POTION_FX[k].stat === stat) v += POTION_FX[k].v; }
+    return v;
   }
 
   /* ---------------- 파티 던전(호스트 권위) — economy-net.js 연결부 ---------------- */
@@ -1163,6 +1248,7 @@
       case 'multi': return multiHTML();
       case 'inv': return invHTML();
       case 'menu': return menuHTML();
+      case 'bestiary': return bestiaryHTML();
       case 'skills': return skillsHTML();
     }
     return '';
@@ -1173,7 +1259,7 @@
       ['stats', '📊', '내 프로필', '스탯 시트'], ['skills', '🧠', '스킬', '8종 스킬 진행도'],
       ['collections', '📚', '컬렉션', '자원 31종 티어'], ['inv', '🎒', '인벤토리', '보유 아이템'],
       ['pets', '🐾', '펫', '펫 관리'], ['talismans', '📿', '장신구 가방', '부적/마력'],
-      ['craft', '⚒️', '레시피 북', '제작(장인 NPC와 동일)'], ['multi', '🌐', '멀티', '거래·파티·섬 방문'],
+      ['craft', '⚒️', '레시피 북', '제작(장인 NPC와 동일)'], ['bestiary', '📕', '도감', '처치 기록·마일스톤 보너스'], ['multi', '🌐', '멀티', '거래·파티·섬 방문'],
     ];
     const worlds = (typeof window.economy3dWorlds === 'function') ? window.economy3dWorlds() : [];
     return `<h4>✦ 스카이블럭 메뉴</h4>
@@ -1181,6 +1267,12 @@
       <h4>🚀 빠른 이동 (워프)</h4>
       <div class="econ-tierbtns">${worlds.map(w => `<button class="btn btn--sm" data-act="econ_warp" data-key="${w.key}">${w.name}</button>`).join('') || '<span class="muted">3D 월드에서 사용 가능</span>'}</div>
       <p class="muted">상점·은행·인챈트·강화·리포지·특가는 마을의 해당 NPC에게 직접 찾아가세요!</p>`;
+  }
+  function bestiaryHTML() {
+    const b = P.bestiary || {};
+    const entries = Object.keys(b).sort((x, y) => b[y] - b[x]);
+    return `<h4>📕 도감 — 종별 처치 100마리당 전투 피해 +0.5% (현재 +${bestiaryBonusPct()}%)</h4>
+      ${entries.length ? `<div class="econ-colgrid">${entries.slice(0, 60).map(k => `<div class="econ-colrow"><span>${k}</span><span><b>${b[k]}</b>마리</span><span class="muted">마일스톤 ${Math.floor(b[k] / 100)}</span></div>`).join('')}</div>` : '<p class="econ-note">아직 처치 기록이 없어요. 사냥을 시작해보세요!</p>'}`;
   }
   function skillsHTML() {
     return `<h4>🧠 스킬 (실제 스카이블럭 XP 테이블 · 최대 ${D().SKILL_MAX_LEVEL}레벨)</h4>
@@ -1203,6 +1295,7 @@
         return `<div class="econ-shopitem econ-tt"${ttAttr(sdef || { key: k, name: itemName(k) })}>
           ${iconImg(k)}<span>${sdef && sdef.tierKey ? `<span style="color:${tierColorByKey(sdef.tierKey)}">${itemName(k)}</span>` : itemName(k)} <b>×${P.inv[k]}</b></span>
           <span class="muted econ-idesc">${shopItemDesc(sdef || { key: k })}</span>
+          ${k.indexOf('potion_') === 0 ? `<button class="btn btn--sm" data-act="econ_potion_use" data-key="${k}">🧪 마시기(3분 버프)</button>` : ''}
           ${sell ? `<span><button class="btn btn--sm btn--ghost" data-act="econ_sell" data-key="${k}">1개 판매 ${fmtGold(sell)}</button></span>` : '<span class="muted">판매 불가</span>'}
         </div>`;
       }).join('')}</div>`;
@@ -1324,8 +1417,20 @@
       <p class="econ-note">💰 이 세계의 골드는 <b>강화·인챈트 합성·리포지</b>에만 쓰여요. 장비/도구/북은 전부 <b>채집·몬스터 드롭·조합</b>으로!<br>가진 아이템을 팔아 강화 자금을 모으세요. (희귀 아이템일수록 비싸게 매입)</p>
       ${ownedCats || '<p class="muted">팔 수 있는 아이템이 없어요. 채집하고 사냥해서 가져오세요!</p>'}`;
   }
+  function bankTierInfo() { const U = D().BANK.upgrades; const t = Math.min(P.bankTier || 0, U.length - 1); return { tier: t, cap: U[t].cap, next: U[t + 1] || null }; }
+  function upgradeBank() {
+    const info = bankTierInfo();
+    if (!info.next) { toastFn('은행이 최고 등급이에요', false); return; }
+    if (P.gold < info.next.cost) { toastFn('업그레이드 비용이 부족해요', false); return; }
+    addGold(-info.next.cost);
+    P.bankTier = (P.bankTier || 0) + 1;
+    toastFn(`🏦 은행 업그레이드! 잔고 상한 ${fmtGold(bankTierInfo().cap)}`, true);
+    saveNow(); renderZone();
+  }
   function bankHTML() {
-    return `<h4>🏦 은행 (하루 ${D().BANK.interestPctPerDay}% 이자, 잔고 ${fmtGold(D().BANK.interestCapBalance)}까지)</h4>
+    const bi = bankTierInfo();
+    return `<h4>🏦 은행 (하루 ${D().BANK.interestPctPerDay}% 이자 · 잔고 상한 ${fmtGold(bi.cap)})</h4>
+      ${bi.next ? `<button class="btn btn--sm" data-act="econ_bank_upgrade">금고 업그레이드 → 상한 ${fmtGold(bi.next.cap)} (비용 ${fmtGold(bi.next.cost)})</button>` : '<p class="muted">🏆 최고 등급 금고</p>'}
       <p>예치금: <b style="color:#facc15">${fmtGold(P.bank)}</b> · 소지금: ${fmtGold(P.gold)}</p>
       <div class="econ-tierbtns">
         ${[1000, 10000, 'all'].map(a => `<button class="btn btn--sm" data-act="econ_bank_deposit" data-amt="${a}">예치 ${a === 'all' ? '전부' : fmtGold(a)}</button>`).join('')}
@@ -1450,10 +1555,10 @@
       <div class="econ-shopgrid">${deals.map((d, i) => {
         const sd = shopDef(d.key); if (!sd) return '';
         const owned = P.inv[d.key] || 0;
-        const bought = (P.dealsBought || []).indexOf(i) >= 0;
+        const bought = (P.dealsBought || []).indexOf(i) >= 0; const mul = i === 0 ? D().DAILY_DEALS.jackpotMul : D().DAILY_DEALS.normalMul;
         return `<div class="econ-shopitem econ-tt"${ttAttr(sd)}>
           ${iconImg(d.key)}<span>${sd.name} <b>×${owned}</b></span>
-          <span class="muted econ-idesc">매입가 ${fmtGold(Math.round(sd.sellPrice * 2.5))} (시세 ${fmtGold(sd.sellPrice)})</span>
+          <span class="muted econ-idesc">${i === 0 ? '🎰 오늘의 잭팟! ' : ''}매입가 ${fmtGold(Math.round(sd.sellPrice * mul))} (시세 ×${mul})</span>
           <button class="btn btn--sm" data-act="econ_deal_buy" data-i="${i}" ${owned > 0 && !bought ? '' : 'disabled'}>${bought ? '오늘 매입 완료' : '보유분 전부 판매(최대 64개)'}</button>
         </div>`;
       }).join('')}</div>`;
@@ -1518,27 +1623,38 @@
   }
 
   function slayerZoneHTML() {
-    return `<div class="econ-panel"><p class="muted">${D().ZONES.find(z => z.key === 'slayerden').desc}</p>
-      ${D().SLAYERS.map(s => {
-        const best = P.slayerBest[s.key] || 0;
-        return `<div class="econ-slayercard"><h4>${s.name} <span class="muted">(${s.flavor})</span></h4>
-          <div class="econ-tierbtns">${s.tiers.map(t => `<button class="btn btn--sm" data-act="econ_slayer_start" data-key="${s.key}" data-tier="${t.tier}" ${t.tier > best + 1 ? 'disabled' : ''}>T${t.tier} (${fmtGold(t.turnInGold)}, 전투Lv${t.minCombatLevel}+)</button>`).join('')}</div>
+    const q = P.slayerQuest;
+    return `<div class="econ-panel"><h4>💀 슬레이어(마덕스식 의뢰)</h4>
+      ${q ? `<div class="econ-note">진행 중: <b>${slayerDef(q.key).name} T${q.tier}</b> — 게이지 <b>${q.kills}/${q.needed}</b><br>해당 계열 몬스터를 월드에서 처치하면 게이지가 차고, 완충 시 보스가 소환됩니다!</div>`
+        : '<p class="econ-note">의뢰를 시작하고 해당 계열 몬스터를 처치해 게이지를 채우세요. 완충되면 슬레이어 보스가 나타납니다!</p>'}
+      ${D().SLAYERS.map(sd => {
+        const lv = slayerLevel(sd.key), xp = slayerXpOf(sd.key);
+        const T = D().SLAYER_XP_LEVELS; const next = lv < T.length ? T[lv] : null;
+        return `<div class="econ-slayercard">
+          <h4>${sd.name} <span style="color:#f6c945">Lv.${lv}</span> <span class="muted">${next ? `${xp}/${next} XP` : 'MAX'}</span></h4>
+          <p class="muted">${sd.flavor} · 최고 처치 T${P.slayerBest[sd.key] || 0} · Lv3 보상: 전용 부적</p>
+          <div class="econ-tierbtns">${sd.tiers.map(t => `<button class="btn btn--sm" data-act="econ_slayer_quest" data-key="${sd.key}" data-tier="${t.tier}" ${q ? 'disabled' : ''}>T${t.tier} 의뢰(${fmtGold(t.turnInGold)} · ${D().SLAYER_QUEST.killsNeeded[t.tier - 1]}마리)</button>`).join('')}</div>
         </div>`;
       }).join('')}
     </div>`;
   }
 
   function dungeonZoneHTML() {
-    return `<div class="econ-panel"><p class="muted">${D().ZONES.find(z => z.key === 'dungeonentrance').desc}</p>
-      <h4>던전 클래스 선택 (카타콤 전용 — 실제 스카이블럭 방식)</h4>
-      <div class="econ-tierbtns">${D().DUNGEON_CLASSES.map(c => `<button class="btn btn--sm ${P.dungeonClass === c.key ? 'btn--primary' : ''}" data-act="econ_dungeon_class" data-key="${c.key}">${c.emoji} ${c.name}</button>`).join('')}</div>
-      <p class="muted">${dungeonClassDef(P.dungeonClass).emoji} ${dungeonClassDef(P.dungeonClass).name}: ${dungeonClassDef(P.dungeonClass).perk}</p>
-      <p>던전 정수: ${P.inv.dungeon_essence || 0}</p>
-      <div class="econ-essenceshop">${D().ESSENCE_SHOP.map(e => `<button class="btn btn--sm" data-act="econ_essence_buy" data-key="${e.key}" ${(P.inv.dungeon_essence || 0) >= e.cost ? '' : 'disabled'}>${e.name} (정수 ${e.cost})</button>`).join('')}</div>
-      ${D().DUNGEON.floors.map(f => `<div class="econ-floorcard"><h4>${f.floor}층 — ${f.bossName}</h4>
-        <p class="muted">최고 등급: ${P.dungeonBest[f.floor] || '-'} · 정수 +${f.essenceReward}</p>
-        <button class="btn btn--sm" data-act="econ_dungeon_start" data-floor="${f.floor}" ${canEnterFloor(f.floor) ? '' : 'disabled'}>입장</button>
-      </div>`).join('')}
+    const MM = D().MASTER_MODE;
+    const masterUnlocked = !!P.dungeonBest[MM.unlockFloor] && P.dungeonBest[MM.unlockFloor] !== 'F';
+    return `<div class="econ-panel"><h4>🗝️ 카타콤 — 총 15개 난이도(입구 + 층 7 + 마스터 7)</h4>
+      <p class="muted">던전 클래스: ${D().DUNGEON_CLASSES.map(c => `<button class="btn btn--sm ${P.dungeonClass === c.key ? '' : 'btn--ghost'}" data-act="econ_dungeon_class" data-key="${c.key}">${c.emoji} ${c.name}</button>`).join(' ')}</p>
+      <div class="econ-shopgrid">${D().DUNGEON.floors.map(fd => {
+        const ok = canEnterFloor(fd.floor);
+        const best = P.dungeonBest[fd.floor];
+        return `<div class="econ-floorcard">
+          <h4>${fd.floor === 0 ? '🚪 입구(F0)' : `F${fd.floor}`} — ${fd.bossName}</h4>
+          <p class="muted">보스 HP ${fd.bossHp.toLocaleString()} · 정수 +${fd.essenceReward} · 최고 등급 ${best || '-'}</p>
+          <button class="btn btn--sm" data-act="econ_dungeon_start" data-floor="${fd.floor}" ${ok ? '' : 'disabled'}>${ok ? '입장' : '이전 층 클리어 필요'}</button>
+          ${fd.floor >= 1 ? `<button class="btn btn--sm btn--ghost" data-act="econ_dungeon_start" data-floor="${fd.floor}" data-master="1" ${masterUnlocked ? '' : 'disabled'} title="F7 클리어 시 해금">☠ M${fd.floor} (몹 ×${MM.hpMul} · 보상 ×${MM.rewardMul})</button>` : ''}
+        </div>`;
+      }).join('')}</div>
+      <p class="muted">☠ 마스터 모드: F7 클리어 후 해금 — 모든 몹이 강화되고 보상 ${MM.rewardMul}배</p>
     </div>`;
   }
 
@@ -1612,6 +1728,9 @@
       case 'dungeon_attack': dungeonAttack(); break;
       case 'dungeon_loot': dungeonLootTreasure(); break;
       case 'bank_deposit': bankDeposit(el.dataset.amt === 'all' ? 'all' : Number(el.dataset.amt)); break;
+      case 'bank_upgrade': upgradeBank(); break;
+      case 'potion_use': usePotion(el.dataset.key); break;
+      case 'slayer_quest': startSlayerQuest(el.dataset.key, Number(el.dataset.tier)); break;
       case 'bank_withdraw': bankWithdraw(el.dataset.amt === 'all' ? 'all' : Number(el.dataset.amt)); break;
       case 'deal_buy': buyDeal(Number(el.dataset.i)); break;
       case 'reforge': reforge(el.dataset.key); break;
@@ -1619,9 +1738,10 @@
       case 'dungeon_class': P.dungeonClass = el.dataset.key; saveNow(); renderZone(); break;
       case 'dungeon_start': {
         const f = Number(el.dataset.floor);
+        const master = el.dataset.master === '1';
         // 3D 카타콤(직접 돌아다니며 전투) — 파티 호스트면 게스트도 자동 합류, 3D 미가동 시 패널 폴백
         const pt0 = net() && net().party();
-        if (typeof window.economy3dDungeon === 'function' && window.economy3dDungeon(f)) {
+        if (typeof window.economy3dDungeon === 'function' && window.economy3dDungeon(f, master)) {
           if (pt0 && pt0.role === 'host' && net()) net().partyD3Start(f);
           break;
         }
@@ -1747,6 +1867,7 @@
       applyEnchant, chaosEnchant, enchantLvl, enchantHardCap, enchantDef,
       enchSum, enchVsSum, enchCondMul, enchHitHeal, enchCoinMul, enchXpMul, randomEquipDrop,
       tradeCanGive, tradeApply, partyStartDungeon, partyRemoteAttack, partyGuestReward, partySnapshot,
+      startSlayerQuest, slayerQuestProgress, slayerLevel, slayerXpOf, usePotion, buffBonus, bestiaryBonusPct, upgradeBank, bankTierInfo, dungeon3dComplete,
       enhanceStar, starCost, starRate,
       craft, canCraft, recipeUnlocked, rolledStat, rollItemStat, equipBase,
       dungeonAttack, dungeonLootTreasure,
