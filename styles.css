@@ -1390,3 +1390,9 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .econ3d-blockchip[data-bk="glass"]{background:rgba(191,230,242,.6);} .econ3d-blockchip[data-bk="glowstone"]{background:#f4d35e; box-shadow:0 0 6px #f4d35e;}
 
 :root[data-theme="light"] .home-card--econ{background:linear-gradient(150deg,#fdf0c8,#fff);}
+
+/* 경제 3D: 플레이어 체력 HUD + 진행 크로스헤어 */
+.econ3d-hpwrap{position:absolute; left:50%; transform:translateX(-50%); bottom:18px; width:min(420px,60vw); display:flex; align-items:center; gap:8px; z-index:5; pointer-events:none;}
+.econ3d-hpbar{flex:1; height:14px; border-radius:8px; background:rgba(0,0,0,.5); border:1px solid rgba(255,255,255,.25); overflow:hidden;}
+.econ3d-hpfill{height:100%; width:100%; background:linear-gradient(90deg,#16a34a,#4ade80); transition:width .15s;}
+.econ3d-hptxt{font-size:12px; font-weight:800; color:#fff; text-shadow:0 1px 2px #000;}

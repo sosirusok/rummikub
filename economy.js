@@ -785,6 +785,78 @@
     renderZone();
   }
 
+  /* ---------------- 3D 인월드 채집/낚시/전투 브리지(economy3d.js가 호출) ---------------- */
+  // 실제 스카이블럭 감성의 자원별 스킬 XP(블록 1개/1회 기준)
+  const RES_XP = { stone: 1, coal: 5, iron: 5, gold: 6, lapis: 7, redstone: 7, diamond: 10, emerald: 11, obsidian: 20,
+    wheat: 4, carrot: 4, potato: 4, pumpkin: 5, melon: 5, sugarcane: 4,
+    oaklog: 6, birchlog: 6, sprucelog: 7, apple: 4,
+    rawfish: 25, salmon: 28, clownfish: 40, pufferfish: 32, prismarine: 30, sponge: 45, clay: 20 };
+  function resSkill(key) { for (const cat of D().COLLECTIONS) if (cat.resources.some(r => r.key === key)) return cat.key; return 'mining'; }
+  let _gatherSaveN = 0;
+  function gatherBlock3d(resKey, family) {
+    if (!P) return 0;
+    const mul = bestToolMul(family || 'pickaxe');
+    let n = Math.max(1, Math.floor(mul) + (Math.random() < (mul % 1) ? 1 : 0));
+    const sk = resSkill(resKey);
+    const zone = { mining: 'mine', farming: 'farm', foraging: 'forest', fishing: 'dock' }[sk];
+    const dbl = zone ? (talismanStats().doublePct[zone] || 0) : 0;
+    if (dbl > 0 && Math.random() * 100 < dbl) n *= 2;
+    addItem(resKey, n); addCollection(resKey, n);
+    addSkillXp(sk === 'combat' ? 'combat' : sk, RES_XP[resKey] || 2);
+    if (++_gatherSaveN % 10 === 0) saveNow(); else saveLocal();
+    return n;
+  }
+  function fishCatch3d() {
+    if (!P) return null;
+    const table = D().GATHER_TABLE.dock;
+    const totalW = table.drops.reduce((a, d) => a + d.weight, 0);
+    let r = Math.random() * totalW, pick = table.drops[0];
+    for (const d of table.drops) { if (r < d.weight) { pick = d; break; } r -= d.weight; }
+    const qty = Math.max(1, Math.round((pick.min + Math.floor(Math.random() * (pick.max - pick.min + 1))) * bestToolMul('rod')));
+    addItem(pick.key, qty); addCollection(pick.key, qty);
+    addSkillXp('fishing', RES_XP[pick.key] || 20);
+    let extra = null;
+    const roll = Math.random();
+    if (roll < 0.05) { const coins = 100 + Math.floor(Math.random() * 400); addGold(coins); extra = { kind: 'treasure', coins }; }
+    else if (roll < 0.17) extra = { kind: 'seaCreature' };   // 3D 레이어가 바다 생물을 스폰
+    saveLocal();
+    return { key: pick.key, name: itemName(pick.key), n: qty, extra };
+  }
+  // 3D 전투: 한 타격의 피해 계산(크리/조건부 인챈트/흡혈 포함)
+  function attackMob3d(ctx) {
+    const crit = playerCritRoll();
+    let dmg = playerAttackPower() * crit;
+    dmg *= enchCondMul({ hitIdx: ctx.hitIdx || 0, targetHp: ctx.hp, targetMaxHp: ctx.maxHp, isBoss: !!ctx.isBoss, slayerKey: ctx.slayerKey || null });
+    return { dmg, crit: crit > 1, heal: enchHitHeal(dmg) };
+  }
+  function mobKilled3d(mob) {
+    if (!P) return 0;
+    const msgs = [];
+    const coins = Math.round((mob.coins || 0) * enchCoinMul());
+    if (coins) addGold(coins);
+    addSkillXp('combat', Math.round((mob.xp || 5) * enchXpMul()));
+    for (const d of mob.drops || []) {
+      if (d.chance != null && Math.random() > d.chance) continue;
+      const n = d.n || 1;
+      addItem(d.key, n); addCollection(d.key, n);
+      if ((d.chance == null ? 1 : d.chance) <= 0.25) msgs.push(`✨ ${itemName(d.key)} ×${n}`);
+    }
+    if (Math.random() < 0.03) {   // 희귀: 드롭 전용 장비
+      const bonus = randomEquipDrop(Math.min(6, mob.tierCap == null ? 2 : mob.tierCap));
+      if (bonus) msgs.push(`🎁 ${bonus.name}`);
+    }
+    if (msgs.length) toastFn(`${mob.name} 처치! ${msgs.join(' · ')}`, true);
+    saveLocal();
+    return coins;
+  }
+  function playerDied3d() {
+    if (!P) return;
+    const loss = Math.floor(P.gold * 0.05);
+    if (loss > 0) { addGold(-loss); toastFn(`💀 사망... 골드 ${fmtGold(loss)}을 잃고 스폰으로 돌아갑니다`, false); }
+    else toastFn('💀 사망... 스폰으로 돌아갑니다', false);
+    saveNow();
+  }
+
   /* ---------------- 파티 던전(호스트 권위) — economy-net.js 연결부 ---------------- */
   function partySnapshot() {
     if (!dungeonRun) return null;
@@ -1280,9 +1352,13 @@
     const zdef = D().ZONES.find(x => x.key === z), table = D().GATHER_TABLE[z];
     const label = z === 'mine' ? '채굴하기' : z === 'farm' ? '수확하기' : z === 'forest' ? '벌목하기' : '낚시하기';
     const mul = bestToolMul(table.toolFamily);
+    const guide = z === 'mine' ? '동굴의 돌·광석 블록을 직접 꾹 눌러 캐세요! 돌→조약돌→기반암 순서로 변하고 시간이 지나면 재생돼요. 딥 캐번/골드 광산 워프에서 더 좋은 광물을!'
+      : z === 'farm' ? '밭의 작물을 직접 꾹 눌러 수확하세요! 수확한 자리는 잠시 후 다시 자라나요. 더 반(The Barn) 워프에 대형 농장이 있어요.'
+        : z === 'forest' ? '나무 원목을 직접 꾹 눌러 베세요! 벤 나무는 잠시 후 다시 자라요. 더 파크 워프에 7종 수종 대삼림이 있어요.'
+          : '물을 조준하고 우클릭으로 찌를 던지세요! 입질(❗)이 오면 클릭해서 낚아채면 돼요. 가끔 바다 생물이 낚여요!';
     return `<div class="econ-panel">
       <p class="muted">${zdef.desc}</p>
-      <button class="btn btn--primary btn--lg" data-act="econ_gather" data-key="${z}">${label}</button>
+      <p class="econ-note">🎮 ${guide}</p>
       <p class="muted">${skillDef(table.skill).name} 스킬 Lv.${skillLevel(table.skill)} · 도구 배율 ×${mul}</p>
       <div class="econ-colgrid">${table.drops.map(d => {
         const rdef = resourceDef(d.key); const tier = collectionTierIdx(d.key);
@@ -1471,6 +1547,18 @@
     // 멀티(economy-net.js가 호출): 거래 검증/적용 + 파티 던전 훅
     tradeCanGive, tradeApply,
     partyStartDungeon, partyRemoteAttack, partyGuestReward,
+    // 3D 인월드 게임플레이 브리지
+    toolMul: fam => bestToolMul(fam),
+    hasTool: fam => (D().TOOLS[fam] || []).some(t => hasItem(t.key)),
+    gatherBlock: gatherBlock3d,
+    fishCatch: fishCatch3d,
+    attackMob: attackMob3d,
+    mobKilled: mobKilled3d,
+    playerDied: playerDied3d,
+    defensePct: lowHp => playerDefensePct(lowHp),
+    maxHp: () => playerMaxHp(),
+    statSpeed: () => playerStats().speed,
+    isFresh: () => !!P && Object.keys(P.collections).length === 0 && P.minions.length === 0 && Object.keys(P.homeEdits).length === 0,
   };
 
   if (typeof window !== 'undefined' && window.__ECON_TEST) {
