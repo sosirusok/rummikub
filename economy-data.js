@@ -296,8 +296,8 @@
 
   /* ---------------- 대량 장비 생성 — 계열별 100종 이상(쓰레기~신급) ----------------
      실제 스카이블럭처럼: 같은 등급이면 외형(스프라이트)은 등급 셀을 공유하고,
-     이름과 수치만 다른 장비가 티어당 15종씩 존재. 티어 내 하위 5종만 상점 구매 가능,
-     나머지 10종은 슬레이어/던전/보물방 드롭 전용(파밍 동기). */
+     이름과 수치만 다른 장비가 티어당 15종씩 존재. 티어 내 하위 2종만 상점 구매 가능(기본템),
+     나머지 13종은 몬스터/슬레이어/던전/보물방 드롭 전용 — 드롭템이 이 게임의 메인 획득 경로. */
   const GEN_TIER_PREFIX = ['낡은', '견습', '정예', '용맹한', '찬란한', '초월한', '태초의'];
   const GEN_SWORD_BASES = ['단검', '소검', '직검', '곡검', '대검', '세이버', '레이피어', '클레이모어', '카타나', '팔치온', '글라디우스', '츠바이핸더', '바스타드 소드', '전투검', '처형검'];
   const GEN_BOW_BASES = ['숏보우', '사냥활', '장궁', '곡궁', '합성궁', '연사궁', '강궁', '저격궁', '섬멸궁', '폭풍궁', '유성궁', '섬광궁', '천궁', '용골궁', '심판의 활'];
@@ -310,7 +310,7 @@
     ITEM_TIERS.forEach((t, ti) => {
       bases.forEach((bn, i) => {
         const dmg = GEN_WEAPON_DMG_BASE[ti] + i;
-        const buyable = i < 5;
+        const buyable = i < 2;
         const price = Math.round(60 * Math.pow(3.1, ti) * (0.5 + i * 0.18));
         out.push({ key: `g_${prefix}_${t.key}_${i}`, name: `${GEN_TIER_PREFIX[ti]} ${bn}`, wclass, tierKey: t.key,
           dmg, buyPrice: buyable ? price : 0, sellPrice: Math.round(price * 0.2) });
@@ -435,6 +435,10 @@
     { key: 'sugar_rush', name: '슈가 러시', target: 'armor', maxLvl: 3, fx: { speed: 4 }, desc: '이동속도 +4%/레벨(3D 월드)', bookBasePrice: 1000 },
     { key: 'big_brain', name: '빅 브레인', target: 'armor', maxLvl: 5, fx: { xp: 5 }, desc: '전투 XP +5%/레벨', bookBasePrice: 1000 },
     { key: 'magnet', name: '자석', target: 'armor', maxLvl: 5, fx: { coin: 5 }, desc: '전투 보상 골드 +5%/레벨', bookBasePrice: 900 },
+    // ── 도구 3종 ──  fx: mineSpeed(채집 속도%), fortune(추가 드롭%), area(주변 블록 동시 파괴 개수)
+    { key: 'efficiency', name: '효율', target: 'tool', maxLvl: 7, fx: { mineSpeed: 12 }, desc: '채집 속도 +12%/레벨', bookBasePrice: 800 },
+    { key: 'fortune', name: '행운', target: 'tool', maxLvl: 5, fx: { fortune: 20 }, desc: '추가 드롭 확률 +20%/레벨', bookBasePrice: 1400 },
+    { key: 'area_mining', name: '광역 채집', target: 'tool', maxLvl: 5, fx: { area: 1 }, desc: '파괴 시 주변 블록 +1개/레벨 동시 파괴(혼돈으로 최대 10)', bookBasePrice: 2200 },
   ];
   // 인챈트북 부여 비용 = bookBasePrice × 현재 레벨(첫 부여는 무료)
   const CHAOS_ENCHANT = {
@@ -471,6 +475,9 @@
     { key: 'talisman_potato', needs: { potato: 160 }, gives: 1, unlock: { resource: 'potato', tier: 2 } },
     { key: 'auto_shipping_module', needs: { iron: 64, redstone: 32 }, gives: 1, unlock: { resource: 'redstone', tier: 2 } },
     { key: 'diamond_spreading', needs: { diamond: 64, gold: 32 }, gives: 1, unlock: { resource: 'diamond', tier: 3 } },
+    { key: 'treecapitator', needs: { oaklog: 128, sprucelog: 64, gold: 32, diamond: 8 }, gives: 1, unlock: { resource: 'oaklog', tier: 5 } },
+    { key: 'stonk', needs: { gold: 64, diamond: 16, obsidian: 8 }, gives: 1, unlock: { resource: 'gold', tier: 5 } },
+    { key: 'enchant_book_efficiency', needs: { lapis: 48, redstone: 16 }, gives: 1, unlock: { resource: 'redstone', tier: 2 } },
     { key: 'enchant_book_sharpness', needs: { lapis: 48, ender_pearl: 4 }, gives: 1, unlock: { resource: 'lapis', tier: 2 } },
     { key: 'enchant_book_protection', needs: { lapis: 48, obsidian: 8 }, gives: 1, unlock: { resource: 'lapis', tier: 2 } },
   ];
@@ -493,6 +500,8 @@
     { key: 'reforge_stone_rare', name: '리포지 스톤(희귀)', category: '강화재료', buyPrice: 1000, sellPrice: 200, stackSize: 64 },
     { key: 'essence_reforge_stone', name: '던전 정수 리포지 스톤', category: '강화재료', buyPrice: 0, sellPrice: 400, stackSize: 64 },
     { key: 'essence_cosmetic_cape', name: '지배자의 망토(장식)', category: '장식', buyPrice: 0, sellPrice: 5000, stackSize: 1 },
+    { key: 'treecapitator', name: '트리캐피테이터(나무 통째 벌목)', category: '특수 도구', buyPrice: 0, sellPrice: 20000, stackSize: 1 },
+    { key: 'stonk', name: '스통크(채굴 가속 곡괭이)', category: '특수 도구', buyPrice: 0, sellPrice: 25000, stackSize: 1 },
     { key: 'minion_slot_expander', name: '미니언 슬롯 확장권', category: '미니언', buyPrice: MINION_SLOT_COST_BASE, sellPrice: 0, stackSize: 1 },
     { key: 'auto_shipping_module', name: '자동출하 모듈', category: '미니언', buyPrice: 3000, sellPrice: 500, stackSize: 1 },
     { key: 'diamond_spreading', name: '다이아 살포기(생산 시 10% 다이아 추가)', category: '미니언', buyPrice: 0, sellPrice: 2000, stackSize: 1 },

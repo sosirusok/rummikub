@@ -15,7 +15,7 @@
   /* ---------------- 저장/불러오기 ---------------- */
   function freshPlayer() {
     return {
-      gold: 0, dungeonClass: 'berserk', reforgeBonus: {}, inv: {}, minions: [], maxMinionSlots: 5, minionCrafts: {},
+      ver: 6, gold: 0, dungeonClass: 'berserk', reforgeBonus: {}, inv: {}, minions: [], maxMinionSlots: 5, minionCrafts: {},
       skillsXp: { combat: 0, mining: 0, farming: 0, foraging: 0, fishing: 0, enchanting: 0, taming: 0, social: 0 },
       collections: {}, collectionTier: {},
       slayerBest: {}, dungeonBest: {},
@@ -23,7 +23,7 @@
       easterEggs: [],
       // --- V2 필드 ---
       pets: {}, activePet: null, petXp: {},
-      enchants: { weapon: {}, armor: {} },
+      enchants: { weapon: {}, armor: {}, tool: {} },
       fairySouls: [],
       bank: 0, lastInterestDay: null,
       minionSlotsBought: 0, minionFuelUntil: 0,
@@ -37,6 +37,8 @@
   }
   // 구버전 세이브 마이그레이션: 누락 필드를 기본값으로 채움(중첩 객체 포함)
   function migrate(p) {
+    // V6 대개편: 세계·밸런스 전면 리셋 — 구버전 세이브는 새 시작(요청 사항)
+    if (!p || p.ver !== 6) return freshPlayer();
     // 구버전 상시 직업 → 던전 클래스 이전(기본값 채우기 전에 선행 — 기본값이 덮어쓰지 않도록)
     if (p.class !== undefined) {
       const clsMap = { warrior: 'berserk', mage: 'mage', archer: 'archer', rogue: 'berserk' };
@@ -48,6 +50,7 @@
     for (const k in fresh.skillsXp) if (p.skillsXp[k] === undefined) p.skillsXp[k] = 0;
     if (!p.enchants.weapon) p.enchants.weapon = {};
     if (!p.enchants.armor) p.enchants.armor = {};
+    if (!p.enchants.tool) p.enchants.tool = {};
     if (typeof p.starForce.weapon !== 'number') p.starForce = { weapon: 0, armor: 0 };
     if (!p.itemRolls || typeof p.itemRolls !== 'object') p.itemRolls = {};
     if (!p.reforgeSlots.weapon && p.reforgeSlots.weapon !== null) p.reforgeSlots = { weapon: null, armor: null };
@@ -801,6 +804,8 @@
     const zone = { mining: 'mine', farming: 'farm', foraging: 'forest', fishing: 'dock' }[sk];
     const dbl = zone ? (talismanStats().doublePct[zone] || 0) : 0;
     if (dbl > 0 && Math.random() * 100 < dbl) n *= 2;
+    const fortune = enchantLvl('tool', 'fortune') * 20;
+    if (fortune > 0 && Math.random() * 100 < fortune) n += Math.max(1, Math.floor(n * 0.5));   // 행운: 추가 드롭
     addItem(resKey, n); addCollection(resKey, n);
     addSkillXp(sk === 'combat' ? 'combat' : sk, RES_XP[resKey] || 2);
     if (++_gatherSaveN % 10 === 0) saveNow(); else saveLocal();
@@ -894,6 +899,12 @@
   }
   function partyStartDungeon(floor) {
     if (dungeonRun || activeCombat) return;
+    // 3D 카타콤 협동(같은 던전 월드에서 함께 전투) — 3D 미가동 시 패널 웨이브 폴백
+    if (typeof window.economy3dDungeon === 'function' && window.economy3dDungeon(floor)) {
+      const n = net(); if (n) n.partyD3Start(floor);
+      toastFn('⚔️ 파티 3D 던전 시작! 파티원이 같은 카타콤에 합류해요', true);
+      return;
+    }
     startDungeon(floor);   // canEnterFloor 검사 포함
     if (!dungeonRun) { const n = net(); if (n) n.partyLeave(); return; }
     dungeonRun.party = true;
@@ -1052,6 +1063,22 @@
     ['multi', '🌐 멀티'],
   ];
   function iconImg(key) { return (typeof window.econIcon === 'function') ? `<img class="econ-icon" src="${window.econIcon(key)}" alt="">` : ''; }
+  // 실제 스카이블럭식 아이템 로어(호버 툴팁): 이름 → 스탯 → 설명 → 등급 라인
+  function itemLore(sdef) {
+    if (!sdef) return '';
+    const lines = [sdef.name];
+    if (sdef.dmg) lines.push(`공격력: +${hasItem(sdef.key) ? rolledStat(sdef.key, sdef.dmg) : sdef.dmg}`);
+    if (sdef.defense) lines.push(`방어력: +${hasItem(sdef.key) ? rolledStat(sdef.key, sdef.defense) : sdef.defense}`);
+    const d = shopItemDesc(sdef); if (d) lines.push(d);
+    if (sdef.sellPrice > 0) lines.push(`판매가: ${fmtGold(sdef.sellPrice)}`);
+    if (sdef.tierKey) { const t = D().ITEM_TIERS.find(x => x.key === sdef.tierKey); if (t) lines.push(`◆ ${t.name.toUpperCase()}`); }
+    return lines.join('\n');
+  }
+  function ttAttr(keyOrDef) {
+    const sdef = typeof keyOrDef === 'string' ? shopDef(keyOrDef) : keyOrDef;
+    if (!sdef) return '';
+    return ` data-tt="${escHtml(itemLore(sdef))}"`;
+  }
   function hubHTML() {
     return `<div class="econ-panel">
       ${hubTabBodyHTML()}
@@ -1074,8 +1101,35 @@
       case 'stats': return statsHTML();
       case 'multi': return multiHTML();
       case 'inv': return invHTML();
+      case 'menu': return menuHTML();
+      case 'skills': return skillsHTML();
     }
     return '';
+  }
+  /* ---- 스카이블럭 메뉴(네더의 별 ✦ 우클릭 / 핫바 9번) — 실제 메뉴 구성 패턴 ---- */
+  function menuHTML() {
+    const tiles = [
+      ['stats', '📊', '내 프로필', '스탯 시트'], ['skills', '🧠', '스킬', '8종 스킬 진행도'],
+      ['collections', '📚', '컬렉션', '자원 31종 티어'], ['inv', '🎒', '인벤토리', '보유 아이템'],
+      ['pets', '🐾', '펫', '펫 관리'], ['talismans', '📿', '장신구 가방', '부적/마력'],
+      ['craft', '⚒️', '레시피 북', '제작(장인 NPC와 동일)'], ['multi', '🌐', '멀티', '거래·파티·섬 방문'],
+    ];
+    const worlds = (typeof window.economy3dWorlds === 'function') ? window.economy3dWorlds() : [];
+    return `<h4>✦ 스카이블럭 메뉴</h4>
+      <div class="econ-menugrid">${tiles.map(t => `<button class="econ-menutile" data-act="econ_menu" data-key="${t[0]}"><span class="econ-menuic">${t[1]}</span><b>${t[2]}</b><span class="muted">${t[3]}</span></button>`).join('')}</div>
+      <h4>🚀 빠른 이동 (워프)</h4>
+      <div class="econ-tierbtns">${worlds.map(w => `<button class="btn btn--sm" data-act="econ_warp" data-key="${w.key}">${w.name}</button>`).join('') || '<span class="muted">3D 월드에서 사용 가능</span>'}</div>
+      <p class="muted">상점·은행·인챈트·강화·리포지·특가는 마을의 해당 NPC에게 직접 찾아가세요!</p>`;
+  }
+  function skillsHTML() {
+    return `<h4>🧠 스킬 (실제 스카이블럭 XP 테이블 · 최대 ${D().SKILL_MAX_LEVEL}레벨)</h4>
+      <div class="econ-colgrid">${D().SKILLS.map(sk => {
+        const lv = skillLevel(sk.key), pr = skillXpProgress(sk.key);
+        const pct = pr.need > 0 ? Math.min(100, pr.cur / pr.need * 100) : 100;
+        return `<div class="econ-colrow"><span>${sk.name} <b>Lv.${lv}</b></span>
+          <span class="econ-hpbar" style="flex:1;height:14px"><span class="econ-hpbar__fill" style="width:${pct}%;background:linear-gradient(90deg,#2c82c9,#54c8e8)"></span></span>
+          <span class="muted">${pr.need ? `${pr.cur.toLocaleString()}/${pr.need.toLocaleString()} XP` : 'MAX'} · ${sk.bonusText}</span></div>`;
+      }).join('')}</div>`;
   }
   /* ---- 인벤토리(전체 보유 아이템 + 판매) ---- */
   function invHTML() {
@@ -1085,7 +1139,7 @@
       <div class="econ-shopgrid">${keys.map(k => {
         const sdef = shopDef(k);
         const sell = sdef && sdef.sellPrice > 0 ? sdef.sellPrice : 0;
-        return `<div class="econ-shopitem">
+        return `<div class="econ-shopitem econ-tt"${ttAttr(sdef || { key: k, name: itemName(k) })}>
           ${iconImg(k)}<span>${sdef && sdef.tierKey ? `<span style="color:${tierColorByKey(sdef.tierKey)}">${itemName(k)}</span>` : itemName(k)} <b>×${P.inv[k]}</b></span>
           <span class="muted econ-idesc">${shopItemDesc(sdef || { key: k })}</span>
           ${sell ? `<span><button class="btn btn--sm btn--ghost" data-act="econ_sell" data-key="${k}">1개 판매 ${fmtGold(sell)}</button></span>` : '<span class="muted">판매 불가</span>'}
@@ -1195,7 +1249,7 @@
       const items = D().SHOP.filter(s => s.category === cat && (s.buyPrice > 0 || (P.inv[s.key] || 0) > 0));
       if (!items.length) return '';
       return `<h4>${cat}</h4><div class="econ-shopgrid">${items.map(s => `
-        <div class="econ-shopitem">
+        <div class="econ-shopitem econ-tt"${ttAttr(s)}>
           ${iconImg(s.key)}<span>${s.tierKey ? `<span style="color:${tierColorByKey(s.tierKey)}">${s.name}</span>` : s.name}${s.dmg ? ` <span class="muted">공격 ${hasItem(s.key) ? rolledStat(s.key, s.dmg) + ' (내 롤)' : rollRangeText(s.dmg)}</span>` : ''}${s.defense ? ` <span class="muted">방어 ${hasItem(s.key) ? rolledStat(s.key, s.defense) + ' (내 롤)' : rollRangeText(s.defense)}</span>` : ''}</span>
           <span class="muted econ-idesc">${shopItemDesc(s)}</span>
           <span class="muted">${hasItem(s.key) ? '보유 ' + P.inv[s.key] : ''}</span>
@@ -1462,6 +1516,7 @@
       case 'zone': zone = el.dataset.key; renderZone(); break;
       case 'hubtab': hubTab = el.dataset.key; renderZone(); break;
       case 'menu': zone = 'hub'; hubTab = el.dataset.key; renderZone(); break;
+      case 'warp': if (typeof window.economy3dWarp === 'function') window.economy3dWarp(el.dataset.key); break;
       case 'gather': gather(el.dataset.key); break;
       case 'buy': buyItem(el.dataset.key); break;
       case 'sell': sellItem(el.dataset.key, 1); break;
@@ -1488,9 +1543,12 @@
       case 'dungeon_class': P.dungeonClass = el.dataset.key; saveNow(); renderZone(); break;
       case 'dungeon_start': {
         const f = Number(el.dataset.floor);
-        // 파티 중이 아니면 3D 카타콤(직접 돌아다니며 전투) — 3D 미가동 시 패널 웨이브로 폴백
-        const inParty = net() && net().party();
-        if (!inParty && typeof window.economy3dDungeon === 'function' && window.economy3dDungeon(f)) break;
+        // 3D 카타콤(직접 돌아다니며 전투) — 파티 호스트면 게스트도 자동 합류, 3D 미가동 시 패널 폴백
+        const pt0 = net() && net().party();
+        if (typeof window.economy3dDungeon === 'function' && window.economy3dDungeon(f)) {
+          if (pt0 && pt0.role === 'host' && net()) net().partyD3Start(f);
+          break;
+        }
         startDungeon(f); break;
       }
       case 'dungeon_advance': dungeonAdvance(); break;
@@ -1576,6 +1634,12 @@
     partyStartDungeon, partyRemoteAttack, partyGuestReward,
     // 3D 인월드 게임플레이 브리지
     toolMul: fam => bestToolMul(fam),
+    toolPower: fam => ({
+      speedMul: bestToolMul(fam) * (1 + enchantLvl('tool', 'efficiency') * 0.12) * (fam === 'pickaxe' && hasItem('stonk') ? 1.6 : 1),
+      fortunePct: enchantLvl('tool', 'fortune') * 20,
+      area: enchantLvl('tool', 'area_mining'),
+      treecap: fam === 'axe' && hasItem('treecapitator'),
+    }),
     hasTool: fam => (D().TOOLS[fam] || []).some(t => hasItem(t.key)),
     gatherBlock: gatherBlock3d,
     fishCatch: fishCatch3d,
@@ -1585,6 +1649,7 @@
     defensePct: lowHp => playerDefensePct(lowHp),
     maxHp: () => playerMaxHp(),
     statSpeed: () => playerStats().speed,
+    skillLv: k => skillLevel(k),
     canEnterFloor,
     dungeonFloorInfo: f => { const fd = dungeonFloorDef(f); return fd ? { floor: fd.floor, bossName: fd.bossName, bossHp: fd.bossHp, bossDmg: fd.bossDmg, mobList: fd.mobList, essenceReward: fd.essenceReward } : null; },
     dungeonComplete: dungeon3dComplete,
