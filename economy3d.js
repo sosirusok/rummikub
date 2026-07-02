@@ -184,7 +184,10 @@
   const HOME_BOUNDS = { x0: 60, x1: 132, z0: 60, z1: 132 };   // 프라이빗 섬 메싱/편집 영역(빠른 리빌드)
   const HOME_CENTER = { x: 96, z: 96, r: 16, top: 20 };
   // 프라이빗 섬 건축 팔레트(자유 건축 모드)
-  const BUILD_BLOCKS = ['dirt', 'stone', 'cobblestone', 'oak_planks', 'oak_log', 'stone_bricks', 'bricks', 'sand', 'glass', 'glowstone'];
+  const BUILD_BLOCKS = ['dirt', 'grass', 'stone', 'cobblestone', 'gravel', 'sand', 'sandstone',
+    'oak_planks', 'birch_planks', 'spruce_planks', 'oak_log', 'birch_log', 'spruce_log', 'dark_oak_log', 'jungle_log', 'acacia_log',
+    'oak_leaves', 'stone_bricks', 'bricks', 'nether_bricks', 'end_bricks', 'quartz_block', 'purpur', 'obsidian',
+    'glass', 'glowstone', 'ice', 'snow_block', 'wool_white', 'wool_red', 'netherrack', 'soul_sand', 'end_stone', 'mycelium', 'magma_block', 'coarse_dirt'];
   let selectedBlock = 1;                  // BUILD_BLOCKS 인덱스
   const PORTALS = {
     hub: { x: 210, z: 224, target: 'home', label: '🏝️ 내 섬으로' },
@@ -1115,6 +1118,17 @@
     mushroom: { sk: 'farming', lv: 2, name: '농사' }, spider: { sk: 'combat', lv: 1, name: '전투' },
     nether: { sk: 'combat', lv: 5, name: '전투' }, end: { sk: 'combat', lv: 12, name: '전투' },
   };
+  // 아라크네 소환: 크리스탈 4개를 성소에 설치(실제 방식)
+  function tryArachneSummon(t) {
+    const api = econApi();
+    if (mobs.some(m => m.type === 'arachne' && !m.dead)) { if (typeof toast === 'function') toast('아라크네가 이미 깨어 있어요!', false); return; }
+    if (!api.consumeItems || !api.consumeItems('arachne_crystal', 4)) {
+      if (typeof toast === 'function') toast('아라크네 크리스탈 4개가 필요해요 (타란튤라 버민/자갈 스켈레톤 드롭)', false);
+      return;
+    }
+    const mob = spawnMob({ x: 96, z: 40, r: 4, world: 'spider' }, 'arachne', 60);
+    if (mob) { mob.state = 'chase'; if (typeof toast === 'function') toast('🕷️ 크리스탈 4개가 공명한다... 아라크네가 깨어났다!!', false); }
+  }
   function warpTo(dest) {
     if (!WORLD_DEFS[dest]) return;
     const req = WARP_REQ[dest];
@@ -1185,13 +1199,11 @@
       const room = { x0: i * ROOM_W + 2, x1: (i + 1) * ROOM_W - 2, gateX: (i + 1) * ROOM_W, kills: 0, need: 4, cleared: false };
       dungeonState.rooms.push(room);
       for (let k = 0; k < room.need; k++) {
-        const name = fd.mobList[k % fd.mobList.length];
-        const hp = Math.max(40, Math.round(fd.bossHp / 40));
-        spawnDungeonMob({
-          name, hp, dmg: Math.round(fd.bossDmg / 3), lv: floor * 5 + k,
-          x: room.x0 + 4 + Math.random() * (room.x1 - room.x0 - 8), z: 14 + Math.random() * 20,
-          color: [0x3a7d3a, 0x8a8a8a, 0x5a4327, 0x7d3a3a][k % 4], roomIdx: i,
-        });
+        // V8: 층별 던전 몹 15종 풀에서 랜덤(총 105종) — 방마다 조합이 다르다
+        const typeKey = `dg_f${floor}_${Math.floor(Math.random() * 15)}`;
+        const area = { x: room.x0 + 4 + Math.random() * (room.x1 - room.x0 - 8), z: 14 + Math.random() * 20, r: 3, world: 'dungeon' };
+        const mob = spawnMob(area, typeKey, floor * 4 + 1 + Math.floor(Math.random() * 4));
+        if (mob) mob.dungeonRoom = i;
       }
     }
     if (typeof toast === 'function') toast(`🗝️ 카타콤 ${floor}층 입장! 몬스터를 모두 잡아 게이트를 열고 보스까지 전진하세요`, true);
@@ -1831,6 +1843,11 @@
     let dx = (-sin * mf + cos * ms), dz = (-cos * mf - sin * ms);
     const len = Math.hypot(dx, dz); if (len > 0) { dx /= len; dz /= len; }
     P.vx = dx * speed; P.vz = dz * speed;
+    // 오토 점프: 진행 방향 1블록 턱은 자동으로 올라간다(조작감)
+    if (P.onGround && len > 0) {
+      const fx = Math.floor(P.x + dx * 0.8), fz = Math.floor(P.z + dz * 0.8), fy = Math.floor(P.y + 0.1);
+      if (solidAt(fx, fy, fz) && !solidAt(fx, fy + 1, fz) && !solidAt(fx, fy + 2, fz)) { P.vy = 8.5; P.onGround = false; }
+    }
     const wantJump = keys.Space || (moveT.active && (moveT.y - moveT.oy) < -34);
     const jumpEdge = wantJump && !P._prevJump;   // 점프 키를 새로 누른 순간(더블점프 판정)
     P._prevJump = wantJump;
@@ -2175,7 +2192,7 @@
     diamond_zombie: { name: '다이아 좀비', kind: 'humanoid', color: 0x5decd5, hp: 700, dmg: 60, xp: 40, coins: 12, speed: 2.0, books: ['area_mining'], drops: [{ key: 'diamond', n: 1, chance: 0.5 }], tierCap: 4 },
     diamond_skeleton: { name: '다이아 스켈레톤', kind: 'humanoid', color: 0x8aeade, hp: 650, dmg: 65, xp: 40, coins: 12, speed: 2.1, books: ['area_mining', 'critical'], drops: [{ key: 'diamond', n: 1, chance: 0.5 }], tierCap: 4 },
     spider: { name: '거미', kind: 'spider', color: 0x3a3040, hp: 80, dmg: 11, xp: 6, coins: 2, speed: 2.4, books: ['bane_of_arthropods', 'triple_strike'], drops: [{ key: 'string', n: 1 }, { key: 'string', n: 2, chance: 0.35 }], tierCap: 1 },
-    gravel_skeleton: { name: '자갈 스켈레톤', kind: 'humanoid', color: 0x7d7873, hp: 220, dmg: 30, xp: 16, coins: 5, speed: 1.9, books: ['prosecute'], drops: [{ key: 'bone', n: 2 }, { key: 'string', n: 2, chance: 0.3 }], tierCap: 2 },
+    gravel_skeleton: { name: '자갈 스켈레톤', kind: 'humanoid', color: 0x7d7873, hp: 220, dmg: 30, xp: 16, coins: 5, speed: 1.9, books: ['prosecute'], drops: [{ key: 'bone', n: 2 }, { key: 'string', n: 2, chance: 0.3 }, { key: 'arachne_crystal', n: 1, chance: 1 / 120 }], tierCap: 2 },
     broodmother: { name: '브루드마더', kind: 'spider', color: 0x4a2050, hp: 6000, dmg: 90, xp: 150, coins: 80, speed: 2.2, scale: 2.4, books: ['bane_of_arthropods', 'rejuvenate'], drops: [{ key: 'string', n: 8 }, { key: 'talisman_spider_ring', n: 1, chance: 0.08 }], tierCap: 5 },
     arachne: { name: '아라크네', kind: 'spider', color: 0x8a1a30, hp: 20000, dmg: 160, xp: 300, coins: 150, speed: 2.5, scale: 3.0, books: ['bane_of_arthropods', 'thunderlord'], drops: [{ key: 'string', n: 16 }, { key: 'talisman_spider_ring', n: 1, chance: 0.25 }, { key: 'pet_egg_wolf', n: 1, chance: 0.05 }], tierCap: 6 },
     blaze: { name: '블레이즈', kind: 'blaze', color: 0xe8a020, hp: 600, dmg: 50, xp: 35, coins: 8, speed: 2.0, books: ['fire_aspect', 'thunderlord'], drops: [{ key: 'blaze_rod', n: 1, chance: 0.6 }, { key: 'talisman_lava_charm', n: 1, chance: 0.02 }], tierCap: 4 },
@@ -2195,6 +2212,65 @@
     sheep: { name: '양', kind: 'quad', color: 0xe9ecec, hp: 45, dmg: 0, xp: 4, coins: 2, speed: 1.0, passive: true, books: [], drops: [{ key: 'string', n: 1, chance: 0.4 }], tierCap: 0 },
     mushroom_cow: { name: '무쉬룸', kind: 'quad', color: 0xa83232, hp: 50, dmg: 0, xp: 4, coins: 3, speed: 1.0, passive: true, books: [], drops: [{ key: 'wheat', n: 1, chance: 0.4 }, { key: 'pet_egg_elephant', n: 1, chance: 0.004 }], tierCap: 0 },
   };
+  /* ── V8 몹 대확장: 지역 변종을 "별도 종"으로 + 개별 드롭률(전부 다름, 위키식 1/N) ── */
+  // 스파이더 덴 6종(실제 로스터)
+  MOB_TYPES.splitter_spider = { name: '스플리터 거미', kind: 'spider', color: 0x4a3a52, hp: 70, dmg: 10, xp: 5, coins: 2, speed: 2.3, drops: [{ key: 'string', n: 1 }, { key: 'enchant_book_bane_of_arthropods', n: 1, chance: 1 / 90 }], tierCap: 1 };
+  MOB_TYPES.weaver_spider = { name: '위버 거미', kind: 'spider', color: 0x2a4a3a, hp: 110, dmg: 14, xp: 7, coins: 3, speed: 2.5, drops: [{ key: 'string', n: 2 }, { key: 'enchant_book_triple_strike', n: 1, chance: 1 / 140 }], tierCap: 1 };
+  MOB_TYPES.dasher_spider = { name: '대셔 거미', kind: 'spider', color: 0x30303a, hp: 160, dmg: 19, xp: 9, coins: 4, speed: 3.4, drops: [{ key: 'string', n: 2 }, { key: 'enchant_book_sugar_rush', n: 1, chance: 1 / 220 }], tierCap: 2 };
+  MOB_TYPES.voracious_spider = { name: '보라시어스 거미', kind: 'spider', color: 0x5a2030, hp: 420, dmg: 33, xp: 18, coins: 8, speed: 2.8, drops: [{ key: 'string', n: 3 }, { key: 'enchant_book_execute', n: 1, chance: 1 / 350 }], tierCap: 3 };
+  MOB_TYPES.spider_jockey = { name: '스파이더 자키', kind: 'jockey', color: 0x3a3040, hp: 260, dmg: 26, xp: 14, coins: 6, speed: 2.9, drops: [{ key: 'string', n: 2 }, { key: 'bone', n: 2 }, { key: 'enchant_book_critical', n: 1, chance: 1 / 180 }], tierCap: 2 };
+  MOB_TYPES.tarantula_vermin = { name: '타란튤라 버민', kind: 'spider', color: 0x6a1a1a, hp: 900, dmg: 55, xp: 35, coins: 14, speed: 3.0, scale: 1.3, drops: [{ key: 'string', n: 4 }, { key: 'arachne_crystal', n: 1, chance: 1 / 40 }, { key: 'enchant_book_bane_of_arthropods', n: 1, chance: 1 / 60 }], tierCap: 4 };
+  // 네더 7종(가스트/좀비 피글린/화염 거미 추가 — 가스트는 부유)
+  MOB_TYPES.ghast = { name: '가스트', kind: 'ghast', color: 0xe8e8e8, hp: 1200, dmg: 90, xp: 55, coins: 18, speed: 1.6, fly: true, drops: [{ key: 'blaze_rod', n: 1, chance: 1 / 8 }, { key: 'enchant_book_dragon_hunter', n: 1, chance: 1 / 600 }], tierCap: 4 };
+  MOB_TYPES.zombie_pigman = { name: '좀비 피글린', kind: 'humanoid', color: 0xd8909a, hp: 550, dmg: 52, xp: 30, coins: 9, speed: 2.1, drops: [{ key: 'gold', n: 2, chance: 1 / 2 }, { key: 'enchant_book_vitality', n: 1, chance: 1 / 240 }], tierCap: 3 };
+  MOB_TYPES.flaming_spider = { name: '화염 거미', kind: 'spider', color: 0xc84a1a, hp: 800, dmg: 70, xp: 42, coins: 12, speed: 3.1, drops: [{ key: 'blaze_rod', n: 1, chance: 1 / 5 }, { key: 'string', n: 3 }, { key: 'enchant_book_fire_aspect', n: 1, chance: 1 / 150 }], tierCap: 4 };
+  // 늑대 5종(하울링 케이브 계열)
+  MOB_TYPES.pack_spirit = { name: '팩 스피릿', kind: 'quad', color: 0xb8c4d8, hp: 700, dmg: 60, xp: 35, coins: 10, speed: 3.0, drops: [{ key: 'bone', n: 3 }, { key: 'enchant_book_first_strike', n: 1, chance: 1 / 200 }], tierCap: 3 };
+  MOB_TYPES.howling_spirit = { name: '하울링 스피릿', kind: 'quad', color: 0x8a9ab8, hp: 1100, dmg: 75, xp: 45, coins: 14, speed: 3.2, drops: [{ key: 'bone', n: 4 }, { key: 'enchant_book_experience', n: 1, chance: 1 / 260 }], tierCap: 4 };
+  MOB_TYPES.soul_of_the_alpha = { name: '알파의 영혼', kind: 'quad', color: 0xdae8f8, hp: 3200, dmg: 120, xp: 90, coins: 30, speed: 3.4, scale: 1.5, drops: [{ key: 'bone', n: 6 }, { key: 'talisman_wolf_claw', n: 1, chance: 1 / 30 }, { key: 'enchant_book_looting', n: 1, chance: 1 / 45 }], tierCap: 5 };
+  // 좀비 라인 보강
+  MOB_TYPES.zombie_villager = { name: '좀비 주민', kind: 'humanoid', color: 0x5a7a3a, hp: 120, dmg: 24, xp: 7, coins: 1, speed: 1.7, drops: [{ key: 'rotten_flesh', n: 1 }, { key: 'carrot', n: 1, chance: 1 / 10 }], tierCap: 1 };
+  // 엔더 드래곤 8종(실제 유형 + 신성) — 서로 다른 레벨/체력/드롭률
+  const DRAGON_TYPES = [
+    ['protector_dragon', '프로텍터 드래곤', 0x8a94b8, 80, 30000, 160, 1 / 60, 1 / 120],
+    ['old_dragon', '올드 드래곤', 0x9a8a6a, 90, 42000, 180, 1 / 55, 1 / 110],
+    ['wise_dragon', '와이즈 드래곤', 0x54c8e8, 100, 36000, 200, 1 / 50, 1 / 100],
+    ['unstable_dragon', '언스테이블 드래곤', 0x1a1a2a, 110, 38000, 240, 1 / 45, 1 / 90],
+    ['young_dragon', '영 드래곤', 0xdadde0, 120, 34000, 220, 1 / 45, 1 / 90],
+    ['strong_dragon', '스트롱 드래곤', 0xc0392b, 130, 48000, 280, 1 / 35, 1 / 70],
+    ['superior_dragon', '슈페리어 드래곤', 0xf2d75c, 150, 60000, 340, 1 / 20, 1 / 40],
+    ['holy_dragon', '홀리 드래곤', 0xfff4d8, 200, 90000, 400, 1 / 12, 1 / 25],
+  ];
+  DRAGON_TYPES.forEach(dt => {
+    MOB_TYPES[dt[0]] = { name: dt[1], kind: 'dragon', color: dt[2], hp: Math.round(dt[4] / (1 + (dt[3] - 1) * 0.35)), dmg: Math.round(dt[5] / (1 + (dt[3] - 1) * 0.35) * 3), xp: 40, coins: 30, speed: 2.8,
+      drops: [{ key: 'ender_pearl', n: 8 }, { key: 'aspect_of_the_dragons', n: 1, chance: dt[6] }, { key: 'pet_egg_ender_dragon', n: 1, chance: dt[7] / 4 }, { key: 'talisman_dragon_claw', n: 1, chance: dt[7] }, { key: 'talisman_dragon_heart', n: 1, chance: dt[7] / 2 }], tierCap: 6, fixedLv: dt[3] };
+  });
+  // 던전 몹 105종 생성(층 7 × 원형 15) — 층이 오를수록 강하고 드롭률 상이
+  const DG_ARCHETYPES = [
+    ['크립트 언데드', 'humanoid', 0x3a6a3a, 1.0], ['크립트 수시어', 'humanoid', 0x4a7a5a, 1.15], ['좀비 솔저', 'humanoid', 0x5a6a3a, 1.3],
+    ['좀비 나이트', 'humanoid', 0x3a4a6a, 1.5], ['크립트 드레드로드', 'humanoid', 0x2a2a4a, 1.8], ['로스트 어드벤처러', 'humanoid', 0xc8a25a, 2.2],
+    ['스켈레톤 솔저', 'humanoid', 0xbababa, 1.2], ['스켈레톤 마스터', 'humanoid', 0x8a8a9a, 1.7], ['위더맨서', 'tall', 0x2a2a2a, 2.0],
+    ['던전 거미', 'spider', 0x3a3050, 1.1], ['던전 슬라임', 'slime', 0x5a4ac2, 1.25], ['테라코타 병사', 'humanoid', 0xb86a3a, 1.6],
+    ['펠스', 'tall', 0x1a1a1a, 2.4], ['섀도우 어쌔신', 'humanoid', 0x252530, 2.8], ['미니 위더', 'slime', 0x1a1a22, 3.2],
+  ];
+  const DG_FLOOR_BOOKS = [
+    ['protection', 'sharpness'], ['growth', 'critical'], ['venomous', 'triple_strike'], ['cubism', 'prosecute'],
+    ['giant_killer', 'rejuvenate'], ['titan_killer', 'last_stand'], ['dragon_hunter', 'true_protection'],
+  ];
+  for (let f = 1; f <= 7; f++) {
+    DG_ARCHETYPES.forEach((a, i) => {
+      const base = 60 * Math.pow(2.1, f - 1) * a[3];
+      MOB_TYPES[`dg_f${f}_${i}`] = {
+        name: `${a[0]} F${f}`, kind: a[1], color: a[2], hp: Math.round(base), dmg: Math.round(8 * Math.pow(1.75, f - 1) * a[3]),
+        xp: Math.round(6 * f * a[3]), coins: Math.round(2 * f * a[3]), speed: 1.8 + (i % 5) * 0.25,
+        drops: [
+          { key: 'dungeon_essence', n: 1, chance: 1 / (4 + i % 4) },
+          { key: `enchant_book_${DG_FLOOR_BOOKS[f - 1][i % 2]}`, n: 1, chance: 1 / (120 + i * 40 + f * 30) },   // 층·몹별 상이(1/150~1/900)
+        ], tierCap: Math.min(6, f), equipChance: 1 / (400 + i * 120),   // 장비 1/400~1/2080
+      };
+    });
+  }
+
   // 스폰 구역: 실제 스카이블럭처럼 특정 지역에 특정 몬스터(레벨 범위 내 변종 + 5% 정예 ★)
   let SPAWN_AREAS = [
     { world: 'hub', x: 152, z: 314, r: 26, types: ['zombie', 'skeleton'], lv: [1, 6], cap: 8, respawn: 9 },     // 묘지(실제: Graveyard Zombie Lv1)
@@ -2219,10 +2295,27 @@
     { world: 'nether', x: 88, z: 88, r: 8, y: 34, types: ['blaze'], lv: [15, 25], cap: 3, respawn: 13 },
     { world: 'nether', x: 64, z: 43, r: 9, y: 22, types: ['wither_skeleton'], lv: [10, 20], cap: 3, respawn: 15 },
     { world: 'nether', x: 64, z: 80, r: 26, types: ['magma_cube'], lv: [8, 18], cap: 5, respawn: 12 },
+    { world: 'nether', x: 88, z: 40, r: 20, types: ['zombie_pigman', 'pigman'], lv: [10, 18], cap: 4, respawn: 13 },
+    { world: 'nether', x: 64, z: 64, r: 40, rMin: 20, types: ['ghast'], lv: [17, 25], cap: 2, respawn: 25 },
+    { world: 'nether', x: 40, z: 88, r: 18, types: ['flaming_spider'], lv: [14, 22], cap: 3, respawn: 15 },
+    // 허브 확장(폐허/크립트 심부/가축) + 딥 캐번 층별 몹 + 자갈 광산
+    { world: 'hub', x: 88, z: 280, r: 24, types: ['old_wolf'], lv: [45, 50], cap: 1, respawn: 40 },
+    { world: 'hub', x: 88, z: 280, r: 20, types: ['rat'], lv: [1, 3], cap: 3, respawn: 10 },
+    { world: 'hub', x: 152, z: 344, r: 10, types: ['wraith', 'golden_ghoul'], lv: [26, 34], cap: 2, respawn: 30 },
+    { world: 'hub', x: 152, z: 314, r: 26, types: ['zombie_villager'], lv: [1, 3], cap: 3, respawn: 12 },
+    { world: 'hub', x: 330, z: 224, r: 34, types: ['cow', 'pig', 'chicken', 'sheep'], lv: [1, 1], cap: 8, respawn: 8 },
+    { world: 'gold', x: 56, z: 46, r: 26, types: ['miner_zombie'], lv: [8, 15], cap: 4, respawn: 12 },
+    { world: 'deep', x: 48, z: 48, r: 28, y: 26, types: ['lapis_zombie'], lv: [7, 12], cap: 4, respawn: 13 },
+    { world: 'deep', x: 48, z: 48, r: 28, y: 21, types: ['redstone_pigman'], lv: [12, 18], cap: 4, respawn: 13 },
+    { world: 'deep', x: 48, z: 48, r: 26, y: 11, types: ['diamond_zombie', 'diamond_skeleton'], lv: [15, 25], cap: 4, respawn: 15 },
+    { world: 'spider', x: 40, z: 96, r: 14, types: ['gravel_skeleton'], lv: [5, 10], cap: 3, respawn: 14 },
+    { world: 'end', x: 64, z: 64, r: 24, y: 8, types: ['obsidian_defender', 'watcher'], lv: [55, 55], cap: 3, respawn: 22 },
+    { world: 'end', x: 64, z: 64, r: 40, rMin: 20, types: ['endermite'], lv: [37, 43], cap: 3, respawn: 16 },
+    { world: 'barn', x: 72, z: 72, r: 44, types: ['cow', 'pig', 'chicken', 'sheep'], lv: [1, 2], cap: 12, respawn: 7 },
     // 엔드: 상판 엔더맨, 심연 아래 드래곤 둥지(젤롯 + 드래곤)
     { world: 'end', x: 64, z: 64, r: 50, rMin: 18, types: ['enderman'], lv: [42, 50], cap: 6, respawn: 14 },
     { world: 'end', x: 64, z: 64, r: 26, y: 8, types: ['zealot'], lv: [55, 55], cap: 3, respawn: 25 },
-    { world: 'end', x: 64, z: 64, r: 8, y: 8, types: ['ender_dragon'], lv: [100, 100], cap: 1, respawn: 120 },
+    { world: 'end', x: 64, z: 64, r: 8, y: 8, types: ['protector_dragon', 'old_dragon', 'wise_dragon', 'unstable_dragon', 'young_dragon', 'strong_dragon', 'superior_dragon', 'holy_dragon'], lv: [80, 200], cap: 1, respawn: 120 },   // 8종 드래곤 랜덤 소환
     // 파크/버섯 사막
     { world: 'park', x: 72, z: 72, r: 60, rMin: 24, types: ['wolf'], lv: [8, 15], cap: 4, respawn: 15 },
     { world: 'mushroom', x: 50, z: 72, r: 34, types: ['mushroom_cow'], lv: [1, 3], cap: 6, respawn: 10 },
@@ -2298,6 +2391,19 @@
     if (def.kind === 'spider') h = buildSpiderMesh(def.color);
     else if (def.kind === 'blaze') h = buildBlazeMesh(def.color);
     else if (def.kind === 'dragon') h = buildDragonMesh(def.color);
+    else if (def.kind === 'jockey') {
+      h = buildSpiderMesh(def.color);
+      const rider = buildHumanoid(0xbababa); rider.group.scale.setScalar(0.55); rider.group.position.set(0, 0.85, 0.1);
+      h.group.add(rider.group);
+    }
+    else if (def.kind === 'ghast') {
+      const g = new THREE.Group();
+      g.add(mkBox(1.3, 1.3, 1.3, def.color, 0, 1.6, 0));
+      addEyes(g, 1.85, 0.68, 0x8a1a1a, 0.24);
+      const tent = [];
+      for (let i = 0; i < 5; i++) { const t = mkBox(0.16, 0.9, 0.16, shade(def.color, 0.8), -0.4 + i * 0.2, 0.55, (i % 2) * 0.3 - 0.15); g.add(t); tent.push(t); }
+      h = { group: g, legs: tent };
+    }
     else if (def.kind === 'quad') {
       h = buildQuadruped(def.color, 0.9);
       addEyes(h.group, 0.62, 0.62, 0x1a1a1a, 0.12);
@@ -2312,10 +2418,7 @@
   }
   function spawnMob(area, typeKey, lv, customDef) {
     let def = customDef || MOB_TYPES[typeKey]; if (!def) return null;
-    if (typeKey === 'spider') {   // 실제 스파이더 덴 변종: 스플리터/위버/대셔/보라시어스
-      const vn = lv <= 2 ? '스플리터 거미' : lv <= 3 ? '위버 거미' : lv <= 6 ? '대셔 거미' : '보라시어스 거미';
-      def = Object.assign({}, def, { name: vn });
-    }
+    if (def.fixedLv) lv = def.fixedLv;   // 드래곤 등 종 고정 레벨
     const a = Math.random() * Math.PI * 2;
     const rMin = area.rMin || 0;
     const rr = rMin + Math.random() * Math.max(1, area.r * 0.9 - rMin);
@@ -2399,8 +2502,13 @@
       if (mvx || mvz) {
         const sp = m.def.speed * (m.state === 'chase' ? 1 : 0.5);
         const nx = mp.x + mvx * sp * dt, nz = mp.z + mvz * sp * dt;
+        if (m.def.fly) {   // 가스트: 부유 비행(지면 +5~7 유지)
+          const gy = groundBelow(Math.floor(nx), Math.floor(nz), 44) + 5.5 + Math.sin(m.walkT * 0.7) * 1.2;
+          mp.x = nx; mp.z = nz; mp.y += (gy - mp.y) * Math.min(1, dt * 2);
+        } else {
         const ny = groundBelow(Math.floor(nx), Math.floor(nz), mp.y + 1.8);
         if (ny - mp.y < 1.6 && ny - mp.y > -6 && ny > 2) { mp.x = nx; mp.z = nz; mp.y += (ny - mp.y) * Math.min(1, dt * 8); }
+        }
         m.mesh.rotation.y = Math.atan2(mvx, mvz);
         m.walkT += dt * 7;
         const sw = Math.sin(m.walkT) * 0.5;
@@ -2456,7 +2564,8 @@
         coins: Math.round(m.def.coins * lvMul * (m.elite ? 3 : 1)),
         xp: Math.round(m.def.xp * lvMul * (m.elite ? 3 : 1)),
         drops: m.def.drops, tierCap: m.def.tierCap + (m.elite ? 1 : 0),
-        books: m.def.books || [], elite: m.elite,
+        books: m.def.books || [], elite: m.elite, lv: m.lv,
+        equipChance: m.def.equipChance,   // 몹별 상이(없으면 economy.js가 레벨·티어로 산출)
       });
       scene.remove(m.mesh); disposeGroup(m.mesh);
       mobs.splice(mobs.indexOf(m), 1);
@@ -2519,6 +2628,16 @@
     const bar = document.getElementById('econ3dHpFill'), txt = document.getElementById('econ3dHpTxt');
     if (bar && php) bar.style.width = Math.max(0, php.hp / php.max * 100) + '%';
     if (txt && php) txt.textContent = `❤ ${Math.max(0, Math.ceil(php.hp))}/${php.max}`;
+    // 핫바 위 스탯(실제 스카이블럭 액션바): 체력/방어/마나/속도 — 나머지는 메뉴에서
+    const row = document.getElementById('econ3dStats');
+    const api = econApi();
+    if (row && api.hudStats) {
+      const st = api.hudStats();
+      row.innerHTML = `<span style="color:#ff5555">❤ ${php ? Math.max(0, Math.ceil(php.hp)) : st.hp}/${st.hp}</span>`
+        + `<span style="color:#55ff55">❈ 방어 ${st.def}</span>`
+        + `<span style="color:#55aaff">✎ 마나 ${st.mana}</span>`
+        + `<span style="color:#f2f2f2">✦ 속도 ${st.speed}</span>`;
+    }
   }
 
   /* ---------------- 상호작용(콘 조준) ---------------- */
@@ -2533,6 +2652,10 @@
     if (portal) {
       const py = surfaceTop(portal.x, portal.z);
       interactables.push({ type: 'portal', ref: portal, x: portal.x + 0.5, y: py + 1.5, z: portal.z + 0.5 });
+    }
+    if (worldMode === 'spider') {
+      const ay = surfaceTop(96, 40);
+      interactables.push({ type: 'arachneAltar', ref: {}, x: 96.5, y: ay + 0.8, z: 40.5 });
     }
     for (const wp of (WARPS[worldMode] || [])) {
       const wy = wp._y || surfaceTop(wp.x, wp.z);
@@ -2625,6 +2748,7 @@
     else if (t.type === 'fairy') { econApi().collectFairySoul(t.ref.id); refreshFairyVisibility(); }
     else if (t.type === 'player') openPanelForZone('hub', 'multi');
     else if (t.type === 'warp') warpTo(t.ref.dest);
+    else if (t.type === 'arachneAltar') tryArachneSummon(t);
     else if (t.type === 'portal') travelTo(t.ref.target);
   }
   function showPanel() {
@@ -2780,6 +2904,10 @@
   function buildWarpMarkers() {
     if (!scene) return;
     if (!propGroup) { propGroup = new THREE.Group(); scene.add(propGroup); }
+    if (worldMode === 'spider') {
+      const ay = surfaceTop(96, 40);
+      interactables.push({ type: 'arachneAltar', ref: {}, x: 96.5, y: ay + 0.8, z: 40.5 });
+    }
     for (const wp of (WARPS[worldMode] || [])) {
       const y = wp._y || surfaceTop(wp.x, wp.z);
       const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.9, 5, 8, 1, true), new THREE.MeshBasicMaterial({ color: 0x54e0a8, transparent: true, opacity: 0.28, side: THREE.DoubleSide }));
@@ -2819,6 +2947,7 @@
       </div>
       <canvas id="econ3dMap" class="econ3d-map" width="140" height="140" data-act="econ3d_map"></canvas>
       <div class="econ3d-hpwrap"><div class="econ3d-hpbar"><div id="econ3dHpFill" class="econ3d-hpfill"></div></div><span id="econ3dHpTxt" class="econ3d-hptxt">❤</span></div>
+      <div class="econ3d-statsrow" id="econ3dStats"></div>
       <div class="econ3d-hotbar" id="econ3dHotbar">${Array.from({ length: 9 }, (_, i) => `<button class="econ3d-slot" data-act="econ3d_hotbar" data-i="${i}" id="econ3dSlot${i}">${i === 8 ? '<span class="econ3d-star">✦</span>' : ''}</button>`).join('')}</div>
       <div class="econ3d-buildbar" id="econ3dBuildBar" style="display:none">${BUILD_BLOCKS.map((bk, i) => `<button class="econ3d-blockbtn ${i === selectedBlock ? 'is-sel' : ''}" data-act="econ3d_block" data-i="${i}" title="${bk}"><span class="econ3d-blockchip" data-bk="${bk}"></span></button>`).join('')}</div>
       ${isTouch ? '<div class="econ3d-jump" data-act="econ3d_jump">⤒</div>' : '<div class="econ3d-controlhint">WASD 이동 · W 더블탭 달리기 · 좌클릭 공격/꾹 눌러 채집 · 우클릭 낚시(물) · E/클릭 NPC · 더블점프 · M 지도</div>'}
