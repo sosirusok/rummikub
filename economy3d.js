@@ -151,6 +151,19 @@
   let running = false, contextLost = false, raf = 0, lastT = 0;
   let renderer = null, scene = null, camera = null, canvas = null;
   let world = null;
+  let worldMode = 'hub';                  // 'hub'(공용 군도) | 'home'(프라이빗 섬 — 블록 설치/파괴 가능)
+  let worldHubCache = null;               // 허브 지형 캐시(포털 왕복 시 재생성 방지)
+  const HOME_BOUNDS = { x0: 60, x1: 132, z0: 60, z1: 132 };   // 프라이빗 섬 메싱/편집 영역(빠른 리빌드)
+  const HOME_CENTER = { x: 96, z: 96, r: 16, top: 20 };
+  // 프라이빗 섬 건축 팔레트(자유 건축 모드)
+  const BUILD_BLOCKS = ['dirt', 'stone', 'cobblestone', 'oak_planks', 'oak_log', 'stone_bricks', 'bricks', 'sand', 'glass', 'glowstone'];
+  let selectedBlock = 1;                  // BUILD_BLOCKS 인덱스
+  const PORTALS = {
+    hub: { x: 80, z: 96, target: 'home', label: '🏝️ 내 섬으로' },
+    home: { x: 96, z: 82, target: 'hub', label: '🏘️ 허브로' },
+  };
+  const HOME_MINION_SLOTS = [];
+  for (let r = 0; r < 3; r++) for (let cIdx = 0; cIdx < 5; cIdx++) HOME_MINION_SLOTS.push([100 + cIdx * 3, 90 + r * 5]);
   let atlasTex = null, atlasUV = {};
   let blockMat = null, waterMat = null, plantMat = null, lavaMat = null;
   let islandMeshes = { opaque: null, water: null, plant: null, lava: null };
@@ -233,6 +246,82 @@
     buildSlayerden();
     buildZiggurat();
     buildShrine();
+    buildPortalFrame(PORTALS.hub.x, PORTALS.hub.z);
+  }
+
+  /* ---- 프라이빗 섬(스카이블럭의 심장 — 공허에 뜬 나만의 섬, 자유 건축) ---- */
+  function buildPortalFrame(cx, cz) {
+    const y = surfaceTop(cx, cz);
+    for (let dx = -2; dx <= 2; dx++) { setW(cx + dx, y, cz, ID.obsidian); setW(cx + dx, y + 4, cz, ID.obsidian); }
+    for (let dy = 0; dy <= 4; dy++) { setW(cx - 2, y + dy, cz, ID.obsidian); setW(cx + 2, y + dy, cz, ID.obsidian); }
+    setW(cx - 2, y + 5, cz, ID.glowstone); setW(cx + 2, y + 5, cz, ID.glowstone);
+  }
+  function genHome() {
+    world = new Uint8Array(W * H * Dp);   // 공허(바다 없음) — 진짜 스카이블럭 프라이빗 섬
+    const { x: cx, z: cz, r, top } = HOME_CENTER;
+    for (let x = HOME_BOUNDS.x0; x <= HOME_BOUNDS.x1; x++) for (let z = HOME_BOUNDS.z0; z <= HOME_BOUNDS.z1; z++) {
+      let d = Math.hypot(x - cx, z - cz) / r;
+      d += (hash3(x, 77, z) - 0.5) * 0.14;
+      if (d >= 1) continue;
+      // 아래로 갈수록 좁아지는 부유섬 형태
+      for (let y = top; y >= 6; y--) {
+        const depth = top - y;
+        const shrink = 1 - depth * 0.09;
+        if (d > shrink) continue;
+        let id = ID.stone;
+        if (y === top) id = ID.grass;
+        else if (y >= top - 3) id = ID.dirt;
+        setW(x, y, z, id);
+      }
+    }
+    // 시작의 나무(큰 참나무)
+    const tx = cx - 7, tz = cz - 6, ty = surfaceTop(tx, tz);
+    for (let i = 0; i < 5; i++) setW(tx, ty + i, tz, ID.oak_log);
+    for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) for (let dy = 3; dy <= 6; dy++) {
+      if (Math.abs(dx) + Math.abs(dz) + Math.max(0, dy - 5) <= 3 && !(dx === 0 && dz === 0 && dy < 5)) {
+        if (!getBlockLocal(tx + dx, ty + dy, tz + dz)) setW(tx + dx, ty + dy, tz + dz, ID.oak_leaves);
+      }
+    }
+    // 일꾼 받침대 15자리(동쪽 정렬)
+    HOME_MINION_SLOTS.forEach(s => { const y = surfaceTop(s[0], s[1]); setW(s[0], y - 1, s[1], ID.stone_bricks); });
+    // 허브 귀환 포털 + 꽃 장식
+    buildPortalFrame(PORTALS.home.x, PORTALS.home.z);
+    for (let i = 0; i < 10; i++) {
+      const x = cx + Math.floor((hash3(i, 81, 3) - 0.5) * r * 1.4), z = cz + Math.floor((hash3(i, 82, 7) - 0.5) * r * 1.4);
+      const y = surfaceTop(x, z);
+      if (getBlockLocal(x, y - 1, z) === ID.grass) setW(x, y, z, hash3(i, 83, 1) < 0.5 ? ID.flower_yellow : ID.tall_grass);
+    }
+    // 저장된 블록 편집 적용(설치/파괴 영속)
+    const edits = econApi().getHomeEdits ? econApi().getHomeEdits() : {};
+    for (const k in edits) {
+      const p = k.split(',').map(Number);
+      if (inBounds(p[0], p[1], p[2])) world[widx(p[0], p[1], p[2])] = edits[k];
+    }
+  }
+  // 월드 이동(허브 ↔ 프라이빗 섬)
+  function travelTo(mode) {
+    if (mode === worldMode) return;
+    if (worldMode === 'hub') worldHubCache = world;   // 허브 지형 캐시
+    worldMode = mode;
+    disposeIslandMeshes();
+    [npcGroup, nodeGroup, minionGroup, fairyGroup, propGroup].forEach(g => { if (g && scene) { scene.remove(g); disposeGroup(g); } });
+    npcGroup = nodeGroup = minionGroup = fairyGroup = propGroup = null;
+    ambientMobs = []; fairyMeshes = {}; _minionSig = ''; dynamicInteractables = [];
+    if (mode === 'home') { genHome(); }
+    else { world = worldHubCache || (genWorld(), world); }
+    buildIslandMesh(mode === 'home' ? HOME_BOUNDS : null);
+    if (mode === 'hub') { buildNpcMeshes(); buildNodeMeshes(); buildFairyMeshes(); buildAmbientMobs(); refreshFairyVisibility(); }
+    else { propGroup = new THREE.Group(); scene.add(propGroup); }
+    buildStaticInteractables();
+    rebuildMinionVisuals(true);
+    buildMinimapBase();
+    buildPortalMarker();
+    if (mode === 'home') { P.x = 96.5; P.z = 100.5; P.y = surfaceTop(96, 100) + 0.02; P.yaw = Math.PI; }
+    else { resetPlayerToSpawn(); }
+    P.vx = P.vy = P.vz = 0;
+    curBannerKey = '';
+    updateBuildHud();
+    if (typeof toast === 'function') toast(mode === 'home' ? '🏝️ 나의 섬에 도착! (좌클릭 파괴 · 우클릭 설치)' : '🏘️ 허브로 돌아왔어요', true);
   }
 
   /* ---- 구조물 헬퍼 ---- */
@@ -623,12 +712,14 @@
     const m = new THREE.Mesh(g, mat); scene.add(m); return m;
   }
   function disposeIslandMeshes() { ['opaque', 'water', 'plant', 'lava'].forEach(k => { const m = islandMeshes[k]; if (m) { scene.remove(m); if (m.geometry) m.geometry.dispose(); islandMeshes[k] = null; } }); }
-  function buildIslandMesh() {
+  function buildIslandMesh(bounds) {
+    const bx0 = bounds ? bounds.x0 : 0, bx1 = bounds ? bounds.x1 : W - 1;
+    const bz0 = bounds ? bounds.z0 : 0, bz1 = bounds ? bounds.z1 : Dp - 1;
     const B = { pos: [], col: [], uv: [], idx: [], vi: 0 };
     const Wt = { pos: [], col: [], uv: [], idx: [], vi: 0 };
     const Pl = { pos: [], col: [], uv: [], idx: [], vi: 0 };
     const Lv = { pos: [], col: [], uv: [], idx: [], vi: 0 };
-    for (let x = 0; x < W; x++) for (let z = 0; z < Dp; z++) for (let y = 0; y < H; y++) {
+    for (let x = bx0; x <= bx1; x++) for (let z = bz0; z <= bz1; z++) for (let y = 0; y < H; y++) {
       const id = getBlockLocal(x, y, z); if (id === 0) continue;
       const b = BLOCKS[id]; const liq = b.liquid;
       if (b.cross) {
@@ -853,42 +944,49 @@
     }
   }
 
-  /* ---------------- 미니언 3D 표시 ---------------- */
+  /* ---------------- 미니언 3D 표시(허브: 자원 존 배치 / 내 섬: 받침대 전체 정렬) ---------------- */
+  function placeMinionMesh(P0, D0, entry, slot) {
+    const y = surfaceTop(slot[0], slot[1]);
+    const h = buildHumanoid(MINION_COLORS[entry.def.resource] || 0x999999);
+    h.group.position.set(slot[0] + 0.5, y, slot[1] + 0.5);
+    const cap = entry.m.storageUpgraded ? D0.MINION_STORAGE_UPGRADED : D0.MINION_STORAGE_BASE;
+    const label = makeMinionLabel(entry.def.name, entry.m.tier, entry.m.storage, cap);
+    label.position.set(0, 2.3, 0); h.group.add(label);
+    minionGroup.add(h.group);
+    dynamicInteractables.push({ type: 'minion', ref: { idx: entry.i }, x: slot[0] + 0.5, y: y + 1.0, z: slot[1] + 0.5 });
+  }
+  function placeEmptySlotMesh(slot) {
+    const y = surfaceTop(slot[0], slot[1]);
+    const eg = buildEmptySlot(); eg.position.set(slot[0] + 0.5, y, slot[1] + 0.5); minionGroup.add(eg);
+    dynamicInteractables.push({ type: 'emptySlot', ref: {}, x: slot[0] + 0.5, y: y + 0.6, z: slot[1] + 0.5 });
+  }
   function rebuildMinionVisuals(force) {
     const P0 = econApi().getP(); if (!P0) return;
-    const sig = P0.minions.map(m => m.key + ':' + m.tier + ':' + m.storage + ':' + (m.storageUpgraded ? 1 : 0)).join('|') + '#' + P0.maxMinionSlots;
+    const sig = worldMode + '|' + P0.minions.map(m => m.key + ':' + m.tier + ':' + m.storage + ':' + (m.storageUpgraded ? 1 : 0)).join('|') + '#' + P0.maxMinionSlots;
     if (!force && sig === _minionSig) return;
     _minionSig = sig;
     if (minionGroup) { scene.remove(minionGroup); disposeGroup(minionGroup); }
     minionGroup = new THREE.Group(); scene.add(minionGroup);
     dynamicInteractables = [];
     const D0 = window.ECON_DATA; if (!D0) return;
+    const entries = P0.minions.map((m, i) => ({ m, i, def: D0.MINIONS.find(x => x.key === m.key) })).filter(e => e.def);
+    if (worldMode === 'home') {
+      // 프라이빗 섬: 모든 미니언이 받침대에 나란히(실제 스카이블럭처럼 내 섬에서 일함)
+      HOME_MINION_SLOTS.forEach((slot, si) => {
+        if (si < entries.length) placeMinionMesh(P0, D0, entries[si], slot);
+        else if (si < Math.min(P0.maxMinionSlots, HOME_MINION_SLOTS.length)) placeEmptySlotMesh(slot);
+      });
+      return;
+    }
     const byZone = {};
-    P0.minions.forEach((m, i) => {
-      const def = D0.MINIONS.find(x => x.key === m.key); if (!def) return;
-      const zk = RESOURCE_ZONE[def.resource] || 'hub';
-      (byZone[zk] = byZone[zk] || []).push({ m, i, def });
-    });
+    entries.forEach(e => { const zk = RESOURCE_ZONE[e.def.resource] || 'hub'; (byZone[zk] = byZone[zk] || []).push(e); });
     let emptyShown = 0;
     const remaining = P0.maxMinionSlots - P0.minions.length;
     Object.keys(MINION_SLOTS).forEach(zoneKey => {
       const list = byZone[zoneKey] || [];
       MINION_SLOTS[zoneKey].forEach((slot, si) => {
-        const y = surfaceTop(slot[0], slot[1]);
-        if (si < list.length) {
-          const { m, i, def } = list[si];
-          const h = buildHumanoid(MINION_COLORS[def.resource] || 0x999999);
-          h.group.position.set(slot[0] + 0.5, y, slot[1] + 0.5);
-          const cap = m.storageUpgraded ? D0.MINION_STORAGE_UPGRADED : D0.MINION_STORAGE_BASE;
-          const label = makeMinionLabel(def.name, m.tier, m.storage, cap);
-          label.position.set(0, 2.3, 0); h.group.add(label);
-          minionGroup.add(h.group);
-          dynamicInteractables.push({ type: 'minion', ref: { idx: i }, x: slot[0] + 0.5, y: y + 1.0, z: slot[1] + 0.5 });
-        } else if (si === list.length && emptyShown < remaining) {
-          emptyShown++;
-          const eg = buildEmptySlot(); eg.position.set(slot[0] + 0.5, y, slot[1] + 0.5); minionGroup.add(eg);
-          dynamicInteractables.push({ type: 'emptySlot', ref: {}, x: slot[0] + 0.5, y: y + 0.6, z: slot[1] + 0.5 });
-        }
+        if (si < list.length) placeMinionMesh(P0, D0, list[si], slot);
+        else if (si === list.length && emptyShown < remaining) { emptyShown++; placeEmptySlotMesh(slot); }
       });
     });
   }
@@ -910,7 +1008,9 @@
     }
   }
   function respawnAtHub(msg) {
-    P.x = spawnX; P.y = spawnY; P.z = spawnZ; P.vx = P.vy = P.vz = 0;
+    if (worldMode === 'home') { P.x = 96.5; P.z = 100.5; P.y = surfaceTop(96, 100) + 0.02; }
+    else { P.x = spawnX; P.y = spawnY; P.z = spawnZ; }
+    P.vx = P.vy = P.vz = 0;
     if (msg && typeof toast === 'function') toast(msg, false);
   }
   function collide(dt) {
@@ -926,11 +1026,18 @@
     const len = Math.hypot(dx, dz); if (len > 0) { dx /= len; dz /= len; }
     P.vx = dx * speed; P.vz = dz * speed;
     const wantJump = keys.Space || (moveT.active && (moveT.y - moveT.oy) < -34);
-    if (inWater) { P.vy -= 9 * dt; if (wantJump) P.vy += 22 * dt; if (P.vy < -4) P.vy = -4; if (P.vy > 5) P.vy = 5; }
-    else { P.vy -= 32 * dt; if (P.vy < -78) P.vy = -78; if (wantJump && P.onGround) { P.vy = 8.5; P.onGround = false; } }
+    const jumpEdge = wantJump && !P._prevJump;   // 점프 키를 새로 누른 순간(더블점프 판정)
+    P._prevJump = wantJump;
+    if (inWater) { P.vy -= 9 * dt; if (wantJump) P.vy += 22 * dt; if (P.vy < -4) P.vy = -4; if (P.vy > 5) P.vy = 5; P._djUsed = false; }
+    else {
+      P.vy -= 32 * dt; if (P.vy < -78) P.vy = -78;
+      if (wantJump && P.onGround) { P.vy = 8.5; P.onGround = false; }
+      else if (jumpEdge && !P.onGround && !P._djUsed) { P.vy = 8.0; P._djUsed = true; }   // 더블점프(메이플 감성)
+    }
     moveAxis('x', P.vx * dt); moveAxis('z', P.vz * dt); P.onGround = false; moveAxis('y', P.vy * dt);
+    if (P.onGround) P._djUsed = false;
     if (feetInLava()) respawnAtHub('앗 뜨거워! 마을로 긴급 귀환했어요');
-    if (P.y < 1) respawnAtHub('마을로 귀환했어요');
+    if (P.y < 1) respawnAtHub(worldMode === 'home' ? '공허에 떨어졌다! 섬으로 귀환' : '마을로 귀환했어요');
   }
   function resetPlayerToSpawn() {
     spawnX = 96.5; spawnZ = 106.5; spawnY = surfaceTop(96, 106) + 0.02;
@@ -948,15 +1055,20 @@
     const p = relPos(e); const cw = canvas.clientWidth;
     if (!isTouch) {
       if (!lookS.locked) { canvas.requestPointerLock && canvas.requestPointerLock(); return; }
+      if (e.button === 2) { if (worldMode === 'home') homePlaceBlock(); return; }   // 우클릭: 블록 설치(내 섬)
       const t = currentAim();
-      if (t && t.type === 'node') { gathering = true; gatherZoneKey = t.ref.zone; } else if (t) doInteract(t);
+      if (t && t.type === 'node') { gathering = true; gatherZoneKey = t.ref.zone; }
+      else if (t) doInteract(t);
+      else if (worldMode === 'home') homeBreakBlock();   // 좌클릭: 블록 파괴(내 섬)
       return;
     }
     if (p.x < cw * 0.4 && moveT.id === -1) { moveT.active = true; moveT.id = e.pointerId; moveT.ox = moveT.x = p.x; moveT.oy = moveT.y = p.y; }
     else if (lookT.id === -1) {
-      lookT.id = e.pointerId; lookT.lx = p.x; lookT.ly = p.y;
+      lookT.id = e.pointerId; lookT.lx = p.x; lookT.ly = p.y; lookT.moved = 0; lookT.downT = performance.now(); lookT.broke = false;
       const t = currentAim();
-      if (t && t.type === 'node') { gathering = true; gatherZoneKey = t.ref.zone; } else if (t) doInteract(t);
+      if (t && t.type === 'node') { gathering = true; gatherZoneKey = t.ref.zone; lookT.acted = true; }
+      else if (t) { doInteract(t); lookT.acted = true; }
+      else lookT.acted = false;
     }
   }
   function onMove(e) {
@@ -964,12 +1076,17 @@
     if (!isTouch) { if (lookS.locked) { P.yaw -= (e.movementX || 0) * 0.0024; P.pitch -= (e.movementY || 0) * 0.0024; clampPitch(); } return; }
     const p = relPos(e);
     if (e.pointerId === moveT.id) { moveT.x = p.x; moveT.y = p.y; }
-    else if (e.pointerId === lookT.id) { const dx = p.x - lookT.lx, dy = p.y - lookT.ly; P.yaw -= dx * 0.005; P.pitch -= dy * 0.005; clampPitch(); lookT.lx = p.x; lookT.ly = p.y; }
+    else if (e.pointerId === lookT.id) { const dx = p.x - lookT.lx, dy = p.y - lookT.ly; P.yaw -= dx * 0.005; P.pitch -= dy * 0.005; clampPitch(); lookT.lx = p.x; lookT.ly = p.y; lookT.moved = (lookT.moved || 0) + Math.abs(dx) + Math.abs(dy); }
   }
   function onUp(e) {
     if (!isTouch) { if (e.button === 0) gathering = false; return; }
     if (e.pointerId === moveT.id) { moveT.active = false; moveT.id = -1; }
-    else if (e.pointerId === lookT.id) { gathering = false; lookT.id = -1; }
+    else if (e.pointerId === lookT.id) {
+      gathering = false;
+      // 내 섬: 짧은 탭(이동 없이 300ms 미만) = 블록 설치 / 길게 누름은 loop에서 파괴 처리
+      if (worldMode === 'home' && !lookT.acted && !lookT.broke && (lookT.moved || 0) < 10 && performance.now() - lookT.downT < 300) homePlaceBlock();
+      lookT.id = -1;
+    }
   }
   function bindInput() {
     document.addEventListener('keydown', onKey); document.addEventListener('keyup', onKeyUp);
@@ -984,12 +1101,71 @@
     document.removeEventListener('pointerlockchange', onPLC);
   }
 
+  /* ---------------- 복셀 DDA 레이캐스트(프라이빗 섬 블록 설치/파괴용) ---------------- */
+  const REACH_EDIT = 5;
+  function raycastBlock() {
+    const o = { x: P.x, y: P.y + P.eye, z: P.z }; const d = lookDir();
+    let x = Math.floor(o.x), y = Math.floor(o.y), z = Math.floor(o.z);
+    const stepX = d.x > 0 ? 1 : -1, stepY = d.y > 0 ? 1 : -1, stepZ = d.z > 0 ? 1 : -1;
+    const tDX = Math.abs(1 / (d.x || 1e-9)), tDY = Math.abs(1 / (d.y || 1e-9)), tDZ = Math.abs(1 / (d.z || 1e-9));
+    let tMX = (d.x > 0 ? (x + 1 - o.x) : (o.x - x)) * tDX;
+    let tMY = (d.y > 0 ? (y + 1 - o.y) : (o.y - y)) * tDY;
+    let tMZ = (d.z > 0 ? (z + 1 - o.z) : (o.z - z)) * tDZ;
+    let face = [0, 0, 0];
+    for (let i = 0; i < REACH_EDIT * 3; i++) {
+      const id = getBlockLocal(x, y, z);
+      if (id !== 0) { const b = BLOCKS[id]; if (!b || !b.liquid) return { x, y, z, face, id }; }
+      if (tMX < tMY && tMX < tMZ) { x += stepX; tMX += tDX; face = [-stepX, 0, 0]; }
+      else if (tMY < tMZ) { y += stepY; tMY += tDY; face = [0, -stepY, 0]; }
+      else { z += stepZ; tMZ += tDZ; face = [0, 0, -stepZ]; }
+      if (Math.hypot(x + 0.5 - o.x, y + 0.5 - o.y, z + 0.5 - o.z) > REACH_EDIT + 1) break;
+    }
+    return null;
+  }
+  let _meshDirty = false, _mapDirty = false;
+  function isPortalBlock(x, y, z) {
+    const p = PORTALS.home;   // 프라이빗 섬 귀환 포털은 파괴 불가(고립 방지)
+    return Math.abs(x - p.x) <= 2 && Math.abs(z - p.z) <= 1 && getBlockLocal(x, y, z) === ID.obsidian;
+  }
+  function homeBreakBlock() {
+    if (worldMode !== 'home') return false;
+    const t = raycastBlock(); if (!t) return false;
+    if (isPortalBlock(t.x, t.y, t.z)) { if (typeof toast === 'function') toast('포털은 부술 수 없어요', false); return false; }
+    world[widx(t.x, t.y, t.z)] = 0;
+    if (econApi().setHomeEdit) econApi().setHomeEdit(t.x, t.y, t.z, 0);
+    _meshDirty = true; _mapDirty = true;
+    return true;
+  }
+  function homePlaceBlock() {
+    if (worldMode !== 'home') return false;
+    const t = raycastBlock(); if (!t) return false;
+    const nx = t.x + t.face[0], ny = t.y + t.face[1], nz = t.z + t.face[2];
+    if (!inBounds(nx, ny, nz) || nx < HOME_BOUNDS.x0 || nx > HOME_BOUNDS.x1 || nz < HOME_BOUNDS.z0 || nz > HOME_BOUNDS.z1) return false;
+    if (getBlockLocal(nx, ny, nz) !== 0) return false;
+    // 플레이어 몸과 겹치면 설치 불가
+    const minX = P.x - P.w / 2, maxX = P.x + P.w / 2, minZ = P.z - P.w / 2, maxZ = P.z + P.w / 2, minY = P.y, maxY = P.y + P.h;
+    if (nx + 1 > minX && nx < maxX && nz + 1 > minZ && nz < maxZ && ny + 1 > minY && ny < maxY) return false;
+    const id = ID[BUILD_BLOCKS[selectedBlock]];
+    world[widx(nx, ny, nz)] = id;
+    if (econApi().setHomeEdit) econApi().setHomeEdit(nx, ny, nz, id);
+    _meshDirty = true; _mapDirty = true;
+    return true;
+  }
+  function flushWorldEdits() {
+    if (_meshDirty) { _meshDirty = false; buildIslandMesh(worldMode === 'home' ? HOME_BOUNDS : null); }
+  }
+
   /* ---------------- 상호작용(콘 조준) ---------------- */
   function buildStaticInteractables() {
     interactables = [];
-    NPCS.forEach(n => interactables.push({ type: 'npc', ref: n, x: n.x + 0.5, y: n._y + 1.0, z: n.z + 0.5 }));
-    NODES.forEach(n => interactables.push({ type: 'node', ref: n, x: n.x + 0.5, y: n._y + 0.6, z: n.z + 0.5 }));
-    FAIRY_SPOTS.forEach(fs => interactables.push({ type: 'fairy', ref: fs, x: fs.x + 0.5, y: fs._y + 0.6, z: fs.z + 0.5 }));
+    if (worldMode === 'hub') {
+      NPCS.forEach(n => interactables.push({ type: 'npc', ref: n, x: n.x + 0.5, y: n._y + 1.0, z: n.z + 0.5 }));
+      NODES.forEach(n => interactables.push({ type: 'node', ref: n, x: n.x + 0.5, y: n._y + 0.6, z: n.z + 0.5 }));
+      FAIRY_SPOTS.forEach(fs => interactables.push({ type: 'fairy', ref: fs, x: fs.x + 0.5, y: fs._y + 0.6, z: fs.z + 0.5 }));
+    }
+    const portal = PORTALS[worldMode];
+    const py = surfaceTop(portal.x, portal.z);
+    interactables.push({ type: 'portal', ref: portal, x: portal.x + 0.5, y: py + 1.5, z: portal.z + 0.5 });
   }
   function currentAim() {
     const d = lookDir(); let best = null, bestDot = DOT_MIN;
@@ -1016,6 +1192,7 @@
     if (t.type === 'npc') openPanelForZone(t.ref.zone, t.ref.tab);
     else if (t.type === 'minion' || t.type === 'emptySlot') openPanelForZone('hub', 'minions');
     else if (t.type === 'fairy') { econApi().collectFairySoul(t.ref.id); refreshFairyVisibility(); }
+    else if (t.type === 'portal') travelTo(t.ref.target);
   }
   function showPanel() {
     const wrap = document.getElementById('econ3dPanelWrap'); if (wrap) wrap.style.display = 'flex';
@@ -1035,10 +1212,20 @@
     if (t && outlineMesh) {
       outlineMesh.visible = true; outlineMesh.scale.set(0.9, 1.6, 0.9); outlineMesh.position.set(t.x, t.y - 0.3, t.z);
       if (cross) cross.classList.add('is-active');
-    } else {
-      if (outlineMesh) outlineMesh.visible = false;
-      if (cross) cross.classList.remove('is-active');
+      return;
     }
+    // 내 섬: 엔티티 조준이 없으면 블록 조준 윤곽선(설치/파괴 대상 표시)
+    if (worldMode === 'home' && outlineMesh) {
+      const b = raycastBlock();
+      if (b) {
+        outlineMesh.visible = true; outlineMesh.scale.set(1.01, 1.01, 1.01);
+        outlineMesh.position.set(b.x + 0.5, b.y + 0.5, b.z + 0.5);
+        if (cross) cross.classList.add('is-active');
+        return;
+      }
+    }
+    if (outlineMesh) outlineMesh.visible = false;
+    if (cross) cross.classList.remove('is-active');
   }
 
   /* ---------------- 낮밤/하늘 ---------------- */
@@ -1074,12 +1261,17 @@
 
   /* ---------------- 존 배너 + 미니맵 + HUD ---------------- */
   function updateBanner() {
-    const key = zoneAt(Math.floor(P.x), Math.floor(P.z));
+    let key, name;
+    if (worldMode === 'home') { key = 'home'; name = '🏝️ 나의 섬'; }
+    else {
+      key = zoneAt(Math.floor(P.x), Math.floor(P.z));
+      const isl = ISLANDS.find(i => i.key === key);
+      name = isl ? isl.name : '';
+    }
     if (key && key !== curBannerKey) {
       curBannerKey = key;
-      const isl = ISLANDS.find(i => i.key === key);
       const el = document.getElementById('econ3dBanner');
-      if (el && isl) { el.textContent = isl.name; el.classList.add('show'); bannerT = 2.6; }
+      if (el && name) { el.textContent = name; el.classList.add('show'); bannerT = 2.6; }
     }
   }
   function tickBanner(dt) {
@@ -1087,6 +1279,7 @@
   }
   const MAP_COLORS = {};
   function mapColor(id) {
+    if (id === 0) return '#0d1524';   // 공허/하늘(내 섬 미니맵에서 섬 실루엣이 보이도록)
     if (MAP_COLORS[id]) return MAP_COLORS[id];
     const key = BLOCKS[id] ? BLOCKS[id].key : 'air';
     const c = { water: '#2f5fc8', sand: '#e0d6a0', grass: '#5f9e48', stone: '#828282', cobblestone: '#7d7d7d', dirt: '#7d573c',
@@ -1127,6 +1320,28 @@
     const pg = document.getElementById('econ3dPanelGold'); if (pg) pg.textContent = '💰 ' + P0.gold.toLocaleString('ko-KR') + 'G · 🏦 ' + (P0.bank || 0).toLocaleString('ko-KR') + 'G';
     const fs = document.getElementById('econ3dSouls'); if (fs) fs.textContent = '✨ ' + (P0.fairySouls ? P0.fairySouls.length : 0) + '/12';
   }
+  // 건축 팔레트 바(내 섬에서만 표시) + 선택 상태 갱신
+  function updateBuildHud() {
+    const bar = document.getElementById('econ3dBuildBar'); if (!bar) return;
+    bar.style.display = worldMode === 'home' ? 'flex' : 'none';
+    const btns = bar.querySelectorAll('.econ3d-blockbtn');
+    btns.forEach((b, i) => b.classList.toggle('is-sel', i === selectedBlock));
+  }
+  // 포털 표식(보라 발광판 + 라벨)
+  let portalMarker = null;
+  function buildPortalMarker() {
+    if (portalMarker) { scene.remove(portalMarker); disposeGroup(portalMarker); portalMarker = null; }
+    const p = PORTALS[worldMode];
+    const y = surfaceTop(p.x, p.z);
+    const g = new THREE.Group();
+    const fill = new THREE.Mesh(new THREE.PlaneGeometry(3, 3.6), new THREE.MeshBasicMaterial({ color: 0xb04ae8, transparent: true, opacity: 0.55, side: THREE.DoubleSide }));
+    fill.position.set(p.x + 0.5, y + 2.2, p.z + 0.5);
+    g.add(fill);
+    const label = makeLabel(p.label); label.position.set(p.x + 0.5, y + 4.8, p.z + 0.5); g.add(label);
+    g.userData.fill = fill;
+    scene.add(g);
+    portalMarker = g;
+  }
 
   /* ---------------- 화면 ---------------- */
   function screenHTML() {
@@ -1141,7 +1356,8 @@
         <button class="btn btn--ghost" data-act="backHome">✕</button>
       </div>
       <canvas id="econ3dMap" class="econ3d-map" width="140" height="140" data-act="econ3d_map"></canvas>
-      ${isTouch ? '<div class="econ3d-jump" data-act="econ3d_jump">⤒</div>' : '<div class="econ3d-controlhint">WASD 이동 · 마우스 시점 · 클릭 상호작용(채집은 꾹) · Ctrl 달리기 · M 지도</div>'}
+      <div class="econ3d-buildbar" id="econ3dBuildBar" style="display:none">${BUILD_BLOCKS.map((bk, i) => `<button class="econ3d-blockbtn ${i === selectedBlock ? 'is-sel' : ''}" data-act="econ3d_block" data-i="${i}" title="${bk}"><span class="econ3d-blockchip" data-bk="${bk}"></span></button>`).join('')}</div>
+      ${isTouch ? '<div class="econ3d-jump" data-act="econ3d_jump">⤒</div>' : '<div class="econ3d-controlhint">WASD 이동 · 마우스 시점 · 클릭 상호작용(채집은 꾹) · 공중 점프 = 더블점프 · Ctrl 달리기 · M 지도</div>'}
       <div class="econ3d-panelwrap" id="econ3dPanelWrap" style="display:none">
         <div class="econ3d-panelbar"><span id="econ3dPanelGold"></span><button class="btn btn--ghost btn--sm" data-act="econ3d_panel_close">✕ 닫기</button></div>
         <div id="econBody" class="econ-body econ3d-body"></div>
@@ -1163,6 +1379,11 @@
       if (!lastT) lastT = ts; let dt = (ts - lastT) / 1000; lastT = ts; if (dt > 0.1) dt = 0.1;
       worldTime += dt;
       if (!panelOpen()) { collide(dt); if (gathering && gatherZoneKey) gatherAt(gatherZoneKey); }
+      // 터치 길게 누름 = 블록 파괴(내 섬, 350ms)
+      if (isTouch && worldMode === 'home' && lookT.id !== -1 && !lookT.acted && !lookT.broke && (lookT.moved || 0) < 10 && performance.now() - lookT.downT > 350) {
+        lookT.broke = true; homeBreakBlock();
+      }
+      flushWorldEdits();   // 블록 편집 → 메시 리빌드(프레임당 1회로 병합)
       camera.position.set(P.x, P.y + P.eye, P.z);
       const d = lookDir(); camera.lookAt(P.x + d.x, P.y + P.eye + d.y, P.z + d.z);
       updateAimHighlight();
@@ -1174,7 +1395,11 @@
       for (const id in fairyMeshes) { const m = fairyMeshes[id]; if (m.visible && m.userData.orb) { m.userData.orb.position.y = 0.6 + Math.sin(_fairyBobT * 2 + Number(id)) * 0.15; m.userData.orb.rotation.y += dt * 1.5; } }
       if (cloudGroup) cloudGroup.children.forEach(g => { g.position.x += g.userData.speed * dt; if (g.position.x > W + 10) g.position.x = -10; });
       _hudT += dt;
-      if (_hudT > 0.4) { _hudT = 0; updateHud(); rebuildMinionVisuals(false); drawMinimap(); }
+      if (_hudT > 0.4) {
+        _hudT = 0; updateHud(); rebuildMinionVisuals(false);
+        if (_mapDirty) { _mapDirty = false; buildMinimapBase(); }
+        drawMinimap();
+      }
       renderer.render(scene, camera);
     } catch (e) { console.error('econ3d loop', e); }
   }
@@ -1205,6 +1430,8 @@
     setupOutline();
     resetPlayerToSpawn();
     buildMinimapBase();
+    buildPortalMarker();
+    updateBuildHud();
     resize(); window.addEventListener('resize', resize);
     bindInput(); running = true; lastT = 0; contextLost = false;
     rebuildMinionVisuals(true);
@@ -1217,12 +1444,13 @@
     window.removeEventListener('resize', resize); unbindInput();
     if (document.exitPointerLock && document.pointerLockElement) try { document.exitPointerLock(); } catch (e) {}
     disposeIslandMeshes();
-    [npcGroup, nodeGroup, minionGroup, fairyGroup, cloudGroup, propGroup].forEach(g => { if (g && scene) { scene.remove(g); disposeGroup(g); } });
-    npcGroup = nodeGroup = minionGroup = fairyGroup = cloudGroup = propGroup = null;
+    [npcGroup, nodeGroup, minionGroup, fairyGroup, cloudGroup, propGroup, portalMarker].forEach(g => { if (g && scene) { scene.remove(g); disposeGroup(g); } });
+    npcGroup = nodeGroup = minionGroup = fairyGroup = cloudGroup = propGroup = portalMarker = null;
     if (outlineMesh && scene) { scene.remove(outlineMesh); outlineMesh = null; }
     if (renderer) { try { renderer.dispose(); } catch (e) {} }
     renderer = null; scene = null; camera = null; canvas = null;
     _minionSig = ''; ambientMobs = []; fairyMeshes = {}; curBannerKey = '';
+    worldMode = 'hub'; worldHubCache = null; world = null; _meshDirty = false; _mapDirty = false;
   }
 
   /* ---------------- 액션 위임 ---------------- */
@@ -1231,6 +1459,7 @@
       case 'econ3d_jump': keys.Space = true; setTimeout(() => { keys.Space = false; }, 120); return true;
       case 'econ3d_panel_close': hidePanel(); return true;
       case 'econ3d_map': toggleMinimapSize(); return true;
+      case 'econ3d_block': selectedBlock = Number(el.dataset.i) || 0; updateBuildHud(); return true;
     }
     return false;
   }
@@ -1255,6 +1484,11 @@
       setGathering: (v, zk) => { gathering = v; gatherZoneKey = zk; },
       collide, moveAxis, dayFactor, ambientMobs: () => ambientMobs,
       ID, BLOCKS,
+      // V3: 프라이빗 섬/건축/이동
+      travelTo, worldMode: () => worldMode, genHome, PORTALS, HOME_MINION_SLOTS, HOME_BOUNDS, HOME_CENTER,
+      raycastBlock, homeBreakBlock, homePlaceBlock, BUILD_BLOCKS,
+      setSelectedBlock: i => { selectedBlock = i; }, getSelectedBlock: () => selectedBlock,
+      flushWorldEdits,
     };
   }
 })();
