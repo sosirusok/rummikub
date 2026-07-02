@@ -48,6 +48,27 @@ begin
 end;
 $$;
 
+-- 섬 방문(멀티): 이름으로 다른 플레이어의 프라이빗 섬 데이터(블록 편집 + 미니언)만 공개 조회.
+-- 골드/인벤토리 등 나머지 진행 정보는 노출하지 않음.
+create or replace function public.econ_get_player_by_name(p_name text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_user uuid; v_state jsonb; v_name text;
+begin
+  select id, real_name into v_user, v_name from public.users
+    where real_name = p_name or username::text = lower(p_name)
+    limit 1;
+  if v_user is null then return null; end if;
+  select state into v_state from public.econ_players where user_id = v_user;
+  if v_state is null then return null; end if;
+  return jsonb_build_object(
+    'name',      v_name,
+    'homeEdits', coalesce(v_state->'homeEdits', '{}'::jsonb),
+    'minions',   coalesce(v_state->'minions',   '[]'::jsonb)
+  );
+end;
+$$;
+
 grant execute on function public.econ_save_player(uuid, jsonb)  to anon, authenticated;
 grant execute on function public.econ_load_player(uuid)         to anon, authenticated;
 grant execute on function public.econ_reset_player(uuid)        to anon, authenticated;
+grant execute on function public.econ_get_player_by_name(text)  to anon, authenticated;

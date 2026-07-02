@@ -16,7 +16,8 @@
   ];
 
   /* ---------------- 컬렉션(자원 31종, 5개 카테고리) ---------------- */
-  function res(key, name, sell, th0) { return { key, name, stackSize: 64, sellPrice: sell, tierThresholds: [th0, th0 * 5, th0 * 20, th0 * 80, th0 * 240, th0 * 800] }; }
+  // 실제 스카이블럭 컬렉션 티어 임계값 패턴(조약돌 I~IX: 50/100/250/1,000/2,500/5,000/10,000/25,000/50,000)
+  function res(key, name, sell, th0) { return { key, name, stackSize: 64, sellPrice: sell, tierThresholds: [th0, th0 * 2, th0 * 5, th0 * 20, th0 * 50, th0 * 100, th0 * 200, th0 * 500, th0 * 1000] }; }
   const COLLECTIONS = [
     { category: '채굴', key: 'mining', resources: [
       res('stone', '조약돌', 2, 50), res('coal', '석탄', 3, 40), res('iron', '철 주괴', 6, 60),
@@ -42,17 +43,30 @@
     ] },
   ];
 
-  const SKILLS = [
-    { key: 'combat', name: '전투', xpBase: 50, xpExp: 1.9, bonusText: '레벨당 최종 피해 +4%' },
-    { key: 'mining', name: '채광', xpBase: 40, xpExp: 1.8, bonusText: '레벨당 방어력 +1' },
-    { key: 'farming', name: '농사', xpBase: 40, xpExp: 1.8, bonusText: '레벨당 체력 +2' },
-    { key: 'foraging', name: '벌목', xpBase: 45, xpExp: 1.8, bonusText: '레벨당 힘 +1' },
-    { key: 'fishing', name: '낚시', xpBase: 50, xpExp: 1.85, bonusText: '레벨당 체력 +1' },
-    { key: 'enchanting', name: '마법부여', xpBase: 60, xpExp: 1.9, bonusText: '레벨당 지력 +2' },
-    { key: 'taming', name: '조련', xpBase: 45, xpExp: 1.85, bonusText: '레벨당 펫 경험치 +1%' },
-    { key: 'social', name: '사교', xpBase: 30, xpExp: 1.7, bonusText: '5레벨마다 상점 판매가 +1%(최대 +10%)' },
+  // 실제 하이픽셀 스카이블럭 스킬 XP 테이블(위키): 레벨 n→n+1 필요 XP. 최대 50레벨.
+  const SKILL_XP_TABLE = [
+    50, 125, 200, 300, 500, 750, 1000, 1500, 2000, 3500,
+    5000, 7500, 10000, 15000, 20000, 30000, 50000, 75000, 100000, 200000,
+    300000, 400000, 500000, 600000, 700000, 800000, 900000, 1000000, 1100000, 1200000,
+    1300000, 1400000, 1500000, 1600000, 1700000, 1800000, 1900000, 2000000, 2100000, 2200000,
+    2300000, 2400000, 2500000, 2600000, 2750000, 2900000, 3100000, 3400000, 3700000, 4000000,
   ];
-  // xpToLevel(n) = xpBase * n^xpExp  (n=현재 레벨, 다음 레벨까지 필요한 증분 XP)
+  const SKILL_MAX_LEVEL = 50;
+  const SKILLS = [
+    { key: 'combat', name: '전투', bonusText: '레벨당 최종 피해 +4%, 크리 확률 +0.5%' },
+    { key: 'mining', name: '채광', bonusText: '레벨당 방어력 +1' },
+    { key: 'farming', name: '농사', bonusText: '레벨당 체력 +2' },
+    { key: 'foraging', name: '벌목', bonusText: '레벨당 힘 +1' },
+    { key: 'fishing', name: '낚시', bonusText: '레벨당 체력 +1' },
+    { key: 'enchanting', name: '마법부여', bonusText: '레벨당 지력(마나) +2' },
+    { key: 'taming', name: '조련', bonusText: '레벨당 펫 경험치 +1%' },
+    { key: 'social', name: '사교', bonusText: '5레벨마다 상점 판매가 +1%(최대 +10%)' },
+  ];
+
+  /* ---------------- 기본 스탯(실제 스카이블럭 기본값 그대로) ---------------- */
+  // 피해 = (5+무기공격)×(1+힘/100)×(스킬/인챈트/리포지/스타포스 배율)×크리티컬
+  // 피해 감소 = 방어/(방어+100), 이동속도 100 = 기준 속도
+  const BASE_STATS = { hp: 100, defense: 0, strength: 0, speed: 100, critChance: 30, critDamage: 50, intelligence: 100 };
 
   /* ---------------- 채집(4개 존: 광산/농장/숲/부둣가) ---------------- */
   const GATHER_TABLE = {
@@ -98,33 +112,39 @@
 
   /* ---------------- 미니언 20종 ---------------- */
   // 실제 스카이블럭처럼 11티어(위키: 미니언은 최대 11~12티어) — 고티어는 기하급수 골드 싱크
-  function mkMinionTiers(baseInterval, baseCost) {
+  // 실제 스카이블럭식: 미니언은 골드 구매가 아니라 "자원으로 조합"한다.
+  //   T1 = 원자재 80개 · T2~T6 = 원자재 160/320/512/1024/2048 · T7~T11 = 인챈티드 자원 8/16/32/64/128
+  function mkMinionTiers(baseInterval, resource) {
+    const rawCost = [80, 160, 320, 512, 1024, 2048];
     const tiers = [];
-    for (let t = 1; t <= 11; t++) tiers.push({ tier: t, intervalSec: +(baseInterval * Math.pow(0.9, t - 1)).toFixed(1), cost: Math.round(baseCost * Math.pow(2, t - 1)) });
+    for (let t = 1; t <= 11; t++) {
+      const mat = t <= 6 ? { key: resource, n: rawCost[t - 1] } : { key: `enchanted_${resource}`, n: 8 * Math.pow(2, t - 7) };
+      tiers.push({ tier: t, intervalSec: +(baseInterval * Math.pow(0.9, t - 1)).toFixed(1), craftCost: mat });
+    }
     return tiers;
   }
-  function minion(key, name, resource, baseInterval, baseCost) { return { key, name, resource, tiers: mkMinionTiers(baseInterval, baseCost), maxTier: 11 }; }
+  function minion(key, name, resource, baseInterval, baseCost) { return { key, name, resource, tiers: mkMinionTiers(baseInterval, resource), maxTier: 11, unlockCollection: resource }; }
   const MINIONS = [
-    minion('cobblestone_minion', '채석 일꾼', 'stone', 27, 80),
-    minion('coal_minion', '석탄 일꾼', 'coal', 27, 80),
-    minion('iron_minion', '철 일꾼', 'iron', 28, 80),
-    minion('gold_minion', '금 일꾼', 'gold', 29, 120),
-    minion('lapis_minion', '청금석 일꾼', 'lapis', 29, 120),
-    minion('redstone_minion', '레드스톤 일꾼', 'redstone', 29, 120),
-    minion('diamond_minion', '다이아 일꾼', 'diamond', 32, 400),
-    minion('emerald_minion', '에메랄드 일꾼', 'emerald', 33, 400),
-    minion('obsidian_minion', '흑요석 일꾼', 'obsidian', 36, 500),
-    minion('wheat_minion', '밀 일꾼', 'wheat', 25, 80),
-    minion('carrot_minion', '당근 일꾼', 'carrot', 25, 80),
-    minion('potato_minion', '감자 일꾼', 'potato', 25, 80),
-    minion('pumpkin_minion', '호박 일꾼', 'pumpkin', 30, 150),
-    minion('melon_minion', '수박 일꾼', 'melon', 28, 150),
-    minion('sugarcane_minion', '사탕수수 일꾼', 'sugarcane', 24, 80),
-    minion('oak_minion', '참나무 일꾼', 'oaklog', 26, 80),
-    minion('birch_minion', '자작나무 일꾼', 'birchlog', 26, 80),
-    minion('spruce_minion', '가문비 일꾼', 'sprucelog', 27, 100),
-    minion('fishing_minion', '어부 일꾼', 'rawfish', 30, 60),
-    minion('clay_minion', '점토 일꾼', 'clay', 26, 60),
+    minion('cobblestone_minion', '조약돌 미니언', 'stone', 27, 80),
+    minion('coal_minion', '석탄 미니언', 'coal', 27, 80),
+    minion('iron_minion', '철 미니언', 'iron', 28, 80),
+    minion('gold_minion', '금 미니언', 'gold', 29, 120),
+    minion('lapis_minion', '청금석 미니언', 'lapis', 29, 120),
+    minion('redstone_minion', '레드스톤 미니언', 'redstone', 29, 120),
+    minion('diamond_minion', '다이아 미니언', 'diamond', 32, 400),
+    minion('emerald_minion', '에메랄드 미니언', 'emerald', 33, 400),
+    minion('obsidian_minion', '흑요석 미니언', 'obsidian', 36, 500),
+    minion('wheat_minion', '밀 미니언', 'wheat', 25, 80),
+    minion('carrot_minion', '당근 미니언', 'carrot', 25, 80),
+    minion('potato_minion', '감자 미니언', 'potato', 25, 80),
+    minion('pumpkin_minion', '호박 미니언', 'pumpkin', 30, 150),
+    minion('melon_minion', '수박 미니언', 'melon', 28, 150),
+    minion('sugarcane_minion', '사탕수수 미니언', 'sugarcane', 24, 80),
+    minion('oak_minion', '참나무 미니언', 'oaklog', 26, 80),
+    minion('birch_minion', '자작나무 미니언', 'birchlog', 26, 80),
+    minion('spruce_minion', '가문비 미니언', 'sprucelog', 27, 100),
+    minion('fishing_minion', '낚시 미니언', 'rawfish', 30, 60),
+    minion('clay_minion', '점토 미니언', 'clay', 26, 60),
   ];
   const MINION_STORAGE_BASE = 15, MINION_STORAGE_UPGRADED = 24, MINION_STORAGE_UPGRADE_COST = 5000;
   const MINION_OFFLINE_CAP_HOURS = 48;
@@ -209,9 +229,12 @@
   const STAFF_NAMES = ['견습생 지팡이', '마도사의 지팡이', '현자의 스태프', '용언 지팡이', '여명의 마봉', '천공의 룬 스태프', '태초의 지팡이'];
   const ARMOR_NAMES = ['누더기 갑옷', '가죽 갑옷', '기사단 갑옷', '용비늘 갑옷', '여명의 갑옷', '천공의 신성 갑옷', '태초의 갑옷'];
   const EQUIPMENT = { weapons: [], armor: [], accessories: [] };
+  // 티어별 상점 무기는 해당 티어 생성 무기 대역(base+0~14)의 상위권 값 — "그 티어의 확실한 선택지"
+  const TIER_WEAPON_DMG = [20, 38, 55, 73, 91, 109, 126];
+  const TIER_ARMOR_DEF = [12, 26, 38, 50, 60, 70, 76];
   ITEM_TIERS.forEach((t, i) => {
     const baseBuy = Math.round(60 * Math.pow(3.1, i));
-    const dmg = Math.round(4 * t.statMultiplier * 3);
+    const dmg = TIER_WEAPON_DMG[i];
     EQUIPMENT.weapons.push({ key: `weapon_${t.key}`, name: WEAPON_NAMES[i], wclass: 'sword', tierKey: t.key, dmg, buyPrice: baseBuy, sellPrice: Math.round(baseBuy * 0.2) });
     EQUIPMENT.weapons.push({ key: `bow_${t.key}`, name: BOW_NAMES[i], wclass: 'bow', tierKey: t.key, dmg, buyPrice: baseBuy, sellPrice: Math.round(baseBuy * 0.2) });
     EQUIPMENT.weapons.push({ key: `staff_${t.key}`, name: STAFF_NAMES[i], wclass: 'staff', tierKey: t.key, dmg, buyPrice: baseBuy, sellPrice: Math.round(baseBuy * 0.2) });
@@ -221,15 +244,15 @@
   // 실제 스카이블럭 방식: 같은 등급이면 외형(스프라이트)은 같고 이름·수치만 다른 무기가 여럿 존재
   // (예: Midas' Sword와 Aspect of the Dragons는 다른 무기지만 각자 등급 외형을 공유).
   const DUNGEON_WEAPONS = [
-    { key: 'bonzo_staff', name: '본조의 지팡이', wclass: 'staff', tierKey: 'rare', dmg: 18, buyPrice: 0, sellPrice: 800 },
-    { key: 'aspect_of_the_end', name: '종말의 형상(AOTE)', wclass: 'sword', tierKey: 'rare', dmg: 21, buyPrice: 0, sellPrice: 1500 },
-    { key: 'spirit_bow', name: '영혼의 활', wclass: 'bow', tierKey: 'epic', dmg: 23, buyPrice: 0, sellPrice: 2500 },
-    { key: 'livid_dagger', name: '리비드 대거', wclass: 'sword', tierKey: 'legendary', dmg: 26, buyPrice: 0, sellPrice: 7000 },
-    { key: 'midas_sword', name: '미다스의 검', wclass: 'sword', tierKey: 'legendary', dmg: 28, buyPrice: 0, sellPrice: 12000 },
-    { key: 'aspect_of_the_dragons', name: '용의 형상(AOTD)', wclass: 'sword', tierKey: 'legendary', dmg: 30, buyPrice: 0, sellPrice: 14000 },
-    { key: 'giant_sword', name: '거인의 대검', wclass: 'sword', tierKey: 'mythic', dmg: 31, buyPrice: 0, sellPrice: 15000 },
-    { key: 'hyperion', name: '히페리온', wclass: 'sword', tierKey: 'mythic', dmg: 33, buyPrice: 0, sellPrice: 25000 },
-    { key: 'necron_blade', name: '네크론의 검', wclass: 'sword', tierKey: 'ancient', dmg: 36, buyPrice: 0, sellPrice: 40000 },
+    { key: 'bonzo_staff', name: '본조의 지팡이', wclass: 'staff', tierKey: 'rare', dmg: 58, buyPrice: 0, sellPrice: 800 },
+    { key: 'aspect_of_the_end', name: '종말의 형상(AOTE)', wclass: 'sword', tierKey: 'rare', dmg: 62, buyPrice: 0, sellPrice: 1500 },
+    { key: 'spirit_bow', name: '영혼의 활', wclass: 'bow', tierKey: 'epic', dmg: 80, buyPrice: 0, sellPrice: 2500 },
+    { key: 'livid_dagger', name: '리비드 대거', wclass: 'sword', tierKey: 'legendary', dmg: 95, buyPrice: 0, sellPrice: 7000 },
+    { key: 'midas_sword', name: '미다스의 검', wclass: 'sword', tierKey: 'legendary', dmg: 98, buyPrice: 0, sellPrice: 12000 },
+    { key: 'aspect_of_the_dragons', name: '용의 형상(AOTD)', wclass: 'sword', tierKey: 'legendary', dmg: 102, buyPrice: 0, sellPrice: 14000 },
+    { key: 'giant_sword', name: '거인의 대검', wclass: 'sword', tierKey: 'mythic', dmg: 118, buyPrice: 0, sellPrice: 15000 },
+    { key: 'hyperion', name: '히페리온', wclass: 'sword', tierKey: 'mythic', dmg: 128, buyPrice: 0, sellPrice: 25000 },
+    { key: 'necron_blade', name: '네크론의 검', wclass: 'sword', tierKey: 'ancient', dmg: 140, buyPrice: 0, sellPrice: 40000 },
   ];
   // 아이템 초기 능력치 무작위 롤(실제 스카이블럭 감성): 같은 이름의 장비라도 획득 시
   // 기본 수치가 ±8% 범위에서 굴려져 고정됨(인챈트/리포지/스타포스와 완전 별개의 "생 초기치").
@@ -270,6 +293,58 @@
     premium: { weapon: { key: 'fabled', name: '전설의(Fabled)', dmgPct: 16 }, armor: { key: 'ancient_r', name: '고대의(Ancient)', def: 14, hp: 20 } },
   };
 
+
+  /* ---------------- 대량 장비 생성 — 계열별 100종 이상(쓰레기~신급) ----------------
+     실제 스카이블럭처럼: 같은 등급이면 외형(스프라이트)은 등급 셀을 공유하고,
+     이름과 수치만 다른 장비가 티어당 15종씩 존재. 티어 내 하위 5종만 상점 구매 가능,
+     나머지 10종은 슬레이어/던전/보물방 드롭 전용(파밍 동기). */
+  const GEN_TIER_PREFIX = ['낡은', '견습', '정예', '용맹한', '찬란한', '초월한', '태초의'];
+  const GEN_SWORD_BASES = ['단검', '소검', '직검', '곡검', '대검', '세이버', '레이피어', '클레이모어', '카타나', '팔치온', '글라디우스', '츠바이핸더', '바스타드 소드', '전투검', '처형검'];
+  const GEN_BOW_BASES = ['숏보우', '사냥활', '장궁', '곡궁', '합성궁', '연사궁', '강궁', '저격궁', '섬멸궁', '폭풍궁', '유성궁', '섬광궁', '천궁', '용골궁', '심판의 활'];
+  const GEN_STAFF_BASES = ['나무 지팡이', '수정 지팡이', '룬 지팡이', '마도 지팡이', '현자 지팡이', '원소 지팡이', '뇌전 지팡이', '빙결 지팡이', '화염 지팡이', '공허 지팡이', '별빛 지팡이', '월광 지팡이', '태양 지팡이', '용언 지팡이', '창세 지팡이'];
+  const GEN_ARMOR_BASES = ['튜닉', '가죽조끼', '사슬갑옷', '스케일 아머', '판금갑옷', '기사갑주', '중장갑주', '수호갑주', '용린갑주', '성기사갑주', '룬 갑주', '심연갑주', '천상갑주', '불멸갑주', '창세갑주'];
+  const GEN_WEAPON_DMG_BASE = [10, 28, 46, 64, 82, 100, 118];   // 티어별 시작 위력(+0~14)
+  const GEN_ARMOR_DEF_BASE = [6, 16, 26, 36, 46, 56, 66];
+  function genFamily(prefix, bases, wclass) {
+    const out = [];
+    ITEM_TIERS.forEach((t, ti) => {
+      bases.forEach((bn, i) => {
+        const dmg = GEN_WEAPON_DMG_BASE[ti] + i;
+        const buyable = i < 5;
+        const price = Math.round(60 * Math.pow(3.1, ti) * (0.5 + i * 0.18));
+        out.push({ key: `g_${prefix}_${t.key}_${i}`, name: `${GEN_TIER_PREFIX[ti]} ${bn}`, wclass, tierKey: t.key,
+          dmg, buyPrice: buyable ? price : 0, sellPrice: Math.round(price * 0.2) });
+      });
+    });
+    return out;
+  }
+  EQUIPMENT.weapons = EQUIPMENT.weapons
+    .concat(genFamily('sw', GEN_SWORD_BASES, 'sword'), genFamily('bw', GEN_BOW_BASES, 'bow'), genFamily('st', GEN_STAFF_BASES, 'staff'))
+    .sort((a, b) => a.dmg - b.dmg || (a.key < b.key ? -1 : 1));
+  const GEN_ARMORS = [];
+  ITEM_TIERS.forEach((t, ti) => {
+    GEN_ARMOR_BASES.forEach((bn, i) => {
+      const def = GEN_ARMOR_DEF_BASE[ti] + i;
+      const buyable = i < 5;
+      const price = Math.round(78 * Math.pow(3.1, ti) * (0.5 + i * 0.18));
+      GEN_ARMORS.push({ key: `g_ar_${t.key}_${i}`, name: `${GEN_TIER_PREFIX[ti]} ${bn}`, tierKey: t.key,
+        defense: def, buyPrice: buyable ? price : 0, sellPrice: Math.round(price * 0.2) });
+    });
+  });
+  EQUIPMENT.armor = EQUIPMENT.armor.concat(GEN_ARMORS).sort((a, b) => a.defense - b.defense || (a.key < b.key ? -1 : 1));
+  // 도구도 계열별 105종 추가(전부 드롭 전용) — 배율 0.6~2.6, 기존 5종 사다리는 그대로 유지
+  const GEN_TOOL_BASES = ['공구', '연장', '장비', '명품', '걸작', '비장의 도구', '유물 공구', '고대 연장', '전설의 공구', '신화의 연장', '용의 도구', '별의 공구', '태초의 연장', '창세의 공구', '신의 연장'];
+  Object.keys(TOOL_FAMILY_NAMES).forEach(fam => {
+    const gen = [];
+    ITEM_TIERS.forEach((t, ti) => {
+      GEN_TOOL_BASES.forEach((bn, i) => {
+        const mul = +(0.6 + (ti * 15 + i) * 0.019).toFixed(2);   // 0.6 ~ 2.58
+        gen.push({ key: `g_t_${fam}_${t.key}_${i}`, name: `${GEN_TIER_PREFIX[ti]} ${TOOL_FAMILY_NAMES[fam]} ${bn}`, tierKey: t.key, mul, price: 0 });
+      });
+    });
+    TOOLS[fam] = TOOLS[fam].concat(gen).sort((a, b) => a.mul - b.mul);
+  });
+
   /* ---------------- 장신구(부적) 20종 — 마력(Magical Power) 시스템 ---------------- */
   // 보유한 모든 부적의 마력 합계가 전역 스탯 보너스로 작동(스카이블럭 MP 방식).
   // effect: str/def/hp 직접 스탯, doubleZone: 해당 존 채집 2배 확률(%), minionSpeed/sellBonus: 특수효과(%)
@@ -291,7 +366,7 @@
     tali('talisman_scarf_studies', '스카프의 연구록', 'rare', 0, { str: 4, def: 4 }, '힘 +4, 방어 +4 (던전 2층 전리품)'),
     tali('talisman_dragon_claw', '드래곤 발톱', 'epic', 15000, { str: 10 }, '힘 +10'),
     tali('talisman_dawn_seal', '여명의 인장', 'epic', 16000, { def: 12 }, '방어 +12'),
-    tali('talisman_hourglass', '시간의 모래시계', 'epic', 20000, { minionSpeed: 5 }, '모든 일꾼 생산속도 +5%'),
+    tali('talisman_hourglass', '시간의 모래시계', 'epic', 20000, { minionSpeed: 5 }, '모든 미니언 생산속도 +5%'),
     tali('talisman_dragon_heart', '용의 심장', 'legendary', 45000, { hp: 40 }, '체력 +40'),
     tali('talisman_wealth_rune', '재물의 룬', 'legendary', 50000, { sellBonus: 5 }, '판매가 +5%'),
     tali('talisman_void_eye', '공허의 눈', 'mythic', 120000, { str: 18, def: 10 }, '힘 +18, 방어 +10'),
@@ -323,18 +398,43 @@
   // maxLvl = 인챈트북으로 도달 가능한 상한(위키: 예리함 7·치명 7·선제공격 5·거인사냥꾼 7·약탈 5·보호 7·성장 7).
   // 그 위로는 "혼돈의 마법부여"(골드+북 소모, 확률 성공/실패 시 레벨 하락 위험)로 +5레벨까지 돌파 가능 — 노가다·운빨 초월 강화.
   const ENCHANTS = [
-    { key: 'sharpness', name: '예리함', target: 'weapon', maxLvl: 7, desc: '레벨당 최종 피해 +5%', bookBasePrice: 500 },
-    { key: 'critical', name: '치명', target: 'weapon', maxLvl: 7, desc: '레벨당 최종 피해 +4%', bookBasePrice: 600 },
-    { key: 'first_strike', name: '선제공격', target: 'weapon', maxLvl: 5, desc: '전투 첫 공격 피해 +25%/레벨', bookBasePrice: 900 },
-    { key: 'giant_killer', name: '거인 사냥꾼', target: 'weapon', maxLvl: 7, desc: '보스 최대체력 10만 이상일 때 피해 +8%/레벨', bookBasePrice: 1500 },
-    { key: 'looting', name: '약탈', target: 'weapon', maxLvl: 5, desc: '전투 보상 골드 +15%/레벨', bookBasePrice: 1200 },
-    { key: 'execute', name: '처형', target: 'weapon', maxLvl: 5, desc: '보스 체력 50% 이하일 때 피해 +6%/레벨', bookBasePrice: 1400 },
-    { key: 'vampirism', name: '흡혈', target: 'weapon', maxLvl: 5, desc: '공격 시 가한 피해의 1%/레벨 회복', bookBasePrice: 1600 },
-    { key: 'experience', name: '경험', target: 'weapon', maxLvl: 4, desc: '전투 스킬 XP +10%/레벨', bookBasePrice: 1000 },
-    { key: 'protection', name: '보호', target: 'armor', maxLvl: 7, desc: '레벨당 방어 +4', bookBasePrice: 500 },
-    { key: 'growth', name: '성장', target: 'armor', maxLvl: 7, desc: '레벨당 체력 +15', bookBasePrice: 700 },
-    { key: 'thorns', name: '가시', target: 'armor', maxLvl: 3, desc: '받는 피해의 10%/레벨 반사', bookBasePrice: 1300 },
-    { key: 'vitality', name: '활력', target: 'armor', maxLvl: 5, desc: '전투 중 공격할 때마다 HP +2/레벨 회복', bookBasePrice: 1100 },
+    // ── 무기 20종 ──  fx: dmg(상시%), first(첫타%), dmgBig(체력10만+%), dmgLow(적HP50%↓), dmgHigh(적HP50%↑),
+    //                  dmgVs(특정 슬레이어%), dmgBoss(던전보스%), third(3타마다%), coin(골드%), xp(전투XP%),
+    //                  lifesteal(가한 피해%회복), healHit(타격당 고정회복)
+    { key: 'sharpness', name: '예리함', target: 'weapon', maxLvl: 7, fx: { dmg: 5 }, desc: '레벨당 최종 피해 +5%', bookBasePrice: 500 },
+    { key: 'critical', name: '치명', target: 'weapon', maxLvl: 7, fx: { dmg: 4 }, desc: '레벨당 최종 피해 +4%', bookBasePrice: 600 },
+    { key: 'first_strike', name: '선제공격', target: 'weapon', maxLvl: 5, fx: { first: 25 }, desc: '첫 공격 피해 +25%/레벨', bookBasePrice: 900 },
+    { key: 'triple_strike', name: '삼연격', target: 'weapon', maxLvl: 5, fx: { firstThree: 10 }, desc: '처음 3회 공격 +10%/레벨', bookBasePrice: 950 },
+    { key: 'giant_killer', name: '거인 사냥꾼', target: 'weapon', maxLvl: 7, fx: { dmgBig: 8 }, desc: '최대체력 10만+ 적에게 +8%/레벨', bookBasePrice: 1500 },
+    { key: 'titan_killer', name: '타이탄 킬러', target: 'weapon', maxLvl: 7, fx: { dmgBig: 6 }, desc: '최대체력 10만+ 적에게 +6%/레벨', bookBasePrice: 1300 },
+    { key: 'execute', name: '처형', target: 'weapon', maxLvl: 5, fx: { dmgLow: 6 }, desc: '적 체력 50% 이하 +6%/레벨', bookBasePrice: 1400 },
+    { key: 'prosecute', name: '기소', target: 'weapon', maxLvl: 7, fx: { dmgHigh: 4 }, desc: '적 체력 50% 이상 +4%/레벨', bookBasePrice: 1200 },
+    { key: 'smite', name: '강타', target: 'weapon', maxLvl: 7, fx: { dmgVs: 'zombie_slayer', v: 8 }, desc: '좀비 슬레이어 +8%/레벨', bookBasePrice: 800 },
+    { key: 'bane_of_arthropods', name: '살충', target: 'weapon', maxLvl: 7, fx: { dmgVs: 'spider_slayer', v: 8 }, desc: '거미 슬레이어 +8%/레벨', bookBasePrice: 800 },
+    { key: 'ender_slayer', name: '엔더 슬레이어', target: 'weapon', maxLvl: 7, fx: { dmgVs: 'enderman_slayer', v: 12 }, desc: '엔더맨 슬레이어 +12%/레벨', bookBasePrice: 1600 },
+    { key: 'cubism', name: '큐비즘', target: 'weapon', maxLvl: 5, fx: { dmgVs: 'blaze_slayer', v: 10 }, desc: '블레이즈 슬레이어 +10%/레벨', bookBasePrice: 1400 },
+    { key: 'dragon_hunter', name: '용 사냥꾼', target: 'weapon', maxLvl: 5, fx: { dmgBoss: 8 }, desc: '던전 보스 +8%/레벨', bookBasePrice: 1800 },
+    { key: 'thunderlord', name: '뇌제', target: 'weapon', maxLvl: 7, fx: { third: 15 }, desc: '3번째 공격마다 +15%/레벨', bookBasePrice: 1700 },
+    { key: 'fire_aspect', name: '발화', target: 'weapon', maxLvl: 3, fx: { dmg: 3 }, desc: '레벨당 최종 피해 +3%', bookBasePrice: 700 },
+    { key: 'venomous', name: '맹독', target: 'weapon', maxLvl: 5, fx: { dmgHigh: 3 }, desc: '적 체력 50% 이상 +3%/레벨', bookBasePrice: 900 },
+    { key: 'looting', name: '약탈', target: 'weapon', maxLvl: 5, fx: { coin: 15 }, desc: '전투 보상 골드 +15%/레벨', bookBasePrice: 1200 },
+    { key: 'experience', name: '경험', target: 'weapon', maxLvl: 4, fx: { xp: 10 }, desc: '전투 스킬 XP +10%/레벨', bookBasePrice: 1000 },
+    { key: 'vampirism', name: '흡혈', target: 'weapon', maxLvl: 5, fx: { lifesteal: 1 }, desc: '가한 피해의 1%/레벨 회복', bookBasePrice: 1600 },
+    { key: 'life_steal', name: '생명 강탈', target: 'weapon', maxLvl: 5, fx: { healHit: 3 }, desc: '공격마다 HP +3/레벨', bookBasePrice: 1500 },
+    // ── 방어구 12종 ──  fx: def(방어), hp(체력), thorns(반사%), healHit, lastStand(HP30%↓ 방어),
+    //                    roomHeal(던전 방이동 회복%p), speed(이동속도%), sell(판매가%), coin
+    { key: 'protection', name: '보호', target: 'armor', maxLvl: 7, fx: { def: 4 }, desc: '레벨당 방어 +4', bookBasePrice: 500 },
+    { key: 'growth', name: '성장', target: 'armor', maxLvl: 7, fx: { hp: 15 }, desc: '레벨당 체력 +15', bookBasePrice: 700 },
+    { key: 'true_protection', name: '진정한 보호', target: 'armor', maxLvl: 1, fx: { def: 15 }, desc: '방어 +15', bookBasePrice: 4000 },
+    { key: 'hardened', name: '경화', target: 'armor', maxLvl: 5, fx: { def: 2, hp: 5 }, desc: '레벨당 방어 +2, 체력 +5', bookBasePrice: 900 },
+    { key: 'thorns', name: '가시', target: 'armor', maxLvl: 3, fx: { thorns: 10 }, desc: '받는 피해의 10%/레벨 반사', bookBasePrice: 1300 },
+    { key: 'cactus', name: '선인장', target: 'armor', maxLvl: 3, fx: { thorns: 5 }, desc: '받는 피해의 5%/레벨 반사', bookBasePrice: 800 },
+    { key: 'vitality', name: '활력', target: 'armor', maxLvl: 5, fx: { healHit: 2 }, desc: '공격마다 HP +2/레벨', bookBasePrice: 1100 },
+    { key: 'rejuvenate', name: '재생', target: 'armor', maxLvl: 5, fx: { roomHeal: 3 }, desc: '던전 방 이동 회복 +3%p/레벨', bookBasePrice: 1200 },
+    { key: 'last_stand', name: '최후의 저항', target: 'armor', maxLvl: 5, fx: { lastStand: 8 }, desc: '내 HP 30% 이하일 때 방어 +8/레벨', bookBasePrice: 1500 },
+    { key: 'sugar_rush', name: '슈가 러시', target: 'armor', maxLvl: 3, fx: { speed: 4 }, desc: '이동속도 +4%/레벨(3D 월드)', bookBasePrice: 1000 },
+    { key: 'big_brain', name: '빅 브레인', target: 'armor', maxLvl: 5, fx: { xp: 5 }, desc: '전투 XP +5%/레벨', bookBasePrice: 1000 },
+    { key: 'magnet', name: '자석', target: 'armor', maxLvl: 5, fx: { coin: 5 }, desc: '전투 보상 골드 +5%/레벨', bookBasePrice: 900 },
   ];
   // 인챈트북 부여 비용 = bookBasePrice × 현재 레벨(첫 부여는 무료)
   const CHAOS_ENCHANT = {
@@ -346,11 +446,25 @@
 
   /* ---------------- 제작 레시피(컬렉션 티어로 해금 — 실제 스카이블럭 방식) ---------------- */
   // 인챈티드 자원: 원자재 160개 → 1개(판매가 20% 프리미엄 = 제작 노가다 보상)
-  const ENCHANTED_RES = ['stone', 'coal', 'iron', 'gold', 'diamond', 'wheat', 'oaklog', 'rawfish'];
+  // 인챈티드 아이템: 모든 컬렉션 자원 — 원자재 160개(32×5 십자 배열) → 인챈티드 1개
+  const ENCHANTED_RES = COLLECTIONS.reduce((a, c) => a.concat(c.resources.map(r => r.key)), []);
+  // 광물은 한 단계 더: 인챈티드 160개 → 인챈티드 블록
+  const ENCHANTED_BLOCK_RES = ['stone', 'coal', 'iron', 'gold', 'lapis', 'redstone', 'diamond', 'emerald'];
   const RECIPES = [
     ...ENCHANTED_RES.map(rk => ({
-      key: `enchanted_${rk}`, needs: { [rk]: 160 }, gives: 1, unlock: { resource: rk, tier: 3 },
+      key: `enchanted_${rk}`, needs: { [rk]: 160 }, gives: 1, unlock: { resource: rk, tier: 2 },
     })),
+    ...ENCHANTED_BLOCK_RES.map(rk => ({
+      key: `enchanted_${rk}_block`, needs: { [`enchanted_${rk}`]: 160 }, gives: 1, unlock: { resource: rk, tier: 5 },
+    })),
+    // 스타터 도구(실제처럼 자원 조합 — 시작 골드 0이어도 진행 가능)
+    { key: 'wooden_pickaxe', needs: { oaklog: 12 }, gives: 1, unlock: null },
+    { key: 'wooden_axe', needs: { oaklog: 12 }, gives: 1, unlock: null },
+    { key: 'wooden_hoe', needs: { oaklog: 10 }, gives: 1, unlock: null },
+    { key: 'fishing_rod', needs: { oaklog: 8, string: 2 }, gives: 1, unlock: null },
+    { key: 'stone_pickaxe', needs: { stone: 16, oaklog: 4 }, gives: 1, unlock: { resource: 'stone', tier: 1 } },
+    { key: 'stone_axe', needs: { stone: 16, oaklog: 4 }, gives: 1, unlock: { resource: 'oaklog', tier: 1 } },
+    { key: 'stone_hoe', needs: { stone: 12, oaklog: 4 }, gives: 1, unlock: { resource: 'wheat', tier: 1 } },
     { key: 'iron_pickaxe', needs: { iron: 24, oaklog: 8 }, gives: 1, unlock: { resource: 'iron', tier: 2 } },
     { key: 'iron_axe', needs: { iron: 24, oaklog: 8 }, gives: 1, unlock: { resource: 'oaklog', tier: 2 } },
     { key: 'minion_fuel_coal', needs: { coal: 32 }, gives: 1, unlock: { resource: 'coal', tier: 2 } },
@@ -373,17 +487,21 @@
   /* ---------------- 상점 ---------------- */
   const SHOP = [
     // 도구 4계열 × 5티어
-    ...Object.keys(TOOLS).flatMap(fam => TOOLS[fam].map(t => ({ key: t.key, name: t.name, category: '도구', buyPrice: t.price, sellPrice: Math.round(t.price * 0.2), stackSize: 1 }))),
-    // 강화/일꾼/인챈트
+    ...Object.keys(TOOLS).flatMap(fam => TOOLS[fam].map(t => ({ key: t.key, name: t.name, category: '도구', tierKey: t.tierKey, buyPrice: t.price, sellPrice: Math.round((t.price || 900 * t.mul) * 0.2), stackSize: 1 }))),
+    // 강화/미니언/인챈트
     { key: 'reforge_stone_common', name: '리포지 스톤(일반)', category: '강화재료', buyPrice: 250, sellPrice: 50, stackSize: 64 },
     { key: 'reforge_stone_rare', name: '리포지 스톤(희귀)', category: '강화재료', buyPrice: 1000, sellPrice: 200, stackSize: 64 },
     { key: 'essence_reforge_stone', name: '던전 정수 리포지 스톤', category: '강화재료', buyPrice: 0, sellPrice: 400, stackSize: 64 },
     { key: 'essence_cosmetic_cape', name: '지배자의 망토(장식)', category: '장식', buyPrice: 0, sellPrice: 5000, stackSize: 1 },
-    { key: 'minion_slot_expander', name: '일꾼 슬롯 확장권', category: '일꾼', buyPrice: MINION_SLOT_COST_BASE, sellPrice: 0, stackSize: 1 },
-    { key: 'auto_shipping_module', name: '자동출하 모듈', category: '일꾼', buyPrice: 3000, sellPrice: 500, stackSize: 1 },
-    { key: 'diamond_spreading', name: '다이아 살포기(생산 시 10% 다이아 추가)', category: '일꾼', buyPrice: 0, sellPrice: 2000, stackSize: 1 },
-    { key: MINION_FUEL.key, name: MINION_FUEL.name, category: '일꾼', buyPrice: MINION_FUEL.price, sellPrice: 100, stackSize: 64 },
+    { key: 'minion_slot_expander', name: '미니언 슬롯 확장권', category: '미니언', buyPrice: MINION_SLOT_COST_BASE, sellPrice: 0, stackSize: 1 },
+    { key: 'auto_shipping_module', name: '자동출하 모듈', category: '미니언', buyPrice: 3000, sellPrice: 500, stackSize: 1 },
+    { key: 'diamond_spreading', name: '다이아 살포기(생산 시 10% 다이아 추가)', category: '미니언', buyPrice: 0, sellPrice: 2000, stackSize: 1 },
+    { key: MINION_FUEL.key, name: MINION_FUEL.name, category: '미니언', buyPrice: MINION_FUEL.price, sellPrice: 100, stackSize: 64 },
     // 인챈티드 자원(제작 전용, 판매가 20% 프리미엄)
+    ...ENCHANTED_BLOCK_RES.map(rk => {
+      const r = COLLECTIONS.flatMap(c => c.resources).find(x => x.key === rk);
+      return { key: `enchanted_${rk}_block`, name: `인챈티드 ${r.name} 블록`, category: '제작품', buyPrice: 0, sellPrice: Math.round(r.sellPrice * 160 * 1.2 * 160 * 1.1), stackSize: 64 };
+    }),
     ...ENCHANTED_RES.map(rk => {
       const r = COLLECTIONS.flatMap(c => c.resources).find(x => x.key === rk);
       return { key: `enchanted_${rk}`, name: `인챈티드 ${r.name}`, category: '제작품', buyPrice: 0, sellPrice: Math.round(r.sellPrice * 160 * 1.2), stackSize: 64 };
@@ -412,7 +530,7 @@
   ];
 
   const ZONES = [
-    { key: 'hub', name: '중앙 마을', emoji: '🏘️', desc: '상점·은행·일꾼 관리소·펫 상점·인챈트 탑이 모인 허브.' },
+    { key: 'hub', name: '중앙 마을', emoji: '🏘️', desc: '상점·은행·미니언 관리소·펫 상점·인챈트 탑이 모인 허브.' },
     { key: 'mine', name: '깊은 동굴', emoji: '⛏️', desc: '돌부터 흑요석까지 9종 광물을 캐는 대형 광산.' },
     { key: 'farm', name: '농장 벌판', emoji: '🌾', desc: '6종 작물이 자라는 너른 들판. 풍차가 돈다.' },
     { key: 'forest', name: '속삭이는 숲', emoji: '🌲', desc: '참나무·자작나무·가문비를 벌목하는 울창한 숲.' },
@@ -440,5 +558,6 @@
     TALISMANS, MAGICAL_POWER, PETS, PET_XP_BASE, PET_XP_EXP, PET_MAX_LEVEL,
     ENCHANTS, CHAOS_ENCHANT, RECIPES,
     FAIRY_SOULS, BANK, DAILY_DEALS, DUNGEON_CLASSES, ZONES, EASTER_EGGS,
+    SKILL_XP_TABLE, SKILL_MAX_LEVEL, BASE_STATS, ENCHANTED_RES, ENCHANTED_BLOCK_RES,
   };
 })();

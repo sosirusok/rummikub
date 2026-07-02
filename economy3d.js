@@ -11,7 +11,7 @@
   'use strict';
   if (typeof window === 'undefined') return;
 
-  const W = 192, H = 48, Dp = 192;
+  let W = 192, H = 48, Dp = 192;   // 월드마다 크기가 다르다(loadWorld에서 설정)
   const SEA = 10;                        // 수면 y(9~10 물, 7~8 모래 바닥)
   const REACH = 4.5, DOT_MIN = 0.86;
   const DAY_LEN = 1200;                  // 낮밤 주기(초) — 모험 탭과 동일
@@ -60,6 +60,16 @@
     { key: 'tall_grass', tex: 'tall_grass', opaque: false, solid: false, cross: true },
     { key: 'flower_red', tex: 'flower_red', opaque: false, solid: false, cross: true },
     { key: 'flower_yellow', tex: 'flower_yellow', opaque: false, solid: false, cross: true },
+    { key: 'dark_oak_log', tex: { top: 'dark_oak_top', side: 'dark_oak_side', bottom: 'dark_oak_top' } },
+    { key: 'dark_oak_leaves', tex: 'dark_oak_leaves' },
+    { key: 'jungle_log', tex: { top: 'jungle_top', side: 'jungle_side', bottom: 'jungle_top' } },
+    { key: 'jungle_leaves', tex: 'jungle_leaves' },
+    { key: 'acacia_log', tex: { top: 'acacia_top', side: 'acacia_side', bottom: 'acacia_top' } },
+    { key: 'acacia_leaves', tex: 'acacia_leaves' },
+    { key: 'netherrack', tex: 'netherrack' },
+    { key: 'soul_sand', tex: 'soul_sand' },
+    { key: 'nether_bricks', tex: 'nether_bricks' },
+    { key: 'end_stone', tex: 'end_stone' },
   ];
   const ID = {};
   BLOCKS.forEach((b, i) => { b.id = i; ID[b.key] = i; if (b.solid === undefined) b.solid = true; if (b.opaque === undefined) b.opaque = true; });
@@ -108,29 +118,24 @@
   };
   // NPC(존 + 허브 서브탭 연결)
   const NPCS = [
-    { key: 'shopkeeper', name: '상점 주인', zone: 'hub', tab: 'shop', x: 86, z: 88, color: 0x3a6ee0 },
-    { key: 'bankTeller', name: '은행원', zone: 'hub', tab: 'bank', x: 106, z: 88, color: 0xf2d75c },
-    { key: 'minionManager', name: '일꾼 관리소장', zone: 'hub', tab: 'minions', x: 86, z: 104, color: 0x6aa84f },
-    { key: 'petKeeper', name: '펫 상인', zone: 'hub', tab: 'pets', x: 106, z: 104, color: 0xe048c4 },
+    { key: 'shopkeeper', name: '상점 주인', zone: 'hub', tab: 'shop', x: 83, z: 91, color: 0x3a6ee0 },
+    { key: 'bankTeller', name: '은행원', zone: 'hub', tab: 'bank', x: 108, z: 91, color: 0xf2d75c },
+    { key: 'minionManager', name: '미니언 관리소장', zone: 'hub', tab: 'minions', x: 83, z: 109, color: 0x6aa84f },
+    { key: 'petKeeper', name: '펫 상인', zone: 'hub', tab: 'pets', x: 108, z: 109, color: 0xe048c4 },
     { key: 'enchanter', name: '마법부여사', zone: 'hub', tab: 'enchant', x: 96, z: 82, color: 0x9365b8 },
     { key: 'auctioneer', name: '경매인', zone: 'hub', tab: 'deals', x: 90, z: 96, color: 0xc0392b },
     { key: 'reforgeSmith', name: '재련 대장장이', zone: 'hub', tab: 'reforge', x: 102, z: 96, color: 0x6b5436 },
-    { key: 'guide', name: '모험 안내인', zone: 'hub', tab: 'stats', x: 96, z: 110, color: 0x2c82c9 },
-    { key: 'mineForeman', name: '광산 감독관', zone: 'mine', x: 46, z: 90, color: 0x787878 },
+    { key: 'guide', name: '모험 안내인', zone: 'hub', tab: 'stats', x: 96, z: 116, color: 0x2c82c9 },
+    { key: 'mineForeman', name: '광산 감독관', zone: 'mine', x: 50, z: 96, color: 0x787878 },
     { key: 'farmForeman', name: '농장 관리인', zone: 'farm', x: 148, z: 44, color: 0xd8b23a },
-    { key: 'lumberjack', name: '벌목꾼', zone: 'forest', x: 42, z: 32, color: 0x8a6a3a },
+    { key: 'lumberjack', name: '벌목꾼', zone: 'forest', x: 43, z: 36, color: 0x8a6a3a },
     { key: 'fisherman', name: '늙은 낚시꾼', zone: 'dock', x: 152, z: 152, color: 0x41a85f },
     { key: 'slayerMaster', name: '슬레이어 대장', zone: 'slayerden', x: 38, z: 148, color: 0x2a2040 },
     { key: 'dungeonGatekeeper', name: '던전 문지기', zone: 'dungeonentrance', x: 96, z: 148, color: 0x5a4327 },
     { key: 'tia', name: '요정 티아', zone: 'hub', tab: 'talismans', x: 96, z: 20, color: 0xffb7dd, island: 'shrine' },
   ];
-  // 채집 노드(존별 실제 위치)
-  const NODES = [
-    { zone: 'mine', x: 26, z: 86 }, { zone: 'mine', x: 22, z: 90 }, { zone: 'mine', x: 30, z: 82 }, { zone: 'mine', x: 38, z: 96 },
-    { zone: 'farm', x: 148, z: 34 }, { zone: 'farm', x: 156, z: 40 }, { zone: 'farm', x: 162, z: 34 },
-    { zone: 'forest', x: 34, z: 40 }, { zone: 'forest', x: 28, z: 30 }, { zone: 'forest', x: 42, z: 24 },
-    { zone: 'dock', x: 158, z: 158 }, { zone: 'dock', x: 164, z: 162 }, { zone: 'dock', x: 150, z: 164 },
-  ];
+  // V5: "딸깍" 채집 노드는 폐지 — 광석/작물/나무/물을 직접 캐고 낚는다(인월드 채집).
+  const NODES = [];
   // 페어리 소울 12개(탐험 보상 — 등대 꼭대기/동굴 심부/풍차 위/다리 밑/수중 등)
   const FAIRY_SPOTS = [
     { id: 0, x: 170, z: 168, y: null, hint: '등대 꼭대기' },
@@ -161,9 +166,51 @@
   const PORTALS = {
     hub: { x: 80, z: 96, target: 'home', label: '🏝️ 내 섬으로' },
     home: { x: 96, z: 82, target: 'hub', label: '🏘️ 허브로' },
+    visit: { x: 96, z: 82, target: 'hub', label: '🏘️ 허브로' },   // 남의 섬 방문 중 귀환 포털
   };
+  // 멀티: 다른 플레이어 아바타 + 섬 방문 상태
+  let others = {};                          // peerId -> {mesh, tx,ty,tz,tyaw, walkT, walkAmp, legL, legR}
+  let visitData = null;                     // {name, homeEdits, minions} — 방문 중인 섬 데이터
   const HOME_MINION_SLOTS = [];
   for (let r = 0; r < 3; r++) for (let cIdx = 0; cIdx < 5; cIdx++) HOME_MINION_SLOTS.push([100 + cIdx * 3, 90 + r * 5]);
+  /* ---------------- 테마 월드 정의(실제 스카이블럭 섬 구성) ----------------
+     허브를 중심으로 워프 패드로 이동하는 독립 월드들. 각 월드는 시간대가 고정. */
+  const WORLD_DEFS = {
+    hub:    { name: '🏘️ 허브 군도', size: [192, 48, 192] },
+    home:   { name: '🏝️ 나의 섬', size: [192, 48, 192] },
+    visit:  { name: '🏝️ 친구의 섬', size: [192, 48, 192] },
+    park:   { name: '🌲 더 파크(7종 삼림)', size: [144, 48, 144], spawn: [72, 128], gen: () => genPark() },
+    barn:   { name: '🌾 더 반(대농장)', size: [144, 48, 144], spawn: [72, 128], gen: () => genBarn() },
+    gold:   { name: '⛏️ 골드 광산', size: [112, 48, 112], spawn: [56, 100], gen: () => genGoldMine() },
+    deep:   { name: '💎 딥 캐번(층별 광물)', size: [96, 48, 96], spawn: [48, 84], gen: () => genDeepCaverns() },
+    spider: { name: '🕷️ 스파이더 덴', size: [128, 48, 128], spawn: [64, 100], gen: () => genSpiderDen() },
+    nether: { name: '🔥 블레이징 포트리스', size: [128, 48, 128], spawn: [64, 96], gen: () => genNether() },
+    end:    { name: '🌌 디 엔드', size: [128, 48, 128], spawn: [64, 100], gen: () => genEnd() },
+    dungeon: { name: '🗝️ 카타콤', size: [144, 32, 48], spawn: [8, 24], gen: () => genDungeon() },
+  };
+  // 워프 패드: 밟거나 클릭하면 슈퍼 점프 후 자동 워프(실제 스카이블럭 런치패드)
+  const WARPS = {
+    hub: [
+      { x: 20, z: 96, dest: 'deep', label: '💎 딥 캐번' },
+      { x: 24, z: 74, dest: 'gold', label: '⛏️ 골드 광산' },
+      { x: 30, z: 20, dest: 'park', label: '🌲 더 파크' },
+      { x: 166, z: 28, dest: 'barn', label: '🌾 더 반' },
+      { x: 24, z: 168, dest: 'spider', label: '🕷️ 스파이더 덴' },
+      { x: 52, z: 172, dest: 'nether', label: '🔥 블레이징 포트리스' },
+      { x: 96, z: 8, dest: 'end', label: '🌌 디 엔드' },
+    ],
+    park: [{ x: 72, z: 134, dest: 'hub', label: '🏘️ 허브' }],
+    barn: [{ x: 72, z: 134, dest: 'hub', label: '🏘️ 허브' }],
+    gold: [{ x: 56, z: 106, dest: 'hub', label: '🏘️ 허브' }, { x: 20, z: 20, dest: 'deep', label: '💎 딥 캐번' }],
+    deep: [{ x: 48, z: 90, dest: 'hub', label: '🏘️ 허브' }],
+    spider: [{ x: 64, z: 106, dest: 'hub', label: '🏘️ 허브' }],
+    nether: [{ x: 64, z: 102, dest: 'hub', label: '🏘️ 허브' }],
+    end: [{ x: 64, z: 106, dest: 'hub', label: '🏘️ 허브' }],
+    dungeon: [{ x: 4, z: 24, dest: 'hub', label: '🚪 포기하고 나가기' }],
+  };
+  let worldCache = {};          // 월드 키 → 지형 버퍼(왕복 시 재생성 방지)
+  let warpCharge = null;        // {dest, t} — 패드 위 0.6초 차지 후 발사
+
   let atlasTex = null, atlasUV = {};
   let blockMat = null, waterMat = null, plantMat = null, lavaMat = null;
   let islandMeshes = { opaque: null, water: null, plant: null, lava: null };
@@ -247,6 +294,7 @@
     buildZiggurat();
     buildShrine();
     buildPortalFrame(PORTALS.hub.x, PORTALS.hub.z);
+    buildWarpPads();
   }
 
   /* ---- 프라이빗 섬(스카이블럭의 심장 — 공허에 뜬 나만의 섬, 자유 건축) ---- */
@@ -256,7 +304,7 @@
     for (let dy = 0; dy <= 4; dy++) { setW(cx - 2, y + dy, cz, ID.obsidian); setW(cx + 2, y + dy, cz, ID.obsidian); }
     setW(cx - 2, y + 5, cz, ID.glowstone); setW(cx + 2, y + 5, cz, ID.glowstone);
   }
-  function genHome() {
+  function genHome(editsOverride) {
     world = new Uint8Array(W * H * Dp);   // 공허(바다 없음) — 진짜 스카이블럭 프라이빗 섬
     const { x: cx, z: cz, r, top } = HOME_CENTER;
     for (let x = HOME_BOUNDS.x0; x <= HOME_BOUNDS.x1; x++) for (let z = HOME_BOUNDS.z0; z <= HOME_BOUNDS.z1; z++) {
@@ -282,7 +330,7 @@
         if (!getBlockLocal(tx + dx, ty + dy, tz + dz)) setW(tx + dx, ty + dy, tz + dz, ID.oak_leaves);
       }
     }
-    // 일꾼 받침대 15자리(동쪽 정렬)
+    // 미니언 받침대 15자리(동쪽 정렬)
     HOME_MINION_SLOTS.forEach(s => { const y = surfaceTop(s[0], s[1]); setW(s[0], y - 1, s[1], ID.stone_bricks); });
     // 허브 귀환 포털 + 꽃 장식
     buildPortalFrame(PORTALS.home.x, PORTALS.home.z);
@@ -291,37 +339,57 @@
       const y = surfaceTop(x, z);
       if (getBlockLocal(x, y - 1, z) === ID.grass) setW(x, y, z, hash3(i, 83, 1) < 0.5 ? ID.flower_yellow : ID.tall_grass);
     }
-    // 저장된 블록 편집 적용(설치/파괴 영속)
-    const edits = econApi().getHomeEdits ? econApi().getHomeEdits() : {};
+    // 저장된 블록 편집 적용(설치/파괴 영속) — 방문 모드면 방문 대상의 편집을 적용
+    const edits = editsOverride || (econApi().getHomeEdits ? econApi().getHomeEdits() : {});
     for (const k in edits) {
       const p = k.split(',').map(Number);
       if (inBounds(p[0], p[1], p[2])) world[widx(p[0], p[1], p[2])] = edits[k];
     }
   }
-  // 월드 이동(허브 ↔ 프라이빗 섬)
-  function travelTo(mode) {
-    if (mode === worldMode) return;
-    if (worldMode === 'hub') worldHubCache = world;   // 허브 지형 캐시
+  // 월드 이동(허브 ↔ 프라이빗 섬 ↔ 남의 섬 방문)
+  function travelTo(mode, force) {
+    if (mode === worldMode && !force) return;
+    restoreAllRegen(); clearMobs(); stopFishing(); mouseHeld = false; warpCharge = null;
+    if (worldMode === 'dungeon' && mode !== 'dungeon') dungeonState = null;
+    if (worldMode !== 'visit' && worldMode !== 'dungeon') worldCache[worldMode] = { world, W, H, Dp };   // 현재 월드 캐시
     worldMode = mode;
+    if (mode !== 'visit') visitData = null;
     disposeIslandMeshes();
     [npcGroup, nodeGroup, minionGroup, fairyGroup, propGroup].forEach(g => { if (g && scene) { scene.remove(g); disposeGroup(g); } });
     npcGroup = nodeGroup = minionGroup = fairyGroup = propGroup = null;
     ambientMobs = []; fairyMeshes = {}; _minionSig = ''; dynamicInteractables = [];
-    if (mode === 'home') { genHome(); }
-    else { world = worldHubCache || (genWorld(), world); }
-    buildIslandMesh(mode === 'home' ? HOME_BOUNDS : null);
+    const def = WORLD_DEFS[mode] || WORLD_DEFS.hub;
+    W = def.size[0]; H = def.size[1]; Dp = def.size[2];
+    if (mode === 'home') genHome();
+    else if (mode === 'visit') genHome(visitData && visitData.homeEdits);
+    else if (worldCache[mode]) { const c = worldCache[mode]; world = c.world; W = c.W; H = c.H; Dp = c.Dp; }
+    else if (mode === 'hub') genWorld();
+    else if (def.gen) def.gen();
+    buildIslandMesh((mode === 'home' || mode === 'visit') ? HOME_BOUNDS : null);
     if (mode === 'hub') { buildNpcMeshes(); buildNodeMeshes(); buildFairyMeshes(); buildAmbientMobs(); refreshFairyVisibility(); }
     else { propGroup = new THREE.Group(); scene.add(propGroup); }
     buildStaticInteractables();
     rebuildMinionVisuals(true);
     buildMinimapBase();
     buildPortalMarker();
-    if (mode === 'home') { P.x = 96.5; P.z = 100.5; P.y = surfaceTop(96, 100) + 0.02; P.yaw = Math.PI; }
-    else { resetPlayerToSpawn(); }
+    if (mode === 'hub') resetPlayerToSpawn();
+    else if (mode === 'home' || mode === 'visit') { P.x = 96.5; P.z = 100.5; P.y = surfaceTop(96, 100) + 0.02; P.yaw = Math.PI; }
+    else { const sp = def.spawn || [W >> 1, Dp >> 1]; P.x = sp[0] + 0.5; P.z = sp[1] + 0.5; P.y = surfaceTop(sp[0], sp[1]) + 0.02; P.yaw = Math.PI; }
     P.vx = P.vy = P.vz = 0;
     curBannerKey = '';
+    _lastSkyKey = '';   // 월드별 고정 시간대 즉시 반영
     updateBuildHud();
-    if (typeof toast === 'function') toast(mode === 'home' ? '🏝️ 나의 섬에 도착! (좌클릭 파괴 · 우클릭 설치)' : '🏘️ 허브로 돌아왔어요', true);
+    if (typeof toast === 'function') {
+      if (mode === 'home') toast('🏝️ 나의 섬에 도착! (좌클릭 파괴 · 우클릭 설치)', true);
+      else if (mode === 'visit') toast(`🏝️ ${(visitData && visitData.name) || '친구'}님의 섬에 방문했어요 (구경만 가능)`, true);
+      else toast(`${def.name}에 도착!`, true);
+    }
+  }
+  // 다른 플레이어 섬 방문(economy-net.js가 RPC 데이터를 받아 호출)
+  function travelVisit(name, data) {
+    if (!running || !scene) { if (typeof toast === 'function') toast('경제 월드에 접속한 상태에서만 방문할 수 있어요', false); return; }
+    visitData = { name, homeEdits: (data && data.homeEdits) || {}, minions: (data && data.minions) || [] };
+    travelTo('visit', true);   // 방문 중 다른 섬 재방문도 허용
   }
 
   /* ---- 구조물 헬퍼 ---- */
@@ -393,10 +461,10 @@
     for (let x = 90; x <= 102; x++) for (let z = 90; z <= 102; z++) setW(x, 15, z, ID.stone_bricks);
     for (let x = 94; x <= 98; x++) for (let z = 94; z <= 98; z++) { setW(x, 16, z, ID.stone_bricks); if (x > 94 && x < 98 && z > 94 && z < 98) { setW(x, 16, z, ID.water); } }
     setW(96, 16, 96, ID.stone_bricks); setW(96, 17, 96, ID.stone_bricks); setW(96, 18, 96, ID.glowstone);   // 분수 기둥
-    // 건물 6채(북서: 상점, 북동: 은행, 서: 일꾼, 동: 펫, 북: 인챈트 탑, 남: 훈련소)
+    // 건물 6채(북서: 상점, 북동: 은행, 서: 미니언, 동: 펫, 북: 인챈트 탑, 남: 훈련소)
     buildHouse(80, 82, 7, 7, 16, ID.bricks, ID.oak_planks);          // 상점
     buildHouse(105, 82, 7, 7, 16, ID.sandstone, ID.oak_planks);      // 은행
-    buildHouse(80, 100, 7, 7, 16, ID.oak_planks, ID.spruce_planks);  // 일꾼 관리소
+    buildHouse(80, 100, 7, 7, 16, ID.oak_planks, ID.spruce_planks);  // 미니언 관리소
     buildHouse(105, 100, 7, 7, 16, ID.birch_planks, ID.oak_planks);  // 펫 상점
     buildHouse(92, 74, 9, 7, 16, ID.stone_bricks, ID.stone_bricks);  // 인챈트 탑(1층)
     for (let y = 21; y < 26; y++) for (let x = 94; x < 100; x++) for (let z = 76; z < 80; z++) {   // 탑 2층
@@ -613,6 +681,332 @@
     setW(cx, 15, cz - 3, ID.stone_bricks); setW(cx, 16, cz - 3, ID.glowstone);
   }
 
+  /* ---------------- 테마 월드 생성기 ---------------- */
+  function genBlobIsland(cx, cz, r, top, opt) {
+    opt = opt || {};
+    for (let x = 0; x < W; x++) for (let z = 0; z < Dp; z++) {
+      let d = Math.hypot(x - cx, z - cz) / r;
+      d += (hash3(x, 7, z) - 0.5) * 0.14;
+      if (d >= 1) continue;
+      const t = Math.min(1, (1 - d) * 2.4); const sm = t * t * (3 - 2 * t);
+      const y0 = opt.flat ? top : Math.round(top - 2 + sm * 3);
+      for (let y = y0; y >= Math.max(2, y0 - 6 - Math.round(sm * 10)); y--) {
+        let id = opt.fill || ID.stone;
+        if (y === y0) id = opt.surf || ID.grass;
+        else if (y >= y0 - 3) id = opt.sub || ID.dirt;
+        setW(x, y, z, id);
+      }
+    }
+  }
+  function scatterOre(cx, cz, r, yMin, yMax, oreId, n, seed) {
+    let placed = 0;
+    for (let i = 0; i < n * 14 && placed < n; i++) {
+      const x = Math.floor(cx - r + hash3(i, seed, 1) * r * 2), z = Math.floor(cz - r + hash3(i, seed, 2) * r * 2);
+      const y = yMin + Math.floor(hash3(i, seed, 3) * (yMax - yMin + 1));
+      if (getBlockLocal(x, y, z) !== ID.stone) continue;
+      if (!(getBlockLocal(x + 1, y, z) === 0 || getBlockLocal(x - 1, y, z) === 0 || getBlockLocal(x, y, z + 1) === 0 || getBlockLocal(x, y, z - 1) === 0 || getBlockLocal(x, y + 1, z) === 0 || getBlockLocal(x, y - 1, z) === 0)) continue;
+      setW(x, y, z, oreId);
+      if (hash3(i, seed, 4) < 0.5) setW(x, y + 1, z, oreId);
+      placed++;
+    }
+  }
+  function plantDarkOak(x, z) {
+    const y0 = surfaceTop(x, z);
+    for (let i = 0; i < 6; i++) { setW(x, y0 + i, z, ID.dark_oak_log); setW(x + 1, y0 + i, z, ID.dark_oak_log); }
+    for (let dx = -3; dx <= 4; dx++) for (let dz = -3; dz <= 3; dz++) for (let dy = 5; dy <= 7; dy++) {
+      if (Math.abs(dx - 0.5) + Math.abs(dz) <= 4.2 - (dy - 5)) { if (!getBlockLocal(x + dx, y0 + dy, z + dz)) setW(x + dx, y0 + dy, z + dz, ID.dark_oak_leaves); }
+    }
+  }
+  function plantJungle(x, z) {
+    const y0 = surfaceTop(x, z);
+    const th = 8 + Math.floor(hash3(x, 41, z) * 4);
+    for (let i = 0; i < th; i++) setW(x, y0 + i, z, ID.jungle_log);
+    for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) for (let dy = th - 2; dy <= th + 1; dy++) {
+      if (Math.abs(dx) + Math.abs(dz) <= 3) { if (!getBlockLocal(x + dx, y0 + dy, z + dz)) setW(x + dx, y0 + dy, z + dz, ID.jungle_leaves); }
+    }
+  }
+  function plantAcacia(x, z) {
+    const y0 = surfaceTop(x, z);
+    for (let i = 0; i < 5; i++) setW(x + (i > 2 ? 1 : 0), y0 + i, z, ID.acacia_log);
+    for (let dx = -2; dx <= 3; dx++) for (let dz = -2; dz <= 2; dz++) {
+      if (Math.abs(dx - 0.5) + Math.abs(dz) <= 3.4) { if (!getBlockLocal(x + dx, y0 + 5, z + dz)) setW(x + 1 + dx, y0 + 5, z + dz, ID.acacia_leaves); }
+    }
+  }
+  function plantMegaSpruce(x, z) {
+    const y0 = surfaceTop(x, z);
+    const th = 11 + Math.floor(hash3(x, 42, z) * 4);
+    for (let i = 0; i < th; i++) { setW(x, y0 + i, z, ID.spruce_log); setW(x + 1, y0 + i, z, ID.spruce_log); }
+    for (let dy = 3; dy <= th; dy++) {
+      const rad = Math.max(1, Math.round((th - dy) * 0.45));
+      for (let dx = -rad; dx <= rad + 1; dx++) for (let dz = -rad; dz <= rad; dz++) {
+        if (Math.abs(dx - 0.5) + Math.abs(dz) <= rad + 0.5 && !getBlockLocal(x + dx, y0 + dy, z + dz)) setW(x + dx, y0 + dy, z + dz, ID.spruce_leaves);
+      }
+    }
+    setW(x, y0 + th, z, ID.spruce_leaves);
+  }
+  // 🌲 더 파크: 실제 The Park처럼 수종별 구역(7종: 참나무/자작/가문비/다크오크/정글/아카시아/메가가문비)
+  function genPark() {
+    world = new Uint8Array(W * H * Dp);
+    genBlobIsland(72, 72, 62, 16);
+    const species = [plantOak, plantBirch, plantSpruce, plantDarkOak, plantJungle, plantAcacia, plantMegaSpruce];
+    for (let gx = 0; gx < 16; gx++) for (let gz = 0; gz < 16; gz++) {
+      const x = 12 + gx * 8 + Math.floor(hash3(gx, 51, gz) * 4), z = 12 + gz * 8 + Math.floor(hash3(gx, 52, gz) * 4);
+      if (Math.hypot(x - 72, z - 72) > 56 || Math.hypot(x - 72, z - 128) < 10) continue;
+      const wedge = Math.floor(((Math.atan2(z - 72, x - 72) + Math.PI) / (Math.PI * 2)) * 7) % 7;   // 방위별 수종 구역
+      if (hash3(x, 53, z) < 0.62) species[wedge](x, z);
+    }
+    buildWarpPads();
+  }
+  // 🌾 더 반: 대형 농장(밀/당근/감자/호박/수박/사탕수수 대구획)
+  function genBarn() {
+    world = new Uint8Array(W * H * Dp);
+    genBlobIsland(72, 72, 62, 15, { flat: true });
+    const crops = [ID.wheat_ripe, ID.carrot_ripe, ID.potato_ripe, ID.sugar_cane, ID.pumpkin, ID.melon];
+    for (let ci = 0; ci < 6; ci++) {
+      const px = 22 + (ci % 3) * 34, pz = 24 + Math.floor(ci / 3) * 40;
+      for (let x = px; x < px + 26; x++) for (let z = pz; z < pz + 30; z++) {
+        if (Math.hypot(x - 72, z - 72) > 58) continue;
+        setW(x, 15, z, ID.farmland);
+        if (crops[ci] === ID.pumpkin || crops[ci] === ID.melon) { if ((x + z * 3) % 4 === 0) setW(x, 16, z, crops[ci]); }
+        else setW(x, 16, z, crops[ci]);
+        if ((x + z) % 9 === 0) { setW(x, 15, z, ID.water); }   // 관개수로
+      }
+    }
+    buildHouse(66, 60, 9, 8, 16, ID.wool_red, ID.spruce_planks);   // 대형 헛간
+    lampPost(64, 90); lampPost(90, 64);
+    buildWarpPads();
+  }
+  // ⛏️ 골드 광산: 노천 금광 산
+  function genGoldMine() {
+    world = new Uint8Array(W * H * Dp);
+    genBlobIsland(56, 56, 48, 14, { surf: ID.stone, sub: ID.stone });
+    // 산(계단식 노천광)
+    for (let ring = 0; ring < 6; ring++) {
+      const rr = 34 - ring * 5;
+      for (let x = 56 - rr; x <= 56 + rr; x++) for (let z = 46 - rr; z <= 46 + rr; z++) {
+        if (Math.hypot(x - 56, z - 46) <= rr) for (let y = 15; y <= 15 + ring * 2; y++) setW(x, y, z, ID.stone);
+      }
+    }
+    scatterOre(56, 46, 34, 14, 26, ID.gold_ore, 40, 61);
+    scatterOre(56, 46, 34, 14, 24, ID.iron_ore, 30, 62);
+    scatterOre(56, 46, 34, 14, 22, ID.coal_ore, 24, 63);
+    [[42, 40], [70, 52], [56, 30]].forEach(p2 => { const y = surfaceTop(p2[0], p2[1]); setW(p2[0], y, p2[1], ID.glowstone); });
+    buildWarpPads();
+  }
+  // 💎 딥 캐번: 실제처럼 층별 광물(위→아래: 석탄/철/금·청금/레드스톤/에메랄드·슬라임/다이아/흑요석) + 리프트
+  function genDeepCaverns() {
+    world = new Uint8Array(W * H * Dp);
+    for (let x = 6; x < W - 6; x++) for (let z = 6; z < Dp - 6; z++) for (let y = 2; y <= 40; y++) setW(x, y, z, ID.stone);
+    // 층 챔버(y대역별 대형 공동)
+    const layers = [
+      { y: 34, ore: ID.coal_ore, n: 40 }, { y: 29, ore: ID.iron_ore, n: 36 }, { y: 24, ore: ID.gold_ore, n: 30 },
+      { y: 24, ore: ID.lapis_ore, n: 24 }, { y: 19, ore: ID.redstone_ore, n: 30 }, { y: 14, ore: ID.emerald_ore, n: 20 },
+      { y: 9, ore: ID.diamond_ore, n: 22 }, { y: 5, ore: ID.obsidian, n: 16 },
+    ];
+    const uniq = [34, 29, 24, 19, 14, 9, 5];
+    uniq.forEach(ly => {
+      for (let x = 14; x < W - 14; x++) for (let z = 14; z < Dp - 14; z++) {
+        const d = Math.hypot(x - 48, z - 48) / 34 + (hash3(x, ly, z) - 0.5) * 0.2;
+        if (d < 1) for (let y = ly - 2; y <= ly + 1; y++) setW(x, y, z, 0);
+      }
+      [[30, 34], [64, 60], [48, 30], [36, 62]].forEach((p2, i) => setW(p2[0], ly - 2, p2[1] + i, ID.glowstone));
+    });
+    layers.forEach((L, i) => { scatterOre(48, 48, 34, L.y - 2, L.y + 1, L.ore, L.n, 71 + i); });
+    // 중앙 리프트 수직 통로 + 층별 착지대(계단식)
+    for (let y = 3; y <= 40; y++) for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) setW(48 + dx, y, 48 + dz, 0);
+    let py = 40;
+    uniq.forEach(ly => { for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) setW(48 + dx, ly - 3, 48 + dz, ID.stone_bricks); });
+    // 나선 계단(리프트 대용 — 층 사이 이동)
+    const ring = [[-3, -3], [-1, -3], [1, -3], [3, -3], [3, -1], [3, 1], [3, 3], [1, 3], [-1, 3], [-3, 3], [-3, 1], [-3, -1]];
+    let sy = 3; let ri = 0;
+    while (sy <= 38) { const o = ring[ri % ring.length]; setW(48 + o[0], sy, 48 + o[1], ID.stone_bricks); clearAbove(48 + o[0], 48 + o[1], sy + 1, 3); ri++; if (ri % 2 === 0) sy++; }
+    // 입구 방(스폰)
+    for (let x = 42; x <= 54; x++) for (let z = 80; z <= 92; z++) for (let y = 36; y <= 41; y++) setW(x, y, z, y === 36 ? ID.stone_bricks : 0);
+    for (let z = 52; z <= 80; z++) { for (let dx = -1; dx <= 1; dx++) { setW(48 + dx, 36, z, ID.stone_bricks); clearAbove(48 + dx, z, 37, 4); } }
+    [[44, 82], [52, 90], [48, 86]].forEach(p2 => setW(p2[0], 37, p2[1], ID.glowstone));
+    buildWarpPads();
+  }
+  // 🕷️ 스파이더 덴
+  function genSpiderDen() {
+    world = new Uint8Array(W * H * Dp);
+    genBlobIsland(64, 64, 56, 15, { surf: ID.dirt });
+    // 죽은 나무 + 거미줄(양털)
+    for (let i = 0; i < 26; i++) {
+      const x = 16 + Math.floor(hash3(i, 81, 1) * 96), z = 14 + Math.floor(hash3(i, 82, 2) * 88);
+      if (Math.hypot(x - 64, z - 64) > 50 || Math.hypot(x - 64, z - 116) < 12) continue;
+      const y = surfaceTop(x, z), th = 3 + Math.floor(hash3(i, 83, 3) * 4);
+      for (let j = 0; j < th; j++) setW(x, y + j, z, ID.spruce_log);
+      if (hash3(i, 84, 4) < 0.5) setW(x, y + th, z, ID.wool_white);
+    }
+    // 중앙 거미 언덕(브루드마더 둥지)
+    for (let dx = -12; dx <= 12; dx++) for (let dz = -12; dz <= 12; dz++) {
+      const hgt = Math.max(0, 9 - Math.hypot(dx, dz) * 0.8);
+      const y0 = surfaceTop(64 + dx, 52 + dz);
+      for (let y = 0; y < hgt; y++) setW(64 + dx, y0 + y, 52 + dz, hash3(dx, 85, dz) < 0.3 ? ID.wool_white : ID.stone);
+    }
+    buildWarpPads();
+  }
+  // 🔥 블레이징 포트리스: 용암 바다 위 네더락 + 요새 통로
+  function genNether() {
+    world = new Uint8Array(W * H * Dp);
+    for (let x = 0; x < W; x++) for (let z = 0; z < Dp; z++) for (let y = 2; y <= SEA - 1; y++) setW(x, y, z, ID.lava);   // 용암 바다
+    genBlobIsland(64, 64, 54, 16, { surf: ID.netherrack, sub: ID.netherrack, fill: ID.netherrack });
+    for (let i = 0; i < 60; i++) {   // 소울샌드 패치
+      const x = 20 + Math.floor(hash3(i, 91, 1) * 88), z = 20 + Math.floor(hash3(i, 92, 2) * 88);
+      const y = surfaceTop(x, z) - 1;
+      if (getBlockLocal(x, y, z) === ID.netherrack && hash3(i, 93, 3) < 0.8) setW(x, y, z, ID.soul_sand);
+    }
+    // 요새 다리(십자) + 블레이즈 스폰 플랫폼
+    for (let x = 24; x <= 104; x++) { for (let o = -1; o <= 1; o++) { setW(x, 20, 64 + o, ID.nether_bricks); clearAbove(x, 64 + o, 21, 4); } if (x % 8 === 0) { setW(x, 21, 62, ID.nether_bricks); setW(x, 21, 66, ID.nether_bricks); } }
+    for (let z = 24; z <= 104; z++) { for (let o = -1; o <= 1; o++) { setW(64 + o, 20, z, ID.nether_bricks); clearAbove(64 + o, z, 21, 4); } }
+    for (let dx = -5; dx <= 5; dx++) for (let dz = -5; dz <= 5; dz++) setW(64 + dx, 20, 40 + dz, ID.nether_bricks);
+    [[60, 40], [68, 40], [64, 36], [64, 44]].forEach(p2 => setW(p2[0], 21, p2[1], ID.glowstone));
+    // 용암 웅덩이
+    [[40, 80], [88, 52]].forEach(p2 => { for (let dx = -3; dx <= 3; dx++) for (let dz = -2; dz <= 2; dz++) { const y = surfaceTop(p2[0] + dx, p2[1] + dz) - 1; setW(p2[0] + dx, y, p2[1] + dz, ID.lava); } });
+    buildWarpPads();
+  }
+  // 🌌 디 엔드: 공허 위 엔드스톤 + 흑요석 기둥
+  function genEnd() {
+    world = new Uint8Array(W * H * Dp);
+    genBlobIsland(64, 64, 56, 16, { surf: ID.end_stone, sub: ID.end_stone, fill: ID.end_stone });
+    for (let i = 0; i < 8; i++) {   // 흑요석 기둥
+      const a = i / 8 * Math.PI * 2;
+      const x = 64 + Math.round(Math.cos(a) * 32), z = 64 + Math.round(Math.sin(a) * 32);
+      const hgt = 10 + Math.floor(hash3(i, 95, 1) * 8), y0 = surfaceTop(x, z);
+      for (let y = 0; y < hgt; y++) for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) {
+        if (Math.abs(dx) + Math.abs(dz) < 2) setW(x + dx, y0 + y, z + dz, ID.obsidian);
+      }
+      setW(x, y0 + hgt, z, ID.glowstone);
+    }
+    // 젤롯 둥지(북쪽 구덩이)
+    for (let dx = -8; dx <= 8; dx++) for (let dz = -8; dz <= 8; dz++) {
+      if (Math.hypot(dx, dz) < 8) { const y0 = surfaceTop(64 + dx, 30 + dz) - 1; setW(64 + dx, y0, 30 + dz, hash3(dx, 96, dz) < 0.25 ? ID.obsidian : ID.end_stone); }
+    }
+    buildWarpPads();
+  }
+  // 워프 패드 지형(흑요석 링 + 글로우스톤 심)
+  function buildWarpPads() {
+    const list = WARPS[worldMode] || [];
+    for (const wp of list) {
+      const y = surfaceTop(wp.x, wp.z) - 1;
+      for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) setW(wp.x + dx, y, wp.z + dz, (dx === 0 && dz === 0) ? ID.glowstone : ID.obsidian);
+      clearAbove(wp.x, wp.z, y + 1, 4);
+      wp._y = y + 1;
+    }
+  }
+  function warpTo(dest) {
+    if (!WORLD_DEFS[dest]) return;
+    if (typeof toast === 'function') toast(`🚀 ${WORLD_DEFS[dest].name}(으)로 워프!`, true);
+    P.vy = 13;   // 슈퍼 점프 연출
+    warpCharge = null;
+    setTimeout(() => { if (running) travelTo(dest); }, 420);
+  }
+  function tickWarpPads(dt) {
+    const list = WARPS[worldMode] || [];
+    for (const wp of list) {
+      if (Math.abs(P.x - (wp.x + 0.5)) < 1.2 && Math.abs(P.z - (wp.z + 0.5)) < 1.2 && Math.abs(P.y - wp._y) < 1.5) {
+        if (!warpCharge || warpCharge.dest !== wp.dest) warpCharge = { dest: wp.dest, t: 0 };
+        warpCharge.t += dt;
+        const cross = document.getElementById('econ3dCross');
+        if (cross) cross.textContent = '🚀' + Math.ceil(0.9 - warpCharge.t) ;
+        if (warpCharge.t >= 0.9) warpTo(wp.dest);
+        return;
+      }
+    }
+    if (warpCharge) { warpCharge = null; const cross = document.getElementById('econ3dCross'); if (cross && !fishing && !breaking) cross.textContent = '+'; }
+  }
+
+  /* ---------------- 3D 카타콤 던전: 직접 돌아다니며 몬스터를 잡고 보스까지 ---------------- */
+  let dungeonState = null;   // {floor, fd, rooms:[{x0,x1,gateX,kills,need,cleared}], t0, deaths, kills, bossSpawned}
+  function genDungeon() {
+    world = new Uint8Array(W * H * Dp);
+    const ROOM_W = 22, ROOMS = 5;
+    // 바닥/외벽(개방형 천장 — 카타콤 폐허 분위기, 하늘은 자정 고정)
+    for (let x = 0; x < W; x++) for (let z = 8; z < 40; z++) setW(x, 2, z, ID.stone_bricks);
+    const wallTo = 9;
+    for (let x = 0; x < W; x++) for (let y = 3; y <= wallTo; y++) { setW(x, y, 8, ID.stone_bricks); setW(x, y, 39, ID.stone_bricks); }
+    for (let y = 3; y <= wallTo; y++) for (let z = 8; z < 40; z++) { setW(0, y, z, ID.stone_bricks); setW(W - 1, y, z, ID.stone_bricks); }
+    // 방 구분 게이트 벽(중앙 2×3 흑요석 게이트 — 방 클리어 시 개방)
+    for (let i = 1; i <= ROOMS; i++) {
+      const gx = i * ROOM_W;
+      for (let y = 3; y <= wallTo; y++) for (let z = 8; z < 40; z++) setW(gx, y, z, ID.stone_bricks);
+      for (let y = 3; y <= 5; y++) for (let z = 22; z <= 25; z++) setW(gx, y, z, ID.obsidian);   // 게이트
+    }
+    // 조명 + 폐허 기둥
+    for (let i = 0; i <= ROOMS; i++) {
+      const cx = i * ROOM_W + 11;
+      [[cx - 6, 14], [cx + 6, 14], [cx - 6, 33], [cx + 6, 33]].forEach(p2 => {
+        if (p2[0] > 1 && p2[0] < W - 1) { for (let y = 3; y <= 5; y++) setW(p2[0], y, p2[1], ID.stone_bricks); setW(p2[0], 6, p2[1], ID.glowstone); }
+      });
+    }
+    buildWarpPads();
+  }
+  function startDungeon3d(floor) {
+    if (!running || !scene) return false;
+    const api = econApi();
+    if (api.hasActiveEncounter && api.hasActiveEncounter()) return false;
+    if (api.canEnterFloor && !api.canEnterFloor(floor)) { if (typeof toast === 'function') toast('이전 층을 먼저 클리어하세요', false); return true; }
+    const fd = api.dungeonFloorInfo ? api.dungeonFloorInfo(floor) : null;
+    if (!fd) return false;
+    dungeonState = { floor, fd, rooms: [], t0: performance.now(), deaths: 0, kills: 0, bossSpawned: false, done: false };
+    hidePanel();
+    travelTo('dungeon', true);
+    // 방 5개: 몬스터 배치(방마다 4마리, 층 몹 이름/스탯)
+    const ROOM_W = 22;
+    for (let i = 0; i < 5; i++) {
+      const room = { x0: i * ROOM_W + 2, x1: (i + 1) * ROOM_W - 2, gateX: (i + 1) * ROOM_W, kills: 0, need: 4, cleared: false };
+      dungeonState.rooms.push(room);
+      for (let k = 0; k < room.need; k++) {
+        const name = fd.mobList[k % fd.mobList.length];
+        const hp = Math.max(40, Math.round(fd.bossHp / 40));
+        spawnDungeonMob({
+          name, hp, dmg: Math.round(fd.bossDmg / 3), lv: floor * 5 + k,
+          x: room.x0 + 4 + Math.random() * (room.x1 - room.x0 - 8), z: 14 + Math.random() * 20,
+          color: [0x3a7d3a, 0x8a8a8a, 0x5a4327, 0x7d3a3a][k % 4], roomIdx: i,
+        });
+      }
+    }
+    if (typeof toast === 'function') toast(`🗝️ 카타콤 ${floor}층 입장! 몬스터를 모두 잡아 게이트를 열고 보스까지 전진하세요`, true);
+    return true;
+  }
+  function spawnDungeonMob(opt) {
+    const def = { name: opt.name, kind: opt.kind || 'humanoid', color: opt.color || 0x3a7d3a, hp: opt.hp, dmg: opt.dmg, xp: 10 + opt.lv, coins: 8 + opt.lv, speed: 2.0, drops: [{ key: 'dungeon_essence', n: 1, chance: 0.25 }], tierCap: Math.min(6, dungeonState ? dungeonState.floor : 2) };
+    const area = { x: opt.x, z: opt.z, r: 6, world: 'dungeon' };
+    const mob = spawnMob(area, '_custom', opt.lv, def);
+    if (mob) { mob.dungeonRoom = opt.roomIdx; mob.isBoss = !!opt.isBoss; }
+    return mob;
+  }
+  function onDungeonMobDead(m) {
+    if (!dungeonState || dungeonState.done) return;
+    dungeonState.kills++;
+    if (m.isBoss) {
+      dungeonState.done = true;
+      const api = econApi();
+      if (api.dungeonComplete) api.dungeonComplete(dungeonState.floor, { timeSec: (performance.now() - dungeonState.t0) / 1000, deaths: dungeonState.deaths, kills: dungeonState.kills });
+      setTimeout(() => { if (running) { dungeonState = null; travelTo('hub'); } }, 1500);
+      return;
+    }
+    if (m.dungeonRoom == null) return;
+    const room = dungeonState.rooms[m.dungeonRoom];
+    if (!room || room.cleared) return;
+    room.kills++;
+    if (room.kills >= room.need) {
+      room.cleared = true;
+      for (let y = 3; y <= 5; y++) for (let z = 22; z <= 25; z++) setW(room.gateX, y, z, 0);   // 게이트 개방
+      markBlockDirty(room.gateX, 22); markBlockDirty(room.gateX, 25);
+      if (typeof toast === 'function') toast(`⚔️ ${m.dungeonRoom + 1}번 방 클리어! 게이트가 열렸다`, true);
+      // 마지막 방이면 보스 소환
+      if (m.dungeonRoom === dungeonState.rooms.length - 1 && !dungeonState.bossSpawned) {
+        dungeonState.bossSpawned = true;
+        const fd = dungeonState.fd;
+        const boss = spawnDungeonMob({ name: fd.bossName, hp: fd.bossHp, dmg: fd.bossDmg, lv: dungeonState.floor * 10, x: 122, z: 24, color: 0x6a1a8a, isBoss: true });
+        if (boss) { boss.mesh.scale.multiplyScalar(1.8); drawMobLabel(boss); }
+        if (typeof toast === 'function') toast(`👹 ${fd.bossName}이(가) 깨어났다!`, false);
+      }
+    }
+  }
+  window.economy3dDungeon = floor => { try { return startDungeon3d(floor); } catch (e) { console.error('econ3d dungeon', e); return false; } };
+
   /* ---------------- 텍스처 아틀라스 ---------------- */
   function px(c, x, y, col) { c.fillStyle = col; c.fillRect(x, y, 1, 1); }
   function rngFrom(n) { let s = (n >>> 0) || 1; return function () { s ^= s << 13; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; }; }
@@ -671,6 +1065,19 @@
       case 'tall_grass': { for (let x = 1; x < 16; x += 2) { const h = 6 + ((r() * 7) | 0); const col = r() < 0.5 ? '#5b9142' : '#6aa84f'; for (let y = 16 - h; y < 16; y++) f(x, y, col); } break; }
       case 'flower_red': { for (let y = 7; y < 16; y++) f(8, y, '#3f7d3a'); c.fillStyle = '#d23b32'; c.fillRect(ox + 6, oy + 3, 5, 5); c.fillStyle = '#f0d33a'; c.fillRect(ox + 8, oy + 5, 1, 1); break; }
       case 'flower_yellow': { for (let y = 7; y < 16; y++) f(8, y, '#3f7d3a'); c.fillStyle = '#f0c829'; c.fillRect(ox + 6, oy + 3, 5, 5); c.fillStyle = '#8a5a18'; c.fillRect(ox + 8, oy + 5, 1, 1); break; }
+      case 'dark_oak_top': { fillNoise('#3a2a18', '#2e2012', '#4a3620'); for (let i = 2; i <= 7; i += 2) { c.strokeStyle = '#241808'; c.strokeRect(ox + 8 - i + .5, oy + 8 - i + .5, i * 2 - 1, i * 2 - 1); } break; }
+      case 'dark_oak_side': { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) f(x, y, ((x + (r() < .3 ? 1 : 0)) % 5 === 0) ? '#241808' : (r() < 0.5 ? '#31230f' : '#3d2c16')); break; }
+      case 'dark_oak_leaves': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.4 ? '#1d3a14' : t < 0.75 ? '#254a1a' : '#2f5a22'); if (t > 0.94) f(x, y, '#0c1c08'); } break;
+      case 'jungle_top': { fillNoise('#9a7048', '#8a6038', '#aa8058'); for (let i = 2; i <= 7; i += 2) { c.strokeStyle = '#6a4828'; c.strokeRect(ox + 8 - i + .5, oy + 8 - i + .5, i * 2 - 1, i * 2 - 1); } break; }
+      case 'jungle_side': { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) f(x, y, ((x + (r() < .3 ? 1 : 0)) % 4 === 0) ? '#5a3d20' : (r() < 0.5 ? '#6d4c2a' : '#7d5a34')); break; }
+      case 'jungle_leaves': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.35 ? '#2f8a24' : t < 0.7 ? '#3aa02e' : '#48b83a'); if (t > 0.93) f(x, y, '#123a0c'); } break;
+      case 'acacia_top': { fillNoise('#a8552f', '#984a26', '#b86238'); for (let i = 2; i <= 7; i += 2) { c.strokeStyle = '#7a3a1c'; c.strokeRect(ox + 8 - i + .5, oy + 8 - i + .5, i * 2 - 1, i * 2 - 1); } break; }
+      case 'acacia_side': { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) f(x, y, ((x + (r() < .3 ? 1 : 0)) % 5 === 0) ? '#5a5048' : (r() < 0.5 ? '#6a5e54' : '#786a5e')); break; }
+      case 'acacia_leaves': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.4 ? '#5a7a28' : t < 0.75 ? '#6a8a30' : '#7a9a3c'); if (t > 0.94) f(x, y, '#2a3a10'); } break;
+      case 'netherrack': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.3 ? '#5a1e1e' : t < 0.6 ? '#6e2626' : t < 0.85 ? '#7e2e2e' : '#8e3a3a'); } break;
+      case 'soul_sand': { fillNoise('#4a3828', '#3e2e20', '#564232'); for (let i = 0; i < 4; i++) { const bx = 2 + ((r() * 11) | 0), by = 2 + ((r() * 11) | 0); c.fillStyle = '#2a1e12'; c.fillRect(ox + bx, oy + by, 3, 2); c.fillRect(ox + bx + 1, oy + by - 1, 1, 1); } break; }
+      case 'nether_bricks': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const e = (y % 4 === 0) || ((x + (((y >> 2) % 2) ? 4 : 0)) % 8 === 0); f(x, y, e ? '#1e0e10' : (r() < 0.5 ? '#2e1618' : '#3a1c1e')); } break;
+      case 'end_stone': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.3 ? '#d5d79a' : t < 0.65 ? '#dddf9f' : '#e8eaac'); } break;
       default: fillNoise('#888', '#666', '#aaa');
     }
   }
@@ -711,10 +1118,36 @@
     g.setIndex(idxArr);
     const m = new THREE.Mesh(g, mat); scene.add(m); return m;
   }
-  function disposeIslandMeshes() { ['opaque', 'water', 'plant', 'lava'].forEach(k => { const m = islandMeshes[k]; if (m) { scene.remove(m); if (m.geometry) m.geometry.dispose(); islandMeshes[k] = null; } }); }
+  // ── 청크 메싱: 32×32 기둥 단위로 나눠 블록 하나 캘 때 그 청크만 다시 만든다(즉시 반영) ──
+  const CHUNK = 32;
+  let chunkMeshes = {};        // "cx,cz" -> {opaque,water,plant,lava}
+  let dirtyChunks = new Set();
+  function disposeChunkMeshes(key) {
+    const cM = chunkMeshes[key]; if (!cM) return;
+    ['opaque', 'water', 'plant', 'lava'].forEach(t => { const m = cM[t]; if (m) { scene.remove(m); if (m.geometry) m.geometry.dispose(); } });
+    delete chunkMeshes[key];
+  }
+  function disposeIslandMeshes() { for (const k in chunkMeshes) disposeChunkMeshes(k); chunkMeshes = {}; dirtyChunks.clear(); }
+  function markBlockDirty(x, z) {
+    const cx = Math.floor(x / CHUNK), cz = Math.floor(z / CHUNK);
+    dirtyChunks.add(cx + ',' + cz);
+    const lx = x - cx * CHUNK, lz = z - cz * CHUNK;   // 경계 블록이면 이웃 청크도(면 컬링 갱신)
+    if (lx === 0) dirtyChunks.add((cx - 1) + ',' + cz);
+    if (lx === CHUNK - 1) dirtyChunks.add((cx + 1) + ',' + cz);
+    if (lz === 0) dirtyChunks.add(cx + ',' + (cz - 1));
+    if (lz === CHUNK - 1) dirtyChunks.add(cx + ',' + (cz + 1));
+  }
   function buildIslandMesh(bounds) {
-    const bx0 = bounds ? bounds.x0 : 0, bx1 = bounds ? bounds.x1 : W - 1;
-    const bz0 = bounds ? bounds.z0 : 0, bz1 = bounds ? bounds.z1 : Dp - 1;
+    const cx0 = bounds ? Math.floor(bounds.x0 / CHUNK) : 0, cx1 = bounds ? Math.floor(bounds.x1 / CHUNK) : Math.floor((W - 1) / CHUNK);
+    const cz0 = bounds ? Math.floor(bounds.z0 / CHUNK) : 0, cz1 = bounds ? Math.floor(bounds.z1 / CHUNK) : Math.floor((Dp - 1) / CHUNK);
+    for (let cx = cx0; cx <= cx1; cx++) for (let cz = cz0; cz <= cz1; cz++) buildChunk(cx, cz);
+  }
+  function buildChunk(cx, cz) {
+    const key = cx + ',' + cz;
+    disposeChunkMeshes(key);
+    const bx0 = cx * CHUNK, bx1 = Math.min(W - 1, bx0 + CHUNK - 1);
+    const bz0 = cz * CHUNK, bz1 = Math.min(Dp - 1, bz0 + CHUNK - 1);
+    if (bx0 >= W || bz0 >= Dp) return;
     const B = { pos: [], col: [], uv: [], idx: [], vi: 0 };
     const Wt = { pos: [], col: [], uv: [], idx: [], vi: 0 };
     const Pl = { pos: [], col: [], uv: [], idx: [], vi: 0 };
@@ -762,11 +1195,12 @@
         T.idx.push(T.vi, T.vi + 1, T.vi + 2, T.vi, T.vi + 2, T.vi + 3); T.vi += 4;
       }
     }
-    disposeIslandMeshes();
-    if (B.pos.length) islandMeshes.opaque = makeMesh(B.pos, B.col, B.uv, B.idx, blockMat);
-    if (Wt.pos.length) islandMeshes.water = makeMesh(Wt.pos, Wt.col, Wt.uv, Wt.idx, waterMat);
-    if (Pl.pos.length) islandMeshes.plant = makeMesh(Pl.pos, Pl.col, Pl.uv, Pl.idx, plantMat);
-    if (Lv.pos.length) islandMeshes.lava = makeMesh(Lv.pos, Lv.col, Lv.uv, Lv.idx, lavaMat);
+    const out = {};
+    if (B.pos.length) out.opaque = makeMesh(B.pos, B.col, B.uv, B.idx, blockMat);
+    if (Wt.pos.length) out.water = makeMesh(Wt.pos, Wt.col, Wt.uv, Wt.idx, waterMat);
+    if (Pl.pos.length) out.plant = makeMesh(Pl.pos, Pl.col, Pl.uv, Pl.idx, plantMat);
+    if (Lv.pos.length) out.lava = makeMesh(Lv.pos, Lv.col, Lv.uv, Lv.idx, lavaMat);
+    chunkMeshes[key] = out;
   }
 
   /* ---------------- 사람형/동물/프롭 메시 ---------------- */
@@ -832,7 +1266,7 @@
     const g = new THREE.Group();
     const mat = new THREE.MeshBasicMaterial({ color: 0x88ccff, transparent: true, opacity: 0.35 });
     const pedestal = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.15, 0.6), mat); pedestal.position.set(0, 0.08, 0); g.add(pedestal);
-    const label = makeLabel('+ 일꾼 배치'); label.position.set(0, 1.0, 0); g.add(label);
+    const label = makeLabel('+ 미니언 배치'); label.position.set(0, 1.0, 0); g.add(label);
     return g;
   }
   function buildNodeMarker(zoneKey) {
@@ -969,6 +1403,14 @@
     minionGroup = new THREE.Group(); scene.add(minionGroup);
     dynamicInteractables = [];
     const D0 = window.ECON_DATA; if (!D0) return;
+    if (worldMode === 'visit') {
+      // 방문 모드: 방문 대상의 미니언을 구경용으로 배치(상호작용 불가)
+      const ve = ((visitData && visitData.minions) || []).map((m, i) => ({ m, i, def: D0.MINIONS.find(x => x.key === m.key) })).filter(e => e.def);
+      HOME_MINION_SLOTS.forEach((slot, si) => { if (si < ve.length) placeMinionMesh(P0, D0, ve[si], slot); });
+      dynamicInteractables = [];
+      return;
+    }
+    if (worldMode !== 'home') return;   // 실제 스카이블럭: 미니언은 프라이빗 섬에서만 일한다
     const entries = P0.minions.map((m, i) => ({ m, i, def: D0.MINIONS.find(x => x.key === m.key) })).filter(e => e.def);
     if (worldMode === 'home') {
       // 프라이빗 섬: 모든 미니언이 받침대에 나란히(실제 스카이블럭처럼 내 섬에서 일함)
@@ -1008,7 +1450,8 @@
     }
   }
   function respawnAtHub(msg) {
-    if (worldMode === 'home') { P.x = 96.5; P.z = 100.5; P.y = surfaceTop(96, 100) + 0.02; }
+    if (worldMode === 'home' || worldMode === 'visit') { P.x = 96.5; P.z = 100.5; P.y = surfaceTop(96, 100) + 0.02; }
+    else if (worldMode !== 'hub') { const sp = (WORLD_DEFS[worldMode] || {}).spawn || [W >> 1, Dp >> 1]; P.x = sp[0] + 0.5; P.z = sp[1] + 0.5; P.y = surfaceTop(sp[0], sp[1]) + 0.02; }
     else { P.x = spawnX; P.y = spawnY; P.z = spawnZ; }
     P.vx = P.vy = P.vz = 0;
     if (msg && typeof toast === 'function') toast(msg, false);
@@ -1018,17 +1461,25 @@
     if (keys.KeyW) mf += 1; if (keys.KeyS) mf -= 1; if (keys.KeyA) ms -= 1; if (keys.KeyD) ms += 1;
     if (moveT.active) { const dx = moveT.x - moveT.ox, dy = moveT.y - moveT.oy; if (Math.abs(dx) > 8) ms += dx > 0 ? 1 : -1; if (Math.abs(dy) > 8) mf += dy < 0 ? 1 : -1; }
     const inWater = feetInWater();
-    const sprint = (keys.ControlLeft || keys.ControlRight) && mf > 0 && !inWater;
+    if (mf <= 0) P._sprintLatch = false;                    // 전진을 멈추면 스프린트 해제
+    const sprint = (P._sprintLatch || keys.ControlLeft || keys.ControlRight) && mf > 0 && !inWater;
     const sin = Math.sin(P.yaw), cos = Math.cos(P.yaw);
     let speed = keys.ShiftLeft ? 2.6 : (sprint ? 5.8 : 4.3);
     if (inWater) speed *= 0.55;
+    // 슈가 러시 인챈트 이동속도 보너스
+    if (window.econApi && window.econApi.moveSpeedPct) speed *= 1 + window.econApi.moveSpeedPct() / 100;
     let dx = (-sin * mf + cos * ms), dz = (-cos * mf - sin * ms);
     const len = Math.hypot(dx, dz); if (len > 0) { dx /= len; dz /= len; }
     P.vx = dx * speed; P.vz = dz * speed;
     const wantJump = keys.Space || (moveT.active && (moveT.y - moveT.oy) < -34);
     const jumpEdge = wantJump && !P._prevJump;   // 점프 키를 새로 누른 순간(더블점프 판정)
     P._prevJump = wantJump;
-    if (inWater) { P.vy -= 9 * dt; if (wantJump) P.vy += 22 * dt; if (P.vy < -4) P.vy = -4; if (P.vy > 5) P.vy = 5; P._djUsed = false; }
+    if (inWater) {
+      P.vy -= 9 * dt; if (wantJump) P.vy += 26 * dt; if (P.vy < -4) P.vy = -4; if (P.vy > 5) P.vy = 5; P._djUsed = false;
+      // 수면 근처에서 점프하면 뭍으로 뛰어오를 수 있게(허우적대다 못 나오는 문제 해결)
+      const headWater = getBlockLocal(Math.floor(P.x), Math.floor(P.y + 1.1), Math.floor(P.z)) === ID.water;
+      if (wantJump && !headWater) P.vy = 8.5;
+    }
     else {
       P.vy -= 32 * dt; if (P.vy < -78) P.vy = -78;
       if (wantJump && P.onGround) { P.vy = 8.5; P.onGround = false; }
@@ -1037,7 +1488,7 @@
     moveAxis('x', P.vx * dt); moveAxis('z', P.vz * dt); P.onGround = false; moveAxis('y', P.vy * dt);
     if (P.onGround) P._djUsed = false;
     if (feetInLava()) respawnAtHub('앗 뜨거워! 마을로 긴급 귀환했어요');
-    if (P.y < 1) respawnAtHub(worldMode === 'home' ? '공허에 떨어졌다! 섬으로 귀환' : '마을로 귀환했어요');
+    if (P.y < 1) respawnAtHub(worldMode === 'hub' ? '마을로 귀환했어요' : '공허에 떨어졌다! 섬으로 귀환');
   }
   function resetPlayerToSpawn() {
     spawnX = 96.5; spawnZ = 106.5; spawnY = surfaceTop(96, 106) + 0.02;
@@ -1048,18 +1499,36 @@
   function panelOpen() { const wrap = document.getElementById('econ3dPanelWrap'); return !!(wrap && wrap.style.display !== 'none'); }
   function relPos(e) { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
   function onPLC() { lookS.locked = (document.pointerLockElement === canvas); }
-  function onKey(e) { keys[e.code] = true; if (e.code === 'Space') e.preventDefault(); if (e.code === 'Escape') hidePanel(); if (e.code === 'KeyM') toggleMinimapSize(); }
+  function onKey(e) {
+    // 더블탭 W = 스프린트(마인크래프트 방식 — Ctrl+W는 브라우저와 충돌하므로)
+    if (e.code === 'KeyW' && !keys.KeyW) {
+      const now = performance.now();
+      if (now - (P._lastW || 0) < 280) P._sprintLatch = true;
+      P._lastW = now;
+    }
+    keys[e.code] = true;
+    if (e.code === 'Space') e.preventDefault();
+    if (e.code === 'Escape') hidePanel();
+    if (e.code === 'KeyM') toggleMinimapSize();
+  }
   function onKeyUp(e) { keys[e.code] = false; }
   function onDown(e) {
     if (panelOpen()) return;
     const p = relPos(e); const cw = canvas.clientWidth;
     if (!isTouch) {
       if (!lookS.locked) { canvas.requestPointerLock && canvas.requestPointerLock(); return; }
-      if (e.button === 2) { if (worldMode === 'home') homePlaceBlock(); return; }   // 우클릭: 블록 설치(내 섬)
+      if (e.button === 2) {
+        if (worldMode === 'home') { homePlaceBlock(); return; }
+        if (!fishing) startFishing();   // 우클릭: 물을 조준하면 낚시
+        return;
+      }
+      if (fishing) { reelFishing(); return; }             // 낚시 중 좌클릭 = 낚아채기
+      const mb = pickMob();
+      if (mb) { P._atkCd = 0.45; attackMobHit(mb); mouseHeld = true; return; }   // 몬스터 공격(꾹 누르면 연속)
       const t = currentAim();
-      if (t && t.type === 'node') { gathering = true; gatherZoneKey = t.ref.zone; }
-      else if (t) doInteract(t);
-      else if (worldMode === 'home') homeBreakBlock();   // 좌클릭: 블록 파괴(내 섬)
+      if (t) { doInteract(t); return; }
+      if (worldMode === 'home') { homeBreakBlock(); return; }   // 내 섬: 즉시 파괴(건축 모드)
+      mouseHeld = true;                                    // 채집: 꾹 누르는 동안 진행
       return;
     }
     if (p.x < cw * 0.4 && moveT.id === -1) { moveT.active = true; moveT.id = e.pointerId; moveT.ox = moveT.x = p.x; moveT.oy = moveT.y = p.y; }
@@ -1079,6 +1548,7 @@
     else if (e.pointerId === lookT.id) { const dx = p.x - lookT.lx, dy = p.y - lookT.ly; P.yaw -= dx * 0.005; P.pitch -= dy * 0.005; clampPitch(); lookT.lx = p.x; lookT.ly = p.y; lookT.moved = (lookT.moved || 0) + Math.abs(dx) + Math.abs(dy); }
   }
   function onUp(e) {
+    if (e.button === 0) { mouseHeld = false; breaking = null; const cr = document.getElementById('econ3dCross'); if (cr && !fishing) cr.textContent = '+'; }
     if (!isTouch) { if (e.button === 0) gathering = false; return; }
     if (e.pointerId === moveT.id) { moveT.active = false; moveT.id = -1; }
     else if (e.pointerId === lookT.id) {
@@ -1131,9 +1601,11 @@
     if (worldMode !== 'home') return false;
     const t = raycastBlock(); if (!t) return false;
     if (isPortalBlock(t.x, t.y, t.z)) { if (typeof toast === 'function') toast('포털은 부술 수 없어요', false); return false; }
+    const g0 = gatherBlocks()[t.id];
+    if (g0 && g0.res && (g0.chance == null || Math.random() < g0.chance) && econApi().gatherBlock) econApi().gatherBlock(g0.res, g0.fam);
     world[widx(t.x, t.y, t.z)] = 0;
     if (econApi().setHomeEdit) econApi().setHomeEdit(t.x, t.y, t.z, 0);
-    _meshDirty = true; _mapDirty = true;
+    markBlockDirty(t.x, t.z); _mapDirty = true;
     return true;
   }
   function homePlaceBlock() {
@@ -1148,11 +1620,385 @@
     const id = ID[BUILD_BLOCKS[selectedBlock]];
     world[widx(nx, ny, nz)] = id;
     if (econApi().setHomeEdit) econApi().setHomeEdit(nx, ny, nz, id);
-    _meshDirty = true; _mapDirty = true;
+    markBlockDirty(nx, nz); _mapDirty = true;
     return true;
   }
   function flushWorldEdits() {
-    if (_meshDirty) { _meshDirty = false; buildIslandMesh(worldMode === 'home' ? HOME_BOUNDS : null); }
+    if (_meshDirty) { _meshDirty = false; }
+    if (dirtyChunks.size) {
+      for (const k of dirtyChunks) { const p2 = k.split(','); buildChunk(Number(p2[0]), Number(p2[1])); }
+      dirtyChunks.clear();
+    }
+  }
+
+  /* ---------------- 인월드 채집: 블록을 직접 꾹 눌러 캔다(실제 스카이블럭 방식) ----------------
+     돌 → 캐면 조약돌 획득, 블록은 코블스톤으로 → 또 캐면 잠시 기반암 → 시간이 지나면 돌로 재생.
+     광석 → 캐면 자원 획득, 잠시 기반암 → 재생. 나무/작물도 캐면 잠시 사라졌다가 다시 자란다. */
+  let GB = null;
+  function gatherBlocks() {
+    if (GB) return GB;
+    GB = {};
+    GB[ID.stone] = { res: 'stone', fam: 'pickaxe', hard: 1.0, to: ID.cobblestone };
+    GB[ID.cobblestone] = { res: 'stone', fam: 'pickaxe', hard: 1.3, to: ID.bedrock, regen: 25, back: ID.stone };
+    const ores = { coal_ore: ['coal', 1.7, 30], iron_ore: ['iron', 2.1, 35], gold_ore: ['gold', 2.3, 40], lapis_ore: ['lapis', 2.1, 35], redstone_ore: ['redstone', 2.1, 35], diamond_ore: ['diamond', 3.4, 55], emerald_ore: ['emerald', 3.4, 55] };
+    for (const k in ores) GB[ID[k]] = { res: ores[k][0], fam: 'pickaxe', hard: ores[k][1], to: ID.bedrock, regen: ores[k][2], back: ID[k] };
+    GB[ID.obsidian] = { res: 'obsidian', fam: 'pickaxe', hard: 4.2, to: ID.bedrock, regen: 70, back: ID.obsidian };
+    GB[ID.oak_log] = { res: 'oaklog', fam: 'axe', hard: 0.9, to: 0, regen: 40, back: ID.oak_log };
+    GB[ID.birch_log] = { res: 'birchlog', fam: 'axe', hard: 0.9, to: 0, regen: 40, back: ID.birch_log };
+    GB[ID.spruce_log] = { res: 'sprucelog', fam: 'axe', hard: 1.0, to: 0, regen: 45, back: ID.spruce_log };
+    GB[ID.oak_leaves] = { res: 'apple', chance: 0.05, fam: 'axe', hard: 0.25, to: 0, regen: 55, back: ID.oak_leaves };
+    GB[ID.spruce_leaves] = { res: null, fam: 'axe', hard: 0.25, to: 0, regen: 55, back: ID.spruce_leaves };
+    GB[ID.wheat_ripe] = { res: 'wheat', fam: 'hoe', hard: 0.25, to: 0, regen: 18, back: ID.wheat_ripe };
+    GB[ID.carrot_ripe] = { res: 'carrot', fam: 'hoe', hard: 0.25, to: 0, regen: 18, back: ID.carrot_ripe };
+    GB[ID.potato_ripe] = { res: 'potato', fam: 'hoe', hard: 0.25, to: 0, regen: 18, back: ID.potato_ripe };
+    GB[ID.sugar_cane] = { res: 'sugarcane', fam: 'hoe', hard: 0.2, to: 0, regen: 20, back: ID.sugar_cane };
+    GB[ID.pumpkin] = { res: 'pumpkin', fam: 'hoe', hard: 0.5, to: 0, regen: 30, back: ID.pumpkin };
+    GB[ID.melon] = { res: 'melon', fam: 'hoe', hard: 0.5, to: 0, regen: 30, back: ID.melon };
+    return GB;
+  }
+  let breaking = null;          // {x,y,z, t, need}
+  let regenQueue = [];          // {x,y,z, back, at}
+  let mouseHeld = false;
+  function progressBreaking(dt) {
+    if (worldMode === 'home' || worldMode === 'visit') return;   // 내 섬은 건축 모드(즉시 파괴/설치)
+    const hit = raycastBlock();
+    if (!hit) { breaking = null; return; }
+    const g = gatherBlocks()[hit.id];
+    if (!g) { breaking = null; return; }
+    if (!breaking || breaking.x !== hit.x || breaking.y !== hit.y || breaking.z !== hit.z) {
+      const api = econApi();
+      const mul = api.toolMul ? api.toolMul(g.fam) : 1;
+      breaking = { x: hit.x, y: hit.y, z: hit.z, t: 0, need: g.hard / Math.max(0.4, mul) };
+    }
+    breaking.t += dt;
+    const cross = document.getElementById('econ3dCross');
+    if (cross) cross.textContent = Math.min(99, Math.round(breaking.t / breaking.need * 100)) + '%';
+    if (breaking.t < breaking.need) return;
+    // 파괴 완료 → 자원 지급 + 블록 전환 + 재생 예약
+    const api = econApi();
+    if (g.res && (g.chance == null || Math.random() < g.chance) && api.gatherBlock) api.gatherBlock(g.res, g.fam);
+    setW(hit.x, hit.y, hit.z, g.to);
+    if (g.regen) regenQueue.push({ x: hit.x, y: hit.y, z: hit.z, back: g.back, at: performance.now() + g.regen * 1000 });
+    markBlockDirty(hit.x, hit.z);
+    if (cross) cross.textContent = '+';
+    breaking = null;
+  }
+  function tickRegen() {
+    if (!regenQueue.length) return;
+    const now = performance.now();
+    for (let i = regenQueue.length - 1; i >= 0; i--) {
+      const q = regenQueue[i];
+      if (now < q.at) continue;
+      if (getBlockLocal(q.x, q.y, q.z) === ID.bedrock || getBlockLocal(q.x, q.y, q.z) === 0) {
+        setW(q.x, q.y, q.z, q.back); markBlockDirty(q.x, q.z);
+      }
+      regenQueue.splice(i, 1);
+    }
+  }
+  function restoreAllRegen() {   // 월드 이탈 시 즉시 원상복구(캐시된 월드가 영구 고갈되지 않게)
+    for (const q of regenQueue) if (getBlockLocal(q.x, q.y, q.z) === ID.bedrock || getBlockLocal(q.x, q.y, q.z) === 0) setW(q.x, q.y, q.z, q.back);
+    regenQueue = []; breaking = null;
+  }
+
+  /* ---------------- 낚시(실제로 물에 찌 던지고 기다렸다 낚아채기) ---------------- */
+  let fishing = null;           // {x,y,z, bobber, state:'wait'|'bite', biteAt, biteUntil}
+  function raycastWater(maxD) {
+    const d = lookDir(); let x = P.x, y = P.y + P.eye, z = P.z;
+    for (let i = 0; i < maxD * 10; i++) {
+      x += d.x * 0.1; y += d.y * 0.1; z += d.z * 0.1;
+      const id = getBlockLocal(Math.floor(x), Math.floor(y), Math.floor(z));
+      if (id === ID.water) return { x, y: Math.floor(y) + 0.95, z };
+      if (id !== 0 && BLOCKS[id] && BLOCKS[id].solid) return null;
+    }
+    return null;
+  }
+  function startFishing() {
+    const api = econApi();
+    if (!api.hasTool || !api.hasTool('rod')) { if (typeof toast === 'function') toast('낚싯대가 필요해요 (참나무 8 + 거미줄 2 조합)', false); return false; }
+    const w = raycastWater(7);
+    if (!w) return false;
+    const bob = new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 6), new THREE.MeshBasicMaterial({ color: 0xff4444 }));
+    bob.position.set(w.x, w.y, w.z); scene.add(bob);
+    fishing = { x: w.x, y: w.y, z: w.z, bobber: bob, state: 'wait', biteAt: performance.now() + 2000 + Math.random() * 4000 };
+    if (typeof toast === 'function') toast('🎣 찌를 던졌어요... 입질이 오면 클릭!', true);
+    return true;
+  }
+  function stopFishing() { if (fishing) { scene.remove(fishing.bobber); fishing.bobber.geometry.dispose(); fishing = null; } }
+  function tickFishing() {
+    if (!fishing) return;
+    const now = performance.now();
+    if (Math.hypot(P.vx, P.vz) > 0.5) { stopFishing(); return; }   // 움직이면 취소
+    if (fishing.state === 'wait') {
+      fishing.bobber.position.y = fishing.y + Math.sin(now / 300) * 0.05;
+      if (now >= fishing.biteAt) {
+        fishing.state = 'bite'; fishing.biteUntil = now + 1600;
+        fishing.bobber.position.y = fishing.y - 0.25;
+        const cross = document.getElementById('econ3dCross');
+        if (cross) cross.textContent = '❗';
+        if (typeof toast === 'function') toast('❗ 입질이다! 지금 클릭!', true);
+      }
+    } else if (now > fishing.biteUntil) {
+      fishing.state = 'wait'; fishing.biteAt = now + 2000 + Math.random() * 4000;
+      const cross = document.getElementById('econ3dCross'); if (cross) cross.textContent = '+';
+    }
+  }
+  function reelFishing() {
+    if (!fishing) return false;
+    const api = econApi();
+    if (fishing.state === 'bite' && api.fishCatch) {
+      const r = api.fishCatch();
+      if (r) {
+        if (typeof toast === 'function') toast(`🎣 ${r.name} ×${r.n}${r.extra && r.extra.kind === 'treasure' ? ` + 보물 ${r.extra.coins}G!` : ''}`, true);
+        if (r.extra && r.extra.kind === 'seaCreature') spawnSeaCreature(fishing.x, fishing.z);
+      }
+    }
+    const cross = document.getElementById('econ3dCross'); if (cross) cross.textContent = '+';
+    stopFishing();
+    return true;
+  }
+
+  /* ---------------- 인월드 몬스터(실제 스카이블럭식: 이름 위 [Lv] 이름 ❤HP, 변종/정예) ---------------- */
+  const MOB_TYPES = {
+    zombie: { name: '좀비', kind: 'humanoid', color: 0x3a7d3a, hp: 100, dmg: 12, xp: 6, coins: 5, speed: 1.7, drops: [{ key: 'rotten_flesh', n: 1 }, { key: 'rotten_flesh', n: 2, chance: 0.3 }], tierCap: 1 },
+    crypt_ghoul: { name: '지하 구울', kind: 'humanoid', color: 0x5a8a5a, hp: 500, dmg: 40, xp: 25, coins: 15, speed: 2.2, drops: [{ key: 'rotten_flesh', n: 3 }, { key: 'gold', n: 1, chance: 0.25 }], tierCap: 3 },
+    skeleton: { name: '스켈레톤', kind: 'humanoid', color: 0xcccccc, hp: 90, dmg: 15, xp: 7, coins: 6, speed: 1.8, drops: [{ key: 'bone', n: 1 }, { key: 'bone', n: 2, chance: 0.4 }], tierCap: 1 },
+    spider: { name: '거미', kind: 'quad', color: 0x3a3040, hp: 80, dmg: 11, xp: 6, coins: 5, speed: 2.4, drops: [{ key: 'string', n: 1 }, { key: 'string', n: 2, chance: 0.35 }], tierCap: 1 },
+    slime: { name: '슬라임', kind: 'slime', color: 0x5ac26a, hp: 120, dmg: 14, xp: 8, coins: 7, speed: 1.4, drops: [{ key: 'emerald', n: 1, chance: 0.08 }], tierCap: 2 },
+    wolf: { name: '늑대', kind: 'quad', color: 0x9a9a9a, hp: 160, dmg: 20, xp: 10, coins: 9, speed: 2.8, drops: [{ key: 'bone', n: 2 }], tierCap: 2 },
+    sea_walker: { name: '바다 보행자', kind: 'humanoid', color: 0x2a6a8a, hp: 300, dmg: 25, xp: 20, coins: 18, speed: 1.6, drops: [{ key: 'prismarine', n: 2 }, { key: 'sponge', n: 1, chance: 0.15 }], tierCap: 3 },
+    enderman: { name: '엔더맨', kind: 'tall', color: 0x1a1a22, hp: 800, dmg: 60, xp: 40, coins: 30, speed: 2.6, drops: [{ key: 'ender_pearl', n: 1, chance: 0.5 }], tierCap: 4 },
+    blaze: { name: '블레이즈', kind: 'slime', color: 0xe8a020, hp: 600, dmg: 50, xp: 35, coins: 25, speed: 2.0, drops: [{ key: 'blaze_rod', n: 1, chance: 0.6 }], tierCap: 4 },
+  };
+  // 스폰 구역: 실제 스카이블럭처럼 특정 지역에 특정 몬스터(레벨 범위 내 변종 + 5% 정예 ★)
+  let SPAWN_AREAS = [
+    { world: 'hub', x: 38, z: 152, r: 18, types: ['zombie', 'skeleton'], lv: [1, 6], cap: 6, respawn: 9 },      // 슬레이어 황무지: 묘지
+    { world: 'hub', x: 26, z: 160, r: 10, types: ['crypt_ghoul'], lv: [24, 30], cap: 2, respawn: 20 },          // 황무지 심부
+    { world: 'hub', x: 26, z: 87, r: 9, types: ['slime'], lv: [3, 8], cap: 3, respawn: 14 },                    // 광산 챔버
+    { world: 'hub', x: 38, z: 34, r: 14, types: ['wolf'], lv: [6, 12], cap: 3, respawn: 16 },                   // 숲
+    { world: 'hub', x: 152, z: 40, r: 12, types: ['spider'], lv: [2, 6], cap: 4, respawn: 12 },                 // 농장 외곽
+  ];
+  SPAWN_AREAS = SPAWN_AREAS.concat([
+    { world: 'spider', x: 64, z: 64, r: 44, types: ['spider'], lv: [2, 13], cap: 12, respawn: 7 },
+    { world: 'spider', x: 64, z: 52, r: 12, types: ['spider'], lv: [12, 13], cap: 3, respawn: 15 },
+    { world: 'deep', x: 48, z: 48, r: 30, types: ['slime'], lv: [5, 10], cap: 6, respawn: 12 },
+    { world: 'deep', x: 48, z: 48, r: 26, types: ['zombie'], lv: [10, 20], cap: 4, respawn: 14 },
+    { world: 'gold', x: 56, z: 46, r: 26, types: ['zombie', 'skeleton'], lv: [8, 15], cap: 5, respawn: 12 },
+    { world: 'nether', x: 64, z: 40, r: 16, types: ['blaze'], lv: [12, 25], cap: 5, respawn: 13 },
+    { world: 'nether', x: 64, z: 80, r: 30, types: ['skeleton'], lv: [10, 20], cap: 5, respawn: 12 },
+    { world: 'end', x: 64, z: 64, r: 44, types: ['enderman'], lv: [42, 50], cap: 6, respawn: 14 },
+    { world: 'end', x: 64, z: 30, r: 9, types: ['enderman'], lv: [55, 55], cap: 2, respawn: 25 },   // 젤롯 둥지
+    { world: 'park', x: 72, z: 72, r: 40, types: ['wolf'], lv: [8, 15], cap: 4, respawn: 15 },
+  ]);
+  let mobs = [];               // {type,def,lv,elite,hp,maxHp,dmg,mesh,label,labelCv,area,state,tx,tz,atkCd,hitIdx,dead}
+  let _spawnT = 0;
+  function mkMobLabel(mob) {
+    const cv = document.createElement('canvas'); cv.width = 256; cv.height = 64;
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false, transparent: true }));
+    spr.scale.set(2.2, 0.55, 1);
+    mob.labelCv = cv; mob.label = spr;
+    drawMobLabel(mob);
+    return spr;
+  }
+  function drawMobLabel(mob) {
+    const c = mob.labelCv.getContext('2d');
+    c.clearRect(0, 0, 256, 64);
+    c.fillStyle = 'rgba(0,0,0,0.55)'; c.fillRect(0, 0, 256, 40);
+    c.textAlign = 'center'; c.font = 'bold 22px sans-serif';
+    c.fillStyle = mob.elite ? '#ff7ad9' : '#aefda6';
+    c.fillText(`${mob.elite ? '★ ' : ''}[Lv ${mob.lv}] ${mob.def.name}`, 128, 21);
+    c.fillStyle = '#222'; c.fillRect(28, 44, 200, 12);
+    c.fillStyle = '#e5484d'; c.fillRect(28, 44, Math.max(2, 200 * mob.hp / mob.maxHp), 12);
+    c.fillStyle = '#fff'; c.font = 'bold 12px sans-serif';
+    c.fillText(`❤ ${Math.max(0, Math.ceil(mob.hp))}/${mob.maxHp}`, 128, 54);
+    mob.label.material.map.needsUpdate = true;
+  }
+  function buildMobMesh(def, elite) {
+    let h;
+    if (def.kind === 'quad') h = buildQuadruped(def.color, 0.9);
+    else if (def.kind === 'slime') { const g = new THREE.Group(); const m = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9, 0.9), new THREE.MeshBasicMaterial({ color: def.color, transparent: true, opacity: 0.85 })); m.position.y = 0.45; g.add(m); h = { group: g, legs: [] }; }
+    else if (def.kind === 'tall') { h = buildHumanoid(def.color); h.group.scale.set(1, 1.45, 1); }
+    else h = buildHumanoid(def.color);
+    if (elite) h.group.scale.multiplyScalar(1.25);
+    return h;
+  }
+  function spawnMob(area, typeKey, lv, customDef) {
+    const def = customDef || MOB_TYPES[typeKey]; if (!def) return null;
+    const a = Math.random() * Math.PI * 2, rr = Math.random() * area.r * 0.8;
+    const x = area.x + Math.cos(a) * rr, z = area.z + Math.sin(a) * rr;
+    const y = surfaceTop(Math.floor(x), Math.floor(z));
+    if (y <= SEA + 1 && worldMode === 'hub') return null;   // 물 위 스폰 방지
+    const elite = !customDef && Math.random() < 0.05;
+    const mul = 1 + (lv - 1) * 0.35;
+    const mob = {
+      type: typeKey, def, lv, elite,
+      maxHp: Math.round(def.hp * mul * (elite ? 2.5 : 1)),
+      dmg: Math.round(def.dmg * mul * (elite ? 1.5 : 1)),
+      state: 'wander', tx: x, tz: z, atkCd: 0, hitIdx: 0, area, walkT: Math.random() * 6,
+    };
+    mob.hp = mob.maxHp;
+    const h = buildMobMesh(def, elite);
+    mob.mesh = h.group; mob.legs = h.legs || []; mob.legL = h.legL; mob.legR = h.legR;
+    mob.mesh.position.set(x, y, z);
+    const lbl = mkMobLabel(mob);
+    lbl.position.set(0, def.kind === 'tall' ? 3.2 : 2.4, 0);
+    mob.mesh.add(lbl);
+    scene.add(mob.mesh);
+    mobs.push(mob);
+    return mob;
+  }
+  function spawnSeaCreature(x, z) {
+    const area = { x, z, r: 3, world: worldMode };
+    const mob = spawnMob(area, 'sea_walker', 5 + Math.floor(Math.random() * 20));
+    if (mob && typeof toast === 'function') toast('🌊 바다 생물이 낚였다! 전투 준비!', false);
+    if (mob) { mob.state = 'chase'; }
+  }
+  function clearMobs() { for (const m of mobs) { scene.remove(m.mesh); disposeGroup(m.mesh); } mobs = []; }
+  function tickMobs(dt) {
+    // 스폰 유지(구역별 밀도 관리)
+    _spawnT += dt;
+    if (_spawnT > 2.5) {
+      _spawnT = 0;
+      for (const area of SPAWN_AREAS) {
+        if (area.world !== worldMode) continue;
+        const cur = mobs.filter(m => m.area === area && !m.dead).length;
+        if (cur < area.cap) {
+          const t = area.types[Math.floor(Math.random() * area.types.length)];
+          spawnMob(area, t, area.lv[0] + Math.floor(Math.random() * (area.lv[1] - area.lv[0] + 1)));
+        }
+      }
+    }
+    const api = econApi();
+    for (let i = mobs.length - 1; i >= 0; i--) {
+      const m = mobs[i];
+      if (m.dead) continue;
+      const mp = m.mesh.position;
+      const dx = P.x - mp.x, dz = P.z - mp.z;
+      const distP = Math.hypot(dx, dz);
+      const aggro = m.elite ? 14 : 10;
+      if (distP < aggro && Math.abs(P.y - mp.y) < 4) m.state = 'chase';
+      else if (distP > aggro * 2) m.state = 'wander';
+      let mvx = 0, mvz = 0;
+      if (m.state === 'chase') {
+        if (distP > 1.5) { mvx = dx / distP; mvz = dz / distP; }
+        m.atkCd -= dt;
+        if (distP < 1.8 && m.atkCd <= 0) {
+          m.atkCd = 1.3;
+          const defPct = api.defensePct ? api.defensePct(php && php.hp <= php.max * 0.3) : 0;
+          damagePlayer(m.dmg * (0.85 + Math.random() * 0.3) * (1 - defPct));
+        }
+      } else {
+        const wdx = m.tx - mp.x, wdz = m.tz - mp.z;
+        if (Math.hypot(wdx, wdz) < 0.8) { const a = Math.random() * Math.PI * 2, rr = Math.random() * m.area.r * 0.8; m.tx = m.area.x + Math.cos(a) * rr; m.tz = m.area.z + Math.sin(a) * rr; }
+        else { const l = Math.hypot(wdx, wdz); mvx = wdx / l * 0.4; mvz = wdz / l * 0.4; }
+      }
+      if (mvx || mvz) {
+        const sp = m.def.speed * (m.state === 'chase' ? 1 : 0.5);
+        const nx = mp.x + mvx * sp * dt, nz = mp.z + mvz * sp * dt;
+        const ny = surfaceTop(Math.floor(nx), Math.floor(nz));
+        if (ny - mp.y < 1.6 && ny > SEA) { mp.x = nx; mp.z = nz; mp.y += (ny - mp.y) * Math.min(1, dt * 8); }
+        m.mesh.rotation.y = Math.atan2(mvx, mvz);
+        m.walkT += dt * 7;
+        const sw = Math.sin(m.walkT) * 0.5;
+        if (m.legL) { m.legL.rotation.x = sw; m.legR.rotation.x = -sw; }
+        for (let li = 0; li < m.legs.length; li++) m.legs[li].rotation.x = (li % 2 ? sw : -sw);
+      }
+    }
+  }
+  // 시선 광선으로 몬스터 조준(가까운 순)
+  function pickMob() {
+    const d = lookDir(); let best = null, bestAlong = 3.8;
+    for (const m of mobs) {
+      if (m.dead) continue;
+      const mp = m.mesh.position;
+      const vx = mp.x - P.x, vy = (mp.y + 1.0) - (P.y + P.eye), vz = mp.z - P.z;
+      const along = vx * d.x + vy * d.y + vz * d.z;
+      if (along < 0.2 || along > 3.8) continue;
+      const px = vx - d.x * along, py = vy - d.y * along, pz = vz - d.z * along;
+      if (Math.hypot(px, py, pz) < (m.elite ? 1.2 : 0.95) && along < bestAlong) { best = m; bestAlong = along; }
+    }
+    return best;
+  }
+  function attackMobHit(m) {
+    const api = econApi(); if (!api.attackMob) return;
+    const r = api.attackMob({ hitIdx: m.hitIdx, hp: m.hp, maxHp: m.maxHp, isBoss: false });
+    m.hitIdx++;
+    m.hp -= r.dmg;
+    if (php && r.heal) php.hp = Math.min(php.max, php.hp + r.heal);
+    spawnDmgText(m.mesh.position, r.dmg, r.crit);
+    // 넉백
+    const kb = 0.7; const dx = m.mesh.position.x - P.x, dz = m.mesh.position.z - P.z; const l = Math.hypot(dx, dz) || 1;
+    m.mesh.position.x += dx / l * kb; m.mesh.position.z += dz / l * kb;
+    m.state = 'chase';
+    if (m.hp <= 0) {
+      m.dead = true;
+      const lvMul = 1 + (m.lv - 1) * 0.12;
+      if (api.mobKilled) api.mobKilled({
+        name: `[Lv ${m.lv}] ${m.def.name}${m.elite ? '★' : ''}`,
+        coins: Math.round(m.def.coins * lvMul * (m.elite ? 3 : 1)),
+        xp: Math.round(m.def.xp * lvMul * (m.elite ? 3 : 1)),
+        drops: m.def.drops, tierCap: m.def.tierCap + (m.elite ? 1 : 0),
+      });
+      scene.remove(m.mesh); disposeGroup(m.mesh);
+      mobs.splice(mobs.indexOf(m), 1);
+      if (worldMode === 'dungeon') onDungeonMobDead(m);
+    } else drawMobLabel(m);
+  }
+  // 떠오르는 피해 숫자
+  let dmgTexts = [];
+  function spawnDmgText(pos, dmg, crit) {
+    const cv = document.createElement('canvas'); cv.width = 128; cv.height = 48;
+    const c = cv.getContext('2d'); c.textAlign = 'center'; c.font = `bold ${crit ? 30 : 24}px sans-serif`;
+    c.fillStyle = crit ? '#ffb020' : '#ffffff'; c.strokeStyle = '#000'; c.lineWidth = 3;
+    const txt = (crit ? '✧' : '') + Math.round(dmg).toLocaleString();
+    c.strokeText(txt, 64, 32); c.fillText(txt, 64, 32);
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false, transparent: true }));
+    spr.scale.set(1.4, 0.55, 1);
+    spr.position.set(pos.x + (Math.random() - 0.5) * 0.6, pos.y + 1.8, pos.z + (Math.random() - 0.5) * 0.6);
+    scene.add(spr);
+    dmgTexts.push({ spr, t: 0 });
+  }
+  function tickDmgTexts(dt) {
+    for (let i = dmgTexts.length - 1; i >= 0; i--) {
+      const d = dmgTexts[i]; d.t += dt;
+      d.spr.position.y += dt * 1.2;
+      d.spr.material.opacity = Math.max(0, 1 - d.t / 0.7);
+      if (d.t > 0.7) { scene.remove(d.spr); d.spr.material.map.dispose(); d.spr.material.dispose(); dmgTexts.splice(i, 1); }
+    }
+  }
+
+  /* ---------------- 플레이어 HP/피격/사망 ---------------- */
+  let php = null;               // {hp, max, lastHitAt}
+  function ensurePhp() {
+    const api = econApi();
+    const max = api.maxHp ? api.maxHp() : 100;
+    if (!php) php = { hp: max, max, lastHitAt: 0 };
+    else { php.max = max; if (php.hp > max) php.hp = max; }
+  }
+  function damagePlayer(dmg) {
+    if (!php) return;
+    php.hp -= dmg; php.lastHitAt = performance.now();
+    spawnDmgText({ x: P.x, y: P.y, z: P.z }, dmg, false);
+    if (php.hp <= 0) {
+      const api = econApi();
+      if (api.playerDied) api.playerDied();
+      php.hp = php.max;
+      if (worldMode === 'dungeon' && dungeonState) dungeonState.deaths++;
+      respawnAtHub('');
+    }
+    updateHpHud();
+  }
+  function tickPlayerVitals(dt) {
+    ensurePhp();
+    if (php.hp < php.max && performance.now() - php.lastHitAt > 5000) {
+      php.hp = Math.min(php.max, php.hp + php.max * 0.02 * dt);   // 전투 이탈 5초 후 초당 2% 재생
+      updateHpHud();
+    }
+  }
+  let _hpHudT = 0;
+  function updateHpHud() {
+    const bar = document.getElementById('econ3dHpFill'), txt = document.getElementById('econ3dHpTxt');
+    if (bar && php) bar.style.width = Math.max(0, php.hp / php.max * 100) + '%';
+    if (txt && php) txt.textContent = `❤ ${Math.max(0, Math.ceil(php.hp))}/${php.max}`;
   }
 
   /* ---------------- 상호작용(콘 조준) ---------------- */
@@ -1164,22 +2010,87 @@
       FAIRY_SPOTS.forEach(fs => interactables.push({ type: 'fairy', ref: fs, x: fs.x + 0.5, y: fs._y + 0.6, z: fs.z + 0.5 }));
     }
     const portal = PORTALS[worldMode];
-    const py = surfaceTop(portal.x, portal.z);
-    interactables.push({ type: 'portal', ref: portal, x: portal.x + 0.5, y: py + 1.5, z: portal.z + 0.5 });
+    if (portal) {
+      const py = surfaceTop(portal.x, portal.z);
+      interactables.push({ type: 'portal', ref: portal, x: portal.x + 0.5, y: py + 1.5, z: portal.z + 0.5 });
+    }
+    for (const wp of (WARPS[worldMode] || [])) {
+      const wy = wp._y || surfaceTop(wp.x, wp.z);
+      interactables.push({ type: 'warp', ref: wp, x: wp.x + 0.5, y: wy + 0.8, z: wp.z + 0.5 });
+    }
   }
   function currentAim() {
-    const d = lookDir(); let best = null, bestDot = DOT_MIN;
+    const d = lookDir(); let best = null, bestPerp = 0.8;   // 시선 광선에서 0.8블록 이내만 선택(정조준 요구)
     const api = econApi();
-    const all = interactables.concat(dynamicInteractables);
+    let all = interactables.concat(dynamicInteractables);
+    // 다른 플레이어 아바타도 조준 대상(E키 → 멀티 패널: 거래/파티/방문)
+    if (worldMode === 'hub') {
+      for (const id in others) {
+        const o = others[id];
+        all = all.concat([{ type: 'player', ref: { id }, x: o.mesh.position.x, y: o.mesh.position.y + 1.0, z: o.mesh.position.z }]);
+      }
+    }
     for (const it of all) {
       if (it.type === 'fairy' && api.fairySoulCollected(it.ref.id)) continue;
       const vx = it.x - P.x, vy = it.y - (P.y + P.eye), vz = it.z - P.z;
-      const dist = Math.hypot(vx, vy, vz); if (dist > REACH || dist < 0.01) continue;
-      const dot = (vx * d.x + vy * d.y + vz * d.z) / dist;
-      if (dot > bestDot) { bestDot = dot; best = it; }
+      const along = vx * d.x + vy * d.y + vz * d.z;         // 시선 방향 투영 거리
+      if (along < 0.2 || along > REACH) continue;           // 뒤/사거리 밖 제외
+      const px = vx - d.x * along, py = vy - d.y * along, pz = vz - d.z * along;
+      const perp = Math.hypot(px, py, pz);                  // 광선과의 수직 거리
+      if (perp < bestPerp) { bestPerp = perp; best = it; }
     }
     return best;
   }
+  /* ---------------- 멀티: 다른 플레이어 아바타(허브 공유 월드) ---------------- */
+  function makeOtherAvatar(name) {
+    const h = buildHumanoid(0x2b6cb0);   // 파란 스킨 = 다른 플레이어
+    const tag = makeLabel(String(name || 'Player').slice(0, 12));
+    tag.position.set(0, 2.35, 0);
+    h.group.add(tag);
+    scene.add(h.group);
+    return { mesh: h.group, legL: h.legL, legR: h.legR, walkT: 0, walkAmp: 0, tx: null, ty: null, tz: null, tyaw: 0 };
+  }
+  function removeOtherAvatar(id) {
+    const o = others[id]; if (!o) return;
+    if (scene) { scene.remove(o.mesh); disposeGroup(o.mesh); }
+    delete others[id];
+  }
+  function updateNetAvatars(dt) {
+    const n = window.econNet; if (!n || !n.isActive()) { for (const id in others) removeOtherAvatar(id); return; }
+    const peers = n.peers();
+    // 같은 허브(공유 월드)에 있는 플레이어만 렌더 — 프라이빗 섬은 각자의 공간
+    for (const id in peers) {
+      const p = peers[id];
+      const sameWorld = worldMode === 'hub' && p.world === 'hub';
+      if (!sameWorld) { if (others[id]) removeOtherAvatar(id); continue; }
+      let o = others[id];
+      if (!o) { o = others[id] = makeOtherAvatar(p.name); o.mesh.position.set(p.x, p.y, p.z); }
+      o.tx = p.x; o.ty = p.y; o.tz = p.z; o.tyaw = p.yaw || 0;
+    }
+    for (const id in others) if (!peers[id]) removeOtherAvatar(id);
+    // 지수 감쇠 보간(프레임레이트 무관) + 걷기 스윙
+    for (const id in others) {
+      const o = others[id]; if (o.tx == null) continue;
+      const k = 1 - Math.exp(-dt * 12);
+      const dist = Math.hypot(o.tx - o.mesh.position.x, o.tz - o.mesh.position.z);
+      o.mesh.position.x += (o.tx - o.mesh.position.x) * k;
+      o.mesh.position.y += (o.ty - o.mesh.position.y) * k;
+      o.mesh.position.z += (o.tz - o.mesh.position.z) * k;
+      let dyaw = o.tyaw - o.mesh.rotation.y; dyaw = Math.atan2(Math.sin(dyaw), Math.cos(dyaw));
+      o.mesh.rotation.y += dyaw * k;
+      o.walkAmp += (((dist > 0.05) ? 0.6 : 0) - o.walkAmp) * Math.min(1, dt * 6);
+      o.walkT += dt * 8;
+      const sw = Math.sin(o.walkT) * o.walkAmp;
+      if (o.legL) o.legL.rotation.x = sw;
+      if (o.legR) o.legR.rotation.x = -sw;
+    }
+  }
+  function netTick(dt) {
+    const n = window.econNet; if (!n) return;
+    n.tick(dt, P, worldMode);
+    updateNetAvatars(dt);
+  }
+
   function gatherAt(zoneKey) { if (typeof window.econAct === 'function') window.econAct('econ_gather', { dataset: { key: zoneKey } }); }
   function openPanelForZone(zoneKey, tab) {
     if (typeof window.econAct !== 'function') return;
@@ -1192,6 +2103,8 @@
     if (t.type === 'npc') openPanelForZone(t.ref.zone, t.ref.tab);
     else if (t.type === 'minion' || t.type === 'emptySlot') openPanelForZone('hub', 'minions');
     else if (t.type === 'fairy') { econApi().collectFairySoul(t.ref.id); refreshFairyVisibility(); }
+    else if (t.type === 'player') openPanelForZone('hub', 'multi');
+    else if (t.type === 'warp') warpTo(t.ref.dest);
     else if (t.type === 'portal') travelTo(t.ref.target);
   }
   function showPanel() {
@@ -1231,38 +2144,46 @@
   /* ---------------- 낮밤/하늘 ---------------- */
   function mixHex(a, b, t) { t = Math.max(0, Math.min(1, t)); const ca = hx(a), cb = hx(b); return `rgb(${Math.round(ca[0] + (cb[0] - ca[0]) * t)},${Math.round(ca[1] + (cb[1] - ca[1]) * t)},${Math.round(ca[2] + (cb[2] - ca[2]) * t)})`; }
   function hx(c) { c = c.replace('#', ''); return [parseInt(c.slice(0, 2), 16), parseInt(c.slice(2, 4), 16), parseInt(c.slice(4, 6), 16)]; }
-  function dayFactor() {
-    const f = (worldTime % DAY_LEN) / DAY_LEN;
-    const sun = Math.cos((f - 0.25) * 2 * Math.PI);
-    const t = (sun + 1) / 2; const s = t * t * (3 - 2 * t);
-    return 0.30 + s * 0.70;
-  }
-  let _lastSkyD = -1;
+  // 실제 스카이블럭처럼 월드마다 시간대가 "고정"이다(같은 장소는 항상 같은 시간).
+  // 야간투시는 기본 패시브: 어두운 월드에서도 블록 밝기 하한 0.85로 항상 잘 보인다.
+  const WORLD_AMBIENCE = {
+    hub:    { light: 1.00, sky: ['#3f7fc8', '#76adde', '#bfe0f5'], fog: '#9fc6ea' },   // 항상 정오
+    home:   { light: 1.00, sky: ['#3f7fc8', '#76adde', '#bfe0f5'], fog: '#9fc6ea' },
+    visit:  { light: 1.00, sky: ['#3f7fc8', '#76adde', '#bfe0f5'], fog: '#9fc6ea' },
+    barn:   { light: 0.95, sky: ['#4f8fd0', '#86b8e4', '#cfe8f8'], fog: '#a8cfee' },   // 밝은 오전
+    mushroom: { light: 0.72, sky: ['#5a3f68', '#9a6a7e', '#e8a06a'], fog: '#b88a8e' }, // 항상 노을
+    park:   { light: 0.90, sky: ['#3a72b8', '#6aa0d0', '#b0d8ea'], fog: '#98c0e0' },
+    gold:   { light: 0.85, sky: ['#c08a3f', '#d8aa5f', '#f0d09a'], fog: '#d0b080' },   // 항상 늦은 오후
+    deep:   { light: 0.35, sky: ['#07070c', '#0c0c14', '#14141f'], fog: '#101018' },   // 지하(항상 어둠)
+    spider: { light: 0.55, sky: ['#1a2416', '#2c3a24', '#4a5a38'], fog: '#37452c' },   // 항상 음침한 황혼
+    nether: { light: 0.60, sky: ['#280808', '#481010', '#802020'], fog: '#581818' },   // 항상 지옥빛
+    end:    { light: 0.45, sky: ['#0c0714', '#1c1028', '#382050'], fog: '#241636' },   // 항상 보랏빛 밤
+    dungeonhub: { light: 0.50, sky: ['#0a0e18', '#141c2c', '#243048'], fog: '#1c2436' }, // 항상 자정
+    dungeon: { light: 0.45, sky: ['#0c0808', '#181010', '#281c1c'], fog: '#1c1414' },
+  };
+  function worldAmbience() { return WORLD_AMBIENCE[worldMode] || WORLD_AMBIENCE.hub; }
+  function dayFactor() { return worldAmbience().light; }
+  let _lastSkyKey = '';
   function updateSky() {
-    const d = dayFactor();
-    const k = Math.max(0, Math.min(1, (d - 0.30) / 0.70));
-    if (scene.fog) scene.fog.color.set(mixHex('#0a0e18', '#9fc6ea', k));
-    if (Math.abs(d - _lastSkyD) > 0.02) {
-      _lastSkyD = d;
-      const el = document.getElementById('econ3dSky');
-      if (el) {
-        const top = mixHex('#04060c', '#3f7fc8', k), mid = mixHex('#070b14', '#76adde', k);
-        let hor = mixHex('#0c1320', '#bfe0f5', k);
-        const dusk = 1 - Math.abs(k - 0.5) * 2;
-        if (dusk > 0.08) hor = mixHex(hor, '#f4a25a', dusk * 0.55);
-        el.style.background = `linear-gradient(${top} 0%, ${mid} 55%, ${hor} 100%)`;
-      }
-    }
-    if (blockMat) blockMat.color.setScalar(d);
-    if (waterMat) waterMat.color.setScalar(d);
-    if (plantMat) plantMat.color.setScalar(d);
-    if (lavaMat) lavaMat.color.setScalar(Math.max(0.7, d));
+    if (_lastSkyKey === worldMode) return;
+    _lastSkyKey = worldMode;
+    const A = worldAmbience();
+    if (scene.fog) scene.fog.color.set(A.fog);
+    const el = document.getElementById('econ3dSky');
+    if (el) el.style.background = `linear-gradient(${A.sky[0]} 0%, ${A.sky[1]} 55%, ${A.sky[2]} 100%)`;
+    const nv = Math.max(0.85, A.light);   // 야간투시 패시브: 블록은 항상 밝게
+    if (blockMat) blockMat.color.setScalar(nv);
+    if (waterMat) waterMat.color.setScalar(nv);
+    if (plantMat) plantMat.color.setScalar(nv);
+    if (lavaMat) lavaMat.color.setScalar(1.0);
   }
 
   /* ---------------- 존 배너 + 미니맵 + HUD ---------------- */
   function updateBanner() {
     let key, name;
     if (worldMode === 'home') { key = 'home'; name = '🏝️ 나의 섬'; }
+    else if (worldMode === 'visit') { key = 'visit'; name = `🏝️ ${(visitData && visitData.name) || '친구'}의 섬`; }
+    else if (worldMode !== 'hub') { key = worldMode; name = (WORLD_DEFS[worldMode] || {}).name || ''; }
     else {
       key = zoneAt(Math.floor(P.x), Math.floor(P.z));
       const isl = ISLANDS.find(i => i.key === key);
@@ -1280,6 +2201,13 @@
   const MAP_COLORS = {};
   function mapColor(id) {
     if (id === 0) return '#0d1524';   // 공허/하늘(내 섬 미니맵에서 섬 실루엣이 보이도록)
+    if (id === ID.netherrack) return '#6e2626';
+    if (id === ID.soul_sand) return '#4a3828';
+    if (id === ID.nether_bricks) return '#2e1618';
+    if (id === ID.end_stone) return '#dddf9f';
+    if (id === ID.dark_oak_leaves) return '#254a1a';
+    if (id === ID.jungle_leaves) return '#3aa02e';
+    if (id === ID.acacia_leaves) return '#6a8a30';
     if (MAP_COLORS[id]) return MAP_COLORS[id];
     const key = BLOCKS[id] ? BLOCKS[id].key : 'air';
     const c = { water: '#2f5fc8', sand: '#e0d6a0', grass: '#5f9e48', stone: '#828282', cobblestone: '#7d7d7d', dirt: '#7d573c',
@@ -1329,15 +2257,30 @@
   }
   // 포털 표식(보라 발광판 + 라벨)
   let portalMarker = null;
+  // 워프 패드 마커(보라 빔 + 라벨)
+  function buildWarpMarkers() {
+    if (!scene) return;
+    if (!propGroup) { propGroup = new THREE.Group(); scene.add(propGroup); }
+    for (const wp of (WARPS[worldMode] || [])) {
+      const y = wp._y || surfaceTop(wp.x, wp.z);
+      const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.9, 5, 8, 1, true), new THREE.MeshBasicMaterial({ color: 0x54e0a8, transparent: true, opacity: 0.28, side: THREE.DoubleSide }));
+      beam.position.set(wp.x + 0.5, y + 2.5, wp.z + 0.5);
+      propGroup.add(beam);
+      const label = makeLabel(wp.label); label.position.set(wp.x + 0.5, y + 5.4, wp.z + 0.5);
+      propGroup.add(label);
+    }
+  }
   function buildPortalMarker() {
     if (portalMarker) { scene.remove(portalMarker); disposeGroup(portalMarker); portalMarker = null; }
     const p = PORTALS[worldMode];
+    if (!p) { buildWarpMarkers(); return; }   // 테마 월드는 포털 대신 워프 패드 마커
     const y = surfaceTop(p.x, p.z);
     const g = new THREE.Group();
     const fill = new THREE.Mesh(new THREE.PlaneGeometry(3, 3.6), new THREE.MeshBasicMaterial({ color: 0xb04ae8, transparent: true, opacity: 0.55, side: THREE.DoubleSide }));
     fill.position.set(p.x + 0.5, y + 2.2, p.z + 0.5);
     g.add(fill);
     const label = makeLabel(p.label); label.position.set(p.x + 0.5, y + 4.8, p.z + 0.5); g.add(label);
+    buildWarpMarkers();
     g.userData.fill = fill;
     scene.add(g);
     portalMarker = g;
@@ -1356,8 +2299,9 @@
         <button class="btn btn--ghost" data-act="backHome">✕</button>
       </div>
       <canvas id="econ3dMap" class="econ3d-map" width="140" height="140" data-act="econ3d_map"></canvas>
+      <div class="econ3d-hpwrap"><div class="econ3d-hpbar"><div id="econ3dHpFill" class="econ3d-hpfill"></div></div><span id="econ3dHpTxt" class="econ3d-hptxt">❤</span></div>
       <div class="econ3d-buildbar" id="econ3dBuildBar" style="display:none">${BUILD_BLOCKS.map((bk, i) => `<button class="econ3d-blockbtn ${i === selectedBlock ? 'is-sel' : ''}" data-act="econ3d_block" data-i="${i}" title="${bk}"><span class="econ3d-blockchip" data-bk="${bk}"></span></button>`).join('')}</div>
-      ${isTouch ? '<div class="econ3d-jump" data-act="econ3d_jump">⤒</div>' : '<div class="econ3d-controlhint">WASD 이동 · 마우스 시점 · 클릭 상호작용(채집은 꾹) · 공중 점프 = 더블점프 · Ctrl 달리기 · M 지도</div>'}
+      ${isTouch ? '<div class="econ3d-jump" data-act="econ3d_jump">⤒</div>' : '<div class="econ3d-controlhint">WASD 이동 · W 더블탭 달리기 · 좌클릭 공격/꾹 눌러 채집 · 우클릭 낚시(물) · E/클릭 NPC · 더블점프 · M 지도</div>'}
       <div class="econ3d-panelwrap" id="econ3dPanelWrap" style="display:none">
         <div class="econ3d-panelbar"><span id="econ3dPanelGold"></span><button class="btn btn--ghost btn--sm" data-act="econ3d_panel_close">✕ 닫기</button></div>
         <div id="econBody" class="econ-body econ3d-body"></div>
@@ -1383,12 +2327,26 @@
       if (isTouch && worldMode === 'home' && lookT.id !== -1 && !lookT.acted && !lookT.broke && (lookT.moved || 0) < 10 && performance.now() - lookT.downT > 350) {
         lookT.broke = true; homeBreakBlock();
       }
-      flushWorldEdits();   // 블록 편집 → 메시 리빌드(프레임당 1회로 병합)
+      // 인월드 게임플레이 틱: 채집 홀드/재생성/낚시/몬스터/피해 텍스트/체력
+      if (!panelOpen()) {
+        P._atkCd = Math.max(0, (P._atkCd || 0) - dt);
+        if (mouseHeld && lookS.locked) {
+          const mb2 = pickMob();
+          if (mb2 && P._atkCd <= 0) { P._atkCd = 0.45; attackMobHit(mb2); }
+          else if (!mb2) progressBreaking(dt);
+        }
+        if (isTouch && worldMode !== 'home' && worldMode !== 'visit' && lookT.id !== -1 && (lookT.moved || 0) < 10 && performance.now() - lookT.downT > 250) progressBreaking(dt);
+        tickMobs(dt); tickFishing(); tickPlayerVitals(dt); tickWarpPads(dt);
+      }
+      tickRegen(); tickDmgTexts(dt);
+      _hpHudT += dt; if (_hpHudT > 0.5) { _hpHudT = 0; updateHpHud(); }
+      flushWorldEdits();   // 블록 편집 → 메시 리빌드(프레임당 1회로 병합, 더티 청크만)
       camera.position.set(P.x, P.y + P.eye, P.z);
       const d = lookDir(); camera.lookAt(P.x + d.x, P.y + P.eye + d.y, P.z + d.z);
       updateAimHighlight();
       updateSky();
       updateAmbientMobs(dt);
+      netTick(dt);
       updateBanner(); tickBanner(dt);
       // 페어리 오브 흔들림 + 구름 이동
       _fairyBobT += dt;
@@ -1436,6 +2394,12 @@
     bindInput(); running = true; lastT = 0; contextLost = false;
     rebuildMinionVisuals(true);
     updateHud();
+    // 진짜 처음 시작(세이브 없음): 실제 스카이블럭처럼 프라이빗 섬에서 시작
+    const api0 = econApi();
+    if (api0.isFresh && api0.isFresh()) {
+      travelTo('home');
+      if (typeof toast === 'function') setTimeout(() => toast('🌱 스카이블럭에 온 걸 환영해요! 나무를 캐서 도구를 만들고, 포탈로 허브에 가보세요', true), 600);
+    }
     raf = requestAnimationFrame(loop);
   }
   function stop() {
@@ -1449,8 +2413,11 @@
     if (outlineMesh && scene) { scene.remove(outlineMesh); outlineMesh = null; }
     if (renderer) { try { renderer.dispose(); } catch (e) {} }
     renderer = null; scene = null; camera = null; canvas = null;
+    for (const id in others) { if (others[id].mesh) disposeGroup(others[id].mesh); }
+    others = {}; visitData = null;
+    clearMobs(); stopFishing(); restoreAllRegen(); dmgTexts = []; php = null; mouseHeld = false; breaking = null;
     _minionSig = ''; ambientMobs = []; fairyMeshes = {}; curBannerKey = '';
-    worldMode = 'hub'; worldHubCache = null; world = null; _meshDirty = false; _mapDirty = false;
+    worldMode = 'hub'; worldHubCache = null; worldCache = {}; world = null; _meshDirty = false; _mapDirty = false;
   }
 
   /* ---------------- 액션 위임 ---------------- */
@@ -1467,6 +2434,7 @@
   window.economy3dStart = start;
   window.economy3dStop = stop;
   window.economy3dAct = act;
+  window.economy3dVisit = travelVisit;   // 멀티: 다른 플레이어 섬 방문(economy-net.js가 호출)
 
   if (typeof window !== 'undefined' && window.__ECON3D_TEST) {
     window.__econ3d = {
@@ -1489,6 +2457,15 @@
       raycastBlock, homeBreakBlock, homePlaceBlock, BUILD_BLOCKS,
       setSelectedBlock: i => { selectedBlock = i; }, getSelectedBlock: () => selectedBlock,
       flushWorldEdits,
+      // V4: 멀티(아바타/방문)
+      travelVisit, updateNetAvatars, others: () => others, getVisitData: () => visitData,
+      // V5: 테마 월드/인월드 게임플레이
+      WORLD_DEFS, WARPS, MOB_TYPES, SPAWN_AREAS, gatherBlocks, regenQueue: () => regenQueue,
+      loadWorldForTest: (key) => { const def = WORLD_DEFS[key]; W = def.size[0]; H = def.size[1]; Dp = def.size[2]; worldMode = key; if (key === 'hub') genWorld(); else if (key === 'home') genHome(); else def.gen(); return world; },
+      getDims: () => ({ W, H, Dp }),
+      spawnMobForTest: (area, type, lv) => spawnMob(area, type, lv),
+      progressBreaking, tickRegen, pickMob, mobs: () => mobs,
+      startDungeon3d, getDungeonState: () => dungeonState, onDungeonMobDead, spawnDungeonMob,
     };
   }
 })();
