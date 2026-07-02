@@ -1349,5 +1349,43 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .econ3d-panelbar{display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:rgba(10,12,20,.72); border-bottom:1px solid rgba(255,255,255,.12);}
 .econ3d-panelbar span{font-weight:800; color:#facc15;}
 .econ3d-body{flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; background:rgba(14,16,24,.58);}
+.econ3d-banner{position:absolute; left:50%; top:18%; transform:translateX(-50%) scale(.9); z-index:6; font-size:30px; font-weight:900; color:#fff; text-shadow:0 2px 8px rgba(0,0,0,.8),0 0 24px rgba(0,0,0,.5); opacity:0; transition:opacity .5s, transform .5s; pointer-events:none; white-space:nowrap;}
+.econ3d-banner.show{opacity:1; transform:translateX(-50%) scale(1);}
+.econ3d-map{position:absolute; right:10px; top:52px; width:140px; height:140px; z-index:5; border:2px solid rgba(255,255,255,.35); border-radius:10px; background:#0a0e1a; opacity:.92; transition:width .2s,height .2s; image-rendering:pixelated;}
+.econ3d-map.is-big{width:320px; height:320px;}
+.econ-hubtabs{display:flex; flex-wrap:wrap; gap:6px; padding-bottom:8px; border-bottom:1px solid var(--line);}
+
+/* ---- 경제 V3: 게임풍 메뉴/상점 UI + 아이콘 + 강화/제작/던전 ---- */
+.econ3d-body .econ-panel{background:linear-gradient(160deg, rgba(30,26,40,.92), rgba(16,14,24,.94)); border:1px solid rgba(250,197,28,.22); border-radius:14px; margin:10px; box-shadow:inset 0 0 40px rgba(0,0,0,.5), 0 4px 24px rgba(0,0,0,.4);}
+.econ3d-body .econ-panel h3,.econ3d-body .econ-panel h4{color:#f5d76a; text-shadow:0 1px 3px rgba(0,0,0,.7); border-bottom:1px solid rgba(250,197,28,.2); padding-bottom:4px;}
+.econ3d-body .econ-zonebtn{background:linear-gradient(180deg,#2a2438,#1c1828); border:1px solid rgba(250,197,28,.25); color:#e8dcc0; border-radius:10px;}
+.econ3d-body .econ-zonebtn.is-active{background:linear-gradient(180deg,#4a3a18,#332608); border-color:#f5d76a; color:#ffe28a; box-shadow:0 0 10px rgba(250,197,28,.35);}
+.econ3d-body .econ-shopgrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:8px;}
+.econ3d-body .econ-shopitem{display:grid; grid-template-columns:44px 1fr; grid-auto-rows:min-content; align-items:center; gap:4px 10px; background:linear-gradient(160deg,rgba(60,52,80,.45),rgba(28,24,40,.55)); border:1px solid rgba(255,255,255,.10); border-radius:12px; padding:10px;}
+.econ3d-body .econ-shopitem>.econ-icon{grid-row:span 2; width:40px; height:40px; image-rendering:pixelated; border-radius:8px;}
+.econ3d-body .econ-shopitem>span:first-of-type{font-weight:700;}
+.econ3d-body .econ-shopitem .btn{grid-column:2; justify-self:start;}
+.econ3d-body .econ-shopitem.is-locked{opacity:.55; filter:grayscale(.4);}
+.econ-icon{width:40px; height:40px; image-rendering:pixelated; vertical-align:middle;}
+.econ-starcard{border:1px solid rgba(250,197,28,.3); border-radius:12px; padding:12px; margin:8px 0; background:linear-gradient(160deg,rgba(60,52,80,.4),rgba(28,24,40,.5));}
+.econ-stars{font-size:20px; color:#ffd84a; letter-spacing:2px; text-shadow:0 0 8px rgba(255,216,74,.6); margin:6px 0;}
+.econ-overcap{color:#e048c4; font-weight:900; text-shadow:0 0 6px rgba(224,72,196,.7);}
+.econ-chaosbtn{background:linear-gradient(180deg,#5a2a6a,#3a1a48)!important; border-color:#e048c4!important; color:#f0c0ff!important;}
+.econ-moblist{display:flex; flex-direction:column; gap:6px;}
+.econ-mobrow{display:flex; align-items:center; gap:10px; padding:6px 10px; border:1px solid rgba(255,255,255,.1); border-radius:10px; background:rgba(40,20,20,.4);}
+.econ-mobrow.is-dead{opacity:.4; filter:grayscale(1);}
+.econ-mobrow .econ-hpbar{flex:1; height:18px;}
+.econ-hpbar--mob .econ-hpbar__fill{background:linear-gradient(90deg,#a62c2c,#e05a4a);}
+
+/* 내 섬 건축 팔레트 바 */
+.econ3d-buildbar{position:absolute; left:50%; bottom:52px; transform:translateX(-50%); display:flex; gap:5px; z-index:6; background:rgba(10,12,20,.65); padding:6px 8px; border-radius:12px; border:1px solid rgba(255,255,255,.2);}
+.econ3d-blockbtn{width:38px; height:38px; border-radius:8px; border:2px solid rgba(255,255,255,.25); background:rgba(30,34,48,.8); padding:3px; cursor:pointer;}
+.econ3d-blockbtn.is-sel{border-color:#ffe066; box-shadow:0 0 8px rgba(255,224,102,.6);}
+.econ3d-blockchip{display:block; width:100%; height:100%; border-radius:4px; image-rendering:pixelated;}
+.econ3d-blockchip[data-bk="dirt"]{background:#7d573c;} .econ3d-blockchip[data-bk="stone"]{background:#828282;}
+.econ3d-blockchip[data-bk="cobblestone"]{background:#7d7d7d;} .econ3d-blockchip[data-bk="oak_planks"]{background:#b08a4f;}
+.econ3d-blockchip[data-bk="oak_log"]{background:#6b5436;} .econ3d-blockchip[data-bk="stone_bricks"]{background:#7b7b7b;}
+.econ3d-blockchip[data-bk="bricks"]{background:#9a4f3f;} .econ3d-blockchip[data-bk="sand"]{background:#e0d6a0;}
+.econ3d-blockchip[data-bk="glass"]{background:rgba(191,230,242,.6);} .econ3d-blockchip[data-bk="glowstone"]{background:#f4d35e; box-shadow:0 0 6px #f4d35e;}
 
 :root[data-theme="light"] .home-card--econ{background:linear-gradient(150deg,#fdf0c8,#fff);}
