@@ -115,7 +115,7 @@
     { key: 'enchanter', name: '마법부여사', zone: 'hub', tab: 'enchant', x: 96, z: 82, color: 0x9365b8 },
     { key: 'auctioneer', name: '경매인', zone: 'hub', tab: 'deals', x: 90, z: 96, color: 0xc0392b },
     { key: 'reforgeSmith', name: '재련 대장장이', zone: 'hub', tab: 'reforge', x: 102, z: 96, color: 0x6b5436 },
-    { key: 'classTrainer', name: '직업 훈련관', zone: 'hub', tab: 'stats', x: 96, z: 110, color: 0x2c82c9 },
+    { key: 'guide', name: '모험 안내인', zone: 'hub', tab: 'stats', x: 96, z: 110, color: 0x2c82c9 },
     { key: 'mineForeman', name: '광산 감독관', zone: 'mine', x: 46, z: 90, color: 0x787878 },
     { key: 'farmForeman', name: '농장 관리인', zone: 'farm', x: 148, z: 44, color: 0xd8b23a },
     { key: 'lumberjack', name: '벌목꾼', zone: 'forest', x: 42, z: 32, color: 0x8a6a3a },
