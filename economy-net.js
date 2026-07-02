@@ -120,6 +120,18 @@
       case 'pt_state':
         if (party && party.role === 'guest' && party.peer === m.id) { party.stage = 'active'; party.run = m.run; }
         break;
+      case 'pt_d3':   // 호스트가 3D 카타콤 시작 → 게스트도 같은 던전 월드로
+        if (party && party.role === 'guest' && party.peer === m.id) {
+          party.stage = 'active3d'; party.floor = m.floor;
+          if (typeof window.economy3dDungeonGuest === 'function') window.economy3dDungeonGuest(m.floor);
+        }
+        break;
+      case 'pt_m':    // 몹 스냅샷(고빈도 — 패널 리렌더 없이 3D가 소비)
+        if (party && party.role === 'guest' && party.peer === m.id && typeof window.economy3dApplyPartyMobs === 'function') window.economy3dApplyPartyMobs(m.snap);
+        return;
+      case 'pt_atk3': // 게스트의 3D 공격(호스트 권위 적용)
+        if (party && party.role === 'host' && party.peer === m.id && typeof window.economy3dApplyPartyAttack === 'function') window.economy3dApplyPartyAttack(m.i, m.dmg || 0);
+        return;
       case 'pt_atk':
         if (party && party.role === 'host' && party.peer === m.id) {
           const a = api();
@@ -130,6 +142,7 @@
         if (party && party.role === 'guest' && party.peer === m.id) {
           const a = api();
           if (a && a.partyGuestReward) a.partyGuestReward(m.result || {});
+          if (typeof window.economy3dPartyDungeonEnded === 'function') window.economy3dPartyDungeonEnded();
           endParty(null);
         }
         break;
@@ -255,6 +268,10 @@
     send({ t: 'pt_end', to: party.peer, result });
     endParty(null);
   }
+  // 3D 협동 던전 프로토콜
+  function partyD3Start(floor) { if (party && party.role === 'host') send({ t: 'pt_d3', to: party.peer, floor }); }
+  function partySendMobs(snap) { if (party && party.role === 'host') send({ t: 'pt_m', to: party.peer, snap }); }
+  function partySendAttack3(i, dmg) { if (party && party.role === 'guest') send({ t: 'pt_atk3', to: party.peer, i, dmg: Math.round(dmg) }); }
   // 게스트: 공격(내 공격력 계산값을 호스트로 전송 — 호스트가 판정)
   function partySendAttack(atk) {
     if (!party || party.role !== 'guest' || party.stage !== 'active') return;
@@ -288,6 +305,7 @@
     tradeRequest, tradeAccept, tradeDecline, tradeAddItem, tradeRemoveItem, tradeSetGold, tradeLock, tradeConfirm, tradeCancel,
     party: () => party,
     partyInvite, partyAccept, partyDecline, partyLeave, partyBroadcastState, partyEnd, partySendAttack,
+    partyD3Start, partySendMobs, partySendAttack3,
     visit,
     // 테스트 훅: 채널 없이 수신/송신 경로를 직접 구동
     _test: { onMsg, setActive: v => { active = v; }, setSend: f => { sendHook = f; }, setId: (id, nm) => { myId = id; myName = nm; } },
