@@ -16,30 +16,30 @@
   ];
 
   /* ---------------- 컬렉션(자원 31종, 5개 카테고리) ---------------- */
-  // 실제 스카이블럭 컬렉션 티어 임계값 패턴(조약돌 I~IX: 50/100/250/1,000/2,500/5,000/10,000/25,000/50,000)
-  function res(key, name, sell, th0) { return { key, name, stackSize: 64, sellPrice: sell, tierThresholds: [th0, th0 * 2, th0 * 5, th0 * 20, th0 * 50, th0 * 100, th0 * 200, th0 * 500, th0 * 1000] }; }
+  // V8: 아이템별 컬렉션 티어 수·임계값이 전부 다름(실제 스카이블럭) — custom 배열이 있으면 그것을 사용
+  function res(key, name, sell, th0, custom) { return { key, name, stackSize: 64, sellPrice: sell, tierThresholds: custom || [th0, th0 * 2, th0 * 5, th0 * 20, th0 * 50, th0 * 100, th0 * 200, th0 * 500, th0 * 1000] }; }
   const COLLECTIONS = [
     { category: '채굴', key: 'mining', resources: [
       res('stone', '조약돌', 2, 50), res('coal', '석탄', 3, 40), res('iron', '철 주괴', 6, 60),
       res('gold', '금 주괴', 12, 40), res('lapis', '청금석', 8, 40), res('redstone', '레드스톤', 7, 40),
-      res('diamond', '다이아몬드', 45, 20), res('emerald', '에메랄드', 25, 20), res('obsidian', '흑요석', 18, 15),
+      res('diamond', '다이아몬드', 45, 0, [25, 50, 100, 250, 1000, 2500, 5000, 10000, 25000]), res('emerald', '에메랄드', 25, 0, [10, 30, 100, 250, 1000, 2500, 5000, 10000]), res('obsidian', '흑요석', 18, 0, [20, 50, 100, 250, 1000, 2500, 5000]),
     ] },
     { category: '농사', key: 'farming', resources: [
-      res('wheat', '밀', 3, 50), res('carrot', '당근', 3, 50), res('potato', '감자', 3, 50),
-      res('pumpkin', '호박', 6, 30), res('melon', '수박', 5, 40), res('sugarcane', '사탕수수', 4, 40),
+      res('wheat', '밀', 3, 0, [50, 100, 250, 500, 1000, 2500, 10000, 15000, 25000, 50000, 100000]), res('carrot', '당근', 3, 50), res('potato', '감자', 3, 50),
+      res('pumpkin', '호박', 6, 0, [40, 100, 250, 1000, 2500, 5000, 10000, 25000, 50000, 100000]), res('melon', '수박', 5, 40), res('sugarcane', '사탕수수', 4, 40),
     ] },
     { category: '벌목', key: 'foraging', resources: [
       res('oaklog', '참나무 원목', 5, 40), res('birchlog', '자작나무 원목', 5, 40),
       res('sprucelog', '가문비 원목', 6, 35), res('apple', '사과', 8, 20),
     ] },
     { category: '낚시', key: 'fishing', resources: [
-      res('rawfish', '생선', 4, 30), res('salmon', '연어', 7, 25), res('clownfish', '광대어', 20, 12),
+      res('rawfish', '생선', 4, 30), res('salmon', '연어', 7, 25), res('clownfish', '광대어', 20, 0, [10, 25, 50, 100, 250, 800]),
       res('pufferfish', '복어', 12, 20), res('prismarine', '프리즈마린 조각', 9, 25),
-      res('sponge', '스펀지', 30, 8), res('clay', '점토', 4, 30),
+      res('sponge', '스펀지', 30, 0, [10, 20, 50, 100, 200, 400]), res('clay', '점토', 4, 30),
     ] },
     { category: '전투', key: 'combat', resources: [
-      res('rotten_flesh', '썩은 살점', 2, 40), res('bone', '뼈', 3, 40), res('string', '거미줄', 4, 30),
-      res('ender_pearl', '엔더 진주', 15, 15), res('blaze_rod', '블레이즈 막대', 20, 12),
+      res('rotten_flesh', '썩은 살점', 2, 0, [50, 150, 400, 1000, 2500, 5000, 15000, 50000]), res('bone', '뼈', 3, 40), res('string', '거미줄', 4, 30),
+      res('ender_pearl', '엔더 진주', 15, 0, [10, 25, 50, 100, 250, 1000, 2500, 10000]), res('blaze_rod', '블레이즈 막대', 20, 0, [10, 25, 50, 100, 250, 500, 1500, 5000]),
     ] },
   ];
 
@@ -508,6 +508,21 @@
     { key: 'ancient_rod', needs: { dungeon_essence: 50, prismarine: 64 }, gives: 1, unlock: { resource: 'prismarine', tier: 4 } },
     { key: 'auto_shipping_module', needs: { iron: 64, redstone: 32 }, gives: 1, unlock: { resource: 'redstone', tier: 2 } },
     { key: 'diamond_spreading', needs: { diamond: 64, gold: 32 }, gives: 1, unlock: { resource: 'diamond', tier: 3 } },
+    // V8: 스킬 레벨 해금 레시피(전투/마법부여 게이트)
+    { key: 'weapon_rare', needs: { iron: 32, oaklog: 8 }, gives: 1, unlock: { skill: 'combat', lv: 5 } },
+    { key: 'bow_rare', needs: { string: 24, oaklog: 16 }, gives: 1, unlock: { skill: 'combat', lv: 5 } },
+    { key: 'staff_rare', needs: { lapis: 24, oaklog: 12 }, gives: 1, unlock: { skill: 'enchanting', lv: 4 } },
+    { key: 'armor_rare', needs: { iron: 48 }, gives: 1, unlock: { skill: 'combat', lv: 5 } },
+    { key: 'weapon_epic', needs: { gold: 48, diamond: 8 }, gives: 1, unlock: { skill: 'combat', lv: 9 } },
+    { key: 'armor_epic', needs: { gold: 64, diamond: 12 }, gives: 1, unlock: { skill: 'combat', lv: 9 } },
+    { key: 'weapon_legendary', needs: { diamond: 48, obsidian: 12, dungeon_essence: 40 }, gives: 1, unlock: { skill: 'combat', lv: 14 } },
+    { key: 'armor_legendary', needs: { diamond: 64, obsidian: 16, dungeon_essence: 50 }, gives: 1, unlock: { skill: 'combat', lv: 14 } },
+    // 마인크래프트 기본 조합(해금 없음)
+    { key: 'weapon_common', needs: { oaklog: 10, stone: 4 }, gives: 1, unlock: null },
+    { key: 'bow_common', needs: { oaklog: 6, string: 6 }, gives: 1, unlock: null },
+    { key: 'armor_common', needs: { rotten_flesh: 24, string: 12 }, gives: 1, unlock: null },
+    { key: 'weapon_uncommon', needs: { stone: 24, oaklog: 6 }, gives: 1, unlock: { resource: 'stone', tier: 1 } },
+    { key: 'armor_uncommon', needs: { iron: 16, string: 8 }, gives: 1, unlock: { resource: 'iron', tier: 1 } },
     { key: 'treecapitator', needs: { oaklog: 128, sprucelog: 64, gold: 32, diamond: 8 }, gives: 1, unlock: { resource: 'oaklog', tier: 5 } },
     { key: 'stonk', needs: { gold: 64, diamond: 16, obsidian: 8 }, gives: 1, unlock: { resource: 'gold', tier: 5 } },
     { key: 'enchant_book_efficiency', needs: { lapis: 48, redstone: 16 }, gives: 1, unlock: { resource: 'redstone', tier: 2 } },
@@ -534,6 +549,7 @@
     { key: 'essence_reforge_stone', name: '던전 정수 리포지 스톤', category: '강화재료', buyPrice: 0, sellPrice: 400, stackSize: 64 },
     { key: 'essence_cosmetic_cape', name: '지배자의 망토(장식)', category: '장식', buyPrice: 0, sellPrice: 5000, stackSize: 1 },
     { key: 'dungeon_essence', name: '던전 정수', category: '재료', buyPrice: 0, sellPrice: 120, stackSize: 64 },
+    { key: 'arachne_crystal', name: '아라크네 크리스탈', category: '재료', buyPrice: 0, sellPrice: 900, stackSize: 16 },
     { key: 'treecapitator', name: '트리캐피테이터(나무 통째 벌목)', category: '특수 도구', buyPrice: 0, sellPrice: 20000, stackSize: 1 },
     { key: 'stonk', name: '스통크(채굴 가속 곡괭이)', category: '특수 도구', buyPrice: 0, sellPrice: 25000, stackSize: 1 },
     { key: 'minion_slot_expander', name: '미니언 슬롯 확장권', category: '미니언', buyPrice: 0, sellPrice: 0, stackSize: 1 },

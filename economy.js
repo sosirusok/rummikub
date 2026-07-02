@@ -404,11 +404,16 @@
   }
 
   /* ---------------- 제작(컬렉션 티어 해금 레시피) ---------------- */
-  function recipeUnlocked(r) { return collectionTierIdx(r.unlock.resource) >= r.unlock.tier; }
+  function recipeUnlocked(r) {
+    if (!r.unlock) return true;   // 기본 조합법(해금 조건 없음) — null 크래시 버그 픽스
+    if (r.unlock.resource && collectionTierIdx(r.unlock.resource) < r.unlock.tier) return false;
+    if (r.unlock.skill && skillLevel(r.unlock.skill) < r.unlock.lv) return false;   // V8: 스킬 레벨 해금
+    return true;
+  }
   function canCraft(r) { return recipeUnlocked(r) && Object.keys(r.needs).every(k => (P.inv[k] || 0) >= r.needs[k]); }
   function craft(key) {
     const r = D().RECIPES.find(x => x.key === key); if (!r) return false;
-    if (!recipeUnlocked(r)) { toastFn('컬렉션 티어가 부족해요', false); return false; }
+    if (!recipeUnlocked(r)) { toastFn(r.unlock && r.unlock.skill ? `${r.unlock.skill === 'combat' ? '전투' : r.unlock.skill === 'enchanting' ? '마법부여' : '요구'} 스킬 ${r.unlock.lv}레벨 필요` : '컬렉션 티어가 부족해요', false); return false; }
     if (!canCraft(r)) { toastFn('재료가 부족해요', false); return false; }
     for (const k in r.needs) removeItem(k, r.needs[k]);
     addItem(key, r.gives || 1);
