@@ -203,6 +203,8 @@
   function enchantDef(key) { return D().ENCHANTS.find(e => e.key === key); }
   function enchantLvl(slot, key) { return (P.enchants[slot] && P.enchants[slot][key]) || 0; }
   function enchantHardCap(def) { return def.maxLvl + D().CHAOS_ENCHANT.overcapLevels; }
+  // 북 등급(가격대)별 기본 요구 마법부여 레벨
+  function enchantReqLevel(def) { return def.bookBasePrice >= 2000 ? 9 : def.bookBasePrice >= 1400 ? 6 : def.bookBasePrice >= 900 ? 3 : 0; }
   // ── 범용 인챈트 효과 엔진: 32종 인챈트의 fx 서술자를 종류별로 합산 ──
   function enchSum(fxKey) {
     let s = 0;
@@ -243,8 +245,10 @@
     const cur = enchantLvl(slot, key);
     if (cur >= def.maxLvl) { toastFn('북으로는 여기까지! 혼돈의 마법부여로 돌파하세요', false); return false; }
     const bookKey = `enchant_book_${key}`;
-    if (!hasItem(bookKey)) { toastFn('인챈트북이 필요해요(상점/슬레이어/던전/제작에서 획득)', false); return false; }
-    const fee = def.bookBasePrice * cur;   // 레벨이 오를수록 부여 비용 증가(첫 레벨은 무료 부여)
+    if (!hasItem(bookKey)) { toastFn('인챈트북이 필요해요 — 북은 몬스터가 떨어뜨려요(몹마다 다른 북!)', false); return false; }
+    const reqE = enchantReqLevel(def) + cur;   // 높은 레벨 합성일수록 높은 마법부여 스킬 요구
+    if (skillLevel('enchanting') < reqE) { toastFn(`마법부여 스킬 ${reqE}레벨 필요 (현재 ${skillLevel('enchanting')})`, false); return false; }
+    const fee = def.bookBasePrice * cur;   // 합성 비용: 레벨이 오를수록 증가(첫 레벨은 무료)
     if (P.gold < fee) { toastFn(`부여 비용 ${fmtGold(fee)}이 부족해요`, false); return false; }
     removeItem(bookKey, 1); addGold(-fee);
     P.enchants[slot][key] = cur + 1;
@@ -286,13 +290,20 @@
   // 무기: 검/활/지팡이 3계열 중 보유한 최고 위력 자동 장착(실제 스카이블럭처럼 직업 제한 없음)
   function equippedWeapon() {
     let best = null, bestDmg = -1;
+    const cl = skillLevel('combat');
     for (const w of D().EQUIPMENT.weapons) {
       if (!hasItem(w.key)) continue;
+      if ((w.reqCombat || 0) > cl) continue;   // V7: 요구 전투 레벨 미달 장비는 착용 불가
       if (w.dmg >= bestDmg) { bestDmg = w.dmg; best = w; }
     }
     return best;
   }
-  function equippedArmor() { return bestOwnedEquip(D().EQUIPMENT.armor); }
+  function equippedArmor() {
+    const cl = skillLevel('combat');
+    const list = D().EQUIPMENT.armor;
+    for (let i = list.length - 1; i >= 0; i--) if (hasItem(list[i].key) && (list[i].reqCombat || 0) <= cl) return list[i];
+    return null;
+  }
   function equippedWeaponDmg() {
     const w = equippedWeapon(); if (!w) return 0;
     return rolledStat(w.key, w.dmg) + (P.reforgeBonus[w.key] || 0);
@@ -305,9 +316,9 @@
     const a = equippedArmor();
     const st = {
       hp: B.hp + skillLevel('farming') * 2 + skillLevel('fishing') + enchSum('hp') + ts.hp + ps.hp + fb.hp
-        + (reforgeOf('weapon').hp || 0) + (reforgeOf('armor').hp || 0) + P.starForce.armor * D().STARFORCE.hpPerStar,
+        + (reforgeOf('weapon').hp || 0) + (reforgeOf('armor').hp || 0) + starHpFlat(),
       defense: B.defense + skillLevel('mining') + ts.def + ps.def + enchSum('def')
-        + (reforgeOf('armor').def || 0) + P.starForce.armor * D().STARFORCE.defPerStar
+        + (reforgeOf('armor').def || 0) + starDefFlat()
         + (a ? rolledStat(a.key, a.defense) : 0),
       strength: B.strength + skillLevel('foraging') + ts.str + ps.str + fb.str,
       speed: B.speed + enchSum('speed'),
@@ -326,7 +337,7 @@
     const flat = 5 + equippedWeaponDmg() + st.strength / 5;
     const mul = (1 + st.strength / 100)
       * (1 + skillLevel('combat') * 0.04 + enchSum('dmg') / 100
-        + (reforgeOf('weapon').dmgPct || 0) / 100 + P.starForce.weapon * D().STARFORCE.atkPctPerStar / 100)
+        + (reforgeOf('weapon').dmgPct || 0) / 100 + starAtkPct() / 100)
       * mpStatMul();
     return flat * mul;
   }
@@ -343,28 +354,53 @@
   }
   function playerMaxHp() { return playerStats().hp; }
 
-  /* ---------------- 스타포스(메이플식 성 강화: 성공/실패/하락) ---------------- */
+  /* ---------------- 스타포스 V2(메이플식 체계): 성공/유지/하락/파괴 + 찬스타임 + 구간별 스탯 ---------------- */
   function starCost(slot) { const SF = D().STARFORCE; return Math.round(SF.costBase * Math.pow(SF.costMul, P.starForce[slot])); }
-  function starRate(slot) { const SF = D().STARFORCE; return SF.successRates[Math.min(P.starForce[slot], SF.successRates.length - 1)]; }
+  function starRow(slot) { const SF = D().STARFORCE; return SF.table[Math.min(P.starForce[slot], SF.table.length - 1)]; }
+  function starRate(slot) { return starRow(slot)[0]; }
+  function starChanceTime(slot) { return D().STARFORCE.chanceTime && ((P.starChance || {})[slot] || 0) >= 2; }
+  // 구간별 누적 스탯(1~5성/6~10성/11~15성 폭이 다름)
+  function starBandSum(stars, bands) {
+    let sum = 0;
+    for (let i = 1; i <= stars; i++) sum += bands[i <= 5 ? 0 : i <= 10 ? 1 : 2];
+    return sum;
+  }
+  function starAtkPct() { return starBandSum(P.starForce.weapon, D().STARFORCE.weaponAtkPctByBand); }
+  function starDefFlat() { return starBandSum(P.starForce.armor, D().STARFORCE.armorDefByBand); }
+  function starHpFlat() { return starBandSum(P.starForce.armor, D().STARFORCE.armorHpByBand); }
   function enhanceStar(slot) {
     const SF = D().STARFORCE;
+    if (!P.starChance) P.starChance = { weapon: 0, armor: 0 };
     const cur = P.starForce[slot];
     if (cur >= SF.maxStars) { toastFn('이미 최대 성 강화예요 (★15)', false); return 'max'; }
     const cost = starCost(slot);
     if (P.gold < cost) { toastFn('골드가 부족해요', false); return 'poor'; }
     addGold(-cost);
-    if (Math.random() < starRate(slot)) {
+    const chance = starChanceTime(slot);
+    const row = starRow(slot);
+    const r = Math.random();
+    if (chance || r < row[0]) {   // 성공(찬스 타임이면 100%)
       P.starForce[slot] = cur + 1;
-      toastFn(`✨ 강화 성공! ${slot === 'weapon' ? '무기' : '방어구'} ★${cur + 1}`, true);
+      P.starChance[slot] = 0;
+      toastFn(`${chance ? '🌟 찬스 타임! ' : '✨ '}강화 성공! ${slot === 'weapon' ? '무기' : '방어구'} ★${cur + 1}`, true);
       saveNow(); renderZone(); return 'success';
     }
-    if (cur >= SF.downgradeMinStar && Math.random() < SF.downgradeChanceOnFail) {
-      P.starForce[slot] = cur - 1;
-      toastFn(`💥 강화 실패... 성이 하락했어요 (★${cur - 1})`, false);
-    } else {
+    if (r < row[0] + row[1]) {    // 유지
+      P.starChance[slot] = 0;
       toastFn('강화 실패! 성은 유지됐어요', false);
+      saveNow(); renderZone(); return 'keep';
     }
-    saveNow(); renderZone(); return 'fail';
+    if (r < row[0] + row[1] + row[2]) {   // 하락(2연속이면 다음이 찬스 타임)
+      P.starForce[slot] = cur - 1;
+      P.starChance[slot] = (P.starChance[slot] || 0) + 1;
+      toastFn(`💥 강화 실패... 성이 하락했어요 (★${cur - 1})${starChanceTime(slot) ? ' — 🌟 다음 강화는 찬스 타임(100%)!' : ''}`, false);
+      saveNow(); renderZone(); return 'drop';
+    }
+    // 파괴: 장비는 남고 12성으로 리셋(메이플식)
+    P.starForce[slot] = Math.min(cur, SF.boomResetTo);
+    P.starChance[slot] = 0;
+    toastFn(`💣 강화 파괴!! ★${P.starForce[slot]}(으)로 리셋됐어요...`, false);
+    saveNow(); renderZone(); return 'boom';
   }
 
   /* ---------------- 제작(컬렉션 티어 해금 레시피) ---------------- */
@@ -382,9 +418,15 @@
   }
 
   /* ---------------- 채집(광산/농장/숲/부둣가) ---------------- */
+  const TOOL_SKILL = { pickaxe: 'mining', axe: 'foraging', hoe: 'farming', rod: 'fishing' };
   function bestToolMul(family) {
     const ladder = D().TOOLS[family]; if (!ladder) return 1;
-    for (let i = ladder.length - 1; i >= 0; i--) if (hasItem(ladder[i].key)) return ladder[i].mul;
+    const lv = skillLevel(TOOL_SKILL[family] || 'mining');
+    for (let i = ladder.length - 1; i >= 0; i--) {
+      if (!hasItem(ladder[i].key)) continue;
+      if ((ladder[i].req || 0) > lv) continue;   // V7: 요구 스킬 레벨 미달 도구 사용 불가
+      return ladder[i].mul;
+    }
     return 0.5;   // 도구 없음 = 절반
   }
   let _lastGatherAt = 0;
@@ -425,6 +467,9 @@
   function sellBonusPct() { return Math.min(10, Math.floor(skillLevel('social') / 5)) + talismanStats().sellBonus; }
   function minionSlotCost() { return Math.round(D().MINION_SLOT_COST_BASE * Math.pow(D().MINION_SLOT_COST_MUL, P.minionSlotsBought)); }
   function buyItem(key) {
+    const sdef = shopDef(key);
+    if (!sdef || !(sdef.buyPrice > 0)) { toastFn('이 게임의 골드는 강화·합성·리포지 전용! 아이템은 채집·드롭·조합으로 얻어요', false); return; }
+
     const def = shopDef(key); if (!def || def.buyPrice <= 0) return;
     // 특수: 미니언 슬롯 확장권(즉시 적용, 가격 누진)
     if (key === 'minion_slot_expander') {
@@ -453,25 +498,28 @@
   // 일일 특가(날짜 시드 고정 3종, 각 1회 구매)
   function seededRand(seedStr) { let h = 2166136261; for (let i = 0; i < seedStr.length; i++) { h ^= seedStr.charCodeAt(i); h = Math.imul(h, 16777619); } return () => { h ^= h << 13; h ^= h >>> 17; h ^= h << 5; return ((h >>> 0) % 100000) / 100000; }; }
   function dealsForToday() {
-    const day = todayStr(); const rand = seededRand('deal' + day);
-    const pool = D().SHOP.filter(s => s.buyPrice > 300 && s.key !== 'minion_slot_expander');
-    const deals = [];
-    for (let i = 0; i < D().DAILY_DEALS.count && pool.length; i++) {
-      const idx = Math.floor(rand() * pool.length);
-      const item = pool.splice(idx, 1)[0];
-      const disc = D().DAILY_DEALS.discountMin + rand() * (D().DAILY_DEALS.discountMax - D().DAILY_DEALS.discountMin);
-      deals.push({ key: item.key, name: item.name, orig: item.buyPrice, price: Math.round(item.buyPrice * (1 - disc)), discPct: Math.round(disc * 100) });
+    // 판매 가능 아이템 중 매일 3종(날짜 시드)
+    const pool = D().SHOP.filter(sd => sd.sellPrice >= 3 && sd.category !== '인챈트');
+    const day = Math.floor(Date.now() / 86400000);
+    const out = [];
+    for (let i = 0; i < D().DAILY_DEALS.count; i++) {
+      const idx = Math.abs((day * 2654435761 + i * 40503) % pool.length);
+      out.push({ key: pool[idx].key });
     }
-    return deals;
+    return out;
   }
   function buyDeal(i) {
-    if (P.dealsDate !== todayStr()) { P.dealsDate = todayStr(); P.dealsBought = {}; }
-    if (P.dealsBought[i]) { toastFn('오늘은 이미 구매했어요', false); return; }
-    const deal = dealsForToday()[i]; if (!deal) return;
-    if (P.gold < deal.price) { toastFn('골드가 부족해요', false); return; }
-    addGold(-deal.price); addItem(deal.key, 1); P.dealsBought[i] = true;
-    addSkillXp('social', 10);
-    toastFn(`특가 구매! ${deal.name} (-${deal.discPct}%)`, true);
+    const deals = dealsForToday(); const d = deals[i]; if (!d) return;
+    if ((P.dealsBought || []).indexOf(i) >= 0) { toastFn('오늘은 이미 매입 완료!', false); return; }
+    const sd = shopDef(d.key); const owned = P.inv[d.key] || 0;
+    if (!sd || owned <= 0) { toastFn('팔 물건이 없어요', false); return; }
+    const n = Math.min(64, owned);
+    removeItem(d.key, n);
+    const gain = Math.round(sd.sellPrice * 2.5) * n;
+    addGold(gain);
+    if (!P.dealsBought) P.dealsBought = [];
+    P.dealsBought.push(i);
+    toastFn(`🎪 수집상에게 ${sd.name} ×${n} 판매! +${fmtGold(gain)} (웃돈 2.5배)`, true);
     saveNow(); renderZone();
   }
 
@@ -850,6 +898,13 @@
       const bonus = randomEquipDrop(Math.min(6, mob.tierCap == null ? 2 : mob.tierCap));
       if (bonus) msgs.push(`🎁 ${bonus.name}`);
     }
+    // V7: 몹별 인챈트북 드롭(몹마다 다른 북 — 정예는 3배 확률)
+    if (mob.books && mob.books.length && Math.random() < (mob.elite ? 0.06 : 0.02)) {
+      const bk = mob.books[Math.floor(Math.random() * mob.books.length)];
+      addItem(`enchant_book_${bk}`, 1);
+      const bdef = enchantDef(bk);
+      msgs.push(`📖 인챈트북: ${bdef ? bdef.name : bk}!`);
+    }
     if (msgs.length) toastFn(`${mob.name} 처치! ${msgs.join(' · ')}`, true);
     saveLocal();
     return coins;
@@ -1070,6 +1125,7 @@
     if (sdef.dmg) lines.push(`공격력: +${hasItem(sdef.key) ? rolledStat(sdef.key, sdef.dmg) : sdef.dmg}`);
     if (sdef.defense) lines.push(`방어력: +${hasItem(sdef.key) ? rolledStat(sdef.key, sdef.defense) : sdef.defense}`);
     const d = shopItemDesc(sdef); if (d) lines.push(d);
+    if (sdef.reqCombat) lines.push(`⚔ 요구 전투 레벨: ${sdef.reqCombat}`);
     if (sdef.sellPrice > 0) lines.push(`판매가: ${fmtGold(sdef.sellPrice)}`);
     if (sdef.tierKey) { const t = D().ITEM_TIERS.find(x => x.key === sdef.tierKey); if (t) lines.push(`◆ ${t.name.toUpperCase()}`); }
     return lines.join('\n');
@@ -1243,20 +1299,25 @@
   }
   function escHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
   function shopHTML() {
+    // V7: 무화폐 구매 경제 — 상점 주인은 "매입 전문"(시세표 + 판매). 아이템은 채집·드롭·조합으로만 얻는다.
     const cats = [];
-    for (const s of D().SHOP) if (cats.indexOf(s.category) < 0) cats.push(s.category);
-    return cats.map(cat => {
-      const items = D().SHOP.filter(s => s.category === cat && (s.buyPrice > 0 || (P.inv[s.key] || 0) > 0));
+    for (const sd of D().SHOP) if (cats.indexOf(sd.category) < 0) cats.push(sd.category);
+    const ownedCats = cats.map(cat => {
+      const items = D().SHOP.filter(sd => sd.category === cat && (P.inv[sd.key] || 0) > 0 && sd.sellPrice > 0);
       if (!items.length) return '';
-      return `<h4>${cat}</h4><div class="econ-shopgrid">${items.map(s => `
-        <div class="econ-shopitem econ-tt"${ttAttr(s)}>
-          ${iconImg(s.key)}<span>${s.tierKey ? `<span style="color:${tierColorByKey(s.tierKey)}">${s.name}</span>` : s.name}${s.dmg ? ` <span class="muted">공격 ${hasItem(s.key) ? rolledStat(s.key, s.dmg) + ' (내 롤)' : rollRangeText(s.dmg)}</span>` : ''}${s.defense ? ` <span class="muted">방어 ${hasItem(s.key) ? rolledStat(s.key, s.defense) + ' (내 롤)' : rollRangeText(s.defense)}</span>` : ''}</span>
-          <span class="muted econ-idesc">${shopItemDesc(s)}</span>
-          <span class="muted">${hasItem(s.key) ? '보유 ' + P.inv[s.key] : ''}</span>
-          ${s.buyPrice > 0 ? `<button class="btn btn--sm" data-act="econ_buy" data-key="${s.key}">구매 ${fmtGold(s.key === 'minion_slot_expander' ? minionSlotCost() : s.buyPrice)}</button>` : ''}
-          ${s.sellPrice > 0 ? `<button class="btn btn--sm btn--ghost" data-act="econ_sell" data-key="${s.key}" ${hasItem(s.key) ? '' : 'disabled'}>판매 ${fmtGold(s.sellPrice)}</button>` : ''}
+      return `<h4>${cat}</h4><div class="econ-shopgrid">${items.map(sd => `
+        <div class="econ-shopitem econ-tt"${ttAttr(sd)}>
+          ${iconImg(sd.key)}<span>${sd.tierKey ? `<span style="color:${tierColorByKey(sd.tierKey)}">${sd.name}</span>` : sd.name} <b>×${P.inv[sd.key]}</b></span>
+          <span class="muted econ-idesc">개당 ${fmtGold(sd.sellPrice)}</span>
+          <span>
+            <button class="btn btn--sm btn--ghost" data-act="econ_sell" data-key="${sd.key}">1개 판매</button>
+            <button class="btn btn--sm" data-act="econ_sell_all" data-key="${sd.key}">전부 판매</button>
+          </span>
         </div>`).join('')}</div>`;
     }).join('');
+    return `<h4>🛒 상점 주인 — 매입 전문</h4>
+      <p class="econ-note">💰 이 세계의 골드는 <b>강화·인챈트 합성·리포지</b>에만 쓰여요. 장비/도구/북은 전부 <b>채집·몬스터 드롭·조합</b>으로!<br>가진 아이템을 팔아 강화 자금을 모으세요. (희귀 아이템일수록 비싸게 매입)</p>
+      ${ownedCats || '<p class="muted">팔 수 있는 아이템이 없어요. 채집하고 사냥해서 가져오세요!</p>'}`;
   }
   function bankHTML() {
     return `<h4>🏦 은행 (하루 ${D().BANK.interestPctPerDay}% 이자, 잔고 ${fmtGold(D().BANK.interestCapBalance)}까지)</h4>
@@ -1271,7 +1332,6 @@
     const fuelLeft = P.minionFuelUntil > Date.now() ? Math.ceil((P.minionFuelUntil - Date.now()) / 3600000) : 0;
     return `<h4>⚙️ 미니언 (슬롯 ${P.minions.length}/${P.maxMinionSlots})</h4>
       <div class="econ-tierbtns">
-        <button class="btn btn--sm" data-act="econ_buy" data-key="minion_slot_expander" ${P.maxMinionSlots >= D().MINION_SLOT_MAX ? 'disabled' : ''}>슬롯 확장(${fmtGold(minionSlotCost())})</button>
         <button class="btn btn--sm" data-act="econ_minion_fuel" ${hasItem(D().MINION_FUEL.key) ? '' : 'disabled'}>연료 주입(보유 ${P.inv[D().MINION_FUEL.key] || 0})</button>
         ${fuelLeft ? `<span class="muted">🔥 연료 가동 중(~${fuelLeft}시간)</span>` : ''}
       </div>
@@ -1327,22 +1387,26 @@
   }
   function starForceHTML() {
     const SF = D().STARFORCE;
-    const stars = n => '★'.repeat(n) + '<span class="muted">' + '☆'.repeat(SF.maxStars - n) + '</span>';
-    const row = (slot, label, eq, effectDesc) => {
-      const n = P.starForce[slot];
+    const rows = ['weapon', 'armor'].map(slot => {
+      const eq = slot === 'weapon' ? equippedWeapon() : equippedArmor();
+      const cur = P.starForce[slot];
+      const row = starRow(slot);
+      const chance = starChanceTime(slot);
+      const bandNow = cur < 5 ? 0 : cur < 10 ? 1 : 2;
+      const gain = slot === 'weapon' ? `공격 +${SF.weaponAtkPctByBand[bandNow]}%` : `방어 +${SF.armorDefByBand[bandNow]} · 체력 +${SF.armorHpByBand[bandNow]}`;
       return `<div class="econ-starcard">
-        <h4>${label} — ${eq ? `<span style="color:${tierColorByKey(eq.tierKey)}">${eq.name}</span> <span class="muted">(초기치 ${rolledStat(eq.key, eq.dmg || eq.defense)} / 범위 ${rollRangeText(eq.dmg || eq.defense)})</span>` : '<span class="muted">장비 없음</span>'}</h4>
-        <div class="econ-stars">${stars(n)}</div>
-        <p class="muted">${effectDesc}</p>
-        <button class="btn btn--primary" data-act="econ_star" data-slot="${slot}" ${n >= SF.maxStars || !eq ? 'disabled' : ''}>
-          ${n >= SF.maxStars ? '최대 강화' : `강화 시도 — 성공률 ${Math.round(starRate(slot) * 100)}% (${fmtGold(starCost(slot))})`}
-        </button>
-        ${n >= SF.downgradeMinStar ? '<p class="muted">⚠ 실패 시 30% 확률로 성이 1개 하락해요</p>' : ''}
+        <h4>${slot === 'weapon' ? '⚔️ 무기' : '🛡 방어구'} ★${cur}${chance ? ' <span style="color:#f6c945">🌟 찬스 타임(100%)</span>' : ''}</h4>
+        <p class="muted">${eq ? eq.name : '장착 장비 없음'} · 누적: ${slot === 'weapon' ? `공격 +${starAtkPct()}%` : `방어 +${starDefFlat()} · 체력 +${starHpFlat()}`}</p>
+        ${cur >= SF.maxStars ? '<p><b>★15 최대 강화 달성!</b></p>' : `
+        <div class="econ-colgrid">
+          <div class="econ-colrow"><span>성공 ${Math.round((chance ? 1 : row[0]) * 100)}%</span><span>유지 ${Math.round((chance ? 0 : row[1]) * 100)}%</span><span>하락 ${Math.round((chance ? 0 : row[2]) * 100)}%</span><span>${row[3] > 0 ? `💣 파괴 ${Math.round((chance ? 0 : row[3]) * 100)}% (★${SF.boomResetTo} 리셋)` : '파괴 없음'}</span></div>
+          <div class="econ-colrow"><span>성공 시 ${gain}</span><span class="muted">구간: 1~5성 소폭 · 6~10성 중폭 · 11~15성 대폭</span></div>
+        </div>
+        <button class="btn" data-act="econ_star" data-slot="${slot}" ${eq ? '' : 'disabled'}>강화 (${fmtGold(starCost(slot))})</button>
+        <p class="muted">2연속 하락 시 다음 강화는 찬스 타임(100% 성공) — 메이플 방식</p>`}
       </div>`;
-    };
-    return `<h4>⭐ 스타포스 강화 — 성 하나하나가 강해지는 길 (실패의 아픔도 게임의 일부)</h4>
-      ${row('weapon', '무기', equippedWeapon(), `성당 최종 공격 +${SF.atkPctPerStar}% (현재 +${P.starForce.weapon * SF.atkPctPerStar}%)`)}
-      ${row('armor', '방어구', equippedArmor(), `성당 방어 +${SF.defPerStar} · 체력 +${SF.hpPerStar} (현재 +${P.starForce.armor * SF.defPerStar}방어/+${P.starForce.armor * SF.hpPerStar}체력)`)}`;
+    }).join('');
+    return `<h4>⭐ 스타포스 강화(메이플식 체계)</h4>${rows}`;
   }
   function reforgeHTML() {
     const row = (slot, label, eq) => {
@@ -1374,14 +1438,20 @@
       }).join('')}</div>`;
   }
   function dealsHTML() {
-    const bought = P.dealsDate === todayStr() ? P.dealsBought : {};
-    return `<h4>🎪 경매인의 일일 특가 (매일 3종, 각 1회)</h4>
-      <div class="econ-shopgrid">${dealsForToday().map((d, i) => `
-        <div class="econ-shopitem">
-          <span>${d.name}</span>
-          <span class="muted"><s>${fmtGold(d.orig)}</s> → <b style="color:#facc15">${fmtGold(d.price)}</b> (-${d.discPct}%)</span>
-          <button class="btn btn--sm" data-act="econ_deal_buy" data-i="${i}" ${bought[i] ? 'disabled' : ''}>${bought[i] ? '구매 완료' : '구매'}</button>
-        </div>`).join('')}</div>`;
+    // V7: 경매인 = 수집상. 매일 원하는 아이템 3종을 시세의 2.5배로 매입(무화폐 구매 경제의 골드 수급처)
+    const deals = dealsForToday();
+    return `<h4>🎪 수집상 — 오늘의 웃돈 매입(시세 ×2.5)</h4>
+      <p class="econ-note">수집상이 매일 다른 아이템을 비싸게 사들여요. 보유분을 팔아 강화 자금을 벌어보세요!</p>
+      <div class="econ-shopgrid">${deals.map((d, i) => {
+        const sd = shopDef(d.key); if (!sd) return '';
+        const owned = P.inv[d.key] || 0;
+        const bought = (P.dealsBought || []).indexOf(i) >= 0;
+        return `<div class="econ-shopitem econ-tt"${ttAttr(sd)}>
+          ${iconImg(d.key)}<span>${sd.name} <b>×${owned}</b></span>
+          <span class="muted econ-idesc">매입가 ${fmtGold(Math.round(sd.sellPrice * 2.5))} (시세 ${fmtGold(sd.sellPrice)})</span>
+          <button class="btn btn--sm" data-act="econ_deal_buy" data-i="${i}" ${owned > 0 && !bought ? '' : 'disabled'}>${bought ? '오늘 매입 완료' : '보유분 전부 판매(최대 64개)'}</button>
+        </div>`;
+      }).join('')}</div>`;
   }
   function collectionsHTML() {
     return D().COLLECTIONS.map(cat => `<h4>${cat.category}</h4><div class="econ-colgrid">${cat.resources.map(r => {
@@ -1520,6 +1590,7 @@
       case 'gather': gather(el.dataset.key); break;
       case 'buy': buyItem(el.dataset.key); break;
       case 'sell': sellItem(el.dataset.key, 1); break;
+      case 'sell_all': sellItem(el.dataset.key, P.inv[el.dataset.key] || 0); break;
       case 'minion_place': placeMinion(el.dataset.key); break;
       case 'minion_collect': collectMinion(Number(el.dataset.idx)); break;
       case 'minion_upgrade': upgradeMinion(Number(el.dataset.idx)); break;
