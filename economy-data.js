@@ -98,15 +98,16 @@
   // 도구 없음 = 0.5배. 상위 도구 보유 시 최고 티어의 배율 적용.
   const TOOL_TIER_NAMES = ['나무', '돌', '철', '다이아', '태초의'];
   const TOOL_MULS = [1.0, 1.2, 1.45, 1.75, 2.2];
-  const TOOL_PRICES = [50, 200, 800, 5000, 30000];
+  const TOOL_PRICES = [0, 0, 0, 0, 0];   // V7: 도구는 조합 전용(무화폐 구매 경제)
   const TOOL_FAMILY_NAMES = { pickaxe: '곡괭이', hoe: '괭이', axe: '도끼', rod: '낚싯대' };
   const TOOL_TIER_KEYS = ['wooden', 'stone', 'iron', 'diamond', 'ancient'];
-  const TOOLS = {};   // family -> [{key,name,mul,price}] 낮은 티어부터
+  const TOOL_REQS = [0, 1, 3, 6, 10];   // V7: 티어별 요구 스킬 레벨(곡괭이=채광 등)
+  const TOOLS = {};   // family -> [{key,name,mul,price,req}] 낮은 티어부터
   Object.keys(TOOL_FAMILY_NAMES).forEach(fam => {
     TOOLS[fam] = TOOL_TIER_KEYS.map((tk, i) => ({
       key: fam === 'rod' && i === 0 ? 'fishing_rod' : `${tk}_${fam}`,   // 기존 세이브 호환(fishing_rod 키 유지)
       name: fam === 'rod' && i === 0 ? '낚싯대' : `${TOOL_TIER_NAMES[i]} ${TOOL_FAMILY_NAMES[fam]}`,
-      mul: TOOL_MULS[i], price: fam === 'rod' ? Math.round(TOOL_PRICES[i] * 1.5) : TOOL_PRICES[i],
+      mul: TOOL_MULS[i], price: 0, req: TOOL_REQS[i],
     }));
   });
 
@@ -235,10 +236,10 @@
   ITEM_TIERS.forEach((t, i) => {
     const baseBuy = Math.round(60 * Math.pow(3.1, i));
     const dmg = TIER_WEAPON_DMG[i];
-    EQUIPMENT.weapons.push({ key: `weapon_${t.key}`, name: WEAPON_NAMES[i], wclass: 'sword', tierKey: t.key, dmg, buyPrice: baseBuy, sellPrice: Math.round(baseBuy * 0.2) });
-    EQUIPMENT.weapons.push({ key: `bow_${t.key}`, name: BOW_NAMES[i], wclass: 'bow', tierKey: t.key, dmg, buyPrice: baseBuy, sellPrice: Math.round(baseBuy * 0.2) });
-    EQUIPMENT.weapons.push({ key: `staff_${t.key}`, name: STAFF_NAMES[i], wclass: 'staff', tierKey: t.key, dmg, buyPrice: baseBuy, sellPrice: Math.round(baseBuy * 0.2) });
-    EQUIPMENT.armor.push({ key: `armor_${t.key}`, name: ARMOR_NAMES[i], tierKey: t.key, defense: Math.round(6 * t.statMultiplier), buyPrice: Math.round(baseBuy * 1.3), sellPrice: Math.round(baseBuy * 1.3 * 0.2) });
+    EQUIPMENT.weapons.push({ key: `weapon_${t.key}`, name: WEAPON_NAMES[i], wclass: 'sword', tierKey: t.key, dmg, buyPrice: 0, sellPrice: Math.round(baseBuy * 0.2) });
+    EQUIPMENT.weapons.push({ key: `bow_${t.key}`, name: BOW_NAMES[i], wclass: 'bow', tierKey: t.key, dmg, buyPrice: 0, sellPrice: Math.round(baseBuy * 0.2) });
+    EQUIPMENT.weapons.push({ key: `staff_${t.key}`, name: STAFF_NAMES[i], wclass: 'staff', tierKey: t.key, dmg, buyPrice: 0, sellPrice: Math.round(baseBuy * 0.2) });
+    EQUIPMENT.armor.push({ key: `armor_${t.key}`, name: ARMOR_NAMES[i], tierKey: t.key, defense: TIER_ARMOR_DEF[i], buyPrice: 0, sellPrice: Math.round(baseBuy * 1.3 * 0.2) });
   });
   // 던전/보스 전용 무기(상점 판매 X, 드롭 전용).
   // 실제 스카이블럭 방식: 같은 등급이면 외형(스프라이트)은 같고 이름·수치만 다른 무기가 여럿 존재
@@ -269,11 +270,19 @@
   // 무기/방어구 슬롯별 0~15성. 성공률은 성수가 오를수록 하락, 5성부터 실패 시 30% 확률로 1성 하락.
   const STARFORCE = {
     maxStars: 15,
-    costBase: 400, costMul: 1.55,                       // n성→n+1성 비용 = 400 × 1.55^n
-    successRates: [0.95, 0.90, 0.85, 0.80, 0.75, 0.65, 0.60, 0.55, 0.50, 0.45, 0.35, 0.30, 0.25, 0.20, 0.15],
-    downgradeChanceOnFail: 0.30, downgradeMinStar: 5,   // 5성 이상에서 실패하면 30% 확률 1성 하락
-    atkPctPerStar: 4,                                    // 무기: 성당 최종 공격 +4%
-    defPerStar: 3, hpPerStar: 10,                        // 방어구: 성당 방어 +3, 체력 +10
+    // 메이플식 체계: 성별 [성공, 유지, 하락, 파괴] — 파괴돼도 장비는 남고 12성으로 리셋
+    table: [
+      [0.95, 0.05, 0.00, 0.00], [0.90, 0.10, 0.00, 0.00], [0.85, 0.15, 0.00, 0.00], [0.85, 0.15, 0.00, 0.00], [0.80, 0.20, 0.00, 0.00],   // →1~5성: 하락 없음
+      [0.75, 0.25, 0.00, 0.00], [0.70, 0.30, 0.00, 0.00], [0.65, 0.35, 0.00, 0.00], [0.60, 0.40, 0.00, 0.00], [0.55, 0.45, 0.00, 0.00],   // →6~10성
+      [0.50, 0.40, 0.10, 0.00], [0.45, 0.40, 0.15, 0.00], [0.40, 0.35, 0.18, 0.07], [0.35, 0.35, 0.21, 0.09], [0.30, 0.33, 0.26, 0.11],   // →11~15성: 하락/파괴 구간
+    ],
+    boomResetTo: 12,        // 파괴 시 12성으로
+    chanceTime: true,       // 2연속 하락 → 다음 강화 100% 성공(찬스 타임)
+    costBase: 400, costMul: 1.55,
+    // 구간별 스탯 상승(뒤 구간일수록 큰 폭 — 단순 %/성 아님)
+    weaponAtkPctByBand: [2, 3, 5],    // 1~5성 +2%/성 · 6~10성 +3%/성 · 11~15성 +5%/성
+    armorDefByBand: [2, 3, 5],
+    armorHpByBand: [6, 10, 16],
   };
 
   /* ---------------- 리포지(실제 스카이블럭 리포지 명칭) ---------------- */
@@ -310,7 +319,7 @@
     ITEM_TIERS.forEach((t, ti) => {
       bases.forEach((bn, i) => {
         const dmg = GEN_WEAPON_DMG_BASE[ti] + i;
-        const buyable = i < 2;
+        const buyable = false;   // V7: 장비는 100% 드롭/조합 — 화폐는 강화·합성 전용
         const price = Math.round(60 * Math.pow(3.1, ti) * (0.5 + i * 0.18));
         out.push({ key: `g_${prefix}_${t.key}_${i}`, name: `${GEN_TIER_PREFIX[ti]} ${bn}`, wclass, tierKey: t.key,
           dmg, buyPrice: buyable ? price : 0, sellPrice: Math.round(price * 0.2) });
@@ -318,6 +327,8 @@
     });
     return out;
   }
+  // V7: 티어별 요구 전투 레벨(장비 착용 조건 — 실제 스카이블럭식 게이트)
+  const REQ_COMBAT_BY_TIER = { common: 0, uncommon: 2, rare: 5, epic: 9, legendary: 14, mythic: 20, ancient: 26 };
   EQUIPMENT.weapons = EQUIPMENT.weapons
     .concat(genFamily('sw', GEN_SWORD_BASES, 'sword'), genFamily('bw', GEN_BOW_BASES, 'bow'), genFamily('st', GEN_STAFF_BASES, 'staff'))
     .sort((a, b) => a.dmg - b.dmg || (a.key < b.key ? -1 : 1));
@@ -325,13 +336,15 @@
   ITEM_TIERS.forEach((t, ti) => {
     GEN_ARMOR_BASES.forEach((bn, i) => {
       const def = GEN_ARMOR_DEF_BASE[ti] + i;
-      const buyable = i < 5;
+      const buyable = false;   // V7: 전 장비 드롭/조합 전용
       const price = Math.round(78 * Math.pow(3.1, ti) * (0.5 + i * 0.18));
       GEN_ARMORS.push({ key: `g_ar_${t.key}_${i}`, name: `${GEN_TIER_PREFIX[ti]} ${bn}`, tierKey: t.key,
         defense: def, buyPrice: buyable ? price : 0, sellPrice: Math.round(price * 0.2) });
     });
   });
   EQUIPMENT.armor = EQUIPMENT.armor.concat(GEN_ARMORS).sort((a, b) => a.defense - b.defense || (a.key < b.key ? -1 : 1));
+  EQUIPMENT.weapons.forEach(w => { w.reqCombat = REQ_COMBAT_BY_TIER[w.tierKey] || 0; });
+  EQUIPMENT.armor.forEach(a => { a.reqCombat = REQ_COMBAT_BY_TIER[a.tierKey] || 0; });
   // 도구도 계열별 105종 추가(전부 드롭 전용) — 배율 0.6~2.6, 기존 5종 사다리는 그대로 유지
   const GEN_TOOL_BASES = ['공구', '연장', '장비', '명품', '걸작', '비장의 도구', '유물 공구', '고대 연장', '전설의 공구', '신화의 연장', '용의 도구', '별의 공구', '태초의 연장', '창세의 공구', '신의 연장'];
   Object.keys(TOOL_FAMILY_NAMES).forEach(fam => {
@@ -339,7 +352,7 @@
     ITEM_TIERS.forEach((t, ti) => {
       GEN_TOOL_BASES.forEach((bn, i) => {
         const mul = +(0.6 + (ti * 15 + i) * 0.019).toFixed(2);   // 0.6 ~ 2.58
-        gen.push({ key: `g_t_${fam}_${t.key}_${i}`, name: `${GEN_TIER_PREFIX[ti]} ${TOOL_FAMILY_NAMES[fam]} ${bn}`, tierKey: t.key, mul, price: 0 });
+        gen.push({ key: `g_t_${fam}_${t.key}_${i}`, name: `${GEN_TIER_PREFIX[ti]} ${TOOL_FAMILY_NAMES[fam]} ${bn}`, tierKey: t.key, mul, price: 0, req: Math.min(25, Math.max(0, Math.round((mul - 1) * 10))) });
       });
     });
     TOOLS[fam] = TOOLS[fam].concat(gen).sort((a, b) => a.mul - b.mul);
@@ -348,7 +361,7 @@
   /* ---------------- 장신구(부적) 20종 — 마력(Magical Power) 시스템 ---------------- */
   // 보유한 모든 부적의 마력 합계가 전역 스탯 보너스로 작동(스카이블럭 MP 방식).
   // effect: str/def/hp 직접 스탯, doubleZone: 해당 존 채집 2배 확률(%), minionSpeed/sellBonus: 특수효과(%)
-  function tali(key, name, tierKey, price, effect, desc) { return { key, name, tierKey, buyPrice: price, sellPrice: Math.round(price * 0.2), effect, desc }; }
+  function tali(key, name, tierKey, price, effect, desc) { return { key, name, tierKey, buyPrice: 0, sellPrice: Math.round(price * 0.2), effect, desc }; }   // V7: 부적은 몹/보스/던전 드롭·조합 전용
   const TALISMANS = [
     tali('talisman_zombie', '좀비 부적', 'common', 400, { hp: 5 }, '체력 +5'),
     tali('talisman_farming', '농부의 부적', 'common', 1500, { doubleZone: 'farm', doublePct: 5 }, '농장 수확 2배 확률 +5%'),
@@ -397,6 +410,7 @@
   // 전역 슬롯 방식: 무기 인챈트는 현재 장착 무기에, 방어구 인챈트는 방어구에 적용(장비 교체 시 유지).
   // maxLvl = 인챈트북으로 도달 가능한 상한(위키: 예리함 7·치명 7·선제공격 5·거인사냥꾼 7·약탈 5·보호 7·성장 7).
   // 그 위로는 "혼돈의 마법부여"(골드+북 소모, 확률 성공/실패 시 레벨 하락 위험)로 +5레벨까지 돌파 가능 — 노가다·운빨 초월 강화.
+  // V7: 인챈트북은 몹 드롭 전용. 부여(합성)에는 골드 + 마법부여 스킬 레벨 필요.
   const ENCHANTS = [
     // ── 무기 20종 ──  fx: dmg(상시%), first(첫타%), dmgBig(체력10만+%), dmgLow(적HP50%↓), dmgHigh(적HP50%↑),
     //                  dmgVs(특정 슬레이어%), dmgBoss(던전보스%), third(3타마다%), coin(골드%), xp(전투XP%),
@@ -473,6 +487,25 @@
     { key: 'iron_axe', needs: { iron: 24, oaklog: 8 }, gives: 1, unlock: { resource: 'oaklog', tier: 2 } },
     { key: 'minion_fuel_coal', needs: { coal: 32 }, gives: 1, unlock: { resource: 'coal', tier: 2 } },
     { key: 'talisman_potato', needs: { potato: 160 }, gives: 1, unlock: { resource: 'potato', tier: 2 } },
+    { key: 'talisman_zombie', needs: { rotten_flesh: 160 }, gives: 1, unlock: { resource: 'rotten_flesh', tier: 2 } },
+    { key: 'talisman_farming', needs: { wheat: 256 }, gives: 1, unlock: { resource: 'wheat', tier: 3 } },
+    { key: 'talisman_mining', needs: { coal: 256 }, gives: 1, unlock: { resource: 'coal', tier: 3 } },
+    { key: 'talisman_lumber', needs: { oaklog: 256 }, gives: 1, unlock: { resource: 'oaklog', tier: 3 } },
+    { key: 'talisman_fisher_anklet', needs: { rawfish: 160, prismarine: 16 }, gives: 1, unlock: { resource: 'rawfish', tier: 3 } },
+    { key: 'talisman_campfire', needs: { sprucelog: 128, coal: 64 }, gives: 1, unlock: { resource: 'sprucelog', tier: 2 } },
+    { key: 'talisman_feather', needs: { string: 64, bone: 64 }, gives: 1, unlock: { resource: 'bone', tier: 2 } },
+    { key: 'reforge_stone_common', needs: { gold: 32, diamond: 4 }, gives: 1, unlock: { resource: 'gold', tier: 3 } },
+    { key: 'reforge_stone_rare', needs: { diamond: 32, obsidian: 8 }, gives: 1, unlock: { resource: 'diamond', tier: 4 } },
+    { key: 'diamond_pickaxe', needs: { diamond: 12, oaklog: 4 }, gives: 1, unlock: { resource: 'diamond', tier: 2 } },
+    { key: 'diamond_axe', needs: { diamond: 12, oaklog: 4 }, gives: 1, unlock: { resource: 'diamond', tier: 2 } },
+    { key: 'diamond_hoe', needs: { diamond: 10, oaklog: 4 }, gives: 1, unlock: { resource: 'diamond', tier: 2 } },
+    { key: 'iron_hoe', needs: { iron: 20, oaklog: 6 }, gives: 1, unlock: { resource: 'iron', tier: 2 } },
+    { key: 'iron_rod', needs: { iron: 16, string: 8 }, gives: 1, unlock: { resource: 'string', tier: 2 } },
+    { key: 'diamond_rod', needs: { diamond: 10, string: 16 }, gives: 1, unlock: { resource: 'clay', tier: 3 } },
+    { key: 'ancient_pickaxe', needs: { dungeon_essence: 60, diamond: 32 }, gives: 1, unlock: { resource: 'diamond', tier: 5 } },
+    { key: 'ancient_axe', needs: { dungeon_essence: 60, diamond: 32 }, gives: 1, unlock: { resource: 'obsidian', tier: 4 } },
+    { key: 'ancient_hoe', needs: { dungeon_essence: 50, diamond: 24 }, gives: 1, unlock: { resource: 'wheat', tier: 6 } },
+    { key: 'ancient_rod', needs: { dungeon_essence: 50, prismarine: 64 }, gives: 1, unlock: { resource: 'prismarine', tier: 4 } },
     { key: 'auto_shipping_module', needs: { iron: 64, redstone: 32 }, gives: 1, unlock: { resource: 'redstone', tier: 2 } },
     { key: 'diamond_spreading', needs: { diamond: 64, gold: 32 }, gives: 1, unlock: { resource: 'diamond', tier: 3 } },
     { key: 'treecapitator', needs: { oaklog: 128, sprucelog: 64, gold: 32, diamond: 8 }, gives: 1, unlock: { resource: 'oaklog', tier: 5 } },
@@ -496,16 +529,17 @@
     // 도구 4계열 × 5티어
     ...Object.keys(TOOLS).flatMap(fam => TOOLS[fam].map(t => ({ key: t.key, name: t.name, category: '도구', tierKey: t.tierKey, buyPrice: t.price, sellPrice: Math.round((t.price || 900 * t.mul) * 0.2), stackSize: 1 }))),
     // 강화/미니언/인챈트
-    { key: 'reforge_stone_common', name: '리포지 스톤(일반)', category: '강화재료', buyPrice: 250, sellPrice: 50, stackSize: 64 },
-    { key: 'reforge_stone_rare', name: '리포지 스톤(희귀)', category: '강화재료', buyPrice: 1000, sellPrice: 200, stackSize: 64 },
+    { key: 'reforge_stone_common', name: '리포지 스톤(일반)', category: '강화재료', buyPrice: 0, sellPrice: 50, stackSize: 64 },
+    { key: 'reforge_stone_rare', name: '리포지 스톤(희귀)', category: '강화재료', buyPrice: 0, sellPrice: 200, stackSize: 64 },
     { key: 'essence_reforge_stone', name: '던전 정수 리포지 스톤', category: '강화재료', buyPrice: 0, sellPrice: 400, stackSize: 64 },
     { key: 'essence_cosmetic_cape', name: '지배자의 망토(장식)', category: '장식', buyPrice: 0, sellPrice: 5000, stackSize: 1 },
+    { key: 'dungeon_essence', name: '던전 정수', category: '재료', buyPrice: 0, sellPrice: 120, stackSize: 64 },
     { key: 'treecapitator', name: '트리캐피테이터(나무 통째 벌목)', category: '특수 도구', buyPrice: 0, sellPrice: 20000, stackSize: 1 },
     { key: 'stonk', name: '스통크(채굴 가속 곡괭이)', category: '특수 도구', buyPrice: 0, sellPrice: 25000, stackSize: 1 },
-    { key: 'minion_slot_expander', name: '미니언 슬롯 확장권', category: '미니언', buyPrice: MINION_SLOT_COST_BASE, sellPrice: 0, stackSize: 1 },
-    { key: 'auto_shipping_module', name: '자동출하 모듈', category: '미니언', buyPrice: 3000, sellPrice: 500, stackSize: 1 },
+    { key: 'minion_slot_expander', name: '미니언 슬롯 확장권', category: '미니언', buyPrice: 0, sellPrice: 0, stackSize: 1 },
+    { key: 'auto_shipping_module', name: '자동출하 모듈', category: '미니언', buyPrice: 0, sellPrice: 500, stackSize: 1 },
     { key: 'diamond_spreading', name: '다이아 살포기(생산 시 10% 다이아 추가)', category: '미니언', buyPrice: 0, sellPrice: 2000, stackSize: 1 },
-    { key: MINION_FUEL.key, name: MINION_FUEL.name, category: '미니언', buyPrice: MINION_FUEL.price, sellPrice: 100, stackSize: 64 },
+    { key: MINION_FUEL.key, name: MINION_FUEL.name, category: '미니언', buyPrice: 0, sellPrice: 100, stackSize: 64 },
     // 인챈티드 자원(제작 전용, 판매가 20% 프리미엄)
     ...ENCHANTED_BLOCK_RES.map(rk => {
       const r = COLLECTIONS.flatMap(c => c.resources).find(x => x.key === rk);
@@ -515,12 +549,11 @@
       const r = COLLECTIONS.flatMap(c => c.resources).find(x => x.key === rk);
       return { key: `enchanted_${rk}`, name: `인챈티드 ${r.name}`, category: '제작품', buyPrice: 0, sellPrice: Math.round(r.sellPrice * 160 * 1.2), stackSize: 64 };
     }),
-    ...ENCHANTS.map(e => ({ key: `enchant_book_${e.key}`, name: `인챈트북: ${e.name}`, category: '인챈트', buyPrice: e.bookBasePrice, sellPrice: Math.round(e.bookBasePrice * 0.2), stackSize: 64 })),
+    ...ENCHANTS.map(e => ({ key: `enchant_book_${e.key}`, name: `인챈트북: ${e.name}`, category: '인챈트', buyPrice: 0, sellPrice: Math.round(e.bookBasePrice * 0.2), stackSize: 64 })),   // V7: 북은 몹 드롭 전용 — 골드는 합성(부여) 비용에만
     // 부적 20종
     ...TALISMANS.map(t => ({ key: t.key, name: `${t.name} [${ITEM_TIERS.find(x => x.key === t.tierKey).name}]`, category: '장신구', tierKey: t.tierKey, buyPrice: t.buyPrice, sellPrice: t.sellPrice, stackSize: 1 })),
     // 펫 알(eggPrice>0만 상점 판매, 나머지는 드롭 전용)
-    ...PETS.filter(p => p.eggPrice > 0).map(p => ({ key: `pet_egg_${p.key}`, name: `펫 알: ${p.name}`, category: '펫', tierKey: p.tierKey, buyPrice: p.eggPrice, sellPrice: Math.round(p.eggPrice * 0.2), stackSize: 1 })),
-    ...PETS.filter(p => !(p.eggPrice > 0)).map(p => ({ key: `pet_egg_${p.key}`, name: `펫 알: ${p.name}`, category: '펫', tierKey: p.tierKey, buyPrice: 0, sellPrice: 2000, stackSize: 1 })),
+    ...PETS.map(p => ({ key: `pet_egg_${p.key}`, name: `펫 알: ${p.name}`, category: '펫', tierKey: p.tierKey, buyPrice: 0, sellPrice: Math.max(2000, Math.round((p.eggPrice || 10000) * 0.2)), stackSize: 1 })),   // V7: 펫 알도 몹/낚시/던전 드롭 전용
     // 원자재 31종(sellPrice는 컬렉션 정의에서)
     ...COLLECTIONS.flatMap(cat => cat.resources.map(r => ({ key: r.key, name: r.name, category: '원자재', buyPrice: 0, sellPrice: r.sellPrice, stackSize: 64 }))),
     // 장비(던전 전용은 buyPrice 0 → 구매 불가, 판매만 가능)
