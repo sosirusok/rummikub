@@ -232,8 +232,6 @@
   ];
   EQUIPMENT.weapons = EQUIPMENT.weapons.concat(DUNGEON_WEAPONS).sort((a, b) => a.dmg - b.dmg || (a.key < b.key ? -1 : 1));
   EQUIPMENT.armor = EQUIPMENT.armor.concat(DUNGEON_ARMORS).sort((a, b) => a.defense - b.defense);
-  const CLASS_WEAPON_AFFINITY = { warrior: 'sword', rogue: 'sword', archer: 'bow', mage: 'staff' };
-  const AFFINITY_MUL = 1.25;
 
   /* ---------------- 스타포스 강화(메이플 시스템) ---------------- */
   // 무기/방어구 슬롯별 0~15성. 성공률은 성수가 오를수록 하락, 5성부터 실패 시 30% 확률로 1성 하락.
@@ -395,11 +393,13 @@
   ];
   const DAILY_SELL_LIMIT_PER_STACK = 10;   // dailySellLimit = 10 * stackSize
 
-  const JOB_CLASSES = [
-    { key: 'warrior', name: '전사', flavor: '검과 방패를 함께 다루는 근접 수호자.', hp: 30, defense: 15, strength: 10, intelligence: 0, dungeonRole: '탱커 — 피격 시 파티 피해 10% 감소' },
-    { key: 'mage', name: '마법사', flavor: '원소의 힘을 다루는 지팡이 술사.', hp: 15, defense: 5, strength: 0, intelligence: 25, dungeonRole: '광역 딜러 — 퍼즐방 성공률 +20%' },
-    { key: 'archer', name: '궁수', flavor: '활시위를 당겨 원거리에서 저격하는 유격병.', hp: 18, defense: 6, strength: 12, intelligence: 6, dungeonRole: '원거리 딜러 — 함정방 회피 보너스' },
-    { key: 'rogue', name: '도적', flavor: '단검과 은신으로 급소를 노리는 암살자.', hp: 20, defense: 8, strength: 15, intelligence: 2, dungeonRole: '버스트 딜러 — 함정 피해 50% 감소, 보물방 발견 +15%' },
+  // 실제 스카이블럭 방식: 상시 직업은 없음. 클래스는 카타콤 던전 전용(입장 시 선택) — 실제 5클래스 라인업.
+  const DUNGEON_CLASSES = [
+    { key: 'berserk', name: '버서크', emoji: '🗡️', perk: '던전 공격 +25%', dmgMul: 1.25 },
+    { key: 'mage', name: '메이지', emoji: '🔮', perk: '퍼즐 자동 성공 + 던전 공격 +10%', dmgMul: 1.10, autoPuzzle: true },
+    { key: 'archer', name: '아처', emoji: '🏹', perk: '각 몬스터 첫 타격 +50% + 던전 공격 +10%', dmgMul: 1.10, firstHitMul: 1.5 },
+    { key: 'tank', name: '탱크', emoji: '🛡️', perk: '던전에서 받는 피해 -30%', dmgTakenMul: 0.70 },
+    { key: 'healer', name: '힐러', emoji: '💚', perk: '방 이동 회복 30% + 공격 시 HP +3', roomHealPct: 0.30, healPerHit: 3 },
   ];
 
   const ZONES = [
@@ -427,9 +427,9 @@
     ITEM_TIERS, COLLECTIONS, SKILLS, GATHER_TABLE, TOOLS, MINIONS, MINION_STORAGE_BASE, MINION_STORAGE_UPGRADED,
     MINION_STORAGE_UPGRADE_COST, MINION_OFFLINE_CAP_HOURS, MINION_SLOT_MAX, MINION_SLOT_COST_BASE, MINION_SLOT_COST_MUL,
     MINION_FUEL, SLAYERS, DUNGEON, DUNGEON_ROOM_SCORE, ESSENCE_SHOP, SHOP, DAILY_SELL_LIMIT_PER_STACK,
-    EQUIPMENT, CLASS_WEAPON_AFFINITY, AFFINITY_MUL, STARFORCE, REFORGES,
+    EQUIPMENT, STARFORCE, REFORGES,
     TALISMANS, MAGICAL_POWER, PETS, PET_XP_BASE, PET_XP_EXP, PET_MAX_LEVEL,
     ENCHANTS, CHAOS_ENCHANT, RECIPES,
-    FAIRY_SOULS, BANK, DAILY_DEALS, JOB_CLASSES, ZONES, EASTER_EGGS,
+    FAIRY_SOULS, BANK, DAILY_DEALS, DUNGEON_CLASSES, ZONES, EASTER_EGGS,
   };
 })();

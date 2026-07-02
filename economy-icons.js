@@ -28,13 +28,40 @@
 
   function findShop(key) { return (D().SHOP || []).find(s => s.key === key); }
 
-  // 외부 스프라이트 시트 훅(사용자가 고품질 이미지 제공 시 assets/econ_items.png + window.ECON_SPRITE_MAP 사용)
-  let sheet = null, sheetReady = false;
+  // 외부 스프라이트 시트(assets/econ_items.png, 8열×6행 고정 그리드) — 있으면 자동 활성화, 없으면 절차 생성 아이콘 폴백
+  const SPRITE_COLS = 8, SPRITE_ROWS = 6;
+  // 셀 좌표 [col,row] — 이미지 생성 프롬프트의 번호 순서(1번=0,0 … 48번=7,5)와 1:1
+  const SPRITE_CELLS = {
+    weapon_common: [0, 0], weapon_uncommon: [1, 0], weapon_rare: [2, 0], weapon_epic: [3, 0], weapon_legendary: [4, 0], weapon_mythic: [5, 0], weapon_ancient: [6, 0], necron_blade: [7, 0],
+    bow_common: [0, 1], bow_uncommon: [1, 1], bow_rare: [2, 1], bow_epic: [3, 1], bow_legendary: [4, 1], bow_mythic: [5, 1], bow_ancient: [6, 1], spirit_bow: [7, 1],
+    staff_common: [0, 2], staff_uncommon: [1, 2], staff_rare: [2, 2], staff_epic: [3, 2], staff_legendary: [4, 2], staff_mythic: [5, 2], staff_ancient: [6, 2], bonzo_staff: [7, 2],
+    armor_common: [0, 3], armor_uncommon: [1, 3], armor_rare: [2, 3], armor_epic: [3, 3], armor_legendary: [4, 3], armor_mythic: [5, 3], armor_ancient: [6, 3], wither_armor: [7, 3],
+    wooden_pickaxe: [0, 4], iron_pickaxe: [1, 4], diamond_pickaxe: [2, 4], ancient_pickaxe: [3, 4], iron_axe: [4, 4], iron_hoe: [5, 4], fishing_rod: [6, 4], livid_dagger: [7, 4],
+    enchant_book: [0, 5], reforge_stone: [1, 5], pet_egg: [2, 5], minion_item: [3, 5], talisman: [4, 5], talisman_dragon_heart: [5, 5], fairy_soul: [6, 5], dungeon_essence: [7, 5],
+    // 유사 아이템 별칭(같은 도상 공유)
+    giant_sword: [5, 0], adaptive_armor: [2, 3], shadow_assassin_armor: [3, 3],
+    stone_pickaxe: [1, 4], wooden_axe: [4, 4], stone_axe: [4, 4], diamond_axe: [4, 4], ancient_axe: [4, 4],
+    wooden_hoe: [5, 4], stone_hoe: [5, 4], diamond_hoe: [5, 4], ancient_hoe: [5, 4],
+    stone_rod: [6, 4], iron_rod: [6, 4], diamond_rod: [6, 4], ancient_rod: [6, 4],
+    essence_reforge_stone: [1, 5], minion_slot_expander: [3, 5], auto_shipping_module: [3, 5], diamond_spreading: [3, 5],
+    skin_diamond_steve: [3, 5], minion_fuel_coal: [1, 5],
+  };
+  function spriteCellFor(key) {
+    if (SPRITE_CELLS[key]) return SPRITE_CELLS[key];
+    if (/^enchant_book_/.test(key)) return SPRITE_CELLS.enchant_book;
+    if (/^pet_egg_/.test(key)) return SPRITE_CELLS.pet_egg;
+    if (key === 'talisman_dragon_heart') return SPRITE_CELLS.talisman_dragon_heart;
+    if (/^talisman_/.test(key)) return SPRITE_CELLS.talisman;
+    if (key === 'dungeon_essence') return SPRITE_CELLS.dungeon_essence;
+    return null;
+  }
+  let sheet = null, sheetReady = false, sheetTried = false;
   function trySheet() {
-    if (sheet || !window.ECON_SPRITE_MAP) return;
+    if (sheetTried) return;
+    sheetTried = true;
     sheet = new Image();
     sheet.onload = () => { sheetReady = true; for (const k in cache) delete cache[k]; };
-    sheet.onerror = () => { sheet = null; };
+    sheet.onerror = () => { sheet = null; };   // 시트 없음 → 절차 생성 아이콘 폴백
     sheet.src = 'assets/econ_items.png';
   }
   trySheet();
@@ -194,11 +221,13 @@
     const cv = document.createElement('canvas'); cv.width = cv.height = S;
     const c = cv.getContext('2d');
     if (!c) return '';
-    // 외부 시트 우선
-    if (sheetReady && window.ECON_SPRITE_MAP && window.ECON_SPRITE_MAP[key]) {
-      const m = window.ECON_SPRITE_MAP[key];   // {x,y,w,h} 셀 좌표
-      c.imageSmoothingEnabled = false;
-      c.drawImage(sheet, m.x, m.y, m.w, m.h, 2, 2, S - 4, S - 4);
+    // 외부 시트 우선(8×6 그리드에서 해당 셀을 잘라 사용 — 셀 크기는 이미지 실제 크기에서 자동 계산)
+    const cell = spriteCellFor(key);
+    if (sheetReady && cell) {
+      const cw = sheet.width / SPRITE_COLS, ch = sheet.height / SPRITE_ROWS;
+      const pad = Math.round(Math.min(cw, ch) * 0.04);   // 셀 가장자리 여백(이웃 셀 침범 방지)
+      c.imageSmoothingEnabled = true;
+      c.drawImage(sheet, cell[0] * cw + pad, cell[1] * ch + pad, cw - pad * 2, ch - pad * 2, 0, 0, S, S);
       return (cache[key] = cv.toDataURL());
     }
     const cat = categoryOf(key);

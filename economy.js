@@ -15,7 +15,7 @@
   /* ---------------- 저장/불러오기 ---------------- */
   function freshPlayer() {
     return {
-      gold: 500, class: null, reforgeBonus: {}, inv: {}, minions: [], maxMinionSlots: 5,
+      gold: 500, dungeonClass: 'berserk', reforgeBonus: {}, inv: {}, minions: [], maxMinionSlots: 5,
       skillsXp: { combat: 0, mining: 0, farming: 0, foraging: 0, fishing: 0, enchanting: 0, taming: 0, social: 0 },
       collections: {}, collectionTier: {},
       slayerBest: {}, dungeonBest: {},
@@ -36,6 +36,12 @@
   }
   // 구버전 세이브 마이그레이션: 누락 필드를 기본값으로 채움(중첩 객체 포함)
   function migrate(p) {
+    // 구버전 상시 직업 → 던전 클래스 이전(기본값 채우기 전에 선행 — 기본값이 덮어쓰지 않도록)
+    if (p.class !== undefined) {
+      const clsMap = { warrior: 'berserk', mage: 'mage', archer: 'archer', rogue: 'berserk' };
+      if (p.dungeonClass === undefined) p.dungeonClass = clsMap[p.class] || 'berserk';
+      delete p.class;
+    }
     const fresh = freshPlayer();
     for (const k in fresh) if (p[k] === undefined) p[k] = fresh[k];
     for (const k in fresh.skillsXp) if (p.skillsXp[k] === undefined) p.skillsXp[k] = 0;
@@ -215,26 +221,24 @@
   }
 
   /* ---------------- 전투력(장비+펫+부적+인챈트+스타포스+리포지+스킬 통합) ---------------- */
-  function classDef() { return D().JOB_CLASSES.find(c => c.key === P.class) || { strength: 0, defense: 0, hp: 0, intelligence: 0 }; }
+  function dungeonClassDef(key) { return D().DUNGEON_CLASSES.find(c => c.key === key) || D().DUNGEON_CLASSES[0]; }
   function bestOwnedEquip(list) { for (let i = list.length - 1; i >= 0; i--) if (hasItem(list[i].key)) return list[i]; return null; }
-  // 무기: 직업 상성(전사/도적=검, 궁수=활, 마법사=지팡이 +25%)을 반영한 실효 위력 최고 장비 자동 장착
-  function weaponAffinityMul(w) { return D().CLASS_WEAPON_AFFINITY[P.class] === w.wclass ? D().AFFINITY_MUL : 1; }
+  // 무기: 검/활/지팡이 3계열 중 보유한 최고 위력 자동 장착(실제 스카이블럭처럼 직업 제한 없음)
   function equippedWeapon() {
-    let best = null, bestEff = -1;
+    let best = null, bestDmg = -1;
     for (const w of D().EQUIPMENT.weapons) {
       if (!hasItem(w.key)) continue;
-      const eff = w.dmg * weaponAffinityMul(w);
-      if (eff >= bestEff) { bestEff = eff; best = w; }
+      if (w.dmg >= bestDmg) { bestDmg = w.dmg; best = w; }
     }
     return best;
   }
   function equippedArmor() { return bestOwnedEquip(D().EQUIPMENT.armor); }
   function equippedWeaponDmg() {
     const w = equippedWeapon(); if (!w) return 0;
-    return w.dmg * weaponAffinityMul(w) + (P.reforgeBonus[w.key] || 0);
+    return w.dmg + (P.reforgeBonus[w.key] || 0);
   }
   function reforgeOf(slot) { return P.reforgeSlots[slot] || {}; }
-  function playerStr() { return classDef().strength + skillLevel('foraging') + talismanStats().str + petStats().str + fairyBonus().str; }
+  function playerStr() { return skillLevel('foraging') + talismanStats().str + petStats().str + fairyBonus().str; }
   function playerAttackPower() {
     const flat = 5 + playerStr() * 0.5 + equippedWeaponDmg();
     const mul = (1 + skillLevel('combat') * 0.04 + enchantLvl('weapon', 'sharpness') * 0.05 + enchantLvl('weapon', 'critical') * 0.04
@@ -242,7 +246,7 @@
     return flat * mul;
   }
   function playerDefensePct() {
-    let def = classDef().defense + skillLevel('mining') + talismanStats().def + petStats().def;
+    let def = skillLevel('mining') + talismanStats().def + petStats().def;
     const a = equippedArmor(); if (a) def += a.defense;
     def += enchantLvl('armor', 'protection') * 4;
     def += (reforgeOf('armor').def || 0) + P.starForce.armor * D().STARFORCE.defPerStar;
@@ -250,7 +254,7 @@
     return Math.min(0.85, def * 0.02);
   }
   function playerMaxHp() {
-    return Math.round(100 + classDef().hp + skillLevel('farming') * 2 + skillLevel('fishing')
+    return Math.round(100 + skillLevel('farming') * 2 + skillLevel('fishing')
       + enchantLvl('armor', 'growth') * 15 + talismanStats().hp + petStats().hp + fairyBonus().hp
       + (reforgeOf('weapon').hp || 0) + (reforgeOf('armor').hp || 0) + P.starForce.armor * D().STARFORCE.hpPerStar);
   }
@@ -547,6 +551,7 @@
       floor, roomIdx: 0, rooms, score: 0, secretStep: 0,
       playerHp: playerMaxHp(), maxPlayerHp: playerMaxHp(),
       mobs: mkRoomMobs(fd, rooms[0]), _treasureLooted: false,
+      cls: dungeonClassDef(P.dungeonClass),   // 던전 전용 클래스(실제 스카이블럭: Berserk/Mage/Archer/Tank/Healer)
     };
     renderZone();
   }
@@ -555,8 +560,9 @@
     const fd = dungeonFloorDef(dungeonRun.floor);
     dungeonRun.mobs = mkRoomMobs(fd, dungeonRoomType());
     dungeonRun._treasureLooted = false;
-    // 방 이동 시 15% 회복(공략 호흡)
-    dungeonRun.playerHp = Math.min(dungeonRun.maxPlayerHp, dungeonRun.playerHp + Math.round(dungeonRun.maxPlayerHp * 0.15));
+    // 방 이동 시 회복(기본 15%, 힐러는 30%)
+    const healPct = (dungeonRun.cls && dungeonRun.cls.roomHealPct) || 0.15;
+    dungeonRun.playerHp = Math.min(dungeonRun.maxPlayerHp, dungeonRun.playerHp + Math.round(dungeonRun.maxPlayerHp * healPct));
   }
   function dungeonAdvance(outcome) {
     const S = D().DUNGEON_ROOM_SCORE;
@@ -591,12 +597,14 @@
   function dungeonAttack() {
     if (!dungeonRun || !dungeonRun.mobs.length) return;
     const target = dungeonRun.mobs.find(m => m.hp > 0); if (!target) return;
-    let dmg = playerAttackPower();
+    const cls = dungeonRun.cls || {};
+    let dmg = playerAttackPower() * (cls.dmgMul || 1);
+    if (cls.firstHitMul && target.hp === target.maxHp) dmg *= cls.firstHitMul;   // 아처: 첫 타격 보너스
     if (target.hp < target.maxHp * 0.5) dmg *= 1 + enchantLvl('weapon', 'execute') * 0.06;   // 처형
     if (target.maxHp >= 100000) dmg *= 1 + enchantLvl('weapon', 'giant_killer') * 0.08;       // 거인 사냥꾼
     target.hp = Math.max(0, target.hp - dmg);
-    // 흡혈/활력 회복
-    const heal = dmg * enchantLvl('weapon', 'vampirism') * 0.01 + enchantLvl('armor', 'vitality') * 2;
+    // 흡혈/활력/힐러 회복
+    const heal = dmg * enchantLvl('weapon', 'vampirism') * 0.01 + enchantLvl('armor', 'vitality') * 2 + (cls.healPerHit || 0);
     dungeonRun.playerHp = Math.min(dungeonRun.maxPlayerHp, dungeonRun.playerHp + heal);
     if (target.hp <= 0) toastFn(`⚔️ ${target.name} 처치!`, true);
     const alive = dungeonRun.mobs.filter(m => m.hp > 0);
@@ -609,7 +617,7 @@
     const attackers = alive.slice(0, 2);
     let taken = 0;
     for (const a of attackers) taken += a.dmg * (0.5 + Math.random() * 0.4);
-    taken *= (1 - playerDefensePct());
+    taken *= (1 - playerDefensePct()) * ((dungeonRun.cls && dungeonRun.cls.dmgTakenMul) || 1);   // 탱크: 받는 피해 감소
     const thorns = enchantLvl('armor', 'thorns') * 0.10;
     if (thorns > 0) { attackers[0].hp = Math.max(0, attackers[0].hp - taken * thorns); }
     dungeonRun.playerHp = Math.max(0, dungeonRun.playerHp - taken);
@@ -715,7 +723,6 @@
     return `<section class="screen econ-screen" data-act-root="econ">
       <div class="econ-top">
         <div class="econ-gold">💰 ${P ? fmtGold(P.gold) : ''}</div>
-        <div class="econ-class">${P && P.class ? (D().JOB_CLASSES.find(c => c.key === P.class) || {}).name : ''}</div>
         <button class="btn btn--ghost" data-act="backHome">✕</button>
       </div>
       <div id="econBody" class="econ-body"></div>
@@ -724,23 +731,9 @@
 
   function renderZone() {
     const body = document.getElementById('econBody'); if (!body) return;
-    if (!P.class) { body.innerHTML = classPickHTML(); return; }
     if (activeCombat) { body.innerHTML = combatHTML(); return; }
     if (dungeonRun) { body.innerHTML = dungeonRoomHTML(); return; }
     body.innerHTML = zoneNavHTML() + zoneBodyHTML(zone);
-  }
-
-  function classPickHTML() {
-    return `<div class="econ-panel">
-      <h3>직업을 선택하세요</h3>
-      <div class="econ-classgrid">
-        ${D().JOB_CLASSES.map(c => `<button class="econ-classcard" data-act="econ_class_pick" data-key="${c.key}">
-          <div class="econ-classcard__name">${c.name}</div>
-          <div class="econ-classcard__flavor">${c.flavor}</div>
-          <div class="econ-classcard__stats">체력+${c.hp} 방어+${c.defense} 힘+${c.strength} 지력+${c.intelligence}</div>
-        </button>`).join('')}
-      </div>
-    </div>`;
   }
 
   function zoneNavHTML() {
@@ -938,8 +931,8 @@
       </div>
       <h4>스킬</h4>
       <div class="econ-colgrid">${D().SKILLS.map(s => `<div class="econ-colrow"><span>${s.name}</span><span>Lv.${skillLevel(s.key)}</span><span class="muted">${s.bonusText}</span></div>`).join('')}</div>
-      <h4>펫</h4>
-      <p class="muted">${P.activePet ? `활성: ${petDef(P.activePet).name} Lv.${petLevel(P.activePet)}` : '활성 펫 없음'}</p>`;
+      <h4>펫 · 던전 클래스</h4>
+      <p class="muted">${P.activePet ? `활성 펫: ${petDef(P.activePet).name} Lv.${petLevel(P.activePet)}` : '활성 펫 없음'} · 던전 클래스: ${dungeonClassDef(P.dungeonClass).emoji} ${dungeonClassDef(P.dungeonClass).name}</p>`;
   }
   function bankSecretHTML() {
     const seedDay = new Date().getDate();
@@ -984,6 +977,9 @@
 
   function dungeonZoneHTML() {
     return `<div class="econ-panel"><p class="muted">${D().ZONES.find(z => z.key === 'dungeonentrance').desc}</p>
+      <h4>던전 클래스 선택 (카타콤 전용 — 실제 스카이블럭 방식)</h4>
+      <div class="econ-tierbtns">${D().DUNGEON_CLASSES.map(c => `<button class="btn btn--sm ${P.dungeonClass === c.key ? 'btn--primary' : ''}" data-act="econ_dungeon_class" data-key="${c.key}">${c.emoji} ${c.name}</button>`).join('')}</div>
+      <p class="muted">${dungeonClassDef(P.dungeonClass).emoji} ${dungeonClassDef(P.dungeonClass).name}: ${dungeonClassDef(P.dungeonClass).perk}</p>
       <p>던전 정수: ${P.inv.dungeon_essence || 0}</p>
       <div class="econ-essenceshop">${D().ESSENCE_SHOP.map(e => `<button class="btn btn--sm" data-act="econ_essence_buy" data-key="${e.key}" ${(P.inv.dungeon_essence || 0) >= e.cost ? '' : 'disabled'}>${e.name} (정수 ${e.cost})</button>`).join('')}</div>
       ${D().DUNGEON.floors.map(f => `<div class="econ-floorcard"><h4>${f.floor}층 — ${f.bossName}</h4>
@@ -1025,7 +1021,7 @@
         : `<p>반짝이는 보물 상자가 놓여 있다...</p><button class="btn btn--primary" data-act="econ_dungeon_loot">상자 열기</button>`;
     }
     const secretHint = dungeonRun.floor >= 3 ? `<div class="econ-secretdoor"><p class="muted">(수상한 벽...)</p>${['left', 'right'].map(d => `<button class="btn btn--sm btn--ghost" data-act="econ_dungeon_secret" data-dir="${d}">${d === 'left' ? '◀' : '▶'}</button>`).join('')}</div>` : '';
-    return `<div class="econ-panel"><h3>카타콤 ${dungeonRun.floor}층 · 방 ${dungeonRun.roomIdx + 1}/${dungeonRun.rooms.length} — ${roomName}</h3>
+    return `<div class="econ-panel"><h3>카타콤 ${dungeonRun.floor}층 · 방 ${dungeonRun.roomIdx + 1}/${dungeonRun.rooms.length} — ${roomName} <span class="muted">(${dungeonRun.cls.emoji} ${dungeonRun.cls.name})</span></h3>
       <div class="econ-hpbar econ-hpbar--player"><div class="econ-hpbar__fill" style="width:${(dungeonRun.playerHp / dungeonRun.maxPlayerHp * 100).toFixed(1)}%"></div><span>내 HP ${Math.ceil(dungeonRun.playerHp)}/${dungeonRun.maxPlayerHp}</span></div>
       <p>현재 점수: ${dungeonRun.score}</p>${inner}${secretHint}
       <button class="btn btn--ghost" data-act="econ_combat_flee">포기</button>
@@ -1039,7 +1035,6 @@
     if (k === 'enter') { open(); return true; }
     if (!P) return true;
     switch (k) {
-      case 'class_pick': P.class = el.dataset.key; saveNow(); renderZone(); break;
       case 'zone': zone = el.dataset.key; renderZone(); break;
       case 'hubtab': hubTab = el.dataset.key; renderZone(); break;
       case 'gather': gather(el.dataset.key); break;
@@ -1065,9 +1060,10 @@
       case 'deal_buy': buyDeal(Number(el.dataset.i)); break;
       case 'reforge': reforge(el.dataset.key); break;
       case 'slayer_start': startSlayer(el.dataset.key, Number(el.dataset.tier)); break;
+      case 'dungeon_class': P.dungeonClass = el.dataset.key; saveNow(); renderZone(); break;
       case 'dungeon_start': startDungeon(Number(el.dataset.floor)); break;
       case 'dungeon_advance': dungeonAdvance(); break;
-      case 'dungeon_puzzle': { const correct = dungeonRun._correctIdx == null ? (dungeonRun._correctIdx = Math.floor(Math.random() * 3)) : dungeonRun._correctIdx; dungeonAdvance(Number(el.dataset.i) === correct ? 'correct' : 'wrong'); dungeonRun._correctIdx = null; break; }
+      case 'dungeon_puzzle': { if (dungeonRun.cls && dungeonRun.cls.autoPuzzle) { toastFn('🔮 메이지의 통찰 — 퍼즐 자동 해결!', true); dungeonAdvance('correct'); break; } const correct = dungeonRun._correctIdx == null ? (dungeonRun._correctIdx = Math.floor(Math.random() * 3)) : dungeonRun._correctIdx; dungeonAdvance(Number(el.dataset.i) === correct ? 'correct' : 'wrong'); dungeonRun._correctIdx = null; break; }
       case 'dungeon_secret': dungeonSecretClick(el.dataset.dir); break;
       case 'essence_buy': { const e = D().ESSENCE_SHOP.find(x => x.key === el.dataset.key); if (e && (P.inv.dungeon_essence || 0) >= e.cost) { removeItem('dungeon_essence', e.cost); if (e.kind === 'gold') addGold(e.goldAmount); else addItem(e.key, 1); saveNow(); renderZone(); } break; }
       case 'combat_attack': combatAttack(); break;
@@ -1130,7 +1126,7 @@
       startSlayer, combatAttack, combatFlee, getActiveCombat: () => activeCombat,
       startDungeon, dungeonAdvance, dungeonSecretClick, getDungeonRun: () => dungeonRun, dungeonGrade, canEnterFloor,
       reforge, reforgeSlot, reforgePremium, playerAttackPower, playerDefensePct, playerMaxHp, playerStr,
-      equippedWeapon, weaponAffinityMul,
+      equippedWeapon, dungeonClassDef,
       hatchPet, activatePet, petLevel, petStats, petDef,
       talismanStats, magicalPower, mpStatMul, fairyBonus, collectFairySoul,
       applyEnchant, chaosEnchant, enchantLvl, enchantHardCap, enchantDef,
