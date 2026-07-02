@@ -30,6 +30,7 @@
       dealsBought: {}, dealsDate: null,
       // --- V3 필드 ---
       starForce: { weapon: 0, armor: 0 },   // 스타포스(메이플식 성 강화) 0~15성
+      itemRolls: {},                         // 장비 초기 능력치 롤({key: 굴려진 수치}) — 획득 시 ±8% 무작위 고정
       reforgeSlots: { weapon: null, armor: null },   // 명명 리포지({key,name,dmgPct,def,hp,sellBonus})
       homeEdits: {},                         // 프라이빗 섬 블록 편집("x,y,z" -> blockId, 0=제거)
     };
@@ -48,6 +49,7 @@
     if (!p.enchants.weapon) p.enchants.weapon = {};
     if (!p.enchants.armor) p.enchants.armor = {};
     if (typeof p.starForce.weapon !== 'number') p.starForce = { weapon: 0, armor: 0 };
+    if (!p.itemRolls || typeof p.itemRolls !== 'object') p.itemRolls = {};
     if (!p.reforgeSlots.weapon && p.reforgeSlots.weapon !== null) p.reforgeSlots = { weapon: null, armor: null };
     return p;
   }
@@ -65,7 +67,21 @@
   async function loadCloud() { if (!cloudReady()) return null; try { const { data } = await sb.rpc('econ_load_player', { p_token: ME.token }); return data ? migrate(data) : null; } catch (e) { return null; } }
 
   /* ---------------- 인벤토리/골드 유틸 ---------------- */
-  function addItem(k, n) { if (n <= 0) return; P.inv[k] = (P.inv[k] || 0) + n; }
+  function addItem(k, n) { if (n <= 0) return; P.inv[k] = (P.inv[k] || 0) + n; rollItemStat(k); }
+  // 장비(무기/방어구) 최초 획득 시 기본 수치를 ±8% 범위에서 1회 굴려 고정(인챈트/리포지/강화와 별개의 "생 초기치")
+  function equipBase(k) {
+    const w = D().EQUIPMENT.weapons.find(x => x.key === k); if (w) return { stat: 'dmg', base: w.dmg };
+    const a = D().EQUIPMENT.armor.find(x => x.key === k); if (a) return { stat: 'defense', base: a.defense };
+    return null;
+  }
+  function rollItemStat(k) {
+    if (P.itemRolls[k] !== undefined) return;
+    const eq = equipBase(k); if (!eq) return;
+    const pct = D().ITEM_ROLL.pct;
+    P.itemRolls[k] = Math.max(1, Math.round(eq.base * (1 - pct + Math.random() * pct * 2)));
+  }
+  function rolledStat(k, base) { return P.itemRolls[k] !== undefined ? P.itemRolls[k] : base; }
+  function rollRangeText(base) { const pct = D().ITEM_ROLL.pct; return `${Math.max(1, Math.round(base * (1 - pct)))}~${Math.round(base * (1 + pct))}`; }
   function hasItem(k, n) { return (P.inv[k] || 0) >= (n || 1); }
   function removeItem(k, n) { n = n || 1; if (!hasItem(k, n)) return false; P.inv[k] -= n; if (P.inv[k] <= 0) delete P.inv[k]; return true; }
   function addGold(n) { P.gold = Math.max(0, P.gold + n); }
@@ -235,7 +251,7 @@
   function equippedArmor() { return bestOwnedEquip(D().EQUIPMENT.armor); }
   function equippedWeaponDmg() {
     const w = equippedWeapon(); if (!w) return 0;
-    return w.dmg + (P.reforgeBonus[w.key] || 0);
+    return rolledStat(w.key, w.dmg) + (P.reforgeBonus[w.key] || 0);
   }
   function reforgeOf(slot) { return P.reforgeSlots[slot] || {}; }
   function playerStr() { return skillLevel('foraging') + talismanStats().str + petStats().str + fairyBonus().str; }
@@ -247,7 +263,7 @@
   }
   function playerDefensePct() {
     let def = skillLevel('mining') + talismanStats().def + petStats().def;
-    const a = equippedArmor(); if (a) def += a.defense;
+    const a = equippedArmor(); if (a) def += rolledStat(a.key, a.defense);
     def += enchantLvl('armor', 'protection') * 4;
     def += (reforgeOf('armor').def || 0) + P.starForce.armor * D().STARFORCE.defPerStar;
     def *= mpStatMul();
@@ -787,7 +803,7 @@
       if (!items.length) return '';
       return `<h4>${cat}</h4><div class="econ-shopgrid">${items.map(s => `
         <div class="econ-shopitem">
-          ${iconImg(s.key)}<span>${s.tierKey ? `<span style="color:${tierColorByKey(s.tierKey)}">${s.name}</span>` : s.name}</span>
+          ${iconImg(s.key)}<span>${s.tierKey ? `<span style="color:${tierColorByKey(s.tierKey)}">${s.name}</span>` : s.name}${s.dmg ? ` <span class="muted">공격 ${hasItem(s.key) ? rolledStat(s.key, s.dmg) + ' (내 롤)' : rollRangeText(s.dmg)}</span>` : ''}${s.defense ? ` <span class="muted">방어 ${hasItem(s.key) ? rolledStat(s.key, s.defense) + ' (내 롤)' : rollRangeText(s.defense)}</span>` : ''}</span>
           <span class="muted">${hasItem(s.key) ? '보유 ' + P.inv[s.key] : ''}</span>
           ${s.buyPrice > 0 ? `<button class="btn btn--sm" data-act="econ_buy" data-key="${s.key}">구매 ${fmtGold(s.key === 'minion_slot_expander' ? minionSlotCost() : s.buyPrice)}</button>` : ''}
           ${s.sellPrice > 0 ? `<button class="btn btn--sm btn--ghost" data-act="econ_sell" data-key="${s.key}" ${hasItem(s.key) ? '' : 'disabled'}>판매 ${fmtGold(s.sellPrice)}</button>` : ''}
@@ -863,7 +879,7 @@
     const row = (slot, label, eq, effectDesc) => {
       const n = P.starForce[slot];
       return `<div class="econ-starcard">
-        <h4>${label} — ${eq ? `<span style="color:${tierColorByKey(eq.tierKey)}">${eq.name}</span>` : '<span class="muted">장비 없음</span>'}</h4>
+        <h4>${label} — ${eq ? `<span style="color:${tierColorByKey(eq.tierKey)}">${eq.name}</span> <span class="muted">(초기치 ${rolledStat(eq.key, eq.dmg || eq.defense)} / 범위 ${rollRangeText(eq.dmg || eq.defense)})</span>` : '<span class="muted">장비 없음</span>'}</h4>
         <div class="econ-stars">${stars(n)}</div>
         <p class="muted">${effectDesc}</p>
         <button class="btn btn--primary" data-act="econ_star" data-slot="${slot}" ${n >= SF.maxStars || !eq ? 'disabled' : ''}>
@@ -1131,7 +1147,7 @@
       talismanStats, magicalPower, mpStatMul, fairyBonus, collectFairySoul,
       applyEnchant, chaosEnchant, enchantLvl, enchantHardCap, enchantDef,
       enhanceStar, starCost, starRate,
-      craft, canCraft, recipeUnlocked,
+      craft, canCraft, recipeUnlocked, rolledStat, rollItemStat, equipBase,
       dungeonAttack, dungeonLootTreasure,
       bankDeposit, bankWithdraw, bankInterestTick,
       dealsForToday, buyDeal, bestToolMul, sellBonusPct, minionSlotCost,
