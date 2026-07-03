@@ -108,6 +108,11 @@
   WOOD_SHAPES.forEach(([w, tex]) => {
     BLOCKS.push({ key: w + '_fence', tex, shape: 'fence', opaque: false });
     BLOCKS.push({ key: w + '_trapdoor', tex, shape: 'trapdoor', opaque: false, collTop: 0.1875 });
+    // V17-C: 문(2칸 높이, 여닫이) — 닫힘(막힘)/열림(통과), 4방향
+    for (let f = 0; f < 4; f++) {
+      BLOCKS.push({ key: w + '_door_c_' + f, tex, shape: 'door', facing: f, open: false, opaque: false });
+      BLOCKS.push({ key: w + '_door_o_' + f, tex, shape: 'door', facing: f, open: true, opaque: false, solid: false });
+    }
   });
   const ID = {};
   BLOCKS.forEach((b, i) => { b.id = i; ID[b.key] = i; if (b.solid === undefined) b.solid = true; if (b.opaque === undefined) b.opaque = true; });
@@ -130,7 +135,7 @@
   }
   /* V12: 설치 가능한 아이템 키 → 블럭 ID(자원 키 별칭 포함) */
   const PLACE_BLOCK = {};
-  BLOCKS.forEach(b => { if (b.key !== 'air' && b.key !== 'bedrock' && !b.liquid && !/_stairs_\d$/.test(b.key)) PLACE_BLOCK[b.key] = b.id; });   // 계단 방향변형은 아이템 아님
+  BLOCKS.forEach(b => { if (b.key !== 'air' && b.key !== 'bedrock' && !b.liquid && !/_stairs_\d$/.test(b.key) && !/_door_[co]_\d$/.test(b.key)) PLACE_BLOCK[b.key] = b.id; });   // 계단/문 변형은 아이템 아님
   PLACE_BLOCK.oaklog = ID.oak_log; PLACE_BLOCK.birchlog = ID.birch_log; PLACE_BLOCK.sprucelog = ID.spruce_log;
   PLACE_BLOCK.sugarcane = ID.sugar_cane;
   // V17: 계단 제네릭 아이템 → 설치 시 방향 재계산(기본 남향), 방향변형은 파괴 시 제네릭 아이템 드롭
@@ -138,8 +143,14 @@
     PLACE_BLOCK[m.k + '_stairs'] = ID[m.k + '_stairs_0'];
     for (let f = 0; f < 4; f++) BLOCK_DROP[m.k + '_stairs_' + f] = m.k + '_stairs';
   });
+  // V17-C: 문 제네릭 아이템 → 2칸 설치, 변형은 제네릭 드롭
+  WOOD_SHAPES.forEach(([w]) => {
+    PLACE_BLOCK[w + '_door'] = ID[w + '_door_c_0'];
+    for (let f = 0; f < 4; f++) { BLOCK_DROP[w + '_door_c_' + f] = w + '_door'; BLOCK_DROP[w + '_door_o_' + f] = w + '_door'; }
+  });
   function isPlaceable(key) { return key != null && PLACE_BLOCK[key] != null; }
   function isStairsItem(key) { return typeof key === 'string' && /_stairs$/.test(key); }
+  function isDoorItem(key) { return typeof key === 'string' && /_door$/.test(key); }
 
   /* ---------------- 하늘 위 메가 허브(448×448, 실제 스카이블럭 허브 구역 구성) ----------------
      바다가 아니라 "공허 하늘"에 떠 있는 거대한 섬 하나. 중앙 마을 광장을 중심으로
@@ -1720,6 +1731,12 @@
       return;
     }
     if (b.shape === 'trapdoor') { emitBox(T, b, x, y, z, 0, 0, 0, 1, 0.1875, 1); return; }   // 닫힘: 바닥 얇은 판
+    if (b.shape === 'door') {   // 얇은 세로 판(한 칸 높이) — 열림은 90° 회전
+      const f = b.open ? (b.facing + 1) % 4 : b.facing;
+      const D = [[0, 0, 0, 1, 1, 0.1875], [0.8125, 0, 0, 1, 1, 1], [0, 0, 0.8125, 1, 1, 1], [0, 0, 0, 0.1875, 1, 1]][f];
+      emitBox(T, b, x, y, z, D[0], D[1], D[2], D[3], D[4], D[5]);
+      return;
+    }
   }
   // ── 청크 메싱: 32×32 기둥 단위로 나눠 블록 하나 캘 때 그 청크만 다시 만든다(즉시 반영) ──
   const CHUNK = 32;
@@ -2390,17 +2407,42 @@
     const t = raycastBlock(); if (!t) return false;
     if (isPortalBlock(t.x, t.y, t.z)) { if (typeof toast === 'function') toast('포털은 부술 수 없어요', false); return false; }
     if (BLOCKS[t.id] && (BLOCKS[t.id].key === 'bedrock')) { if (typeof toast === 'function') toast('기반암은 부술 수 없어요', false); return false; }
+    const tb = BLOCKS[t.id];
     world[widx(t.x, t.y, t.z)] = 0;
     if (econApi().setHomeEdit) econApi().setHomeEdit(t.x, t.y, t.z, 0);
     markBlockDirty(t.x, t.z); _mapDirty = true;
+    if (tb && tb.shape === 'door') {   // V17-C: 문은 짝 칸도 함께 제거(아이템은 1개만)
+      for (const cy of [t.y + 1, t.y - 1]) {
+        const cb = BLOCKS[getBlockLocal(t.x, cy, t.z)];
+        if (cb && cb.shape === 'door') { world[widx(t.x, cy, t.z)] = 0; if (econApi().setHomeEdit) econApi().setHomeEdit(t.x, cy, t.z, 0); markBlockDirty(t.x, t.z); break; }
+      }
+    }
     const drop = blockDropKey(t.id);
     if (drop && econApi().giveItem) econApi().giveItem(drop, 1);   // 파괴 = 아이템 획득
     updateBuildHud();
     return true;
   }
+  // V17-C: 문 여닫기(양쪽 칸 동시) — 우클릭이 문을 조준하면 설치 대신 토글
+  function toggleDoor(x, y, z) {
+    const api = econApi();
+    const b0 = BLOCKS[getBlockLocal(x, y, z)]; if (!b0 || b0.shape !== 'door') return false;
+    const m = b0.key.match(/^(.*)_door_([co])_(\d)$/); if (!m) return false;
+    const wood = m[1], ns = m[2] === 'c' ? 'o' : 'c';
+    for (const cy of [y, y + 1, y - 1]) {
+      const cb = BLOCKS[getBlockLocal(x, cy, z)];
+      if (cb && cb.shape === 'door' && cb.key.indexOf(wood + '_door_') === 0) {
+        const cm = cb.key.match(/_door_[co]_(\d)$/);
+        const cid = ID[wood + '_door_' + ns + '_' + cm[1]];
+        world[widx(x, cy, z)] = cid; if (api.setHomeEdit) api.setHomeEdit(x, cy, z, cid); markBlockDirty(x, z);
+      }
+    }
+    _mapDirty = true; return true;
+  }
   // V12 블럭 경제: 핫바에서 고른 블럭 아이템을 소모해서 설치(보유 필요, 무한 아님).
   function homePlaceBlock() {
     if (worldMode !== 'home') return false;
+    const t0 = raycastBlock();   // V17-C: 문을 조준하면 여닫기
+    if (t0) { const hb = BLOCKS[getBlockLocal(t0.x, t0.y, t0.z)]; if (hb && hb.shape === 'door') return toggleDoor(t0.x, t0.y, t0.z); }
     const key = selectedPlaceKey;
     const api = econApi();
     if (!isPlaceable(key)) return false;   // V13-A: 핫바에 블럭 없으면 조용히(토스트 스팸 제거)
@@ -2412,6 +2454,15 @@
     // 플레이어 몸과 겹치면 설치 불가
     const minX = P.x - P.w / 2, maxX = P.x + P.w / 2, minZ = P.z - P.w / 2, maxZ = P.z + P.w / 2, minY = P.y, maxY = P.y + P.h;
     if (nx + 1 > minX && nx < maxX && nz + 1 > minZ && nz < maxZ && ny + 1 > minY && ny < maxY) return false;
+    if (isDoorItem(key)) {   // V17-C: 문은 2칸(아래+위) 설치, 바라보는 방향으로
+      if (!inBounds(nx, ny + 1, nz) || getBlockLocal(nx, ny + 1, nz) !== 0) return false;
+      if (!api.takeItem || !api.takeItem(key, 1)) return false;
+      const d = lookDir(); let f; if (Math.abs(d.x) > Math.abs(d.z)) f = d.x > 0 ? 1 : 3; else f = d.z > 0 ? 2 : 0;
+      const did = ID[key + '_c_' + f];
+      world[widx(nx, ny, nz)] = did; world[widx(nx, ny + 1, nz)] = did;
+      if (api.setHomeEdit) { api.setHomeEdit(nx, ny, nz, did); api.setHomeEdit(nx, ny + 1, nz, did); }
+      markBlockDirty(nx, nz); _mapDirty = true; updateBuildHud(); return true;
+    }
     if (!api.takeItem || !api.takeItem(key, 1)) return false;   // 소모
     let id = PLACE_BLOCK[key];
     if (isStairsItem(key)) {   // V17: 계단은 바라보는 방향으로 높은 면 배치
@@ -2481,8 +2532,8 @@
     if (!g && worldMode === 'home') {   // 홈: 건축 블럭도 hold-to-break(금가는 과정) + 아이템 드롭
       const b = BLOCKS[hit.id];
       if (!b || b.key === 'bedrock' || b.liquid) { breaking = null; return; }
-      const bk = BLOCKS[hit.id].key; const fam = /log|planks|leaves|fence/.test(bk) ? 'axe' : /dirt|grass|sand|gravel/.test(bk) ? 'pickaxe' : 'pickaxe';
-      g = { res: null, homeDrop: blockDropKey(hit.id), fam, hard: homeBlockHardness(hit.id), to: 0 };
+      const bk = BLOCKS[hit.id].key; const fam = /log|planks|leaves|fence|door|trapdoor/.test(bk) ? 'axe' : /dirt|grass|sand|gravel/.test(bk) ? 'pickaxe' : 'pickaxe';
+      g = { res: null, homeDrop: blockDropKey(hit.id), fam, hard: homeBlockHardness(hit.id), to: 0, door: BLOCKS[hit.id].shape === 'door' };   // V17-C: 문은 짝 칸도 제거
     }
     if (!g) { breaking = null; return; }
     if (!breaking || breaking.x !== hit.x || breaking.y !== hit.y || breaking.z !== hit.z) {
@@ -2536,6 +2587,12 @@
     if (g.homeDrop !== undefined) {   // V13-A: 홈 건축 블럭 파괴 → 아이템 드롭 + 영속 편집
       if (g.homeDrop && api.giveItem) api.giveItem(g.homeDrop, 1);
       if (api.setHomeEdit) api.setHomeEdit(x, y, z, 0);
+    }
+    if (g.door) {   // V17-C: 문 짝 칸(위/아래) 함께 제거(아이템은 1개만 지급됨)
+      for (const cy of [y + 1, y - 1]) {
+        const cb = BLOCKS[getBlockLocal(x, cy, z)];
+        if (cb && cb.shape === 'door') { setW(x, cy, z, 0); if (api.setHomeEdit) api.setHomeEdit(x, cy, z, 0); markBlockDirty(x, z); break; }
+      }
     }
     setW(x, y, z, g.to);
     if (g.regen) regenQueue.push({ x, y, z, back: g.back, at: performance.now() + g.regen * 1000 });
