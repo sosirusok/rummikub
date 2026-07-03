@@ -893,12 +893,107 @@
   // 핫 포테이토 북 규칙
   const HPB = { maxBooks: 10, fumingMax: 15, weaponDmgPerBook: 2, armorDefPerBook: 2, armorHpPerBook: 4 };
 
+  /* ---------------- V13-B: 위치 기반 퀘스트 시스템 ----------------
+     퀘스트를 주는 NPC는 특정 월드의 특정 좌표에 서 있다. 플레이어가 그 반경(region) 안에
+     들어오면 우측 중앙에 퀘스트가 나타나고, 떠나면 사라진다. NPC에게 E(대화)로 수락.
+     objective.type: gather(누적 채집) / kill / killBoss / mine / chop / farm / fish / craft / place / gold / talk(대화만)
+     metric은 economy.js questMetric()가 카운터/컬렉션 스냅샷으로 계산(일일퀘스트와 동일 방식). */
+  const QUEST_NPCS = [
+    // 프라이빗 섬(home) — 온보딩 튜토리얼 담당
+    { key: 'jerry',   name: '제리',        world: 'home', x: 99,  z: 78,  color: 0x4fae5a, region: 12, blurb: '이 섬을 물려준 마을의 괴짜 어르신' },
+    { key: 'pat',     name: '농부 팻',      world: 'home', x: 92,  z: 106, color: 0x7cb342, region: 12, blurb: '스폰섬 텃밭을 가꾸는 이웃' },
+    // 허브(hub) — 각 구역별 퀘스트 안내인
+    { key: 'q_village', name: '촌장 엘더',   world: 'hub', x: 218, z: 236, color: 0xcaa24a, region: 22, blurb: '허브 마을의 촌장' },
+    { key: 'q_mine',    name: '갱도장 브록',  world: 'hub', x: 118, z: 204, color: 0x8a8a8a, region: 24, blurb: '석탄 광산 갱도장' },
+    { key: 'q_forest',  name: '숲지기 로완',  world: 'hub', x: 150, z: 134, color: 0x5d8a3a, region: 24, blurb: '삼림 관리인' },
+    { key: 'q_farm',    name: '방앗간 밀리', world: 'hub', x: 322, z: 214, color: 0xd8b23a, region: 24, blurb: '대농장 방앗간지기' },
+    { key: 'q_dock',    name: '뱃사공 핀',   world: 'hub', x: 320, z: 322, color: 0x3f9fd0, region: 22, blurb: '선착장 뱃사공' },
+    { key: 'q_grave',   name: '묘지기 모르', world: 'hub', x: 158, z: 314, color: 0x584a6a, region: 22, blurb: '묘지 관리인' },
+    { key: 'q_arena',   name: '투기 심판',   world: 'hub', x: 224, z: 340, color: 0xb8860b, region: 22, blurb: '콜로세움 심판' },
+  ];
+  // region은 QUEST_NPCS의 좌표 반경을 그대로 쓴다(economy.js에서 매핑).
+  const QUESTS = [
+    // ===== 온보딩 튜토리얼 체인(제리, home) =====
+    { key: 'tut_welcome', giver: 'jerry', name: '스카이블럭에 온 걸 환영해!', req: null,
+      story: '어이 신참! 이 작은 섬이 이제 자네 거야. 우선 저기 참나무를 두들겨서 원목을 좀 모아보게.',
+      objective: { type: 'gather', target: 'oaklog', count: 4, label: '참나무 원목 채집' },
+      reward: { gold: 60, xp: { skill: 'foraging', amt: 30 }, items: [] } },
+    { key: 'tut_craft_tools', giver: 'jerry', name: '첫 도구 만들기', req: 'tut_welcome',
+      story: '원목은 손에 넣었군! 이제 ✦ 메뉴의 3×3 제작대에서 판자 → 막대 → 나무 곡괭이를 만들어봐. 곡괭이가 있어야 돌을 캘 수 있거든.',
+      objective: { type: 'craft', target: null, count: 3, label: '아이템 3개 제작' },
+      reward: { gold: 100, xp: { skill: 'foraging', amt: 40 }, items: [{ key: 'stick', n: 4 }] } },
+    { key: 'tut_mine_cobble', giver: 'jerry', name: '돌을 캐자', req: 'tut_craft_tools',
+      story: '나무 곡괭이를 들고 포탈섬의 조약돌 바닥이나 아무 돌이나 캐서 조약돌을 모아봐. 건축의 기본이지.',
+      objective: { type: 'gather', target: 'cobblestone', count: 12, label: '조약돌 채집' },
+      reward: { gold: 140, xp: { skill: 'mining', amt: 60 }, items: [{ key: 'oak_planks', n: 8 }] } },
+    { key: 'tut_portal', giver: 'jerry', name: '허브로 떠나기', req: 'tut_mine_cobble',
+      story: '준비 됐군! 포탈섬의 보라색 포탈을 타면 허브 마을로 갈 수 있어. 거기서 진짜 모험이 시작된다네. 촌장 엘더를 찾아가게.',
+      objective: { type: 'talk', target: null, count: 1, label: '포탈로 허브 이동' },
+      reward: { gold: 200, xp: { skill: 'combat', amt: 40 }, items: [{ key: 'wooden_sword', n: 1 }] } },
+    // 팻(home) — 사이드 퀘스트
+    { key: 'home_farm', giver: 'pat', name: '텃밭 일손', req: null,
+      story: '섬에서 농사도 지을 수 있다네. 밀이든 당근이든 작물을 좀 수확해다 주게.',
+      objective: { type: 'farm', target: null, count: 10, label: '작물 수확' },
+      reward: { gold: 120, xp: { skill: 'farming', amt: 50 }, items: [{ key: 'wheat', n: 4 }] } },
+    { key: 'home_build', giver: 'pat', name: '내 집 짓기', req: 'home_farm',
+      story: '이제 집을 지어봐야지. 아무 블럭이나 20개쯤 설치해서 자네만의 공간을 만들어보게.',
+      objective: { type: 'place', target: null, count: 20, label: '블럭 설치' },
+      reward: { gold: 180, xp: { skill: 'foraging', amt: 60 }, items: [{ key: 'glass', n: 8 }] } },
+    // ===== 허브 촌장 엘더(마을) =====
+    { key: 'hub_intro', giver: 'q_village', name: '허브에 오신 걸 환영합니다', req: null,
+      story: '허브 마을에 잘 오셨소. 상점, 은행, 경매장이 모두 여기 있지요. 우선 근처 몹을 몇 마리 처치해 실력을 보여주시오.',
+      objective: { type: 'kill', target: null, count: 8, label: '몬스터 처치' },
+      reward: { gold: 400, xp: { skill: 'combat', amt: 120 }, items: [] } },
+    { key: 'hub_trade', giver: 'q_village', name: '장사의 기본', req: 'hub_intro',
+      story: '모험가는 돈을 벌 줄 알아야 하오. 상점에 잡템을 팔거나 몹을 잡아 코인 2,000G을 모아보시오.',
+      objective: { type: 'gold', target: null, count: 2000, label: '코인 획득' },
+      reward: { gold: 500, xp: { skill: 'combat', amt: 100 }, items: [] } },
+    // ===== 광산 갱도장 브록 =====
+    { key: 'mine_coal', giver: 'q_mine', name: '석탄이 필요해', req: null,
+      story: '갱도가 춥구먼. 석탄을 캐다 주면 화로를 지필 수 있겠어. 광산에서 돌과 석탄을 캐오게.',
+      objective: { type: 'mine', target: null, count: 40, label: '블럭 채굴' },
+      reward: { gold: 350, xp: { skill: 'mining', amt: 140 }, items: [{ key: 'iron_ingot', n: 3 }] } },
+    { key: 'mine_iron', giver: 'q_mine', name: '철광 확보', req: 'mine_coal',
+      story: '실력이 붙었군! 이번엔 더 깊이 들어가 철을 캐와. 철 곡괭이를 만들면 다이아도 캘 수 있지.',
+      objective: { type: 'gather', target: 'iron_ingot', count: 8, label: '철 주괴 확보' },
+      reward: { gold: 600, xp: { skill: 'mining', amt: 220 }, items: [] } },
+    // ===== 삼림 숲지기 로완 =====
+    { key: 'forest_wood', giver: 'q_forest', name: '목재 조달', req: null,
+      story: '건축가들이 목재를 찾고 있소. 여러 나무를 베어 원목을 모아주시오.',
+      objective: { type: 'chop', target: null, count: 30, label: '나무 벌목' },
+      reward: { gold: 320, xp: { skill: 'foraging', amt: 160 }, items: [] } },
+    // ===== 대농장 방앗간 밀리 =====
+    { key: 'farm_crop', giver: 'q_farm', name: '수확의 계절', req: null,
+      story: '방앗간이 바쁘답니다. 밀과 작물을 잔뜩 수확해 주세요.',
+      objective: { type: 'farm', target: null, count: 50, label: '작물 수확' },
+      reward: { gold: 380, xp: { skill: 'farming', amt: 170 }, items: [] } },
+    // ===== 선착장 뱃사공 핀 =====
+    { key: 'dock_fish', giver: 'q_dock', name: '오늘의 조황', req: null,
+      story: '바다가 잔잔할 때 낚시나 해보시게. 물고기를 좀 낚아오면 좋겠구먼.',
+      objective: { type: 'fish', target: null, count: 10, label: '물고기 낚시' },
+      reward: { gold: 420, xp: { skill: 'fishing', amt: 180 }, items: [] } },
+    // ===== 묘지기 모르 =====
+    { key: 'grave_undead', giver: 'q_grave', name: '망자를 잠재워라', req: null,
+      story: '밤이면 묘지에서 언데드가 기어나온다오. 좀비와 해골을 처치해 주시오.',
+      objective: { type: 'kill', target: null, count: 20, label: '언데드 처치' },
+      reward: { gold: 550, xp: { skill: 'combat', amt: 200 }, items: [] } },
+    { key: 'grave_boss', giver: 'q_grave', name: '무덤의 우두머리', req: 'grave_undead',
+      story: '언데드를 이끄는 강한 놈이 있소. 보스급 몬스터를 처치해 무덤의 평화를 찾아주시오.',
+      objective: { type: 'killBoss', target: null, count: 1, label: '보스급 처치' },
+      reward: { gold: 900, xp: { skill: 'combat', amt: 350 }, items: [] } },
+    // ===== 투기장 심판 =====
+    { key: 'arena_warm', giver: 'q_arena', name: '투기장 입문', req: null,
+      story: '콜로세움에 도전할 텐가? 우선 몹을 25마리 잡아 몸을 풀어보게.',
+      objective: { type: 'kill', target: null, count: 25, label: '몬스터 처치' },
+      reward: { gold: 700, xp: { skill: 'combat', amt: 260 }, items: [] } },
+  ];
+
   window.ECON_DATA = {
     ITEM_TIERS, COLLECTIONS, SKILLS, GATHER_TABLE, TOOLS, MINIONS, MINION_STORAGE_BASE, MINION_STORAGE_UPGRADED,
     MINION_STORAGE_UPGRADE_COST, MINION_OFFLINE_CAP_HOURS, MINION_SLOT_MAX, MINION_SLOT_COST_BASE, MINION_SLOT_COST_MUL,
     MINION_FUEL, MINION_FUEL2, SLAYERS, DUNGEON, DUNGEON_ROOM_SCORE, ESSENCE_SHOP, SHOP, DAILY_SELL_LIMIT_PER_STACK,
     EQUIPMENT, STARFORCE, REFORGES, ITEM_ROLL,
-    TRAITS, EQUIP_SETS, FIELD_DIFF, ARENA, ACHIEVEMENTS, DAILY_QUESTS, SALVAGE, WEEKLY, HPB,
+    TRAITS, EQUIP_SETS, FIELD_DIFF, ARENA, ACHIEVEMENTS, DAILY_QUESTS, SALVAGE, WEEKLY, HPB, QUESTS, QUEST_NPCS,
     TALISMANS, MAGICAL_POWER, PETS, PET_XP_BASE, PET_XP_EXP, PET_MAX_LEVEL,
     ENCHANTS, CHAOS_ENCHANT, RECIPES, MASTER_MODE,
     FAIRY_SOULS, BANK, DAILY_DEALS, DUNGEON_CLASSES, ZONES, EASTER_EGGS,

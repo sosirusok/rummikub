@@ -45,6 +45,8 @@
       arenaBest: {},                         // 아레나 난이도별 최고 웨이브
       // --- V12 필드 ---
       hotbar: [null, null, null, null, null, null, null, null],   // 핫바 1~8 지정(9번=스카이블럭 메뉴 고정)
+      // --- V13-B 필드 ---
+      quests: { active: {}, done: {}, seen: {} },   // 위치기반 퀘스트({active:{key:{base}}, done:{key:1}, seen:{key:1}})
     };
   }
   // 구버전 세이브 마이그레이션: 누락 필드를 기본값으로 채움(중첩 객체 포함)
@@ -76,6 +78,8 @@
     if (p.daily === undefined) p.daily = null;
     if (!p.fieldDiff) p.fieldDiff = 'normal';
     if (!Array.isArray(p.hotbar) || p.hotbar.length !== 8) p.hotbar = [null, null, null, null, null, null, null, null];   // V12
+    if (!p.quests || typeof p.quests !== 'object') p.quests = { active: {}, done: {}, seen: {} };   // V13-B
+    if (!p.quests.active) p.quests.active = {}; if (!p.quests.done) p.quests.done = {}; if (!p.quests.seen) p.quests.seen = {};
     return p;
   }
   function todayStr() { return new Date().toISOString().slice(0, 10); }
@@ -539,6 +543,7 @@
     for (const k in r.needs) removeItem(k, r.needs[k]);
     addItem(key, r.gives || 1);
     addSkillXp('enchanting', 10);
+    stat('itemsCrafted');   // V13-B: 퀘스트 카운터
     toastFn(`제작 완료: ${itemName(key)}`, true);
     saveNow(); renderZone(); return true;
   }
@@ -1327,6 +1332,119 @@
     toastFn(`📜 일일 퀘스트 [${q.name}] 완료! +${fmtGold(q.gold)}`, true);
     checkAchievements(true); saveNow(); renderZone();
   }
+  /* ---------------- V13-B: 위치 기반 퀘스트 ----------------
+     퀘스트 진행도는 일일퀘스트와 같은 "카운터 스냅샷" 방식.
+     수락 시 metric을 base로 저장 → 진행도 = 현재 metric - base (goal 상한). */
+  function questDef(key) { return (D().QUESTS || []).find(q => q.key === key); }
+  function questNpcDef(npcKey) { return (D().QUEST_NPCS || []).find(n => n.key === npcKey); }
+  function questMetric(obj) {
+    switch (obj.type) {
+      case 'gather': return (P.collections[obj.target] || 0);
+      case 'kill': return statValue('kills');
+      case 'killBoss': return statValue('bossKills');
+      case 'mine': return statValue('blocksMined');
+      case 'chop': return statValue('treesChopped');
+      case 'farm': return statValue('cropsHarvested');
+      case 'fish': return statValue('fishCaught');
+      case 'craft': return statValue('itemsCrafted');
+      case 'place': return statValue('blocksPlaced');
+      case 'gold': return statValue('goldEarned');
+      case 'talk': return 0;   // 대화형: 수락 즉시 목표 도달로 취급
+      default: return 0;
+    }
+  }
+  function questAvailable(key) {
+    const q = questDef(key); if (!q) return false;
+    if (P.quests.done[key] || P.quests.active[key]) return false;
+    if (q.req && !P.quests.done[q.req]) return false;   // 선행 퀘스트 미완료
+    return true;
+  }
+  function questProgress(key) {
+    const q = questDef(key); const a = P.quests.active[key]; if (!q || !a) return 0;
+    if (q.objective.type === 'talk') return q.objective.count;   // 대화형은 항상 완료 상태
+    return Math.min(q.objective.count, questMetric(q.objective) - (a.base || 0));
+  }
+  function acceptQuest(key) {
+    if (!questAvailable(key)) return false;
+    const q = questDef(key);
+    P.quests.active[key] = { base: questMetric(q.objective), at: Date.now() };
+    P.quests.seen[key] = 1;
+    toastFn(`📜 퀘스트 수락: [${q.name}] — ${q.objective.label} 0/${q.objective.count}`, true);
+    saveNow(); if (typeof renderZone === 'function') renderZone();
+    tryCompleteQuest(key);   // 대화형은 즉시 완료
+    return true;
+  }
+  function grantQuestReward(q) {
+    const rw = q.reward || {};
+    if (rw.gold) addGold(rw.gold);
+    if (rw.xp && rw.xp.skill) addSkillXp(rw.xp.skill, rw.xp.amt || 0);
+    if (Array.isArray(rw.items)) rw.items.forEach(it => addItem(it.key, it.n || 1));
+  }
+  function tryCompleteQuest(key) {
+    const q = questDef(key); const a = P.quests.active[key]; if (!q || !a) return false;
+    if (questProgress(key) < q.objective.count) return false;
+    delete P.quests.active[key];
+    P.quests.done[key] = 1;
+    grantQuestReward(q);
+    stat('questsDone');
+    const rw = q.reward || {};
+    const rewardTxt = [rw.gold ? `+${fmtGold(rw.gold)}` : '', rw.xp ? `${skillName(rw.xp.skill)} XP +${rw.xp.amt}` : '',
+      (rw.items || []).map(it => itemName(it.key) + (it.n > 1 ? `×${it.n}` : '')).join(', ')].filter(Boolean).join(' · ');
+    toastFn(`✅ 퀘스트 완료: [${q.name}] 보상 ${rewardTxt}`, true);
+    checkAchievements(true); saveNow(); if (typeof renderZone === 'function') renderZone();
+    return true;
+  }
+  // 진행 중인 모든 퀘스트를 점검(채집/처치 등 카운터가 오른 뒤 호출)
+  let _questTickAt = 0;
+  function tickQuests(force) {
+    if (!P || !P.quests) return;
+    const now = Date.now(); if (!force && now - _questTickAt < 700) return; _questTickAt = now;
+    for (const key in P.quests.active) tryCompleteQuest(key);
+  }
+  function skillName(k) { const s = (D().SKILLS || []).find(x => x.key === k); return s ? s.name : k; }
+  // NPC 반경 안의 퀘스트 상태를 HUD용으로 반환(3D가 매 프레임 위치를 넘겨줌)
+  function questHudData(world, x, z) {
+    if (!P || !P.quests) return null;
+    tickQuests(false);
+    const npcs = (D().QUEST_NPCS || []).filter(n => (n.world || 'hub') === world);
+    let bestNpc = null, bestD = Infinity;
+    for (const n of npcs) {
+      const d = Math.hypot(n.x - x, n.z - z);
+      if (d <= (n.region || 20) && d < bestD) { bestD = d; bestNpc = n; }
+    }
+    // 위치와 무관하게 진행 중인 퀘스트는 항상 우측에 표시(플레이어가 목표 지역으로 이동해야 하므로)
+    const activeList = Object.keys(P.quests.active).map(key => {
+      const q = questDef(key); if (!q) return null;
+      return { key, name: q.name, label: q.objective.label, cur: questProgress(key), goal: q.objective.count, giver: (questNpcDef(q.giver) || {}).name || '' };
+    }).filter(Boolean);
+    let offer = null;
+    if (bestNpc) {
+      // 이 NPC가 줄 수 있는(선행 완료·미수락·미완료) 첫 퀘스트
+      const giveable = (D().QUESTS || []).filter(q => q.giver === bestNpc.key && questAvailable(q.key));
+      if (giveable.length) { const q = giveable[0]; offer = { npc: bestNpc.key, npcName: bestNpc.name, key: q.key, name: q.name, story: q.story, label: q.objective.label, goal: q.objective.count }; }
+    }
+    // 안내(가이드): 근처에 제안이 없고 진행 중 퀘스트도 없을 때, 이 월드에서 받을 수 있는 퀘스트의 NPC로 유도
+    let guide = null;
+    if (!offer && !activeList.length) {
+      for (const n of npcs) {
+        const giveable = (D().QUESTS || []).filter(q => q.giver === n.key && questAvailable(q.key));
+        if (giveable.length) { guide = { npcName: n.name, x: n.x, z: n.z, dist: Math.round(Math.hypot(n.x - x, n.z - z)) }; break; }
+      }
+    }
+    return { npc: bestNpc ? { key: bestNpc.key, name: bestNpc.name } : null, offer, active: activeList, guide };
+  }
+  // NPC 대화(E) → 그 NPC의 첫 수락 가능 퀘스트를 받음. 없으면 안내.
+  function talkQuestNpc(npcKey) {
+    const npc = questNpcDef(npcKey); if (!npc) return false;
+    const giveable = (D().QUESTS || []).filter(q => q.giver === npcKey && questAvailable(q.key));
+    if (giveable.length) { acceptQuest(giveable[0].key); return true; }
+    // 진행 중인 퀘스트가 있으면 진행도 안내
+    const mine = (D().QUESTS || []).filter(q => q.giver === npcKey && P.quests.active[q.key]);
+    if (mine.length) { const q = mine[0]; toastFn(`${npc.name}: "${q.name} — ${q.objective.label} ${questProgress(q.key)}/${q.objective.count}"`, true); return true; }
+    toastFn(`${npc.name}: "지금은 부탁할 일이 없구먼. 나중에 또 오게!"`, true);
+    return true;
+  }
+
   // ---- 필드 난이도(쉬움/일반/영웅/지옥) ----
   function setFieldDiff(key) {
     const fd = D().FIELD_DIFF[key]; if (!fd) return;
@@ -2472,6 +2590,7 @@
       const keys = Object.keys(P.homeEdits);
       if (keys.length > 6000 && P.homeEdits[`${x},${y},${z}`] === undefined) { toastFn('섬 편집 한도에 도달했어요(6,000블록)', false); return false; }
       P.homeEdits[`${x},${y},${z}`] = id;
+      if (id) { stat('blocksPlaced'); tickQuests(true); }   // V13-B: 설치 퀘스트 카운터
       saveNow(); return true;
     },
     // 슈가 러시 등 이동속도 인챈트(%): economy3d.js가 매 프레임 참조
@@ -2526,6 +2645,10 @@
     traitSum, guardPct,
     anglerPct: () => traitSum('angler'),
     checkAch: () => checkAchievements(),
+    // V13-B 위치기반 퀘스트 브리지
+    questHud: (world, x, z) => questHudData(world, x, z),
+    talkQuest: npcKey => talkQuestNpc(npcKey),
+    questTick: () => tickQuests(true),
     equipDropFromSrc,
     addSharedXp: v => { if (P && v > 0) { addSkillXp('combat', Math.round(v)); toastFn(`🤝 파티 사냥 XP +${Math.round(v)}`, true); } },
     gearScore,
