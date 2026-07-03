@@ -532,13 +532,27 @@
     buildHouse(108, 214, 7, 6, surfaceTop(111, 217), ID.spruce_planks, ID.stone);   // 감독관 오두막
   }
   function buildGraveyardZone() {
-    // 묘비 줄 + 지하 크립트(구울 소굴) + 슬레이어 제단
+    // V18: 을씨년스러운 공동묘지 — 계단 묘비 + 이끼/자갈 바닥 + 울타리 난간 + 고사목 + 지하 크립트 아치 입구
+    const gFence = ID.dark_oak_fence != null ? ID.dark_oak_fence : ID.spruce_fence;
     for (let gx = 0; gx < 6; gx++) for (let gz = 0; gz < 5; gz++) {
       const x = 132 + gx * 7, z = 300 + gz * 8;
       if (zoneAt(x, z) !== 'graveyard') continue;
       const y = surfaceTop(x, z);
-      setW(x, y, z, ID.cobblestone); setW(x, y + 1, z, ID.cobblestone); setW(x, y + 2, z, ID.stone);   // 묘비
-      if (hash3(gx, 63, gz) < 0.3) setW(x + 1, y, z, ID.tall_grass);
+      // 묘비: 조약돌 대 + 이끼조약돌 비석 + 계단 지붕돌(반쯤 기울어진 느낌)
+      setW(x, y, z, ID.mossy_cobblestone); setW(x, y + 1, z, ID.cobblestone);
+      const cap = stairIdFor(ID.cobblestone, (gx + gz) % 4); setW(x, y + 2, z, cap != null ? cap : ID.stone);
+      // 무덤 봉분 앞 자갈 + 잡초 + 낮은 울타리 난간
+      if (getBlockLocal(x + 1, y - 1, z) === ID.grass) setW(x + 1, y - 1, z, ID.gravel);
+      if (hash3(gx, 63, gz) < 0.4) setW(x + 1, y, z, ID.tall_grass);
+      if (gz === 0 && gFence != null) setW(x, y, z - 2, gFence);   // 앞줄 난간
+    }
+    // 고사목(잎 없는 통나무) 산발
+    for (let i = 0; i < 5; i++) {
+      const x = 138 + Math.floor(hash3(i, 66, 3) * 30), z = 302 + Math.floor(hash3(i, 67, 4) * 28);
+      if (zoneAt(x, z) !== 'graveyard') continue;
+      const y = surfaceTop(x, z); const h = 3 + Math.floor(hash3(i, 68, 5) * 2);
+      for (let j = 0; j < h; j++) setW(x, y + j, z, ID.dark_oak_log != null ? ID.dark_oak_log : ID.spruce_log);
+      setW(x + 1, y + h - 1, z, gFence != null ? gFence : ID.spruce_log);   // 앙상한 가지
     }
     // 크립트: 지하 방(계단 입구)
     const cy = surfaceTop(152, 334) - 1;
@@ -568,14 +582,31 @@
       }
       [[px - 1, pz - 1], [px + 14, pz - 1], [px - 1, pz + 20], [px + 14, pz + 20]].forEach(c => { const y = surfaceTop(c[0], c[1]); setW(c[0], y, c[1], ID.oak_log); });
     }
-    // 풍차
+    // V18: 네덜란드식 풍차 — 석재 기단 + 통나무 기둥 몸통 + 유리창 + 반블럭 처마 + 원뿔 지붕 + X자 날개(천 돛)
     const wx = 344, wz = 206, wy = surfaceTop(wx, wz);
+    const stoneSlab = slabIdFor(ID.stone_bricks);
+    // 석재 기단
+    for (let dx = -1; dx <= 4; dx++) for (let dz = -1; dz <= 4; dz++) setW(wx + dx, wy - 1, wz + dz, ID.stone_bricks);
     for (let y = wy; y < wy + 13; y++) for (let dx = 0; dx < 4; dx++) for (let dz = 0; dz < 4; dz++) {
       const edge = dx === 0 || dx === 3 || dz === 0 || dz === 3;
-      setW(wx + dx, y, wz + dz, edge ? ID.spruce_planks : 0);
+      const corner = (dx === 0 || dx === 3) && (dz === 0 || dz === 3);
+      setW(wx + dx, y, wz + dz, corner ? ID.spruce_log : (edge ? ID.spruce_planks : 0));
     }
-    for (let dx = 0; dx < 4; dx++) for (let dz = 0; dz < 4; dz++) setW(wx + dx, wy + 13, wz + dz, ID.spruce_planks);
-    for (let i = 1; i <= 6; i++) [[i, i], [-i, i], [i, -i], [-i, -i]].forEach(o => setW(wx + 1 + o[0], wy + 9 + o[1], wz + 4, ID.wool_white));
+    // 유리창(2층)
+    setW(wx + 1, wy + 3, wz, ID.glass); setW(wx + 2, wy + 7, wz, ID.glass); setW(wx, wy + 5, wz + 2, ID.glass);
+    // 반블럭 처마 + 원뿔 계단 지붕(자수정 대신 spruce 계단으로 물매)
+    if (stoneSlab != null) for (let dx = -1; dx <= 4; dx++) { setW(wx + dx, wy + 13, wz - 1, stoneSlab); setW(wx + dx, wy + 13, wz + 4, stoneSlab); }
+    let rr = 2, ry = wy + 14;
+    while (rr >= 0) {
+      for (let dx = 0; dx < 4; dx++) for (let dz = 0; dz < 4; dz++) {
+        if (rr >= 2 || (dx >= 1 && dx <= 2 && dz >= 1 && dz <= 2)) setW(wx + dx, ry, wz + dz, ID.spruce_planks);
+      }
+      rr--; ry++;
+    }
+    setW(wx + 1, ry, wz + 1, ID.glowstone);
+    // X자 날개(천 돛 — 흰 양털 팔 4개 + 나무 축)
+    for (let i = 1; i <= 6; i++) [[i, i], [-i, i], [i, -i], [-i, -i]].forEach(o => setW(wx + 1 + o[0], wy + 9 + o[1], wz - 1, (i % 3 === 0) ? ID.spruce_planks : ID.wool_white));
+    setW(wx + 1, wy + 9, wz - 1, ID.spruce_log); setW(wx + 2, wy + 9, wz - 1, ID.spruce_log);
     buildHouse(330, 236, 10, 8, surfaceTop(335, 240), ID.wool_red, ID.spruce_planks);   // 헛간
   }
   function buildForestZone() {
@@ -1103,15 +1134,33 @@
     else if (mode === 'mushroom' && ok(58, 100)) buildMushroomHouse(58, 100, base(58, 100));   // 거대 버섯 집
   }
   function buildMushroomHouse(cx, cz, base) {
+    // V18: 동화풍 버섯 오두막 — 버섯대 몸통 + 흰 점박이 붉은 갓 + 둥근 창 + 반블럭 처마 + 현관 랜턴
     flattenSite(cx - 1, cz - 1, cx + 4, cz + 4, base - 1);
     for (let y = base; y < base + 4; y++) for (let dx = 0; dx < 4; dx++) for (let dz = 0; dz < 4; dz++) {
       const edge = dx === 0 || dx === 3 || dz === 0 || dz === 3;
       setW(cx + dx, y, cz + dz, edge ? ID.mushroom_stem : 0);
     }
-    const mdoor = ID.spruce_door_c_2; setW(cx + 1, base, cz + 3, mdoor); setW(cx + 1, base + 1, cz + 3, mdoor);   // 여닫이 문
-    for (let dx = -1; dx <= 4; dx++) for (let dz = -1; dz <= 4; dz++) setW(cx + dx, base + 4, cz + dz, ID.mushroom_red_block);   // 갓(넓은 층)
-    for (let dx = 0; dx <= 3; dx++) for (let dz = 0; dz <= 3; dz++) setW(cx + dx, base + 5, cz + dz, ID.mushroom_red_block);
-    for (let dx = 1; dx <= 2; dx++) for (let dz = 1; dz <= 2; dz++) setW(cx + dx, base + 6, cz + dz, ID.mushroom_red_block);
+    // 둥근 창(유리) + 현관 여닫이 문 + 랜턴
+    setW(cx + 2, base + 1, cz, ID.glass); setW(cx, base + 2, cz + 2, ID.glass); setW(cx + 3, base + 2, cz + 1, ID.glass);
+    const mdoor = ID.spruce_door_c_2; setW(cx + 1, base, cz + 3, mdoor); setW(cx + 1, base + 1, cz + 3, mdoor);
+    setW(cx, base + 2, cz + 3, ID.glowstone); setW(cx + 2, base + 2, cz + 3, ID.glowstone);   // 현관 랜턴
+    // 몸통 상단 반블럭 처마 띠(갓 아래)
+    const stemSlab = slabIdFor(ID.mushroom_stem);
+    if (stemSlab != null) for (let dx = -1; dx <= 4; dx++) { setW(cx + dx, base + 4, cz - 1, stemSlab); setW(cx + dx, base + 4, cz + 4, stemSlab); }
+    // 붉은 갓(3층 수렴, 가장자리는 계단으로 물매) + 흰 점박이(mushroom_brown/quartz 점)
+    const capLayers = [[base + 4, -1, 4], [base + 5, 0, 3], [base + 6, 1, 2]];
+    capLayers.forEach(([cy, lo, hi], li) => {
+      for (let dx = lo; dx <= hi; dx++) for (let dz = lo; dz <= hi; dz++) {
+        const onEdge = dx === lo || dx === hi || dz === lo || dz === hi;
+        let id = ID.mushroom_red_block;
+        // 흰 점박이(해시 기반 산발)
+        if ((li < 2) && ((dx * 7 + dz * 13 + li * 5) % 6 === 0)) id = ID.quartz_block;
+        if (onEdge && li < 2) { const s = stairIdFor(ID.mushroom_red_block, dx === lo ? 1 : dx === hi ? 3 : dz === lo ? 2 : 0); if (s != null) id = s; }
+        setW(cx + dx, cy, cz + dz, id);
+      }
+    });
+    // 갓 꼭대기 굴뚝(버섯대) + 발광
+    setW(cx + 1, base + 7, cz + 1, ID.mushroom_stem); setW(cx + 1, base + 8, cz + 1, ID.glowstone);
     setW(cx + 1, base + 3, cz + 1, ID.glowstone);   // 실내 조명
   }
   /* ---------------- 테마 월드 생성기 ---------------- */
@@ -1433,7 +1482,12 @@
       for (let y = 0; y < hgt; y++) for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) {
         if (Math.abs(dx) + Math.abs(dz) < 2) setW(x + dx, y0 + y, z + dz, ID.obsidian);
       }
-      setW(x, y0 + hgt, z, ID.glowstone);
+      // V18: 실제 엔드 크리스탈 — 흑요석 대(3×3) 위 자수정 받침 + 발광 코어 + 자수정 뿔
+      for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) setW(x + dx, y0 + hgt, z + dz, ID.obsidian);
+      setW(x, y0 + hgt + 1, z, ID.purpur);
+      setW(x, y0 + hgt + 2, z, ID.glowstone);                                   // 크리스탈 코어
+      for (const [ox, oz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) setW(x + ox, y0 + hgt + 2, z + oz, ID.purpur);   // 뿔
+      setW(x, y0 + hgt + 3, z, ID.purpur);
     }
     // 보이드 세펄처(남쪽 엔드 벽돌 첨탑)
     const vy = surfaceTop(64, 98);
