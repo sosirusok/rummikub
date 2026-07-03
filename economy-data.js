@@ -263,11 +263,11 @@
       { floor: 3, mobList: ['수문장 골렘', '방벽 기사단'], bossName: '교수 (미치광이 연금술사)', bossHp: 70000, bossDmg: 95, lootTable: ['adaptive_armor', 'enchant_book_growth', 'pet_egg_silverfish'], essenceReward: 22 },
       { floor: 4, mobList: ['유령 늑대 무리', '영혼 결계병'], bossName: '쏜 (유령 수호자)', bossHp: 150000, bossDmg: 140, lootTable: ['spirit_bow', 'enchant_book_critical', 'pet_egg_ocelot'], essenceReward: 32 },
       { floor: 5, mobList: ['그림자 암살단', '분신 환영'], bossName: '리비드 (그림자 군주)', bossHp: 300000, bossDmg: 200, lootTable: ['livid_dagger', 'shadow_assassin_armor', 'enchant_book_giant_killer'], essenceReward: 45 },
-      { floor: 6, mobList: ['거인 병사', '왕의 근위대'], bossName: '사단 (거인왕)', bossHp: 600000, bossDmg: 280, lootTable: ['giant_sword', 'enchant_book_looting', 'pet_egg_blue_whale'], essenceReward: 60 },
-      { floor: 7, mobList: ['위더 기사', '지배자의 사도'], bossName: '네크론 (마지막 지배자)', bossHp: 1200000, bossDmg: 400, lootTable: ['necron_blade', 'hyperion', 'wither_armor', 'pet_egg_ender_dragon'], essenceReward: 85 },
+      { floor: 6, mobList: ['거인 병사', '왕의 근위대'], bossName: '사단 (거인왕)', bossHp: 600000, bossDmg: 280, lootTable: ['giant_sword', 'juju_shortbow', 'enchant_book_looting', 'pet_egg_blue_whale'], essenceReward: 60 },
+      { floor: 7, mobList: ['위더 기사', '지배자의 사도'], bossName: '네크론 (마지막 지배자)', bossHp: 1200000, bossDmg: 400, lootTable: ['necron_blade', 'hyperion', 'valkyrie', 'scylla', 'wither_armor', 'pet_egg_ender_dragon'], essenceReward: 85 },
       // V11: 지옥층 M8~M10 — M7 클리어 후 해금되는 극악 3난이도(마스터 토글 불가, 자체가 지옥)
-      { floor: 8, hell: true, mobList: ['지옥문 파수병', '타락한 위더 기사'], bossName: '지옥문 수문장 아자젤', bossHp: 2600000, bossDmg: 650, lootTable: ['hot_potato_book', 'fuming_potato_book', 'hyperion'], essenceReward: 130 },
-      { floor: 9, hell: true, mobList: ['심연 포식자', '공허 사도'], bossName: '심연의 폭군 벨페고르', bossHp: 5500000, bossDmg: 950, lootTable: ['fuming_potato_book', 'necron_blade', 'pet_egg_ender_dragon'], essenceReward: 180 },
+      { floor: 8, hell: true, mobList: ['지옥문 파수병', '타락한 위더 기사'], bossName: '지옥문 수문장 아자젤', bossHp: 2600000, bossDmg: 650, lootTable: ['hot_potato_book', 'fuming_potato_book', 'astraea'], essenceReward: 130 },
+      { floor: 9, hell: true, mobList: ['심연 포식자', '공허 사도'], bossName: '심연의 폭군 벨페고르', bossHp: 5500000, bossDmg: 950, lootTable: ['fuming_potato_book', 'terminator_bow', 'necron_blade', 'pet_egg_ender_dragon'], essenceReward: 180 },
       { floor: 10, hell: true, mobList: ['태초의 파편', '시간 포식자'], bossName: '태초의 지배자 아이온', bossHp: 12000000, bossDmg: 1400, lootTable: ['fuming_potato_book', 'hot_potato_book', 'essence_cosmetic_cape'], essenceReward: 300 },
     ],
     scoreThresholds: [ ['F', -Infinity], ['D', 0], ['C', 100], ['B', 160], ['A', 230], ['S', 270], ['S+', 300] ],
@@ -303,22 +303,30 @@
   // 던전/보스 전용 무기(상점 판매 X, 드롭 전용).
   // 실제 스카이블럭 방식: 같은 등급이면 외형(스프라이트)은 같고 이름·수치만 다른 무기가 여럿 존재
   // (예: Midas' Sword와 Aspect of the Dragons는 다른 무기지만 각자 등급 외형을 공유).
+  // V17: 실제 하이픽셀 무기 데미지 사다리 + 부가 스탯(힘/치명피해/광포/지력, caster=지력 스케일 어빌리티)
   const DUNGEON_WEAPONS = [
-    { key: 'bonzo_staff', name: '본조의 지팡이', wclass: 'staff', tierKey: 'rare', dmg: 58, buyPrice: 0, sellPrice: 800 },
-    { key: 'aspect_of_the_end', name: '종말의 형상(AOTE)', wclass: 'sword', tierKey: 'rare', dmg: 62, buyPrice: 0, sellPrice: 1500 },
-    { key: 'spirit_bow', name: '영혼의 활', wclass: 'bow', tierKey: 'epic', dmg: 80, buyPrice: 0, sellPrice: 2500 },
-    { key: 'livid_dagger', name: '리비드 대거', wclass: 'sword', tierKey: 'legendary', dmg: 95, buyPrice: 0, sellPrice: 7000 },
-    { key: 'midas_sword', name: '미다스의 검', wclass: 'sword', tierKey: 'legendary', dmg: 98, buyPrice: 0, sellPrice: 12000 },
-    { key: 'aspect_of_the_dragons', name: '용의 형상(AOTD)', wclass: 'sword', tierKey: 'legendary', dmg: 102, buyPrice: 0, sellPrice: 14000 },
-    { key: 'giant_sword', name: '거인의 대검', wclass: 'sword', tierKey: 'mythic', dmg: 118, buyPrice: 0, sellPrice: 15000 },
-    { key: 'hyperion', name: '히페리온', wclass: 'sword', tierKey: 'mythic', dmg: 128, buyPrice: 0, sellPrice: 25000 },
-    { key: 'necron_blade', name: '네크론의 검', wclass: 'sword', tierKey: 'ancient', dmg: 140, buyPrice: 0, sellPrice: 40000 },
+    { key: 'bonzo_staff', name: '본조의 지팡이', wclass: 'staff', tierKey: 'rare', dmg: 90, intelligence: 100, caster: true, buyPrice: 0, sellPrice: 800 },
+    { key: 'aspect_of_the_end', name: '종말의 형상(AOTE)', wclass: 'sword', tierKey: 'rare', dmg: 100, buyPrice: 0, sellPrice: 1500 },
+    { key: 'spirit_bow', name: '영혼의 활', wclass: 'bow', tierKey: 'epic', dmg: 160, buyPrice: 0, sellPrice: 2500 },
+    { key: 'livid_dagger', name: '리비드 대거', wclass: 'sword', tierKey: 'legendary', dmg: 180, critDamage: 40, critChance: 10, buyPrice: 0, sellPrice: 7000 },
+    { key: 'midas_sword', name: '미다스의 검', wclass: 'sword', tierKey: 'legendary', dmg: 130, str: 50, buyPrice: 0, sellPrice: 12000 },
+    { key: 'aspect_of_the_dragons', name: '용의 형상(AOTD)', wclass: 'sword', tierKey: 'legendary', dmg: 225, str: 100, buyPrice: 0, sellPrice: 14000 },
+    { key: 'giant_sword', name: '거인의 대검', wclass: 'sword', tierKey: 'mythic', dmg: 500, buyPrice: 0, sellPrice: 15000 },
+    { key: 'necron_blade', name: '네크론의 검', wclass: 'sword', tierKey: 'ancient', dmg: 190, str: 100, buyPrice: 0, sellPrice: 40000 },
+    // V17: 위더 블레이드 4종(네크론의 검 + 촉매) — 실제 최종 캐스터 무기
+    { key: 'hyperion', name: '히페리온', wclass: 'sword', tierKey: 'mythic', dmg: 260, str: 150, intelligence: 350, ferocity: 30, caster: true, buyPrice: 0, sellPrice: 25000 },
+    { key: 'valkyrie', name: '발키리', wclass: 'sword', tierKey: 'mythic', dmg: 260, str: 150, ferocity: 60, caster: true, buyPrice: 0, sellPrice: 25000 },
+    { key: 'scylla', name: '스킬라', wclass: 'sword', tierKey: 'mythic', dmg: 260, str: 150, critChance: 15, critDamage: 40, caster: true, buyPrice: 0, sellPrice: 25000 },
+    { key: 'astraea', name: '아스트라이아', wclass: 'sword', tierKey: 'mythic', dmg: 270, str: 150, defense: 250, intelligence: 50, ferocity: 30, caster: true, buyPrice: 0, sellPrice: 25000 },
+    // V17: 최종 활(원거리 캐리)
+    { key: 'juju_shortbow', name: '주주 단궁', wclass: 'bow', tierKey: 'legendary', dmg: 310, str: 40, critChance: 10, critDamage: 110, buyPrice: 0, sellPrice: 30000 },
+    { key: 'terminator_bow', name: '터미네이터', wclass: 'bow', tierKey: 'mythic', dmg: 300, str: 130, critChance: 25, critDamage: 40, buyPrice: 0, sellPrice: 45000 },
     // V10: 슬레이어 계열 전용 유니크 무기(보스 티어2+ 희귀 드롭)
-    { key: 'revenant_falchion', name: '리븐넌트 팔션', wclass: 'sword', tierKey: 'epic', dmg: 84, buyPrice: 0, sellPrice: 3200 },
-    { key: 'scorpion_foil', name: '스콜피온 포일', wclass: 'sword', tierKey: 'epic', dmg: 88, buyPrice: 0, sellPrice: 4200 },
-    { key: 'pooch_sword', name: '푸치 소드', wclass: 'sword', tierKey: 'legendary', dmg: 100, buyPrice: 0, sellPrice: 9000 },
-    { key: 'voidedge_katana', name: '보이드엣지 카타나', wclass: 'sword', tierKey: 'mythic', dmg: 120, buyPrice: 0, sellPrice: 18000 },
-    { key: 'fire_fury_staff', name: '화염 분노 지팡이', wclass: 'staff', tierKey: 'mythic', dmg: 126, buyPrice: 0, sellPrice: 22000 },
+    { key: 'revenant_falchion', name: '리븐넌트 팔션', wclass: 'sword', tierKey: 'epic', dmg: 120, str: 40, buyPrice: 0, sellPrice: 3200 },
+    { key: 'scorpion_foil', name: '스콜피온 포일', wclass: 'sword', tierKey: 'epic', dmg: 130, critChance: 15, buyPrice: 0, sellPrice: 4200 },
+    { key: 'pooch_sword', name: '푸치 소드', wclass: 'sword', tierKey: 'legendary', dmg: 160, str: 60, buyPrice: 0, sellPrice: 9000 },
+    { key: 'voidedge_katana', name: '보이드엣지 카타나', wclass: 'sword', tierKey: 'mythic', dmg: 200, str: 80, critDamage: 30, buyPrice: 0, sellPrice: 18000 },
+    { key: 'fire_fury_staff', name: '화염 분노 지팡이', wclass: 'staff', tierKey: 'mythic', dmg: 220, intelligence: 200, ferocity: 20, caster: true, buyPrice: 0, sellPrice: 22000 },
   ];
   // 아이템 초기 능력치 무작위 롤(실제 스카이블럭 감성): 같은 이름의 장비라도 획득 시
   // 기본 수치가 ±8% 범위에서 굴려져 고정됨(인챈트/리포지/스타포스와 완전 별개의 "생 초기치").
