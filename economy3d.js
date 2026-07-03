@@ -710,7 +710,7 @@
     else if (mode === 'visit') genHome(visitData && visitData.homeEdits);
     else if (worldCache[mode]) { const c = worldCache[mode]; world = c.world; W = c.W; H = c.H; Dp = c.Dp; }
     else if (mode === 'hub') genWorld();
-    else if (def.gen) def.gen();
+    else if (def.gen) { def.gen(); scatterWorldDetail(mode); }   // V16: 신규 생성 시 월드별 앰비언트 데코(캐시엔 이미 반영)
     if (mode === 'hub') resetPlayerToSpawn();
     else if (mode === 'home' || mode === 'visit') { P.x = 96.5; P.z = 104.5; P.y = surfaceTop(96, 104) + 0.02; P.yaw = Math.PI; }   // V13-A: 스폰섬
     else { const sp = def.spawn || [W >> 1, Dp >> 1]; P.x = sp[0] + 0.5; P.z = sp[1] + 0.5; P.y = surfaceTop(sp[0], sp[1]) + 0.02; P.yaw = Math.PI; }
@@ -835,6 +835,70 @@
       }
     }
     setW(x, y0 + th, z, ID.spruce_leaves);
+  }
+
+  // V16: 월드별 지표 앰비언트 데코 — 각 섬에 고유한 분위기(꽃밭/버섯/크리스탈/용암/영혼불 등)
+  function propOnGround(x, z, groundOk, place) {   // 지면 위 빈칸에 프롭 설치
+    if (x < 1 || z < 1 || x >= W - 1 || z >= Dp - 1) return;
+    const y = surfaceTop(x, z); if (y < 3 || y >= H - 2) return;
+    const g = getBlockLocal(x, y - 1, z);
+    if (getBlockLocal(x, y, z) !== 0) return;
+    if (groundOk && groundOk.indexOf(g) < 0) return;
+    place(x, y, z, g);
+  }
+  const GRASSY = () => [ID.grass, ID.dirt, ID.coarse_dirt, ID.mycelium];
+  function scatterWorldDetail(mode) {
+    const R = (x, z, s) => hash3(x, s, z);
+    for (let x = 2; x < W - 2; x += 2) for (let z = 2; z < Dp - 2; z += 2) {
+      const r = R(x, z, 7);
+      if (mode === 'park') {   // 화사한 초원: 꽃밭 군락 + 수풀 + 그늘 버섯
+        propOnGround(x, z, GRASSY(), (px, py, pz) => {
+          if (r < 0.14) setW(px, py, pz, r < 0.07 ? ID.flower_red : ID.flower_yellow);
+          else if (r < 0.30) setW(px, py, pz, ID.tall_grass);
+          else if (r < 0.32) setW(px, py, pz, R(px, pz, 3) < 0.5 ? ID.mushroom_red_block : ID.mushroom_brown_block);
+        });
+      } else if (mode === 'barn') {   // 농가: 건초더미 + 호박 + 밀밭 느낌
+        propOnGround(x, z, GRASSY(), (px, py, pz) => {
+          if (r < 0.04) { setW(px, py, pz, ID.hay_block); if (R(px, pz, 9) < 0.4) setW(px, py + 1, pz, ID.hay_block); }
+          else if (r < 0.08) setW(px, py, pz, ID.pumpkin);
+          else if (r < 0.24) setW(px, py, pz, ID.tall_grass);
+        });
+      } else if (mode === 'gold') {   // 건조 협곡: 마른 덤불 + 자갈 바위 + 금맥 반짝
+        propOnGround(x, z, [ID.sand, ID.sandstone, ID.stone, ID.gravel, ID.coarse_dirt, ID.grass, ID.dirt], (px, py, pz) => {
+          if (r < 0.10) setW(px, py, pz, ID.tall_grass);
+          else if (r < 0.13) { setW(px, py, pz, ID.gravel); if (R(px, pz, 2) < 0.4) setW(px, py + 1, pz, ID.cobblestone); }
+          else if (r < 0.135) setW(px, py, pz, ID.gold_ore);
+        });
+      } else if (mode === 'deep') {   // 심층 동굴: 발광 수정 군집 + 프리즈머린 + 청금석
+        propOnGround(x, z, [ID.stone, ID.cobblestone, ID.dirt, ID.gravel], (px, py, pz) => {
+          if (r < 0.05) { setW(px, py, pz, ID.glowstone); if (R(px, pz, 4) < 0.5) setW(px, py + 1, pz, ID.glowstone); }
+          else if (r < 0.08) setW(px, py, pz, ID.prismarine);
+          else if (r < 0.10) setW(px, py, pz, ID.lapis_ore);
+        });
+      } else if (mode === 'spider') {   // 거미굴: 거미줄(흰 양털) 무더기 + 이끼 바위
+        propOnGround(x, z, GRASSY().concat([ID.stone, ID.cobblestone]), (px, py, pz) => {
+          if (r < 0.045) setW(px, py, pz, ID.wool_white);
+          else if (r < 0.08) setW(px, py, pz, ID.mossy_cobblestone);
+          else if (r < 0.14) setW(px, py, pz, ID.tall_grass);
+        });
+      } else if (mode === 'nether') {   // 지옥: 용암 웅덩이 가장자리 마그마 + 영혼불(발광석) + 영혼모래
+        propOnGround(x, z, [ID.netherrack, ID.soul_sand, ID.nether_bricks], (px, py, pz) => {
+          if (r < 0.04) setW(px, py, pz, ID.magma_block);
+          else if (r < 0.06) setW(px, py, pz, ID.glowstone);
+          else if (r < 0.09) setW(px, py, pz, ID.soul_sand);
+        });
+      } else if (mode === 'end') {   // 엔드: 흑요석 첨탑 + 엔드로드(발광석) + 자수정(purpur)
+        propOnGround(x, z, [ID.end_stone, ID.end_bricks, ID.obsidian, ID.purpur], (px, py, pz) => {
+          if (r < 0.014) { const h = 2 + ((R(px, pz, 5) * 3) | 0); for (let k = 0; k < h; k++) setW(px, py + k, pz, ID.obsidian); setW(px, py + h, pz, ID.glowstone); }
+          else if (r < 0.035) setW(px, py, pz, ID.purpur);
+        });
+      } else if (mode === 'mushroom') {   // 버섯 사막: 거대 버섯 군락 + 균사 위 작은 버섯
+        propOnGround(x, z, [ID.mycelium, ID.sand, ID.grass, ID.dirt], (px, py, pz) => {
+          if (r < 0.03) { setW(px, py, pz, ID.mushroom_stem); setW(px, py + 1, pz, ID.mushroom_stem); setW(px, py + 2, pz, R(px, pz, 1) < 0.5 ? ID.mushroom_red_block : ID.mushroom_brown_block); }
+          else if (r < 0.10) setW(px, py, pz, R(px, pz, 6) < 0.5 ? ID.mushroom_red_block : ID.mushroom_brown_block);
+        });
+      }
+    }
   }
 
   /* ---------------- 테마 월드 생성기 ---------------- */
@@ -3714,6 +3778,7 @@
       chunkMeshCount: () => Object.keys(chunkMeshes).length,   // V12 크래시 검증용
       buildQueueLen: () => buildQueue.length,
       updateQuestHud, questNpcList,   // V13-B 퀘스트 HUD 검증용
+      scatterWorldDetail,   // V16 월드별 데코 검증용
       raycastBlock, homeBreakBlock, homePlaceBlock,
       setSelectedBlock: k => { selectedPlaceKey = k; }, getSelectedBlock: () => selectedPlaceKey, ownedPlaceableList,
       getSelectedHotbar: () => selectedHotbar, setSelectedHotbar: i => { selectedHotbar = i; updateHotbar(); }, ensureHotbar, activeHotbarKey, updateHotbar,
