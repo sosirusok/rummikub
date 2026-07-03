@@ -13,6 +13,8 @@
     { key: 'legendary', name: '전설', colorHex: '#FAC51C', statMultiplier: 1.8, reforgeCost: 5000, magicalPower: 16 },
     { key: 'mythic', name: '신화', colorHex: '#E048C4', statMultiplier: 2.0, reforgeCost: 9000, magicalPower: 22 },
     { key: 'ancient', name: '고대', colorHex: '#5DECD5', statMultiplier: 2.4, reforgeCost: 15000, magicalPower: 28 },
+    { key: 'divine', name: '신성', colorHex: '#66E0FF', statMultiplier: 2.8, reforgeCost: 25000, magicalPower: 34 },   // V11
+    { key: 'primal', name: '태초', colorHex: '#FF5470', statMultiplier: 3.2, reforgeCost: 40000, magicalPower: 40 },   // V11
   ];
 
   /* ---------------- 컬렉션(자원 31종, 5개 카테고리) ---------------- */
@@ -212,30 +214,35 @@
       ['rotten_flesh', 'enchant_book_sharpness', 'talisman_campfire'],
       ['rotten_flesh', 'weapon_epic', 'enchant_book_growth'],
       ['rotten_flesh', 'talisman_dragon_claw', 'pet_egg_enderman'],
+      ['rotten_flesh', 'reforge_stone_rare', 'hot_potato_book'],
     ]) },
     { key: 'spider_slayer', uniqueDrop: 'scorpion_foil', name: '거미 슬레이어', flavor: '타란튤라 브루드파더', dropResource: 'string', tiers: mkSlayerTiers(800, 25, 5, 300, 6.9, [
       ['string', 'reforge_stone_common', 'talisman_spider_ring'],
       ['string', 'enchant_book_critical', 'talisman_wolf_claw'],
       ['string', 'armor_epic', 'enchant_book_protection'],
       ['string', 'talisman_lava_charm', 'pet_egg_wolf'],
+      ['string', 'reforge_stone_rare', 'hot_potato_book'],
     ]) },
     { key: 'wolf_slayer', uniqueDrop: 'pooch_sword', name: '늑대 슬레이어', flavor: '스벤 팩마스터', dropResource: 'bone', tiers: mkSlayerTiers(800, 25, 6, 400, 47.6, [
       ['bone', 'reforge_stone_rare', 'talisman_wolf_claw'],
       ['bone', 'enchant_book_first_strike', 'talisman_fisher_anklet'],
       ['bone', 'weapon_legendary', 'enchant_book_growth'],
       ['bone', 'talisman_dragon_heart', 'pet_egg_wolf'],
+      ['bone', 'reforge_stone_rare', 'fuming_potato_book'],
     ]) },
     { key: 'enderman_slayer', uniqueDrop: 'voidedge_katana', name: '엔더맨 슬레이어', flavor: '보이드글룸 세라프', dropResource: 'ender_pearl', tiers: mkSlayerTiers(800, 25, 8, 600, 328, [
       ['ender_pearl', 'reforge_stone_rare', 'talisman_deep_pearl'],
       ['ender_pearl', 'aspect_of_the_end', 'talisman_hourglass'],
       ['ender_pearl', 'armor_mythic', 'enchant_book_protection'],
       ['ender_pearl', 'aspect_of_the_dragons', 'pet_egg_enderman'],
+      ['ender_pearl', 'reforge_stone_rare', 'fuming_potato_book'],
     ]) },
     { key: 'blaze_slayer', uniqueDrop: 'fire_fury_staff', name: '블레이즈 슬레이어', flavor: '인페르노 데몬로드', dropResource: 'blaze_rod', tiers: mkSlayerTiers(800, 25, 10, 900, 2266, [
       ['blaze_rod', 'reforge_stone_rare', 'talisman_lava_charm'],
       ['blaze_rod', 'enchant_book_looting', 'talisman_wealth_rune'],
       ['blaze_rod', 'midas_sword', 'enchant_book_sharpness'],
       ['blaze_rod', 'talisman_primal_shard', 'pet_egg_ender_dragon'],
+      ['blaze_rod', 'fuming_potato_book', 'pet_egg_ender_dragon'],
     ]) },
   ];
 
@@ -252,6 +259,10 @@
       { floor: 5, mobList: ['그림자 암살단', '분신 환영'], bossName: '리비드 (그림자 군주)', bossHp: 300000, bossDmg: 200, lootTable: ['livid_dagger', 'shadow_assassin_armor', 'enchant_book_giant_killer'], essenceReward: 45 },
       { floor: 6, mobList: ['거인 병사', '왕의 근위대'], bossName: '사단 (거인왕)', bossHp: 600000, bossDmg: 280, lootTable: ['giant_sword', 'enchant_book_looting', 'pet_egg_blue_whale'], essenceReward: 60 },
       { floor: 7, mobList: ['위더 기사', '지배자의 사도'], bossName: '네크론 (마지막 지배자)', bossHp: 1200000, bossDmg: 400, lootTable: ['necron_blade', 'hyperion', 'wither_armor', 'pet_egg_ender_dragon'], essenceReward: 85 },
+      // V11: 지옥층 M8~M10 — M7 클리어 후 해금되는 극악 3난이도(마스터 토글 불가, 자체가 지옥)
+      { floor: 8, hell: true, mobList: ['지옥문 파수병', '타락한 위더 기사'], bossName: '지옥문 수문장 아자젤', bossHp: 2600000, bossDmg: 650, lootTable: ['hot_potato_book', 'fuming_potato_book', 'hyperion'], essenceReward: 130 },
+      { floor: 9, hell: true, mobList: ['심연 포식자', '공허 사도'], bossName: '심연의 폭군 벨페고르', bossHp: 5500000, bossDmg: 950, lootTable: ['fuming_potato_book', 'necron_blade', 'pet_egg_ender_dragon'], essenceReward: 180 },
+      { floor: 10, hell: true, mobList: ['태초의 파편', '시간 포식자'], bossName: '태초의 지배자 아이온', bossHp: 12000000, bossDmg: 1400, lootTable: ['fuming_potato_book', 'hot_potato_book', 'essence_cosmetic_cape'], essenceReward: 300 },
     ],
     scoreThresholds: [ ['F', -Infinity], ['D', 0], ['C', 100], ['B', 160], ['A', 230], ['S', 270], ['S+', 300] ],
     roomTypes: ['전투방', '퍼즐방', '함정방', '미니보스방', '보물방'],
@@ -275,7 +286,7 @@
   // 티어별 상점 무기는 해당 티어 생성 무기 대역(base+0~14)의 상위권 값 — "그 티어의 확실한 선택지"
   const TIER_WEAPON_DMG = [20, 38, 55, 73, 91, 109, 126];
   const TIER_ARMOR_DEF = [12, 26, 38, 50, 60, 70, 76];
-  ITEM_TIERS.forEach((t, i) => {
+  ITEM_TIERS.slice(0, 7).forEach((t, i) => {   // V11: 레거시 생성은 7티어까지(신성/태초는 신규 DB 전용)
     const baseBuy = Math.round(60 * Math.pow(3.1, i));
     const dmg = TIER_WEAPON_DMG[i];
     EQUIPMENT.weapons.push({ key: `weapon_${t.key}`, name: WEAPON_NAMES[i], wclass: 'sword', tierKey: t.key, dmg, buyPrice: 0, sellPrice: Math.round(baseBuy * 0.2) });
@@ -364,7 +375,7 @@
   const GEN_ARMOR_DEF_BASE = [6, 16, 26, 36, 46, 56, 66];
   function genFamily(prefix, bases, wclass) {
     const out = [];
-    ITEM_TIERS.forEach((t, ti) => {
+    ITEM_TIERS.slice(0, 7).forEach((t, ti) => {
       bases.forEach((bn, i) => {
         const dmg = GEN_WEAPON_DMG_BASE[ti] + i;
         const buyable = false;   // V7: 장비는 100% 드롭/조합 — 화폐는 강화·합성 전용
@@ -376,12 +387,12 @@
     return out;
   }
   // V7: 티어별 요구 전투 레벨(장비 착용 조건 — 실제 스카이블럭식 게이트)
-  const REQ_COMBAT_BY_TIER = { common: 0, uncommon: 2, rare: 5, epic: 9, legendary: 14, mythic: 20, ancient: 26 };
+  const REQ_COMBAT_BY_TIER = { common: 0, uncommon: 2, rare: 5, epic: 9, legendary: 14, mythic: 20, ancient: 26, divine: 33, primal: 40 };   // V11 9티어
   EQUIPMENT.weapons = EQUIPMENT.weapons
     .concat(genFamily('sw', GEN_SWORD_BASES, 'sword'), genFamily('bw', GEN_BOW_BASES, 'bow'), genFamily('st', GEN_STAFF_BASES, 'staff'))
     .sort((a, b) => a.dmg - b.dmg || (a.key < b.key ? -1 : 1));
   const GEN_ARMORS = [];
-  ITEM_TIERS.forEach((t, ti) => {
+  ITEM_TIERS.slice(0, 7).forEach((t, ti) => {
     GEN_ARMOR_BASES.forEach((bn, i) => {
       const def = GEN_ARMOR_DEF_BASE[ti] + i;
       const buyable = false;   // V7: 전 장비 드롭/조합 전용
@@ -393,11 +404,107 @@
   EQUIPMENT.armor = EQUIPMENT.armor.concat(GEN_ARMORS).sort((a, b) => a.defense - b.defense || (a.key < b.key ? -1 : 1));
   EQUIPMENT.weapons.forEach(w => { w.reqCombat = REQ_COMBAT_BY_TIER[w.tierKey] || 0; });
   EQUIPMENT.armor.forEach(a => { a.reqCombat = REQ_COMBAT_BY_TIER[a.tierKey] || 0; });
+
+  /* ================ V11: 장비 초대확장 — 특성 카탈로그 · 세트 · 1400종 DB 머지 ================ */
+  // 특성(트레잇): 모든 신규 장비가 1~3개 보유. 전투/채집/경제 전 분야에 실동작(economy.js 특성 엔진).
+  const TRAITS = {
+    lifesteal: { n: '흡혈', f: '타격 피해의 {v}%만큼 회복' }, execute: { n: '처형', f: '적 HP 30% 이하일 때 피해 +{v}%' },
+    first_strike: { n: '선제 공격', f: '첫 2타 피해 +{v}%' }, combo: { n: '연격', f: '연속 타격당 피해 +{v}% (최대 5중첩)' },
+    giant_slayer: { n: '거인 학살자', f: '보스·미니보스 피해 +{v}%' }, swift: { n: '신속', f: '이동속도 +{v}' },
+    vampiric_kill: { n: '흡혼', f: '처치 시 HP {v} 회복' }, gold_rush: { n: '골드 러시', f: '처치 골드 +{v}%' },
+    wisdom: { n: '지혜', f: '처치 경험치 +{v}%' }, crit_eye: { n: '매의 눈', f: '크리티컬 확률 +{v}%' },
+    brutality: { n: '잔혹', f: '크리티컬 피해 +{v}%' }, double_strike: { n: '이도류', f: '{v}% 확률로 2회 타격' },
+    rage: { n: '분노', f: '내 HP 40% 이하일 때 피해 +{v}%' }, focus: { n: '집중', f: '내 HP 90% 이상일 때 피해 +{v}%' },
+    shred: { n: '파쇄', f: '타격당 고정 추가 피해 +{v}' }, midas: { n: '미다스의 손', f: '보유 골드 10만당 피해 +{v}% (최대 5중첩)' },
+    vs_undead: { n: '언데드 특효', f: '좀비 계열 피해 +{v}%' }, vs_arachnid: { n: '절지류 특효', f: '거미 계열 피해 +{v}%' },
+    vs_beast: { n: '야수 특효', f: '늑대 계열 피해 +{v}%' }, vs_ender: { n: '엔더 특효', f: '엔더 계열 피해 +{v}%' },
+    vs_demon: { n: '악마 특효', f: '화염 계열 피해 +{v}%' },
+    guard: { n: '수호', f: '받는 피해 -{v}%' }, vitality: { n: '활력', f: '최대 HP +{v}' }, bulwark: { n: '방벽', f: '방어 +{v}' },
+    regeneration: { n: '재생', f: '2초마다 HP {v} 회복' }, swiftness: { n: '질주', f: '이동속도 +{v}' },
+    gatherer: { n: '채집꾼', f: '모든 채집 속도 +{v}%' }, angler: { n: '강태공', f: '낚시 입질 +{v}% 빨라짐' },
+    miner: { n: '광부', f: '채광 속도 +{v}%' }, lumber: { n: '벌목꾼', f: '벌목 속도 +{v}%' },
+    lucky: { n: '행운', f: '희귀 드롭 확률 +{v}%' }, thorns: { n: '가시', f: '받은 피해의 {v}% 반사' },
+    greed: { n: '탐욕', f: '골드 획득 +{v}%' }, scholar: { n: '학자', f: '경험치 획득 +{v}%' }, mana_well: { n: '마나 샘', f: '지능 +{v}' },
+  };
+  // 세트 40종 보너스 — 투구+흉갑+레깅스+부츠 4부위 동일 세트 착용 시 발동
+  const EQUIP_SETS = {
+    squire: { name: '견습 기사단', bonus: { def: 6, hp: 15 }, desc: '기사단의 첫걸음' },
+    gravekeeper: { name: '묘지기', bonus: { def: 5, hp: 10, xpPct: 5 }, desc: '망자의 가호' },
+    miner_guild: { name: '광부조합', bonus: { def: 6, minerPct: 12 }, desc: '조합원의 곡괭이 축복' },
+    wolfhide: { name: '늑대가죽', bonus: { speed: 6, str: 4 }, desc: '설원 무리의 온기' },
+    angler_crew: { name: '노련한 어부', bonus: { hp: 20, anglerPct: 15 }, desc: '만선의 기운' },
+    harvest: { name: '풍년 농군', bonus: { hp: 30, gathererPct: 8 }, desc: '황금 들녘의 축복' },
+    hunter: { name: '숲 사냥꾼', bonus: { str: 8, critChance: 3 }, desc: '숨죽인 추적자' },
+    skeletal: { name: '백골', bonus: { def: 10, str: 6 }, desc: '뼈까지 시린 냉기' },
+    spider_queen: { name: '거미 여왕', bonus: { str: 10, speed: 5, dmgPct: 4 }, desc: '여왕의 독니' },
+    diver: { name: '심연 잠수부', bonus: { hp: 45, def: 8, anglerPct: 20 }, desc: '깊은 곳의 숨결' },
+    magma_walker: { name: '용암 행자', bonus: { def: 14, guard: 3 }, desc: '불길 위를 걷는 자' },
+    frost: { name: '서리칼바람', bonus: { str: 12, critDamage: 10 }, desc: '살을 에는 한파' },
+    golden_pharaoh: { name: '황금 파라오', bonus: { goldPct: 15, hp: 30 }, desc: '사막 왕의 부' },
+    dune_wanderer: { name: '사구 방랑자', bonus: { speed: 10, def: 10 }, desc: '모래폭풍의 인도' },
+    jungle_stalker: { name: '밀림 추적자', bonus: { str: 14, speed: 6 }, desc: '보이지 않는 사냥' },
+    storm: { name: '뇌운', bonus: { dmgPct: 8, critChance: 4 }, desc: '천둥을 두른 자' },
+    moonlight: { name: '달빛 무희', bonus: { critChance: 6, critDamage: 14, speed: 4 }, desc: '달 아래의 검무' },
+    steel_knight: { name: '강철 기사', bonus: { def: 22, hp: 40 }, desc: '꺾이지 않는 방벽' },
+    dragon_scale: { name: '용비늘', bonus: { def: 20, str: 15, dmgPct: 6 }, desc: '용의 비호' },
+    shadow_assassin: { name: '그림자 암살자', bonus: { dmgPct: 12, speed: 10, critDamage: 15 }, desc: '그림자에서 그림자로' },
+    archmage: { name: '대마법사', bonus: { intelligence: 60, dmgPct: 8 }, desc: '마나의 흐름을 지배' },
+    paladin: { name: '성기사', bonus: { def: 25, hp: 60, guard: 4 }, desc: '빛의 서약' },
+    blood_fiend: { name: '혈귀', bonus: { dmgPct: 10, lifestealPct: 4 }, desc: '피의 갈증' },
+    beast_king: { name: '야수왕', bonus: { str: 22, speed: 8, dmgPct: 5 }, desc: '무리의 왕' },
+    thunder_emperor: { name: '뇌제', bonus: { dmgPct: 14, critChance: 6, critDamage: 18 }, desc: '벼락의 옥좌' },
+    glacier: { name: '빙하 거인', bonus: { hp: 120, def: 26, guard: 5 }, desc: '만년설의 육체' },
+    necro_lord: { name: '사령군주', bonus: { dmgPct: 12, hp: 60, xpPct: 12 }, desc: '망자 군단의 주인' },
+    phoenix: { name: '불사조', bonus: { hp: 90, regenFlat: 5, dmgPct: 8 }, desc: '재에서 다시 태어나다' },
+    necron: { name: '네크론', bonus: { dmgPct: 18, str: 25, def: 20 }, desc: '지배자의 유산' },
+    void_seraph: { name: '공허 세라프', bonus: { dmgPct: 15, speed: 12, critDamage: 22 }, desc: '공허를 가르는 날개' },
+    world_tree: { name: '세계수', bonus: { hp: 150, regenFlat: 8, gathererPct: 15 }, desc: '뿌리 깊은 생명' },
+    stargazer: { name: '별지기', bonus: { intelligence: 90, critChance: 8, xpPct: 15 }, desc: '별의 궤적을 읽는 자' },
+    hell_monarch: { name: '지옥 군주', bonus: { dmgPct: 22, str: 30, guard: 5 }, desc: '불지옥의 옥좌' },
+    chrono: { name: '시간 방랑자', bonus: { speed: 18, critChance: 10, dmgPct: 12 }, desc: '시간의 틈을 걷다' },
+    deep_emperor: { name: '심해 제왕', bonus: { hp: 180, def: 35, anglerPct: 30 }, desc: '해구의 왕관' },
+    celestial: { name: '천상 수호자', bonus: { def: 45, hp: 140, guard: 7 }, desc: '하늘의 방패' },
+    primal_titan: { name: '태초 거인', bonus: { str: 45, hp: 200, dmgPct: 18 }, desc: '세계를 빚은 손' },
+    genesis: { name: '창세', bonus: { dmgPct: 25, str: 35, critDamage: 30, hp: 100 }, desc: '시작이자 끝' },
+    yeti_lord: { name: '예티 군주', bonus: { hp: 80, def: 24, guard: 4 }, desc: '설산의 지배자' },
+    arachne_brood: { name: '아라크네 혈족', bonus: { dmgPct: 12, speed: 8, lifestealPct: 3 }, desc: '어미의 축복' },
+  };
+  // 레거시 장비 슬롯 정규화(구 방어구는 전부 흉갑 취급, 무기는 wclass 기준)
+  EQUIPMENT.weapons.forEach(w => { if (!w.slot) w.slot = w.wclass === 'bow' ? 'bow' : 'weapon'; });
+  EQUIPMENT.armor.forEach(a => { if (!a.slot) a.slot = 'chest'; });
+  // 1400종 신규 장비 DB(economy-equip.js가 window.ECON_EQUIP로 선로드) 머지
+  const EQ2 = (typeof window !== 'undefined' && window.ECON_EQUIP && Array.isArray(window.ECON_EQUIP.items)) ? window.ECON_EQUIP : null;
+  if (EQ2) {
+    for (const it of EQ2.items) {
+      const e = {
+        key: it.key, name: it.name, tierKey: it.tierKey, buyPrice: 0, sellPrice: it.sellPrice,
+        reqCombat: REQ_COMBAT_BY_TIER[it.tierKey] || 0, traits: it.traits || [], set: it.set || null,
+        src: it.src || 'field', flavor: it.flavor || '',
+      };
+      if (it.slot === 'sword' || it.slot === 'bow') {
+        e.wclass = it.slot === 'bow' ? 'bow' : 'sword'; e.slot = it.slot === 'bow' ? 'bow' : 'weapon'; e.dmg = it.dmg;
+        EQUIPMENT.weapons.push(e);
+      } else {
+        e.slot = it.slot; e.defense = it.defense || 0; e.hp = it.hp || 0;
+        EQUIPMENT.armor.push(e);
+      }
+    }
+    EQUIPMENT.weapons.sort((x, y) => x.dmg - y.dmg || (x.key < y.key ? -1 : 1));
+    EQUIPMENT.armor.sort((x, y) => x.defense - y.defense || (x.key < y.key ? -1 : 1));
+    // 슬레이어 T5 전리품: 계열 전용 최상위 장비로 교체(플레이스홀더 → 실제 키)
+    const bySrc = {};
+    EQ2.items.forEach(it => { (bySrc[it.src] = bySrc[it.src] || []).push(it); });
+    SLAYERS.forEach(sd => {
+      const fam = sd.key.replace('_slayer', '');
+      const pool = (bySrc['slayer_' + fam] || []).slice().sort((x, y) => (REQ_COMBAT_BY_TIER[y.tierKey] || 0) - (REQ_COMBAT_BY_TIER[x.tierKey] || 0));
+      if (pool.length >= 2 && sd.tiers[4]) sd.tiers[4].rareDropTable = [sd.dropResource, pool[0].key, pool[1].key];
+    });
+  }
   // 도구도 계열별 105종 추가(전부 드롭 전용) — 배율 0.6~2.6, 기존 5종 사다리는 그대로 유지
   const GEN_TOOL_BASES = ['공구', '연장', '장비', '명품', '걸작', '비장의 도구', '유물 공구', '고대 연장', '전설의 공구', '신화의 연장', '용의 도구', '별의 공구', '태초의 연장', '창세의 공구', '신의 연장'];
   Object.keys(TOOL_FAMILY_NAMES).forEach(fam => {
     const gen = [];
-    ITEM_TIERS.forEach((t, ti) => {
+    ITEM_TIERS.slice(0, 7).forEach((t, ti) => {
       GEN_TOOL_BASES.forEach((bn, i) => {
         const mul = +(0.6 + (ti * 15 + i) * 0.019).toFixed(2);   // 0.6 ~ 2.58
         gen.push({ key: `g_t_${fam}_${t.key}_${i}`, name: `${GEN_TIER_PREFIX[ti]} ${TOOL_FAMILY_NAMES[fam]} ${bn}`, tierKey: t.key, mul, price: 0, req: Math.min(25, Math.max(0, Math.round((mul - 1) * 10))) });
@@ -579,6 +686,8 @@
     { key: 'potion_strength', needs: { blaze_rod: 2, spider_eye: 4 }, gives: 1, unlock: { resource: 'spider_eye', tier: 2 } },
     { key: 'potion_speed', needs: { sugarcane: 16, feather: 4 }, gives: 1, unlock: { resource: 'sugarcane', tier: 2 } },
     { key: 'potion_healing', needs: { melon: 12, ghast_tear: 1 }, gives: 1, unlock: { resource: 'melon', tier: 2 } },
+    { key: 'hot_potato_book', needs: { potato: 128, sugarcane: 32 }, gives: 1, unlock: { resource: 'potato', tier: 3 } },   // V11
+    { key: 'fuming_potato_book', needs: { hot_potato_book: 2, magma_cream: 48 }, gives: 1, unlock: { resource: 'potato', tier: 6 } },   // V11
     { key: 'weapon_common', needs: { oaklog: 10, stone: 4 }, gives: 1, unlock: null },
     { key: 'bow_common', needs: { oaklog: 6, string: 6 }, gives: 1, unlock: null },
     { key: 'armor_common', needs: { rotten_flesh: 24, string: 12 }, gives: 1, unlock: null },
@@ -608,6 +717,8 @@
     // 도구 4계열 × 5티어
     ...Object.keys(TOOLS).flatMap(fam => TOOLS[fam].map(t => ({ key: t.key, name: t.name, category: '도구', tierKey: t.tierKey, buyPrice: t.price, sellPrice: Math.round((t.price || 900 * t.mul) * 0.2), stackSize: 1 }))),
     // 강화/미니언/인챈트
+    { key: 'hot_potato_book', name: '핫 포테이토 북', category: '강화재료', buyPrice: 0, sellPrice: 800, stackSize: 64 },   // V11: 장비당 10권(무기 공+2 / 방어구 방+2·체+4)
+    { key: 'fuming_potato_book', name: '퓨밍 포테이토 북', category: '강화재료', buyPrice: 0, sellPrice: 4000, stackSize: 64 },   // V11: 11~15권째 확장(희귀)
     { key: 'reforge_stone_common', name: '리포지 스톤(일반)', category: '강화재료', buyPrice: 0, sellPrice: 50, stackSize: 64 },
     { key: 'reforge_stone_rare', name: '리포지 스톤(희귀)', category: '강화재료', buyPrice: 0, sellPrice: 200, stackSize: 64 },
     { key: 'essence_reforge_stone', name: '던전 정수 리포지 스톤', category: '강화재료', buyPrice: 0, sellPrice: 400, stackSize: 64 },
@@ -647,8 +758,8 @@
     // 원자재 31종(sellPrice는 컬렉션 정의에서)
     ...COLLECTIONS.flatMap(cat => cat.resources.map(r => ({ key: r.key, name: r.name, category: '원자재', buyPrice: 0, sellPrice: r.sellPrice, stackSize: 64 }))),
     // 장비(던전 전용은 buyPrice 0 → 구매 불가, 판매만 가능)
-    ...EQUIPMENT.weapons.map(w => ({ key: w.key, name: `${w.name} [${ITEM_TIERS.find(t => t.key === w.tierKey).name}]`, category: '무기', tierKey: w.tierKey, buyPrice: w.buyPrice, sellPrice: w.sellPrice, stackSize: 1, dmg: w.dmg })),
-    ...EQUIPMENT.armor.map(a => ({ key: a.key, name: `${a.name} [${ITEM_TIERS.find(t => t.key === a.tierKey).name}]`, category: '방어구', tierKey: a.tierKey, buyPrice: a.buyPrice, sellPrice: a.sellPrice, stackSize: 1, defense: a.defense })),
+    ...EQUIPMENT.weapons.map(w => ({ key: w.key, name: `${w.name} [${ITEM_TIERS.find(t => t.key === w.tierKey).name}]`, category: '무기', tierKey: w.tierKey, buyPrice: w.buyPrice, sellPrice: w.sellPrice, stackSize: 1, dmg: w.dmg, slot: w.slot, traits: w.traits, set: w.set, flavor: w.flavor, reqCombat: w.reqCombat })),
+    ...EQUIPMENT.armor.map(a => ({ key: a.key, name: `${a.name} [${ITEM_TIERS.find(t => t.key === a.tierKey).name}]`, category: '방어구', tierKey: a.tierKey, buyPrice: a.buyPrice, sellPrice: a.sellPrice, stackSize: 1, defense: a.defense, hp: a.hp || 0, slot: a.slot, traits: a.traits, set: a.set, flavor: a.flavor, reqCombat: a.reqCombat })),
   ];
   const DAILY_SELL_LIMIT_PER_STACK = 10;   // dailySellLimit = 10 * stackSize
 
@@ -682,11 +793,85 @@
     lighthouseKeeper: '등대 꼭대기에 오르면 좋은 일이 생긴다는 소문이 있다',
   };
 
+  /* ================ V11: 난이도 스펙트럼 · 아레나 · 업적 · 일일 퀘스트 · 분해 · 주간 보스 ================ */
+  // 필드 난이도 4단계 — 던전·프라이빗 섬 제외 전 필드 몹에 적용(메뉴에서 전환)
+  const FIELD_DIFF = {
+    easy: { name: '쉬움', emoji: '🌱', lvMul: 0.55, hpMul: 0.5, dmgMul: 0.55, rewardMul: 0.7, req: 0, desc: '입문자용 — 몹이 약해지고 보상도 소폭 감소' },
+    normal: { name: '일반', emoji: '⚔️', lvMul: 1, hpMul: 1, dmgMul: 1, rewardMul: 1, req: 0, desc: '표준 밸런스' },
+    heroic: { name: '영웅', emoji: '🔥', lvMul: 1.8, hpMul: 2.5, dmgMul: 1.9, rewardMul: 2.1, req: 8, desc: '전투 Lv8+ — 강한 몹, 2배 보상' },
+    hell: { name: '지옥', emoji: '☠️', lvMul: 2.8, hpMul: 5.5, dmgMul: 3.2, rewardMul: 3.6, req: 15, desc: '전투 Lv15+ — Lv100 몹과 지옥 보스, 3.6배 보상 + 전용 드롭' },
+  };
+  // 콜로세움 웨이브 아레나 — 10웨이브 생존전 4난이도
+  const ARENA = {
+    waves: 10, equipChance: 0.45,
+    difficulties: [
+      { key: 'easy', name: '입문 투기장', lv: 5, hpMul: 0.8, waveGold: 300, finalGold: 2000, req: 0 },
+      { key: 'normal', name: '투사의 시험', lv: 20, hpMul: 1.6, waveGold: 900, finalGold: 7000, req: 6 },
+      { key: 'heroic', name: '검투왕 결선', lv: 45, hpMul: 3.2, waveGold: 2500, finalGold: 20000, req: 14 },
+      { key: 'hell', name: '지옥 투기장', lv: 80, hpMul: 6.5, waveGold: 6000, finalGold: 60000, req: 20 },
+    ],
+  };
+  // 업적 30종 — statValue(counter/파생값) 기반, 달성 시 보상 자동 지급
+  const ACHIEVEMENTS = [
+    { key: 'first_blood', name: '첫 사냥', desc: '몬스터 1마리 처치', stat: 'kills', gte: 1, gold: 500 },
+    { key: 'hunter_100', name: '사냥꾼', desc: '몬스터 100마리 처치', stat: 'kills', gte: 100, gold: 2000 },
+    { key: 'hunter_1000', name: '학살자', desc: '몬스터 1,000마리 처치', stat: 'kills', gte: 1000, gold: 10000 },
+    { key: 'hunter_10000', name: '전장의 신', desc: '몬스터 10,000마리 처치', stat: 'kills', gte: 10000, gold: 50000, item: 'fuming_potato_book' },
+    { key: 'boss_10', name: '보스 헌터', desc: '보스급 10회 처치', stat: 'bossKills', gte: 10, gold: 5000 },
+    { key: 'boss_100', name: '왕조 붕괴자', desc: '보스급 100회 처치', stat: 'bossKills', gte: 100, gold: 30000, item: 'fuming_potato_book' },
+    { key: 'hit_1k', name: '천 단위 타격', desc: '한 방 피해 1,000 달성', stat: 'maxHit', gte: 1000, gold: 2000 },
+    { key: 'hit_10k', name: '만 단위 타격', desc: '한 방 피해 10,000 달성', stat: 'maxHit', gte: 10000, gold: 8000 },
+    { key: 'hit_100k', name: '유성 낙하', desc: '한 방 피해 100,000 달성', stat: 'maxHit', gte: 100000, gold: 40000 },
+    { key: 'rich_10k', name: '첫 목돈', desc: '누적 1만 골드 획득', stat: 'goldEarned', gte: 10000, gold: 1000 },
+    { key: 'rich_100k', name: '알부자', desc: '누적 10만 골드 획득', stat: 'goldEarned', gte: 100000, gold: 5000 },
+    { key: 'rich_1m', name: '백만장자', desc: '누적 100만 골드 획득', stat: 'goldEarned', gte: 1000000, gold: 20000 },
+    { key: 'rich_10m', name: '재벌', desc: '누적 1,000만 골드 획득', stat: 'goldEarned', gte: 10000000, gold: 100000 },
+    { key: 'fisher_100', name: '어부의 길', desc: '물고기 100마리', stat: 'fishCaught', gte: 100, gold: 3000 },
+    { key: 'fisher_1000', name: '바다의 친구', desc: '물고기 1,000마리', stat: 'fishCaught', gte: 1000, gold: 15000 },
+    { key: 'miner_1000', name: '광부의 손', desc: '블록 1,000개 채집', stat: 'blocksMined', gte: 1000, gold: 3000 },
+    { key: 'miner_20000', name: '대지의 조각가', desc: '블록 20,000개 채집', stat: 'blocksMined', gte: 20000, gold: 20000 },
+    { key: 'dungeon_5', name: '카타콤 입문', desc: '던전 5회 완주', stat: 'dungeonClears', gte: 5, gold: 4000 },
+    { key: 'dungeon_50', name: '카타콤 정복자', desc: '던전 50회 완주', stat: 'dungeonClears', gte: 50, gold: 25000 },
+    { key: 'slayer_10', name: '현상금 사냥꾼', desc: '슬레이어 보스 10회', stat: 'slayerBosses', gte: 10, gold: 5000 },
+    { key: 'slayer_100', name: '마덕스의 오른팔', desc: '슬레이어 보스 100회', stat: 'slayerBosses', gte: 100, gold: 40000 },
+    { key: 'arena_40', name: '검투 챔피언', desc: '아레나 웨이브 40회 클리어', stat: 'arenaWaves', gte: 40, gold: 15000 },
+    { key: 'quest_10', name: '성실한 일꾼', desc: '일일 퀘스트 10회 완료', stat: 'questsDone', gte: 10, gold: 5000 },
+    { key: 'quest_50', name: '의뢰 전문가', desc: '일일 퀘스트 50회 완료', stat: 'questsDone', gte: 50, gold: 25000 },
+    { key: 'gear_100', name: '수집가', desc: '장비 도감 100종 등록', stat: 'equipLog', gte: 100, gold: 10000 },
+    { key: 'gear_400', name: '박물관장', desc: '장비 도감 400종 등록', stat: 'equipLog', gte: 400, gold: 50000, item: 'fuming_potato_book' },
+    { key: 'souls_24', name: '요정의 친구', desc: '페어리 소울 24개 수집', stat: 'fairySouls', gte: 24, gold: 20000 },
+    { key: 'minion_30', name: '자동화 제국', desc: '미니언 슬롯 30칸 달성', stat: 'minionSlots', gte: 30, gold: 20000 },
+    { key: 'star_15', name: '별을 삼킨 자', desc: '스타포스 15성 달성', stat: 'starMax', gte: 15, gold: 30000 },
+    { key: 'combat_30', name: '무의 극의', desc: '전투 스킬 30레벨', stat: 'combatLv', gte: 30, gold: 100000, item: 'fuming_potato_book' },
+  ];
+  // 일일 퀘스트 풀(매일 3종 무작위 배정, 카운터 스냅샷 기반)
+  const DAILY_QUESTS = [
+    { key: 'dq_kills', name: '오늘의 사냥', counter: 'kills', goal: 60, gold: 1500 },
+    { key: 'dq_mine', name: '광맥 청소', counter: 'blocksMined', goal: 150, gold: 1200 },
+    { key: 'dq_chop', name: '벌목 할당량', counter: 'treesChopped', goal: 60, gold: 1000 },
+    { key: 'dq_crop', name: '풍작 준비', counter: 'cropsHarvested', goal: 80, gold: 1000 },
+    { key: 'dq_fish', name: '오늘의 조황', counter: 'fishCaught', goal: 12, gold: 1500 },
+    { key: 'dq_dungeon', name: '카타콤 순찰', counter: 'dungeonClears', goal: 1, gold: 2500 },
+    { key: 'dq_slayer', name: '현상금 집행', counter: 'slayerBosses', goal: 1, gold: 3000 },
+    { key: 'dq_gold', name: '장사 수완', counter: 'goldEarned', goal: 5000, gold: 2000 },
+    { key: 'dq_sell', name: '재고 정리', counter: 'itemsSold', goal: 40, gold: 1200 },
+    { key: 'dq_ench', name: '마법부여 실습', counter: 'enchantsApplied', goal: 1, gold: 1500 },
+    { key: 'dq_arena', name: '투기장 몸풀기', counter: 'arenaWaves', goal: 5, gold: 2000 },
+    { key: 'dq_boss', name: '거물 사냥', counter: 'bossKills', goal: 2, gold: 2500 },
+  ];
+  // 장비 분해 — 티어 인덱스별 던전 정수 회수(+15% 확률 인챈티드 재료)
+  const SALVAGE = { essenceByTier: [1, 2, 4, 7, 12, 20, 32, 50, 80], bonusChance: 0.15, bonusItem: 'enchanted_iron' };
+  // 주간 순환 보스 — ISO 주차마다 한 계열이 강화(⭐ HP·보상 2배)
+  const WEEKLY = { families: ['zombie_slayer', 'spider_slayer', 'wolf_slayer', 'enderman_slayer', 'blaze_slayer'], hpMul: 2, rewardMul: 2 };
+  // 핫 포테이토 북 규칙
+  const HPB = { maxBooks: 10, fumingMax: 15, weaponDmgPerBook: 2, armorDefPerBook: 2, armorHpPerBook: 4 };
+
   window.ECON_DATA = {
     ITEM_TIERS, COLLECTIONS, SKILLS, GATHER_TABLE, TOOLS, MINIONS, MINION_STORAGE_BASE, MINION_STORAGE_UPGRADED,
     MINION_STORAGE_UPGRADE_COST, MINION_OFFLINE_CAP_HOURS, MINION_SLOT_MAX, MINION_SLOT_COST_BASE, MINION_SLOT_COST_MUL,
     MINION_FUEL, MINION_FUEL2, SLAYERS, DUNGEON, DUNGEON_ROOM_SCORE, ESSENCE_SHOP, SHOP, DAILY_SELL_LIMIT_PER_STACK,
     EQUIPMENT, STARFORCE, REFORGES, ITEM_ROLL,
+    TRAITS, EQUIP_SETS, FIELD_DIFF, ARENA, ACHIEVEMENTS, DAILY_QUESTS, SALVAGE, WEEKLY, HPB,
     TALISMANS, MAGICAL_POWER, PETS, PET_XP_BASE, PET_XP_EXP, PET_MAX_LEVEL,
     ENCHANTS, CHAOS_ENCHANT, RECIPES, MASTER_MODE,
     FAIRY_SOULS, BANK, DAILY_DEALS, DUNGEON_CLASSES, ZONES, EASTER_EGGS,

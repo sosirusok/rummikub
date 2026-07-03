@@ -47,12 +47,19 @@
   }
 
   /* ---------------- 프레즌스(economy3d 루프가 매 프레임 호출) ---------------- */
+  let _gearT = 0, _gearCache = null;
   function tick(dt, pos, world) {
     if (!active) return;
     _posT += dt;
     if (_posT < 0.15) return;
+    _gearT += _posT;
     _posT = 0;
-    send({ t: 'p', x: pos.x, y: pos.y, z: pos.z, yaw: pos.yaw, world });
+    if (_gearT >= 1.5 || !_gearCache) {   // V11: 장착 장비 요약(1.5초마다 갱신 — 패킷 소형 유지)
+      _gearT = 0;
+      const a = api();
+      _gearCache = a && a.peerGear ? a.peerGear() : null;
+    }
+    send({ t: 'p', x: pos.x, y: pos.y, z: pos.z, yaw: pos.yaw, world, g: _gearCache });
     const now = Date.now();
     for (const id in peers) if (now - peers[id].at > 6000) {
       delete peers[id];
@@ -67,7 +74,7 @@
     if (m.to && m.to !== myId) return;   // 대상 지정 메시지는 나에게 온 것만
     switch (m.t) {
       case 'p':
-        peers[m.id] = { name: m.nm, x: m.x, y: m.y, z: m.z, yaw: m.yaw || 0, world: m.world, at: Date.now() };
+        peers[m.id] = { name: m.nm, x: m.x, y: m.y, z: m.z, yaw: m.yaw || 0, world: m.world, g: m.g || null, at: Date.now() };
         return;   // 위치 패킷은 패널 리렌더 불필요(3D 루프가 소비)
       case 'leave':
         delete peers[m.id];
@@ -101,6 +108,10 @@
       case 'trade_cancel':
         if (trade && trade.peer === m.id) endTrade('상대가 거래를 취소했어요');
         break;
+      case 'pt_xp': {   // V11: 파티 사냥 XP 공유 수신
+        if (party && party.peer === m.id) { const a = api(); if (a && a.addSharedXp) a.addSharedXp(m.v || 0); }
+        return;
+      }
       case 'announce':   // V10: 보스 처치 등 전서버 알림
         toast(`📣 ${m.nm}: ${m.txt}`, true);
         return;
@@ -275,6 +286,7 @@
   function partyD3Start(floor) { if (party && party.role === 'host') send({ t: 'pt_d3', to: party.peer, floor }); }
   function partySendMobs(snap) { if (party && party.role === 'host') send({ t: 'pt_m', to: party.peer, snap }); }
   function partySendAttack3(i, dmg) { if (party && party.role === 'guest') send({ t: 'pt_atk3', to: party.peer, i, dmg: Math.round(dmg) }); }
+  function partySendXp(v) { if (party && v > 0) send({ t: 'pt_xp', to: party.peer, v: Math.round(v) }); }   // V11: 사냥 XP 공유
   // 게스트: 공격(내 공격력 계산값을 호스트로 전송 — 호스트가 판정)
   function partySendAttack(atk) {
     if (!party || party.role !== 'guest' || party.stage !== 'active') return;
@@ -308,7 +320,7 @@
     tradeRequest, tradeAccept, tradeDecline, tradeAddItem, tradeRemoveItem, tradeSetGold, tradeLock, tradeConfirm, tradeCancel,
     party: () => party,
     partyInvite, partyAccept, partyDecline, partyLeave, partyBroadcastState, partyEnd, partySendAttack,
-    partyD3Start, partySendMobs, partySendAttack3,
+    partyD3Start, partySendMobs, partySendAttack3, partySendXp,
     announce: txt => { if (active) send({ t: 'announce', txt: String(txt).slice(0, 120) }); },
     visit,
     // 테스트 훅: 채널 없이 수신/송신 경로를 직접 구동
