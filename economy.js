@@ -833,7 +833,12 @@
   }
   /* ---------------- 슬레이어 보스전 ---------------- */
   function slayerDef(key) { return D().SLAYERS.find(s => s.key === key); }
-  function itemName(key) { const s = shopDef(key); return s ? s.name : key; }
+  let _buildNameMap = null;
+  function itemName(key) {
+    const s = shopDef(key); if (s) return s.name;
+    if (!_buildNameMap) { _buildNameMap = {}; (D().BUILDER_SHOP || []).forEach(b => { _buildNameMap[b.key] = b.name; }); }   // V15: 건축 블럭 이름
+    return _buildNameMap[key] || key;
+  }
   // 보너스 장비 드롭: 상점에서 못 사는(드롭 전용) 무기/방어구 풀에서 무작위 지급 — 파밍의 재미
   function randomEquipDrop(maxTierIdx) {
     const E = D().EQUIPMENT; const tiers = D().ITEM_TIERS;
@@ -2686,7 +2691,7 @@
 
   if (typeof window !== 'undefined' && window.__ECON_TEST) {
     window.__econ = {
-      open, stop, act, getP: () => P, setP: v => { P = v; }, renderZone,
+      open, stop, act, getP: () => P, setP: v => { P = v; }, renderZone, itemName,
       gather, buyItem, sellItem, addItem, hasItem, removeItem, addGold,
       skillLevel, addSkillXp, addCollection, collectionTierIdx,
       placeMinion, upgradeMinion, upgradeMinionStorage, collectMinion, tickMinions, minionStorageCap, minionSpeedMul, useMinionFuel,

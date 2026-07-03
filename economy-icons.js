@@ -229,9 +229,18 @@
     if (/^enchanted_/.test(key)) return 'cube';
     return 'cube';
   }
+  let _dyeCol = null;
+  function dyeColorOf(key) {   // V15: 양털/콘크리트/테라코타 16색 + 장식 블럭 → 아이콘 색
+    if (!_dyeCol) {
+      _dyeCol = { smooth_stone: '#9a9a9a', polished_andesite: '#a2a4a2', chiseled_stone_bricks: '#7b7b7b', mossy_cobblestone: '#6a7a52', prismarine: '#66c2b4', bookshelf: '#b08a4f', hay_block: '#c8a83a' };
+      ((D().DYES) || []).forEach(d => { _dyeCol['wool_' + d.k] = d.hex; _dyeCol['concrete_' + d.k] = d.hex; _dyeCol['terracotta_' + d.k] = d.hex; });
+    }
+    return _dyeCol[key] || null;
+  }
   function baseColorOf(key, cat) {
     const shop = findShop(key);
     if (shop && shop.tierKey) return tierColor(shop.tierKey);
+    const dc = dyeColorOf(key); if (dc) return dc;
     const rk = key.replace(/^enchanted_/, '');
     if (RES_COLORS[rk]) return RES_COLORS[rk];
     if (cat === 'book') return '#9365b8';

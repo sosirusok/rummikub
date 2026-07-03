@@ -49,8 +49,6 @@
     { key: 'emerald_ore', tex: 'emerald_ore' },
     { key: 'water', tex: 'water', solid: false, opaque: false, liquid: true },
     { key: 'lava', tex: 'lava', solid: false, opaque: false, liquid: true, lava: true },
-    { key: 'wool_white', tex: 'wool_white' },
-    { key: 'wool_red', tex: 'wool_red' },
     { key: 'pumpkin', tex: { top: 'pumpkin_top', side: 'pumpkin_side', bottom: 'pumpkin_top' } },
     { key: 'melon', tex: 'melon' },
     { key: 'wheat_ripe', tex: 'wheat_mature', opaque: false, solid: false, cross: true },
@@ -83,6 +81,17 @@
     { key: 'magma_block', tex: 'magma' },
     { key: 'coarse_dirt', tex: 'coarse_dirt' },
   ];
+  // V15: 16색 양털·콘크리트·테라코타(단일 출처 ECON_DATA.DYES) + 장식 블럭 — 색상 건축
+  const DYE_HEX = {};
+  ((window.ECON_DATA && window.ECON_DATA.DYES) || []).forEach(d => {
+    DYE_HEX['wool_' + d.k] = d.hex; DYE_HEX['concrete_' + d.k] = d.hex; DYE_HEX['terracotta_' + d.k] = d.hex;
+    BLOCKS.push({ key: 'wool_' + d.k, tex: 'wool_' + d.k });
+    BLOCKS.push({ key: 'concrete_' + d.k, tex: 'concrete_' + d.k });
+    BLOCKS.push({ key: 'terracotta_' + d.k, tex: 'terracotta_' + d.k });
+  });
+  [['smooth_stone', 'smooth_stone'], ['chiseled_stone_bricks', 'chiseled_stone_bricks'], ['mossy_cobblestone', 'mossy_cobble'],
+   ['polished_andesite', 'polished_andesite'], ['prismarine', 'prismarine'], ['bookshelf', 'bookshelf'],
+   ['hay_block', { top: 'hay_top', side: 'hay_side', bottom: 'hay_top' }]].forEach(([k, tex]) => BLOCKS.push({ key: k, tex }));
   const ID = {};
   BLOCKS.forEach((b, i) => { b.id = i; ID[b.key] = i; if (b.solid === undefined) b.solid = true; if (b.opaque === undefined) b.opaque = true; });
 
@@ -1455,7 +1464,24 @@
     const r = rngFrom(hashStr(name) >>> 0);
     function f(x, y, col) { px(c, ox + x, oy + y, col); }
     function fillNoise(p0, p1, p2) { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.33 ? p1 : t < 0.66 ? p0 : p2); } }
+    function hx(hex, fac) { const n = parseInt(hex.slice(1), 16); const R = Math.min(255, ((n >> 16 & 255) * fac) | 0), G = Math.min(255, ((n >> 8 & 255) * fac) | 0), Bc = Math.min(255, ((n & 255) * fac) | 0); return '#' + (0x1000000 + (R << 16) + (G << 8) + Bc).toString(16).slice(1); }
+    // V15: 16색 양털/콘크리트/테라코타 — DYE_HEX 기반 절차 텍스처
+    if (DYE_HEX[name] !== undefined) {
+      const base = DYE_HEX[name];
+      if (name.indexOf('concrete_') === 0) { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) f(x, y, r() < 0.72 ? base : (r() < 0.5 ? hx(base, 0.95) : hx(base, 1.04))); }
+      else if (name.indexOf('terracotta_') === 0) { const t0 = hx(base, 0.78), t1 = hx(base, 0.62), t2 = hx(base, 0.9); fillNoise(t0, t1, t2); for (let y = 2; y < 16; y += 5) for (let x = 0; x < 16; x++) f(x, y, hx(base, 0.55)); }
+      else { fillNoise(base, hx(base, 0.9), hx(base, 1.08)); for (let i = 0; i < 6; i++) f((r() * 16) | 0, (r() * 16) | 0, hx(base, 0.82)); }
+      return;
+    }
     switch (name) {
+      case 'smooth_stone': fillNoise('#9a9a9a', '#8f8f8f', '#a6a6a6'); break;
+      case 'polished_andesite': fillNoise('#a2a4a2', '#989a98', '#adafad'); break;
+      case 'chiseled_stone_bricks': { fillNoise('#7b7b7b', '#6f6f6f', '#868686'); c.strokeStyle = '#5a5a5a'; c.strokeRect(ox + 3.5, oy + 2.5, 9, 11); c.fillStyle = '#5a5a5a'; c.fillRect(ox + 7, oy + 4, 2, 8); break; }
+      case 'mossy_cobble': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.22 ? '#4a5a3a' : t < 0.45 ? '#5a5a5a' : t < 0.72 ? '#7d7d7d' : '#6a7a52'); } break;
+      case 'prismarine': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.3 ? '#4f9a8e' : t < 0.6 ? '#5aad9e' : t < 0.85 ? '#66c2b4' : '#7ad0c2'); } break;
+      case 'bookshelf': { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) f(x, y, ((y >> 2) % 2) ? '#9c7a44' : '#b08a4f'); for (let bx = 0; bx < 16; bx += 3) { const col = ['#b23b2e', '#2e6ab2', '#2e9a4a', '#c8a02a', '#8a4fb2'][(r() * 5) | 0]; for (let y = 2; y < 14; y++) if ((y >> 2) % 2 === 0) c.fillStyle = col, c.fillRect(ox + bx, oy + y, 2, 1); } break; }
+      case 'hay_top': { fillNoise('#c8a83a', '#b89830', '#d8b84a'); c.strokeStyle = '#8a6f20'; c.strokeRect(ox + 0.5, oy + 0.5, 15, 15); break; }
+      case 'hay_side': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { f(x, y, (y % 5 === 4) ? '#8a6f20' : (r() < 0.5 ? '#c2a234' : '#d0b040')); } break;
       case 'stone': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.25 ? '#6f6f6f' : t < 0.5 ? '#787878' : t < 0.78 ? '#828282' : '#8c8c8c'); } break;
       case 'dirt': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.25 ? '#6e4c34' : t < 0.55 ? '#7d573c' : t < 0.82 ? '#8a6044' : '#976b4d'); } break;
       case 'grass_top': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.3 ? '#5b9142' : t < 0.7 ? '#6aa84f' : '#7bbf5c'); } break;
@@ -1488,8 +1514,6 @@
       case 'lava': { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) f(x, y, r() < 0.5 ? '#e8632a' : '#d2541f'); for (let i = 0; i < 5; i++) f((r() * 16) | 0, (r() * 16) | 0, '#f7a02a'); break; }
       case 'obsidian': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.4 ? '#120d1c' : t < 0.8 ? '#1a1326' : '#2a2040'); } break;
       case 'glow': { fillNoise('#c8a23f', '#b38e30', '#f4d35e'); for (let i = 0; i < 8; i++) f((r() * 16) | 0, (r() * 16) | 0, '#fff7cc'); break; }
-      case 'wool_white': fillNoise('#e9ecec', '#dadddd', '#f6f9f9'); break;
-      case 'wool_red': fillNoise('#c0392b', '#a93226', '#d64536'); break;
       case 'farmland_top': { fillNoise('#5a3f28', '#4a3320', '#6a4d34'); c.fillStyle = '#3a2818'; for (let y = 2; y < 16; y += 4) c.fillRect(ox, oy + y, 16, 1); break; }
       case 'pumpkin_top': { fillNoise('#d6791f', '#c46c18', '#e8902f'); c.fillStyle = '#8a5012'; for (let i = 2; i <= 6; i += 2) c.strokeRect(ox + 8 - i + .5, oy + 8 - i + .5, i * 2 - 1, i * 2 - 1); break; }
       case 'pumpkin_side': { fillNoise('#d6791f', '#c46c18', '#e8902f'); for (let y = 0; y < 16; y++) { f(3, y, '#a85f16'); f(7, y, '#a85f16'); f(12, y, '#a85f16'); } break; }
