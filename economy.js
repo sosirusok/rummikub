@@ -130,15 +130,16 @@
 
   /* ---------------- 스킬 레벨 ---------------- */
   function skillDef(key) { return D().SKILLS.find(s => s.key === key); }
+  function skillMaxLevel(key) { const m = D().SKILL_MAX_BY; return (m && m[key]) || D().SKILL_MAX_LEVEL; }   // V16: 스킬별 상한(전투60/낚시50 등)
   function skillLevel(key) {
     const def = skillDef(key); if (!def) return 0;
-    const T = D().SKILL_XP_TABLE, MAX = D().SKILL_MAX_LEVEL;
+    const T = D().SKILL_XP_TABLE, MAX = skillMaxLevel(key);
     let xp = P.skillsXp[key] || 0, lvl = 0;
     while (lvl < MAX) { const req = T[lvl]; if (xp < req) break; xp -= req; lvl++; }
     return lvl;
   }
   function skillXpProgress(key) {   // {cur, need} — 현재 레벨 내 진행도(UI 표시용)
-    const T = D().SKILL_XP_TABLE, MAX = D().SKILL_MAX_LEVEL;
+    const T = D().SKILL_XP_TABLE, MAX = skillMaxLevel(key);
     let xp = P.skillsXp[key] || 0, lvl = 0;
     while (lvl < MAX && xp >= T[lvl]) { xp -= T[lvl]; lvl++; }
     return { cur: Math.floor(xp), need: lvl >= MAX ? 0 : T[lvl] };
