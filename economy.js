@@ -1743,6 +1743,7 @@
   function hubTabBodyHTML() {
     switch (hubTab) {
       case 'shop': return shopHTML();
+      case 'buildshop': return buildShopHTML();
       case 'bank': return bankHTML();
       case 'minions': return minionsHTML();
       case 'pets': return petsHTML();
@@ -2009,6 +2010,25 @@
     return `<h4>🛒 상점 주인 — 매입 전문</h4>
       <p class="econ-note">💰 이 세계의 골드는 <b>강화·인챈트 합성·리포지</b>에만 쓰여요. 장비/도구/북은 전부 <b>채집·몬스터 드롭·조합</b>으로!<br>가진 아이템을 팔아 강화 자금을 모으세요. (희귀 아이템일수록 비싸게 매입)</p>
       ${ownedCats || '<p class="muted">팔 수 있는 아이템이 없어요. 채집하고 사냥해서 가져오세요!</p>'}`;
+  }
+  // V14: 건축가 빌더 — 건축 블럭 대량(스택) 구매(코인 → 블럭, 서바이벌 설치용 재고)
+  function buildShopHTML() {
+    return `<h4>🧱 건축가 빌더 — 건축 자재상</h4>
+      <p class="econ-note">코인으로 건축 블럭을 <b>대량 구매</b>해요. 산 블럭은 인벤토리에 들어가고, 프라이빗 섬에서 <b>서바이벌 방식으로 설치</b>(설치 시 소모)돼요.</p>
+      <p class="muted">소지금: ${fmtGold(P.gold)}</p>
+      <div class="econ-shopgrid">${D().BUILDER_SHOP.map(b => {
+        const ok = P.gold >= b.price;
+        return `<div class="econ-shopitem">${iconImg(b.key)}<span>${b.name} <b>×${b.amount}</b></span>
+          <span class="muted econ-idesc">보유 ${P.inv[b.key] || 0}</span>
+          <button class="btn btn--sm" data-act="econ_buildbuy" data-key="${b.key}" ${ok ? '' : 'disabled'}>${fmtGold(b.price)} 구매</button></div>`;
+      }).join('')}</div>`;
+  }
+  function buildBuy(key) {
+    const b = D().BUILDER_SHOP.find(x => x.key === key); if (!b) return;
+    if (P.gold < b.price) { toastFn('코인이 부족해요', false); return; }
+    addGold(-b.price); addItem(b.key, b.amount);
+    toastFn(`🧱 ${b.name} ×${b.amount} 구매! (소지금 ${fmtGold(P.gold)})`, true);
+    saveNow(); renderZone();
   }
   function bankTierInfo() { const U = D().BANK.upgrades; const t = Math.min(P.bankTier || 0, U.length - 1); return { tier: t, cap: U[t].cap, pct: U[t].pct, next: U[t + 1] || null }; }
   function upgradeBank() {
@@ -2462,6 +2482,7 @@
     switch (k) {
       case 'zone': zone = el.dataset.key; renderZone(); break;
       case 'hubtab': hubTab = el.dataset.key; renderZone(); break;
+      case 'buildbuy': buildBuy(el.dataset.key); break;
       case 'menu': zone = 'hub'; hubTab = el.dataset.key; renderZone(); break;
       case 'warp': if (typeof window.economy3dWarp === 'function') window.economy3dWarp(el.dataset.key); break;
       case 'gather': gather(el.dataset.key); break;

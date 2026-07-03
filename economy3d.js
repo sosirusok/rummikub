@@ -175,6 +175,7 @@
     { key: 'reforgeSmith', name: '재련 대장장이', zone: 'hub', tab: 'reforge', x: 238, z: 226, color: 0x6b5436 },
     { key: 'guide', name: '모험 안내인', zone: 'hub', tab: 'stats', x: 224, z: 247, color: 0x2c82c9 },
     { key: 'craftsman', name: '장인(제작대)', zone: 'hub', tab: 'craft', x: 214, z: 210, color: 0x8a6a3a },
+    { key: 'builder', name: '건축가 빌더', zone: 'hub', tab: 'buildshop', x: 246, z: 220, color: 0x9a7b4f },   // V14: 건축 자재상
     { key: 'starSmith', name: '별빛 강화공(스타포스)', zone: 'hub', tab: 'star', x: 234, z: 210, color: 0x54c8e8 },
     { key: 'mineForeman', name: '광산 감독관', zone: 'mine', x: 114, z: 208, color: 0x787878 },
     { key: 'farmForeman', name: '농장 관리인', zone: 'farm', x: 318, z: 218, color: 0xd8b23a },
@@ -739,30 +740,62 @@
   }
   function clearAbove(x, z, y0, n) { for (let y = y0; y < y0 + n; y++) setW(x, y, z, 0); }
   // 입장 가능한 건물: 벽 4높이 + 평지붕 + 남쪽 문(1×2) + 유리창 + 내부 글로우스톤
-  function buildHouse(x0, z0, wdt, dpt, base, wallId, roofId) {
+  // V14: 상자 폐기 — 석재 기초·통나무 모서리 기둥·유리창 열·경사(계단식) 지붕·문 양옆 랜턴
+  function buildHouse(x0, z0, wdt, dpt, base, wallId, roofId, trimId) {
+    trimId = trimId != null ? trimId : ID.oak_log;
     flattenSite(x0 - 1, z0 - 1, x0 + wdt, z0 + dpt, base - 1);
-    for (let x = x0; x < x0 + wdt; x++) for (let z = z0; z < z0 + dpt; z++) setW(x, base - 1, z, ID.oak_planks);   // 바닥
-    for (let y = base; y < base + 4; y++) for (let x = x0; x < x0 + wdt; x++) for (let z = z0; z < z0 + dpt; z++) {
-      const edge = x === x0 || x === x0 + wdt - 1 || z === z0 || z === z0 + dpt - 1;
-      setW(x, y, z, edge ? wallId : 0);
+    // 석재 기초 테두리 + 판자 바닥
+    for (let x = x0 - 1; x <= x0 + wdt; x++) for (let z = z0 - 1; z <= z0 + dpt; z++) {
+      if (x === x0 - 1 || x === x0 + wdt || z === z0 - 1 || z === z0 + dpt) setW(x, base - 1, z, ID.stone_bricks);
     }
-    for (let x = x0; x < x0 + wdt; x++) for (let z = z0; z < z0 + dpt; z++) setW(x, base + 4, z, roofId);   // 지붕
-    const dx = x0 + (wdt >> 1);
-    setW(dx, base, z0 + dpt - 1, 0); setW(dx, base + 1, z0 + dpt - 1, 0);   // 남쪽 문
-    setW(x0, base + 2, z0 + (dpt >> 1), ID.glass); setW(x0 + wdt - 1, base + 2, z0 + (dpt >> 1), ID.glass);   // 창문
-    setW(dx, base + 2, z0, ID.glass);
-    setW(x0 + (wdt >> 1), base + 3, z0 + (dpt >> 1), ID.glowstone);   // 실내 조명
+    for (let x = x0; x < x0 + wdt; x++) for (let z = z0; z < z0 + dpt; z++) setW(x, base - 1, z, ID.oak_planks);
+    const wallH = 3;
+    // 벽 3칸 + 모서리 통나무 기둥
+    for (let y = base; y < base + wallH; y++) for (let x = x0; x < x0 + wdt; x++) for (let z = z0; z < z0 + dpt; z++) {
+      const edge = x === x0 || x === x0 + wdt - 1 || z === z0 || z === z0 + dpt - 1;
+      const corner = (x === x0 || x === x0 + wdt - 1) && (z === z0 || z === z0 + dpt - 1);
+      setW(x, y, z, corner ? trimId : (edge ? wallId : 0));
+    }
+    // 상인방(벽 위 통나무 띠)
+    for (let x = x0; x < x0 + wdt; x++) { setW(x, base + wallH, z0, trimId); setW(x, base + wallH, z0 + dpt - 1, trimId); }
+    for (let z = z0; z < z0 + dpt; z++) { setW(x0, base + wallH, z, trimId); setW(x0 + wdt - 1, base + wallH, z, trimId); }
+    // 유리창(벽 중간, 2칸 간격) — 사방
+    const wy = base + 1;
+    for (let x = x0 + 1; x < x0 + wdt - 1; x += 2) { setW(x, wy, z0, ID.glass); setW(x, wy, z0 + dpt - 1, ID.glass); }
+    for (let z = z0 + 1; z < z0 + dpt - 1; z += 2) { setW(x0, wy, z, ID.glass); setW(x0 + wdt - 1, wy, z, ID.glass); }
+    // 남쪽 문(2칸) + 문 양옆 랜턴 기둥(통나무+발광석)
+    const dxc = x0 + (wdt >> 1);
+    setW(dxc, base, z0 + dpt - 1, 0); setW(dxc, base + 1, z0 + dpt - 1, 0);
+    for (const lx of [dxc - 1, dxc + 1]) { if (lx > x0 - 1 && lx < x0 + wdt) { setW(lx, base, z0 + dpt, trimId); setW(lx, base + 1, z0 + dpt, ID.glowstone); } }
+    // 계단식 경사 지붕(사방 1칸씩 좁혀 올라가며 채움 — 완전 밀폐, 처마 1칸 돌출)
+    let a = x0 - 1, b = z0 - 1, c = x0 + wdt, d = z0 + dpt, ry = base + wallH;
+    const maxRy = base + wallH + 4;
+    while (a <= c && b <= d && ry <= maxRy) {
+      for (let x = a; x <= c; x++) for (let z = b; z <= d; z++) setW(x, ry, z, roofId);
+      a++; b++; c--; d--; ry++;
+    }
+    if (a <= c && b <= d) for (let x = a; x <= c; x++) for (let z = b; z <= d; z++) setW(x, ry, z, roofId);   // 넓은 건물 지붕 마감(평평한 꼭대기)
+    // 실내 조명(천장 밑)
+    setW(dxc, base + wallH - 1, z0 + (dpt >> 1), ID.glowstone);
   }
   function lampPost(x, z) {
     const y = surfaceTop(x, z);
     setW(x, y, z, ID.oak_log); setW(x, y + 1, z, ID.oak_log); setW(x, y + 2, z, ID.glowstone);
   }
-  function pathTo(x0, z0, x1, z1) {   // 지표면 자갈길
+  function pathTo(x0, z0, x1, z1) {   // V14: 3칸 폭 석재 대로(중앙 석재벽돌 + 가장자리 조약돌)
     let x = x0, z = z0;
+    const lay = (px, pz, mat) => {
+      const y = surfaceTop(px, pz) - 1;
+      const b = getBlockLocal(px, y, pz);
+      if (b === ID.grass || b === ID.dirt || b === ID.coarse_dirt || b === ID.gravel) setW(px, y, pz, mat);
+    };
     while (x !== x1 || z !== z1) {
-      const y = surfaceTop(x, z) - 1;
-      if (getBlockLocal(x, y, z) === ID.grass) setW(x, y, z, ID.cobblestone);
-      if (x !== x1) x += x1 > x ? 1 : -1; else if (z !== z1) z += z1 > z ? 1 : -1;
+      const horiz = x !== x1;
+      lay(x, z, ID.stone_bricks);
+      // 진행 방향에 수직으로 양옆 1칸(조약돌 갓길)
+      if (horiz) { lay(x, z - 1, ID.cobblestone); lay(x, z + 1, ID.cobblestone); }
+      else { lay(x - 1, z, ID.cobblestone); lay(x + 1, z, ID.cobblestone); }
+      if (horiz) x += x1 > x ? 1 : -1; else z += z1 > z ? 1 : -1;
     }
   }
 
@@ -1797,6 +1830,7 @@
     reforgeSmith: { shirt: 0x6b5436, pants: 0x3a2a1a, apron: 0x4a3220, hair: 0x2a2a2a, beard: true },
     guide:        { shirt: 0x2c82c9, pants: 0x1a4a6a, hat: 0x6a4a2a, brim: true },
     craftsman:    { shirt: 0x8a6a3a, pants: 0x5a3a1a, apron: 0x6a4a2a },
+    builder:      { shirt: 0xd4a017, pants: 0x6a5020, hat: 0xffcf3a, apron: 0x9a7b4f },   // 안전모+작업복
     starSmith:    { shirt: 0x54c8e8, pants: 0x2a6a8a, hair: 0xdddddd },
     mineForeman:  { shirt: 0x787878, pants: 0x3a3a3a, hat: 0xffcf3a, apron: 0x5a5a5a },
     farmForeman:  { shirt: 0xd8b23a, pants: 0x6a5a2a, hat: 0xe6cf7a, brim: true },

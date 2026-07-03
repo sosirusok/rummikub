@@ -893,6 +893,28 @@
   // 핫 포테이토 북 규칙
   const HPB = { maxBooks: 10, fumingMax: 15, weaponDmgPerBook: 2, armorDefPerBook: 2, armorHpPerBook: 4 };
 
+  /* V14: 건축가 빌더 상점 — 건축 블럭을 코인으로 대량(스택) 구매(설치는 서바이벌 소모) */
+  const BUILDER_SHOP = [
+    { key: 'cobblestone', name: '조약돌', amount: 16, price: 40 },
+    { key: 'stone', name: '돌', amount: 16, price: 64 },
+    { key: 'stone_bricks', name: '석재 벽돌', amount: 16, price: 120 },
+    { key: 'oak_planks', name: '참나무 판자', amount: 16, price: 80 },
+    { key: 'birch_planks', name: '자작나무 판자', amount: 16, price: 80 },
+    { key: 'spruce_planks', name: '가문비 판자', amount: 16, price: 80 },
+    { key: 'oak_log', name: '참나무 원목', amount: 16, price: 120 },
+    { key: 'bricks', name: '벽돌', amount: 16, price: 160 },
+    { key: 'sandstone', name: '사암', amount: 16, price: 90 },
+    { key: 'quartz_block', name: '석영 블럭', amount: 16, price: 260 },
+    { key: 'glass', name: '유리', amount: 16, price: 120 },
+    { key: 'glowstone', name: '발광석', amount: 8, price: 200 },
+    { key: 'wool_white', name: '흰 양털', amount: 16, price: 100 },
+    { key: 'wool_red', name: '빨강 양털', amount: 16, price: 100 },
+    { key: 'obsidian', name: '흑요석', amount: 4, price: 320 },
+    { key: 'dirt', name: '흙', amount: 32, price: 30 },
+    { key: 'sand', name: '모래', amount: 16, price: 40 },
+    { key: 'gravel', name: '자갈', amount: 16, price: 40 },
+  ];
+
   /* ---------------- V13-B: 위치 기반 퀘스트 시스템 ----------------
      퀘스트를 주는 NPC는 특정 월드의 특정 좌표에 서 있다. 플레이어가 그 반경(region) 안에
      들어오면 우측 중앙에 퀘스트가 나타나고, 떠나면 사라진다. NPC에게 E(대화)로 수락.
@@ -993,7 +1015,7 @@
     MINION_STORAGE_UPGRADE_COST, MINION_OFFLINE_CAP_HOURS, MINION_SLOT_MAX, MINION_SLOT_COST_BASE, MINION_SLOT_COST_MUL,
     MINION_FUEL, MINION_FUEL2, SLAYERS, DUNGEON, DUNGEON_ROOM_SCORE, ESSENCE_SHOP, SHOP, DAILY_SELL_LIMIT_PER_STACK,
     EQUIPMENT, STARFORCE, REFORGES, ITEM_ROLL,
-    TRAITS, EQUIP_SETS, FIELD_DIFF, ARENA, ACHIEVEMENTS, DAILY_QUESTS, SALVAGE, WEEKLY, HPB, QUESTS, QUEST_NPCS,
+    TRAITS, EQUIP_SETS, FIELD_DIFF, ARENA, ACHIEVEMENTS, DAILY_QUESTS, SALVAGE, WEEKLY, HPB, QUESTS, QUEST_NPCS, BUILDER_SHOP,
     TALISMANS, MAGICAL_POWER, PETS, PET_XP_BASE, PET_XP_EXP, PET_MAX_LEVEL,
     ENCHANTS, CHAOS_ENCHANT, RECIPES, MASTER_MODE,
     FAIRY_SOULS, BANK, DAILY_DEALS, DUNGEON_CLASSES, ZONES, EASTER_EGGS,
