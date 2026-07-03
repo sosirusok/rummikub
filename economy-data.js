@@ -675,6 +675,13 @@
     { key: 'stone_bricks', needs: { cobblestone: 4 }, gives: 4, unlock: { resource: 'stone', tier: 1 } },
     { key: 'stone_bricks_slab', needs: { stone_bricks: 3 }, gives: 6, unlock: { resource: 'stone', tier: 1 } },
     { key: 'stone_bricks_stairs', needs: { stone_bricks: 6 }, gives: 4, unlock: { resource: 'stone', tier: 1 } },
+    // V17-B: 울타리(판자4+막대2→3) + 트랩도어(판자6→2) — 흔한 나무 조합
+    { key: 'oak_fence', needs: { oak_planks: 4, stick: 2 }, gives: 3, unlock: null },
+    { key: 'oak_trapdoor', needs: { oak_planks: 6 }, gives: 2, unlock: null },
+    { key: 'birch_fence', needs: { birch_planks: 4, stick: 2 }, gives: 3, unlock: null },
+    { key: 'birch_trapdoor', needs: { birch_planks: 6 }, gives: 2, unlock: null },
+    { key: 'spruce_fence', needs: { spruce_planks: 4, stick: 2 }, gives: 3, unlock: null },
+    { key: 'spruce_trapdoor', needs: { spruce_planks: 6 }, gives: 2, unlock: null },
     { key: 'iron_pickaxe', needs: { iron: 3, stick: 2 }, gives: 1, unlock: { resource: 'iron', tier: 2 } },
     { key: 'iron_axe', needs: { iron: 3, stick: 2 }, gives: 1, unlock: { resource: 'iron', tier: 2 } },
     { key: 'minion_fuel_coal', needs: { coal: 32 }, gives: 1, unlock: { resource: 'coal', tier: 2 } },
@@ -959,6 +966,12 @@
   SHAPE_NAMES.forEach(([k, n]) => {
     BUILDER_SHOP.push({ key: k + '_slab', name: n + ' 반블럭', amount: 16, price: 70 });
     BUILDER_SHOP.push({ key: k + '_stairs', name: n + ' 계단', amount: 16, price: 90 });
+  });
+  // V17-B: 울타리 + 트랩도어(모든 나무)
+  const WOOD_KO = [['oak', '참나무'], ['birch', '자작나무'], ['spruce', '가문비'], ['dark_oak', '짙은참나무'], ['jungle', '정글'], ['acacia', '아카시아']];
+  WOOD_KO.forEach(([w, n]) => {
+    BUILDER_SHOP.push({ key: w + '_fence', name: n + ' 울타리', amount: 16, price: 80 });
+    BUILDER_SHOP.push({ key: w + '_trapdoor', name: n + ' 트랩도어', amount: 8, price: 70 });
   });
 
   /* ---------------- V13-B: 위치 기반 퀘스트 시스템 ----------------
