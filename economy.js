@@ -387,6 +387,12 @@
     if (b) d += Math.round((rolledStat(b.key, b.dmg) + hpbOf(b.key) * D().HPB.weaponDmgPerBook) * 0.3);   // 활 보조 기여 30%
     return d;
   }
+  // V17: 무기 부가 스탯(힘/치명피해/광포/지력) — 주무기 기준 + 활 보조 30%
+  function weaponStat(k) {
+    const w = equippedWeapon(); let v = w ? (w[k] || 0) : 0;
+    const b = equippedBow(); if (b && b[k]) v += Math.round(b[k] * 0.3);
+    return v;
+  }
   /* ---- V11 특성(트레잇) 엔진: 정적 합산 + 세트 보너스 ---- */
   const SET_TRAIT_MAP = { minerPct: 'miner', anglerPct: 'angler', gathererPct: 'gatherer', lifestealPct: 'lifesteal', regenFlat: 'regeneration' };
   function activeSetBonuses() {
@@ -428,38 +434,44 @@
     const B = D().BASE_STATS, HB = D().HPB;
     const ts = talismanStats(), ps = petStats(), fb = fairyBonus();
     // V11: 4부위 방어구 합산(초기롤 + 핫포북 + 아이템 HP)
-    let armorDef = 0, armorHp = 0, armorRfDef = 0, armorRfHp = 0;
+    let armorDef = 0, armorHp = 0, armorRfDef = 0, armorRfHp = 0, armorRfStr = 0, armorRfCd = 0, armorRfFero = 0;
     for (const sl of ARMOR_SLOTS) {
       const p = equippedPiece(sl);
       if (p) { armorDef += rolledStat(p.key, p.defense) + hpbOf(p.key) * HB.armorDefPerBook; armorHp += (p.hp || 0) + hpbOf(p.key) * HB.armorHpPerBook; }
-      const rf = reforgeOf(sl); armorRfDef += rf.def || 0; armorRfHp += rf.hp || 0;
+      const rf = reforgeOf(sl); armorRfDef += rf.def || 0; armorRfHp += rf.hp || 0; armorRfStr += rf.str || 0; armorRfCd += rf.critDamage || 0; armorRfFero += rf.ferocity || 0;
     }
+    const rw = reforgeOf('weapon');
     const st = {
       hp: B.hp + skillLevel('farming') * 2 + skillLevel('fishing') + enchSum('hp') + ts.hp + ps.hp + fb.hp
-        + (reforgeOf('weapon').hp || 0) + armorRfHp + starHpFlat() + buffBonus('hp')
-        + armorHp + traitSum('vitality') + setStat('hp'),
+        + (rw.hp || 0) + armorRfHp + starHpFlat() + buffBonus('hp')
+        + armorHp + traitSum('vitality') + setStat('hp') + weaponStat('hp'),
       defense: B.defense + skillLevel('mining') + ts.def + ps.def + enchSum('def')
-        + armorRfDef + starDefFlat() + armorDef + traitSum('bulwark') + setStat('def'),
-      strength: B.strength + skillLevel('foraging') + ts.str + ps.str + fb.str + buffBonus('strength') + setStat('str'),
+        + armorRfDef + starDefFlat() + armorDef + traitSum('bulwark') + setStat('def') + weaponStat('defense'),
+      strength: B.strength + skillLevel('foraging') + ts.str + ps.str + fb.str + buffBonus('strength') + setStat('str')
+        + weaponStat('str') + (rw.str || 0) + armorRfStr,
       speed: B.speed + enchSum('speed') + buffBonus('speed') + traitSum('swift') + traitSum('swiftness') + setStat('speed'),
-      critChance: Math.min(100, B.critChance + skillLevel('combat') * 0.5 + traitSum('crit_eye') + setStat('critChance')),
-      critDamage: B.critDamage + skillLevel('combat') + traitSum('brutality') + setStat('critDamage'),
-      intelligence: B.intelligence + skillLevel('enchanting') * 2 + traitSum('mana_well') + setStat('intelligence'),
+      critChance: Math.min(100, B.critChance + skillLevel('combat') * 0.5 + traitSum('crit_eye') + setStat('critChance') + weaponStat('critChance')),
+      critDamage: B.critDamage + skillLevel('combat') + traitSum('brutality') + setStat('critDamage') + weaponStat('critDamage') + (rw.critDamage || 0) + armorRfCd,
+      // V17: 광포(추가타) — 무기/리포지/특성/세트. 실제: floor(광포/100) 확정 추가타 + 나머지% 확률(기댓값 1+광포/100배)
+      ferocity: weaponStat('ferocity') + (rw.ferocity || 0) + armorRfFero + traitSum('ferocity') + setStat('ferocity'),
+      intelligence: B.intelligence + skillLevel('enchanting') * 2 + traitSum('mana_well') + setStat('intelligence') + weaponStat('intelligence'),
     };
     st.defense = Math.round(st.defense * mpStatMul());
     st.hp = Math.round(st.hp);
     return st;
   }
   function playerStr() { return playerStats().strength; }
-  // 실제 공식: 피해 = (5 + 무기공격 + 힘/5) × (1 + 힘/100) × (배율들) — 크리티컬은 타격마다 별도 굴림
+  // V17 실제 하이픽셀 공식: 피해 = (5 + 무기공격) × (1 + 힘/100) × 가산배수 × (1 + 광포/100) × 어빌리티 × 마력
+  //   (힘은 배수로만 기여 — 0.11.5에서 '힘의 20% 플랫뎀' 삭제됨. 크리티컬은 타격마다 별도 굴림)
   function playerAttackPower() {
     const st = playerStats();
-    const flat = 5 + equippedWeaponDmg() + st.strength / 5;
-    const mul = (1 + st.strength / 100)
-      * (1 + skillLevel('combat') * 0.04 + enchSum('dmg') / 100 + bestiaryBonusPct() / 100
-        + (reforgeOf('weapon').dmgPct || 0) / 100 + (reforgeOf('bow').dmgPct || 0) * 0.3 / 100
-        + starAtkPct() / 100 + setStat('dmgPct') / 100)
-      * mpStatMul();
+    const flat = 5 + equippedWeaponDmg();
+    const additive = 1 + skillLevel('combat') * 0.04 + enchSum('dmg') / 100 + bestiaryBonusPct() / 100
+      + (reforgeOf('weapon').dmgPct || 0) / 100 + (reforgeOf('bow').dmgPct || 0) * 0.3 / 100
+      + starAtkPct() / 100 + setStat('dmgPct') / 100;
+    const w = equippedWeapon();
+    const abilityMul = (w && w.caster) ? (1 + st.intelligence / 1500) : 1;   // 캐스터(히페리온식): 지력 스케일 어빌리티 피해
+    const mul = (1 + st.strength / 100) * additive * (1 + st.ferocity / 100) * abilityMul * mpStatMul();
     return flat * mul;
   }
   // 크리티컬 굴림: 확률 critChance%, 성공 시 ×(1 + critDamage/100)
@@ -2283,8 +2295,9 @@
         <div class="econ-colrow"><span>❤ 체력</span><span>${st.hp}</span><span class="muted">기본 100 + 농사/낚시/인챈트/부적/펫</span></div>
         <div class="econ-colrow"><span>🛡 방어</span><span>${st.defense}</span><span class="muted">피해 감소 ${(playerDefensePct() * 100).toFixed(1)}% = 방어/(방어+100)</span></div>
         <div class="econ-colrow"><span>💪 힘</span><span>${st.strength}</span><span class="muted">피해 ×(1+힘/100)</span></div>
-        <div class="econ-colrow"><span>⚔ 공격력</span><span>${playerAttackPower().toFixed(1)}</span><span class="muted">무기: ${w ? w.name : '없음'}</span></div>
+        <div class="econ-colrow"><span>⚔ 공격력</span><span>${Math.round(playerAttackPower()).toLocaleString('ko-KR')}</span><span class="muted">무기: ${w ? w.name : '없음'}${w && w.caster ? ' (캐스터)' : ''}</span></div>
         <div class="econ-colrow"><span>☠ 크리 확률</span><span>${st.critChance.toFixed(1)}%</span><span class="muted">크리 피해 +${st.critDamage.toFixed(0)}%</span></div>
+        <div class="econ-colrow"><span>⚡ 광포(추가타)</span><span>${st.ferocity}</span><span class="muted">100당 확정 추가타 · 피해 ×(1+광포/100)</span></div>
         <div class="econ-colrow"><span>✦ 이동속도</span><span>${st.speed}</span><span class="muted">100 = 기준(슈가 러시로 증가)</span></div>
         <div class="econ-colrow"><span>✎ 지능(마나)</span><span>${st.intelligence}</span><span class="muted">마법부여 레벨당 +2</span></div>
         <div class="econ-colrow"><span>🛡 방어구</span><span>${a ? a.name : '없음'}</span><span class="muted">마력 ${magicalPower()}</span></div>
