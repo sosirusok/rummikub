@@ -749,7 +749,7 @@
     else if (mode === 'visit') genHome(visitData && visitData.homeEdits);
     else if (worldCache[mode]) { const c = worldCache[mode]; world = c.world; W = c.W; H = c.H; Dp = c.Dp; }
     else if (mode === 'hub') genWorld();
-    else if (def.gen) { def.gen(); scatterWorldDetail(mode); }   // V16: 신규 생성 시 월드별 앰비언트 데코(캐시엔 이미 반영)
+    else if (def.gen) { def.gen(); scatterWorldDetail(mode); buildThemeStructures(mode); }   // V16 데코 + V18-C 테마 건물(캐시엔 이미 반영)
     if (mode === 'hub') resetPlayerToSpawn();
     else if (mode === 'home' || mode === 'visit') { P.x = 96.5; P.z = 104.5; P.y = surfaceTop(96, 104) + 0.02; P.yaw = Math.PI; }   // V13-A: 스폰섬
     else { const sp = def.spawn || [W >> 1, Dp >> 1]; P.x = sp[0] + 0.5; P.z = sp[1] + 0.5; P.y = surfaceTop(sp[0], sp[1]) + 0.02; P.yaw = Math.PI; }
@@ -969,6 +969,31 @@
     }
   }
 
+  // V18-C: 테마 월드별 컨셉 시그니처 건물(새 형태 블럭 활용)
+  function buildThemeStructures(mode) {
+    const ok = (x, z) => surfaceTop(x, z) > 3;
+    const base = (x, z) => surfaceTop(x, z) + 1;
+    if (mode === 'park' && ok(70, 100)) buildHouse(67, 97, 7, 6, base(70, 100), ID.spruce_planks, ID.oak_planks, ID.oak_log);   // 삼림 산장
+    else if (mode === 'barn' && ok(58, 100)) { buildHouse(54, 96, 10, 8, base(58, 100), ID.bricks, ID.dark_oak_log, ID.dark_oak_log); const by = base(52, 98); for (const [hx, hz] of [[52, 98], [53, 98], [52, 99]]) { setW(hx, by, hz, ID.hay_block); setW(hx, by + 1, hz, ID.hay_block); } }   // 붉은 헛간 + 건초더미
+    else if (mode === 'gold' && ok(42, 90)) buildHouse(40, 88, 6, 5, base(42, 90), ID.cobblestone, ID.oak_planks, ID.oak_log);   // 광부 오두막
+    else if (mode === 'deep' && ok(46, 74)) { buildHouse(44, 72, 6, 6, base(46, 74), ID.stone_bricks, ID.stone_bricks, ID.stone_bricks); const gy = base(46, 74); setW(43, gy + 1, 71, ID.glowstone); setW(50, gy + 1, 78, ID.glowstone); }   // 지하 전초기지 + 발광석
+    else if (mode === 'spider' && ok(74, 88)) { buildHouse(72, 86, 6, 5, base(74, 88), ID.dark_oak_planks, ID.dark_oak_planks, ID.dark_oak_log); const wy = base(74, 88); for (let i = 0; i < 5; i++) setW(71 + (i % 4), wy + 3 + (i % 2), 85 + (i % 3), ID.wool_white); }   // 어두운 오두막 + 거미줄
+    else if (mode === 'nether' && ok(62, 78)) { buildHouse(60, 76, 7, 6, base(62, 78), ID.nether_bricks, ID.nether_bricks, ID.nether_bricks); const ny = base(62, 78); setW(59, ny, 75, ID.magma_block); setW(67, ny, 82, ID.glowstone); }   // 네더 요새 + 마그마
+    else if (mode === 'end' && ok(62, 84)) { buildHouse(60, 82, 6, 6, base(62, 84), ID.purpur, ID.purpur, ID.obsidian); const ey = base(62, 84); setW(59, ey, 81, ID.glowstone); setW(66, ey + 5, 88, ID.glowstone); }   // 엔드 성소 + 엔드로드
+    else if (mode === 'mushroom' && ok(58, 100)) buildMushroomHouse(58, 100, base(58, 100));   // 거대 버섯 집
+  }
+  function buildMushroomHouse(cx, cz, base) {
+    flattenSite(cx - 1, cz - 1, cx + 4, cz + 4, base - 1);
+    for (let y = base; y < base + 4; y++) for (let dx = 0; dx < 4; dx++) for (let dz = 0; dz < 4; dz++) {
+      const edge = dx === 0 || dx === 3 || dz === 0 || dz === 3;
+      setW(cx + dx, y, cz + dz, edge ? ID.mushroom_stem : 0);
+    }
+    const mdoor = ID.spruce_door_c_2; setW(cx + 1, base, cz + 3, mdoor); setW(cx + 1, base + 1, cz + 3, mdoor);   // 여닫이 문
+    for (let dx = -1; dx <= 4; dx++) for (let dz = -1; dz <= 4; dz++) setW(cx + dx, base + 4, cz + dz, ID.mushroom_red_block);   // 갓(넓은 층)
+    for (let dx = 0; dx <= 3; dx++) for (let dz = 0; dz <= 3; dz++) setW(cx + dx, base + 5, cz + dz, ID.mushroom_red_block);
+    for (let dx = 1; dx <= 2; dx++) for (let dz = 1; dz <= 2; dz++) setW(cx + dx, base + 6, cz + dz, ID.mushroom_red_block);
+    setW(cx + 1, base + 3, cz + 1, ID.glowstone);   // 실내 조명
+  }
   /* ---------------- 테마 월드 생성기 ---------------- */
   function genBlobIsland(cx, cz, r, top, opt) {
     opt = opt || {};
@@ -3956,7 +3981,7 @@
       chunkMeshCount: () => Object.keys(chunkMeshes).length,   // V12 크래시 검증용
       buildQueueLen: () => buildQueue.length,
       updateQuestHud, questNpcList,   // V13-B 퀘스트 HUD 검증용
-      scatterWorldDetail,   // V16 월드별 데코 검증용
+      scatterWorldDetail, buildThemeStructures,   // V16 데코 + V18-C 테마 건물 검증용
       raycastBlock, homeBreakBlock, homePlaceBlock,
       setSelectedBlock: k => { selectedPlaceKey = k; }, getSelectedBlock: () => selectedPlaceKey, ownedPlaceableList,
       getSelectedHotbar: () => selectedHotbar, setSelectedHotbar: i => { selectedHotbar = i; updateHotbar(); }, ensureHotbar, activeHotbarKey, updateHotbar,
