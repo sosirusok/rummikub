@@ -1978,8 +1978,24 @@
       <h4>🥔 핫 포테이토 북 — 장비당 최대 15권(10권부터 퓨밍 필요)</h4>
       <div class="econ-shopgrid">${hpbRows || '<p class="muted">장착 중인 장비가 없어요</p>'}</div>`;
   }
+  // V12: 보유 아이템 기반 추천 제작(재료 보유율 높은 순, 지금 제작 가능 우선)
+  function craftRecommendations() {
+    const scored = D().RECIPES.filter(r => recipeUnlocked(r)).map(r => {
+      const total = Object.values(r.needs).reduce((a, b) => a + b, 0);
+      const have = Object.keys(r.needs).reduce((a, k) => a + Math.min(P.inv[k] || 0, r.needs[k]), 0);
+      return { r, ratio: total ? have / total : 0, canNow: canCraft(r) };
+    }).filter(x => x.ratio > 0.15);
+    scored.sort((a, b) => (b.canNow ? 1 : 0) - (a.canNow ? 1 : 0) || b.ratio - a.ratio);
+    return scored.slice(0, 3);
+  }
   function craftHTML() {
-    return `<h4>⚒️ 제작대 — 컬렉션 티어를 올리면 레시피가 해금돼요(실제 스카이블럭 방식)</h4>
+    const recs = craftRecommendations();
+    const recHTML = recs.length ? `<div class="econ-craftrec"><b>✨ 추천 제작 (보유 재료 기준)</b>${recs.map(x => {
+      const needsTxt = Object.keys(x.r.needs).map(k => `${itemName(k)} ${P.inv[k] || 0}/${x.r.needs[k]}`).join(', ');
+      return `<div class="econ-recitem">${iconImg(x.r.key)}<span>${itemName(x.r.key)} <span class="muted">(${needsTxt})</span></span><button class="btn btn--sm" data-act="econ_craft" data-key="${x.r.key}" ${x.canNow ? '' : 'disabled'}>${x.canNow ? '제작' : '재료 부족'}</button></div>`;
+    }).join('')}</div>` : '';
+    return `<h4>⚒️ 제작대 (메뉴에서 바로 제작 · 바닐라 조합 + 스카이블럭 레시피)</h4>
+      ${recHTML}
       <div class="econ-shopgrid">${D().RECIPES.map(r => {
         const unlocked = recipeUnlocked(r);
         const needsTxt = Object.keys(r.needs).map(k => `${itemName(k)} ×${r.needs[k]} (${P.inv[k] || 0})`).join(', ');

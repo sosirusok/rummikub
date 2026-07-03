@@ -402,6 +402,12 @@
     });
   });
   EQUIPMENT.armor = EQUIPMENT.armor.concat(GEN_ARMORS).sort((a, b) => a.defense - b.defense || (a.key < b.key ? -1 : 1));
+  // V12: 바닐라 검(나무/돌) — 최하 등급 무기(조합 전용). 장착 시스템이 인식하도록 EQUIPMENT에 등록.
+  EQUIPMENT.weapons.push(
+    { key: 'wooden_sword', name: '나무 검', wclass: 'sword', slot: 'weapon', tierKey: 'common', dmg: 15, buyPrice: 0, sellPrice: 2, flavor: '갓 깎은 나무 검. 없는 것보다 낫다.' },
+    { key: 'stone_sword', name: '돌 검', wclass: 'sword', slot: 'weapon', tierKey: 'common', dmg: 20, buyPrice: 0, sellPrice: 4, flavor: '조약돌을 깎아 만든 투박한 검.' }
+  );
+  EQUIPMENT.weapons.sort((a, b) => a.dmg - b.dmg || (a.key < b.key ? -1 : 1));
   EQUIPMENT.weapons.forEach(w => { w.reqCombat = REQ_COMBAT_BY_TIER[w.tierKey] || 0; });
   EQUIPMENT.armor.forEach(a => { a.reqCombat = REQ_COMBAT_BY_TIER[a.tierKey] || 0; });
 
@@ -638,16 +644,27 @@
     ...ENCHANTED_BLOCK_RES.map(rk => ({
       key: `enchanted_${rk}_block`, needs: { [`enchanted_${rk}`]: 160 }, gives: 1, unlock: { resource: rk, tier: 5 },
     })),
-    // 스타터 도구(실제처럼 자원 조합 — 시작 골드 0이어도 진행 가능)
-    { key: 'wooden_pickaxe', needs: { oaklog: 12 }, gives: 1, unlock: null },
-    { key: 'wooden_axe', needs: { oaklog: 12 }, gives: 1, unlock: null },
-    { key: 'wooden_hoe', needs: { oaklog: 10 }, gives: 1, unlock: null },
-    { key: 'fishing_rod', needs: { oaklog: 8, string: 2 }, gives: 1, unlock: null },
-    { key: 'stone_pickaxe', needs: { stone: 16, oaklog: 4 }, gives: 1, unlock: { resource: 'stone', tier: 1 } },
-    { key: 'stone_axe', needs: { stone: 16, oaklog: 4 }, gives: 1, unlock: { resource: 'oaklog', tier: 1 } },
-    { key: 'stone_hoe', needs: { stone: 12, oaklog: 4 }, gives: 1, unlock: { resource: 'wheat', tier: 1 } },
-    { key: 'iron_pickaxe', needs: { iron: 24, oaklog: 8 }, gives: 1, unlock: { resource: 'iron', tier: 2 } },
-    { key: 'iron_axe', needs: { iron: 24, oaklog: 8 }, gives: 1, unlock: { resource: 'oaklog', tier: 2 } },
+    // ===== V12: 바닐라 마인크래프트 조합 체인(항상 해금 — 원목→판자→막대→도구/작업대/화로/상자) =====
+    { key: 'oak_planks', needs: { oaklog: 1 }, gives: 4, unlock: null },
+    { key: 'birch_planks', needs: { birchlog: 1 }, gives: 4, unlock: null },
+    { key: 'spruce_planks', needs: { sprucelog: 1 }, gives: 4, unlock: null },
+    { key: 'stick', needs: { oak_planks: 2 }, gives: 4, unlock: null },
+    { key: 'crafting_table', needs: { oak_planks: 4 }, gives: 1, unlock: null },
+    { key: 'furnace', needs: { cobblestone: 8 }, gives: 1, unlock: null },
+    { key: 'chest', needs: { oak_planks: 8 }, gives: 1, unlock: null },
+    { key: 'torch', needs: { coal: 1, stick: 1 }, gives: 4, unlock: null },
+    // 바닐라 도구(정확한 재료: 판자/조약돌 + 막대). 여기선 전부 최하 등급 성능.
+    { key: 'wooden_pickaxe', needs: { oak_planks: 3, stick: 2 }, gives: 1, unlock: null },
+    { key: 'wooden_axe', needs: { oak_planks: 3, stick: 2 }, gives: 1, unlock: null },
+    { key: 'wooden_hoe', needs: { oak_planks: 2, stick: 2 }, gives: 1, unlock: null },
+    { key: 'wooden_sword', needs: { oak_planks: 2, stick: 1 }, gives: 1, unlock: null },
+    { key: 'fishing_rod', needs: { stick: 3, string: 2 }, gives: 1, unlock: null },
+    { key: 'stone_pickaxe', needs: { cobblestone: 3, stick: 2 }, gives: 1, unlock: { resource: 'stone', tier: 1 } },
+    { key: 'stone_axe', needs: { cobblestone: 3, stick: 2 }, gives: 1, unlock: { resource: 'stone', tier: 1 } },
+    { key: 'stone_hoe', needs: { cobblestone: 2, stick: 2 }, gives: 1, unlock: { resource: 'stone', tier: 1 } },
+    { key: 'stone_sword', needs: { cobblestone: 2, stick: 1 }, gives: 1, unlock: { resource: 'stone', tier: 1 } },
+    { key: 'iron_pickaxe', needs: { iron: 3, stick: 2 }, gives: 1, unlock: { resource: 'iron', tier: 2 } },
+    { key: 'iron_axe', needs: { iron: 3, stick: 2 }, gives: 1, unlock: { resource: 'iron', tier: 2 } },
     { key: 'minion_fuel_coal', needs: { coal: 32 }, gives: 1, unlock: { resource: 'coal', tier: 2 } },
     { key: 'talisman_potato', needs: { potato: 160 }, gives: 1, unlock: { resource: 'potato', tier: 2 } },
     { key: 'talisman_zombie', needs: { rotten_flesh: 160 }, gives: 1, unlock: { resource: 'rotten_flesh', tier: 2 } },
@@ -714,6 +731,16 @@
   /* ---------------- 상점 ---------------- */
   const SHOP = [
     ...MINIBOSS_LOOT,
+    // V12: 바닐라 제작품(이름 표기용 — 성능/블럭 기능은 코드에서)
+    { key: 'oak_planks', name: '참나무 판자', category: '건축', buyPrice: 0, sellPrice: 1, stackSize: 64 },
+    { key: 'birch_planks', name: '자작나무 판자', category: '건축', buyPrice: 0, sellPrice: 1, stackSize: 64 },
+    { key: 'spruce_planks', name: '가문비 판자', category: '건축', buyPrice: 0, sellPrice: 1, stackSize: 64 },
+    { key: 'cobblestone', name: '조약돌', category: '건축', buyPrice: 0, sellPrice: 1, stackSize: 64 },
+    { key: 'stick', name: '막대기', category: '재료', buyPrice: 0, sellPrice: 1, stackSize: 64 },
+    { key: 'crafting_table', name: '작업대', category: '제작품', buyPrice: 0, sellPrice: 4, stackSize: 64 },
+    { key: 'furnace', name: '화로', category: '제작품', buyPrice: 0, sellPrice: 6, stackSize: 64 },
+    { key: 'chest', name: '상자', category: '제작품', buyPrice: 0, sellPrice: 6, stackSize: 64 },
+    { key: 'torch', name: '횃불', category: '제작품', buyPrice: 0, sellPrice: 1, stackSize: 64 },
     // 도구 4계열 × 5티어
     ...Object.keys(TOOLS).flatMap(fam => TOOLS[fam].map(t => ({ key: t.key, name: t.name, category: '도구', tierKey: t.tierKey, buyPrice: t.price, sellPrice: Math.round((t.price || 900 * t.mul) * 0.2), stackSize: 1 }))),
     // 강화/미니언/인챈트
