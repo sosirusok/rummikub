@@ -604,49 +604,169 @@
     lampPost(312, 322);
   }
   function buildColosseum() {
-    // 원형 사암 경기장(관중석 2단 + 모래 바닥)
+    // V18: 로마식 원형 투기장 — 계단식 관중석 + 아치 입구 4방 + 크레넬 성벽 + 깃발/랜턴
     const cx = 224, cz = 352, cy = surfaceTop(cx, cz) - 1;
-    for (let dx = -22; dx <= 22; dx++) for (let dz = -18; dz <= 18; dz++) {
-      const d = Math.hypot(dx / 1.25, dz);
-      const x = cx + dx, z = cz + dz;
-      if (d < 12) { for (let y = cy + 1; y < cy + 9; y++) setW(x, y, z, 0); setW(x, cy, z, ID.sand); }
-      else if (d < 14) { for (let y = cy + 1; y <= cy + 4; y++) setW(x, y, z, ID.sandstone); setW(x, cy + 5, z, (Math.abs(dx) % 4 === 0) ? ID.glowstone : ID.sandstone); }
-      else if (d < 16) { for (let y = cy + 1; y <= cy + 2; y++) setW(x, y, z, ID.sandstone); }
+    const RIN = 11, ROUT = 21;               // 경기장 반경 / 외벽 반경
+    const sandSlab = slabIdFor(ID.sandstone), smoothSlab = slabIdFor(ID.smooth_stone);
+    const banners = [ID.wool_red, ID.wool_yellow, ID.wool_blue, ID.wool_lime, ID.wool_orange, ID.wool_magenta];
+    flattenSite(cx - ROUT - 1, cz - ROUT - 1, cx + ROUT + 1, cz + ROUT + 1, cy);
+    for (let dx = -ROUT - 1; dx <= ROUT + 1; dx++) for (let dz = -ROUT - 1; dz <= ROUT + 1; dz++) {
+      const x = cx + dx, z = cz + dz, d = Math.hypot(dx, dz);
+      const ang = Math.atan2(dz, dx);
+      // 4방 아치 입구 통로(±x, ±z 축 근처 좁은 통로)
+      const nearAxis = Math.min(Math.abs(dx), Math.abs(dz)) <= 1;
+      if (d < RIN) {                          // 경기장 바닥(1칸 파냄 + 모래)
+        for (let y = cy + 1; y < cy + 12; y++) setW(x, y, z, 0);
+        setW(x, cy, z, (Math.abs(dx) + Math.abs(dz)) % 5 === 0 ? ID.smooth_stone : ID.sand);
+      } else if (d <= ROUT) {                 // 계단식 관중석: 바깥으로 갈수록 한 단씩 상승
+        const tier = Math.floor((d - RIN) / 1.6);         // 0..~6 단
+        const topY = cy + 1 + tier;
+        if (nearAxis && d < ROUT - 1) {       // 입구 통로는 뚫어 아치 터널
+          setW(x, cy, z, ID.smooth_stone);
+          continue;
+        }
+        for (let y = cy + 1; y <= topY; y++) setW(x, y, z, ID.sandstone);
+        // 단 앞턱에 매끈한돌 반블럭 → 좌석 라인
+        if (smoothSlab != null) setW(x, topY + 1, z, smoothSlab);
+      }
     }
-    for (let o = -1; o <= 1; o++) for (let y = cy + 1; y <= cy + 3; y++) { setW(cx + o, y, cz - 18, 0); setW(cx + o, y, cz - 17, 0); setW(cx + o, y, cz - 16, 0); }   // 북쪽 입구
+    // 외벽(크레넬 + 아케이드 창 + 깃발 + 랜턴)
+    for (let a = 0; a < 96; a++) {
+      const th = a / 96 * Math.PI * 2;
+      const x = cx + Math.round(Math.cos(th) * (ROUT + 1)), z = cz + Math.round(Math.sin(th) * (ROUT + 1));
+      const wallTop = cy + 8;
+      for (let y = cy + 1; y <= wallTop; y++) setW(x, y, z, ID.sandstone);
+      setW(x, wallTop + 1, z, a % 2 === 0 ? ID.sandstone : (sandSlab != null ? sandSlab : ID.sandstone));   // 크레넬
+      if (a % 8 === 0) { setW(x, cy + 4, z, ID.glowstone); }                                                 // 벽감 랜턴
+      if (a % 12 === 0) { const bn = banners[(a / 12) % banners.length]; setW(x, cy + 6, z, bn); setW(x, cy + 5, z, bn); }   // 걸개 깃발
+    }
+    // 4방 아치 입구(스택 계단으로 아치머리)
+    const arch = (ex, ez, f1, f2) => {
+      const bx = cx + ex, bz = cz + ez;
+      for (let o = -1; o <= 1; o++) for (let y = cy + 1; y <= cy + 3; y++) { setW(bx + (ez ? o : 0), y, bz + (ex ? o : 0), 0); }
+      const sL = stairIdFor(ID.sandstone, f1), sR = stairIdFor(ID.sandstone, f2);
+      if (sL != null) setW(bx + (ez ? -1 : 0), cy + 4, bz + (ex ? -1 : 0), sL);
+      if (sR != null) setW(bx + (ez ? 1 : 0), cy + 4, bz + (ex ? 1 : 0), sR);
+      setW(bx, cy + 4, bz, ID.sandstone); setW(bx, cy + 5, bz, ID.glowstone);
+    };
+    arch(0, -(ROUT + 1), 2, 0); arch(0, ROUT + 1, 2, 0); arch(-(ROUT + 1), 0, 1, 3); arch(ROUT + 1, 0, 1, 3);
+    // 중앙 승리 단(작은 사각 대 + 횃불)
+    for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) setW(cx + dx, cy + 1, cz + dz, ID.smooth_stone);
+    setW(cx, cy + 2, cz, ID.glowstone);
   }
   function buildWizardTower() {
+    // V18: 원통형 마법사 탑 — 석재벽돌 몸통 + 아치창 + 버트레스 기둥 + 원뿔 계단 지붕 + 발광 첨탑
     const cx = 322, cz = 120, base = surfaceTop(cx, cz);
-    for (let y = base; y < base + 20; y++) for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) {
-      const edge = Math.abs(dx) === 2 || Math.abs(dz) === 2;
-      if (Math.abs(dx) + Math.abs(dz) <= 3) setW(cx + dx, y, cz + dz, edge ? (y > base + 14 ? ID.purpur : ID.stone_bricks) : 0);
+    const R = 4, H = 22;
+    flattenSite(cx - R - 2, cz - R - 2, cx + R + 2, cz + R + 2, base - 1);
+    // 원통 벽(반경 R) — 아래 석재벽돌, 위 4칸 자수정(purpur)
+    for (let y = base; y < base + H; y++) {
+      const mat = y >= base + H - 5 ? ID.purpur : ID.stone_bricks;
+      for (let a = 0; a < 40; a++) {
+        const th = a / 40 * Math.PI * 2;
+        const x = cx + Math.round(Math.cos(th) * R), z = cz + Math.round(Math.sin(th) * R);
+        setW(x, y, z, mat);
+      }
     }
-    for (let dx = -3; dx <= 3; dx++) for (let dz = -3; dz <= 3; dz++) if (Math.abs(dx) + Math.abs(dz) <= 4) setW(cx + dx, base + 20, cz + dz, ID.purpur);
-    setW(cx, base + 21, cz, ID.glowstone);
-    setW(cx, base, cz - 2, 0); setW(cx, base + 1, cz - 2, 0);   // 문
+    // 바닥/층 마루
+    for (let dx = -R; dx <= R; dx++) for (let dz = -R; dz <= R; dz++) if (dx * dx + dz * dz <= R * R) { setW(cx + dx, base - 1, cz + dz, ID.polished_andesite); }
+    // 4방 버트레스(모서리 지지 기둥 + 상단 자수정 캡)
+    for (const [ox, oz] of [[R, 0], [-R, 0], [0, R], [0, -R]]) {
+      for (let y = base; y < base + H - 3; y++) setW(cx + ox, y, cz + oz, ID.chiseled_stone_bricks);
+      setW(cx + ox, base + H - 3, cz + oz, ID.purpur); setW(cx + ox, base + H - 2, cz + oz, ID.glowstone);
+    }
+    // 아치창(3층, 4방) — 유리 + 위에 계단 아치머리
+    for (const [ox, oz, f] of [[0, -R, 2], [0, R, 0], [-R, 0, 1], [R, 0, 3]]) {
+      for (const wy of [base + 3, base + 8, base + 13]) {
+        setW(cx + ox, wy, cz + oz, ID.glass); setW(cx + ox, wy + 1, cz + oz, ID.glass);
+        const sid = stairIdFor(ID.stone_bricks, f); if (sid != null) setW(cx + ox, wy + 2, cz + oz, sid);
+      }
+    }
+    // 정문(남쪽) — 진짜 나무 문 2칸 + 랜턴
+    setW(cx, base, cz - R, ID.spruce_door_c_0); setW(cx, base + 1, cz - R, ID.spruce_door_c_0);
+    setW(cx - 1, base + 2, cz - R, ID.glowstone); setW(cx + 1, base + 2, cz - R, ID.glowstone);
+    // 원뿔 계단 지붕(자수정 계단 4단 수렴)
+    let rr = R + 1, ry = base + H;
+    while (rr >= 0) {
+      for (let a = 0; a < 48; a++) {
+        const th = a / 48 * Math.PI * 2, dx = Math.cos(th), dz = Math.sin(th);
+        const x = cx + Math.round(dx * rr), z = cz + Math.round(dz * rr);
+        const f = Math.abs(dx) > Math.abs(dz) ? (dx > 0 ? 1 : 3) : (dz > 0 ? 0 : 2);   // 바깥 향해 물매
+        const sid = stairIdFor(ID.purpur, f);
+        setW(x, ry, z, rr > 0 && sid != null ? sid : ID.purpur);
+      }
+      rr--; ry++;
+    }
+    // 발광 첨탑(수정 막대)
+    for (let i = 0; i < 4; i++) setW(cx, ry + i, cz, i < 3 ? ID.purpur : ID.glowstone);
+    // 떠다니는 룬 고리(자수정+발광 — 마력 연출)
+    for (const [ox, oz] of [[R + 2, 0], [-(R + 2), 0], [0, R + 2], [0, -(R + 2)]]) setW(cx + ox, base + 10, cz + oz, ID.glowstone);
   }
   function buildRuinsZone() {
-    // 부서진 성벽/기둥(폐허)
-    for (let i = 0; i < 12; i++) {
+    // V18: 이끼 낀 고대 폐허 — 무너진 아치·기울어진 기둥·부서진 바닥 타일·덩굴
+    const mossy = ID.mossy_cobblestone, sb = ID.stone_bricks;
+    for (let i = 0; i < 14; i++) {
       const x = 74 + Math.floor(hash3(i, 71, 1) * 30), z = 266 + Math.floor(hash3(i, 72, 2) * 30);
       if (zoneAt(x, z) !== 'ruins') continue;
-      const y = surfaceTop(x, z), h = 2 + Math.floor(hash3(i, 73, 3) * 4);
-      for (let j = 0; j < h; j++) setW(x, y + j, z, hash3(i, 74, j) < 0.3 ? ID.cobblestone : ID.stone_bricks);
-      if (hash3(i, 75, 4) < 0.4) for (let j = 0; j < 3; j++) setW(x + 1, y + j, z, ID.cobblestone);
+      const y = surfaceTop(x, z), h = 3 + Math.floor(hash3(i, 73, 3) * 4);
+      // 부서진 기둥(위로 갈수록 이끼/파손)
+      for (let j = 0; j < h; j++) setW(x, y + j, z, hash3(i, 74, j) < 0.4 ? mossy : sb);
+      // 기둥머리(계단 4방으로 부서진 주두)
+      if (hash3(i, 76, 5) < 0.5) { const s = stairIdFor(ID.stone_bricks, (i % 4)); if (s != null) setW(x, y + h, z, s); }
+      // 무너진 아치 잔해(옆으로 흘러내린 계단/반블럭)
+      if (hash3(i, 75, 4) < 0.5) {
+        const s = slabIdFor(ID.stone_bricks); const dir = hash3(i, 77, 6) < 0.5 ? 1 : -1;
+        if (s != null) { setW(x + dir, y, z, s); setW(x + dir * 2, y, z, mossy); }
+      }
     }
+    // 깨진 바닥 타일 패치(석재벽돌/이끼조약돌 혼합)
+    for (let i = 0; i < 40; i++) {
+      const x = 74 + Math.floor(hash3(i, 81, 7) * 30), z = 266 + Math.floor(hash3(i, 82, 8) * 30);
+      if (zoneAt(x, z) !== 'ruins') continue;
+      const y = surfaceTop(x, z) - 1;
+      if (getBlockLocal(x, y, z) === ID.grass || getBlockLocal(x, y, z) === ID.dirt) setW(x, y, z, hash3(i, 83, 9) < 0.5 ? mossy : ID.polished_andesite);
+    }
+    // 반쯤 무너진 아치 게이트(입구 랜드마크)
+    const gx = 88, gz = 280, gy = surfaceTop(gx, gz);
+    for (let dy = 0; dy < 4; dy++) { setW(gx - 2, gy + dy, gz, sb); setW(gx + 2, gy + dy, gz, dy < 3 ? mossy : sb); }
+    setW(gx - 1, gy + 4, gz, stairIdFor(ID.stone_bricks, 3) || sb); setW(gx, gy + 4, gz, sb); setW(gx + 1, gy + 4, gz, stairIdFor(ID.stone_bricks, 1) || sb);
   }
   function buildZigguratV6() {
+    // V18: 대신전 지구라트 — 층마다 계단 트림 + 정면 대계단 + 모서리 화톳불 + 정상 흑요석 성소
     const cx = 296, cz = 384;
     const base = surfaceTop(cx, cz);
+    const ssSlab = slabIdFor(ID.stone_bricks);
     flattenSite(cx - 15, cz - 15, cx + 15, cz + 15, base - 1);
     for (let tier = 0; tier < 7; tier++) {
       const half = 13 - tier * 2, y = base + tier;
-      for (let x = cx - half; x <= cx + half; x++) for (let z = cz - half; z <= cz + half; z++) setW(x, y, z, ID.stone_bricks);
-      [[-half, -half], [half, -half], [-half, half], [half, half]].forEach(c => setW(cx + c[0], y + 1, cz + c[1], ID.glowstone));
+      for (let x = cx - half; x <= cx + half; x++) for (let z = cz - half; z <= cz + half; z++) {
+        const edge = x === cx - half || x === cx + half || z === cz - half || z === cz + half;
+        setW(x, y, z, edge && (x + z) % 3 === 0 ? ID.chiseled_stone_bricks : ID.stone_bricks);
+      }
+      // 층 앞턱 계단 트림(사방 바깥 물매)
+      for (let x = cx - half; x <= cx + half; x++) {
+        let s;
+        s = stairIdFor(ID.stone_bricks, 2); if (s != null) setW(x, y + 1, cz - half, s);
+        s = stairIdFor(ID.stone_bricks, 0); if (s != null) setW(x, y + 1, cz + half, s);
+      }
+      for (let z = cz - half; z <= cz + half; z++) {
+        let s;
+        s = stairIdFor(ID.stone_bricks, 1); if (s != null) setW(cx - half, y + 1, z, s);
+        s = stairIdFor(ID.stone_bricks, 3); if (s != null) setW(cx + half, y + 1, z, s);
+      }
+      [[-half, -half], [half, -half], [-half, half], [half, half]].forEach(c => { setW(cx + c[0], y + 1, cz + c[1], ID.netherrack); setW(cx + c[0], y + 2, cz + c[1], ID.glowstone); });   // 모서리 화톳불
     }
+    // 정면 대계단(남쪽) — 자수정 카펫 느낌 매끈돌 계단
+    for (let tier = 0; tier < 7; tier++) {
+      const zf = cz + (13 - tier * 2) + 1;
+      for (let dx = -2; dx <= 2; dx++) { const s = stairIdFor(ID.smooth_stone, 0); if (s != null) setW(cx + dx, base + tier, zf, s); }
+    }
+    // 정상 성소(흑요석 문설주 + 자수정 제단 + 발광 코어)
     const ty = base + 7;
     for (let dx = -2; dx <= 2; dx++) { setW(cx + dx, ty, cz + 3, ID.obsidian); setW(cx + dx, ty + 4, cz + 3, ID.obsidian); }
     for (let dy = 0; dy <= 4; dy++) { setW(cx - 2, ty + dy, cz + 3, ID.obsidian); setW(cx + 2, ty + dy, cz + 3, ID.obsidian); }
+    for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) setW(cx + dx, ty, cz + dz, ID.purpur);
+    setW(cx, ty + 1, cz, ID.glowstone);
   }
   function buildShrineV6() {
     const cx = 224, cz = 158;
