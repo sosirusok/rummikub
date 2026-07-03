@@ -1353,11 +1353,25 @@
       }
       if (Math.round(rr * 2) % 10 === 0) setW(x, want + 1, z, ID.glowstone);
     }
-    // 정상 브루드마더 둥지(거미줄 플랫폼)
+    // V18: 정상 브루드마더 둥지 — 거미줄 플랫폼 + 거미줄 천막(4기둥→돔) + 알집 + 중앙 옥좌
     const ty = surfaceTop(64, 64);
     for (let dx = -6; dx <= 6; dx++) for (let dz = -6; dz <= 6; dz++) {
-      if (Math.hypot(dx, dz) < 6.5) setW(64 + dx, ty - 1, 64 + dz, hash3(dx, 88, dz) < 0.55 ? ID.wool_white : ID.stone);
+      if (Math.hypot(dx, dz) < 6.5) setW(64 + dx, ty - 1, 64 + dz, hash3(dx, 88, dz) < 0.55 ? ID.wool_white : ID.cobblestone);
     }
+    // 거미줄 천막: 네 모서리 기둥 + 위로 수렴하는 줄(양털)
+    const webFence = ID.spruce_fence;
+    for (const [ox, oz] of [[5, 5], [-5, 5], [5, -5], [-5, -5]]) {
+      for (let y = 0; y < 6; y++) setW(64 + ox, ty + y, 64 + oz, webFence != null ? webFence : ID.wool_white);
+      // 대각선 거미줄 스트랜드(기둥→중앙 상단)
+      for (let s = 1; s <= 4; s++) setW(64 + Math.round(ox * (1 - s / 5)), ty + 5 + Math.round(s * 0.4), 64 + Math.round(oz * (1 - s / 5)), ID.wool_white);
+    }
+    // 천막 지붕(거미줄 캐노피)
+    for (let dx = -4; dx <= 4; dx++) for (let dz = -4; dz <= 4; dz++) if (Math.hypot(dx, dz) < 4.5) setW(64 + dx, ty + 7, 64 + dz, ID.wool_white);
+    // 알집(양털 뭉치 + 발광) 산발
+    for (const [ox, oz] of [[3, 0], [-3, 1], [0, 3], [1, -3]]) { setW(64 + ox, ty, 64 + oz, ID.wool_white); setW(64 + ox, ty + 1, 64 + oz, hash3(ox, 90, oz) < 0.4 ? ID.glowstone : ID.wool_white); }
+    // 중앙 브루드 옥좌(흑요석 대 + 발광 코어)
+    for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) setW(64 + dx, ty, 64 + dz, ID.obsidian);
+    setW(64, ty + 1, 64, ID.magma_block); setW(64, ty + 2, 64, ID.glowstone);
     // 죽은 나무 + 거미줄(산기슭)
     for (let i = 0; i < 22; i++) {
       const x = 16 + Math.floor(hash3(i, 81, 1) * 96), z = 14 + Math.floor(hash3(i, 82, 2) * 88);
@@ -1400,8 +1414,12 @@
           const wall = Math.abs(o) === 2;
           setW(px2, 20, pz2, ID.nether_bricks);
           for (let y = 21; y <= 24; y++) setW(px2, y, pz2, wall && (x + z) % 3 !== 0 ? ID.nether_bricks : 0);
+          // V18: 벽 위 크레넬(톱니) + 마그마 발광 띠
+          if (wall) { setW(px2, 25, pz2, (x + z) % 2 === 0 ? ID.nether_bricks : 0); if ((x + z) % 6 === 0) setW(px2, 22, pz2, ID.magma_block); }
         }
         if ((x + z) % 9 === 0) { const lx = dx !== 0 ? x : x + 2, lz = dx !== 0 ? z + 2 : z; setW(lx, 24, lz, ID.glowstone); }
+        // V18: 소울 등잔 기둥(울타리+발광) — 복도 벽 옆
+        if ((x + z) % 11 === 0) { const lx = dx !== 0 ? x : x + 2, lz = dx !== 0 ? z + 2 : z; setW(lx, 21, lz, ID.soul_sand); setW(lx, 22, lz, ID.glowstone); }
         if (x === x1 && z === z1) break;
         x += dx; z += dz;
       }
