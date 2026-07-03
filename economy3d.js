@@ -645,7 +645,12 @@
     if (mode === worldMode && !force) return;
     restoreAllRegen(); clearMobs(); stopFishing(); mouseHeld = false; warpCharge = null;
     if (worldMode === 'dungeon' && mode !== 'dungeon') { dungeonState = null; partyGuestMode = false; }
-    if (worldMode !== 'visit' && worldMode !== 'dungeon') worldCache[worldMode] = { world, W, H, Dp };   // 현재 월드 캐시
+    if (world && worldMode !== 'visit' && worldMode !== 'dungeon') {   // 현재 월드 캐시(널 월드 금지)
+      worldCache[worldMode] = { world, W, H, Dp, _at: (worldCache[worldMode] && worldCache[worldMode]._at || 0) + 1 };
+      // V12: 캐시 상한 — home + 최근 2개만 유지(대형 hub Uint8Array 무한 누적 방지)
+      const keys = Object.keys(worldCache).filter(k => k !== 'home' && k !== worldMode);
+      if (keys.length > 2) { keys.sort((a, b) => worldCache[a]._at - worldCache[b]._at); delete worldCache[keys[0]]; }
+    }
     worldMode = mode;
     if (mode !== 'visit') visitData = null;
     disposeIslandMeshes();
@@ -983,8 +988,8 @@
     // 요새 복도망(십자 + 외곽 회랑 — 벽 있는 진짜 던전 복도)
     function corridor(x0, z0, x1, z1) {
       const dx = Math.sign(x1 - x0), dz = Math.sign(z1 - z0);
-      let x = x0, z = z0;
-      while (true) {
+      let x = x0, z = z0, _guard = 0;
+      while (_guard++ < 4096) {   // V12: 무한루프 방지(비축정렬 인자 대비)
         for (let o = -2; o <= 2; o++) {
           const px2 = dx !== 0 ? x : x + o, pz2 = dx !== 0 ? z + o : z;
           const wall = Math.abs(o) === 2;
@@ -1495,12 +1500,13 @@
   const CHUNK = 32;
   let chunkMeshes = {};        // "cx,cz" -> {opaque,water,plant,lava}
   let dirtyChunks = new Set();
+  let _queuedChunks = new Set();   // V12: buildQueue에 든 청크 키(중복 큐잉 방지)
   function disposeChunkMeshes(key) {
     const cM = chunkMeshes[key]; if (!cM) return;
     ['opaque', 'water', 'plant', 'lava'].forEach(t => { const m = cM[t]; if (m) { scene.remove(m); if (m.geometry) m.geometry.dispose(); } });
     delete chunkMeshes[key];
   }
-  function disposeIslandMeshes() { for (const k in chunkMeshes) disposeChunkMeshes(k); chunkMeshes = {}; dirtyChunks.clear(); }
+  function disposeIslandMeshes() { for (const k in chunkMeshes) disposeChunkMeshes(k); chunkMeshes = {}; dirtyChunks.clear(); _queuedChunks.clear(); buildQueue = []; }
   function markBlockDirty(x, z) {
     const cx = Math.floor(x / CHUNK), cz = Math.floor(z / CHUNK);
     dirtyChunks.add(cx + ',' + cz);
@@ -1528,25 +1534,41 @@
     let i = 0;
     for (; i < list.length && list[i][2] <= 3.2; i++) buildChunk(list[i][0], list[i][1]);
     buildQueue = list.slice(i);
+    _queuedChunks.clear();
+    for (const c of buildQueue) _queuedChunks.add(c[0] + ',' + c[1]);
   }
   function tickBuildQueue() {
     if (!buildQueue.length) return;
     let budget = 6;   // 프레임당 6청크
-    while (budget-- > 0 && buildQueue.length) { const c = buildQueue.shift(); buildChunk(c[0], c[1]); }
+    while (budget-- > 0 && buildQueue.length) { const c = buildQueue.shift(); _queuedChunks.delete(c[0] + ',' + c[1]); buildChunk(c[0], c[1]); }
   }
-  // 거리 컬링: 멀리 있는 청크 메시는 숨겨서 드로우콜 절감(대형 허브 렉 감소)
-  const VIEW_DIST = 120;
+  // V12 크래시 수정: 거리 컬링을 "숨김(.visible=false)"이 아니라 "실제 메시 해제(VRAM 반환)"로 승격.
+  //   원거리 청크 지오메트리를 dispose해 GPU 메모리를 비우고, 재접근하면 다시 빌드한다.
+  //   지형은 world Uint8Array에 그대로 남아 재구성 안전 — 448² 허브 VRAM 소진→컨텍스트 손실→"튕김" 방지.
+  const VIEW_DIST = 120;           // 이 반경 안의 미빌드 청크는 큐잉해 복원
+  const CULL_DIST = 176;           // 이 밖의 청크 메시는 해제(히스테리시스로 스래싱 방지)
   let _cullT = 0;
+  function chunkDistToPlayer(cx, cz) {
+    const wx = cx * CHUNK + CHUNK / 2, wz = cz * CHUNK + CHUNK / 2;
+    return Math.hypot(wx - P.x, wz - P.z);
+  }
   function tickChunkCulling(dt) {
-    _cullT += dt; if (_cullT < 0.35) return; _cullT = 0;
-    const pcx = P.x, pcz = P.z;
+    _cullT += dt; if (_cullT < 0.4) return; _cullT = 0;
+    // 1) 원거리 청크 메시 해제 → VRAM 반환
     for (const k in chunkMeshes) {
-      const c = chunkMeshes[k];
       const ix = k.indexOf(',');
-      const wx = (+k.slice(0, ix)) * CHUNK + CHUNK / 2, wz = (+k.slice(ix + 1)) * CHUNK + CHUNK / 2;
-      const vis = Math.hypot(wx - pcx, wz - pcz) < VIEW_DIST;
-      for (const t in c) if (c[t]) c[t].visible = vis;
+      if (chunkDistToPlayer(+k.slice(0, ix), +k.slice(ix + 1)) > CULL_DIST) disposeChunkMeshes(k);
     }
+    // 2) 근거리 미빌드 청크 재큐잉 → 재접근 시 복원
+    const pcx = Math.floor(P.x / CHUNK), pcz = Math.floor(P.z / CHUNK);
+    const rad = Math.ceil(VIEW_DIST / CHUNK) + 1;
+    const cxMax = Math.floor((W - 1) / CHUNK), czMax = Math.floor((Dp - 1) / CHUNK);
+    for (let cx = Math.max(0, pcx - rad); cx <= Math.min(cxMax, pcx + rad); cx++)
+      for (let cz = Math.max(0, pcz - rad); cz <= Math.min(czMax, pcz + rad); cz++) {
+        const k = cx + ',' + cz;
+        if (chunkMeshes[k] || _queuedChunks.has(k)) continue;
+        if (chunkDistToPlayer(cx, cz) < VIEW_DIST) { buildQueue.push([cx, cz]); _queuedChunks.add(k); }
+      }
   }
   function buildChunk(cx, cz) {
     const key = cx + ',' + cz;
@@ -2594,7 +2616,7 @@
     }
     if (mob) { mob.state = 'chase'; }
   }
-  function clearMobs() { arenaState = null; for (const m of mobs) { scene.remove(m.mesh); disposeGroup(m.mesh); } mobs = []; }   // V11: 월드 전환 시 아레나 종료
+  function clearMobs() { arenaState = null; for (const m of mobs) { if (scene && m.mesh) scene.remove(m.mesh); if (m.mesh) disposeGroup(m.mesh); } mobs = []; }   // V11: 월드 전환 시 아레나 종료 / V12: scene 널 가드(종료 시 몹 있으면 튕기던 버그 수정)
   function tickMobs(dt) {
     // 스폰 유지(구역별 밀도 관리)
     _spawnT += dt;
@@ -3266,33 +3288,32 @@
     catch (e) { if (typeof app === 'function') app().innerHTML = fallbackErr('이 기기/브라우저가 3D(WebGL)를 지원하지 않아요.'); return; }
     renderer.setPixelRatio(1); renderer.setClearColor(0x000000, 0);
     canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); contextLost = true; }, false);
-    canvas.addEventListener('webglcontextrestored', () => { try { buildAtlas(); buildIslandMesh(); contextLost = false; } catch (err) { console.error('econ3d ctx restore', err); } }, false);
+    canvas.addEventListener('webglcontextrestored', () => {   // V12: 컨텍스트 복구 시 전체 재구성(아틀라스+지형+그룹)
+      try {
+        contextLost = false;
+        buildAtlas();
+        disposeIslandMeshes();
+        buildIslandMesh((worldMode === 'home' || worldMode === 'visit') ? HOME_BOUNDS : null);
+        if (worldMode === 'hub') { buildNpcMeshes(); buildNodeMeshes(); buildAmbientMobs(); }
+        buildFairyMeshes(); refreshFairyVisibility(); buildStaticInteractables();
+        rebuildMinionVisuals(true); buildMinimapBase(); buildPortalMarker(); setupOutline();
+        if (typeof toast === 'function') toast('그래픽을 복구했어요', true);
+      } catch (err) { console.error('econ3d ctx restore', err); }
+    }, false);
     scene = new THREE.Scene(); scene.background = null; scene.fog = new THREE.Fog(0xbfe0f5, 60, 150);
     camera = new THREE.PerspectiveCamera(72, 1, 0.1, 500);
     buildAtlas();
-    if (!world) { const hubDef = WORLD_DEFS.hub; W = hubDef.size[0]; H = hubDef.size[1]; Dp = hubDef.size[2]; genWorld(); }
-    resetPlayerToSpawn();
-    buildIslandMesh();
-    buildNpcMeshes();
-    buildNodeMeshes();
-    buildFairyMeshes();
     buildClouds();
-    buildAmbientMobs();
-    buildStaticInteractables();
-    refreshFairyVisibility();
     setupOutline();
-    resetPlayerToSpawn();
-    buildMinimapBase();
-    buildPortalMarker();
-    updateBuildHud();
     resize(); window.addEventListener('resize', resize);
     bindInput(); running = true; lastT = 0; contextLost = false;
-    rebuildMinionVisuals(true);
     updateHud();
-    // V12: 실제 하이픽셀 스카이블럭처럼 — 접속/재접속 시 항상 프라이빗 섬에서 스폰(허브 아님)
-    //       (기존엔 신규 유저만 섬으로 보내고 복귀 유저는 허브에 남아 "튕기면 허브" 버그가 있었음)
+    // V12: 실제 하이픽셀 스카이블럭처럼 — 접속/재접속 시 항상 프라이빗 섬에서 스폰(허브 아님).
+    //   기존엔 접속 즉시 448² 허브를 풀생성·풀메싱한 뒤 곧바로 섬으로 이동하며 통째로 폐기(이중 작업·프레임 스파이크)했다.
+    //   이제 허브는 첫 진입 시점에만 생성 — 접속 직후 렉/튕김 대폭 완화. travelTo가 지형/그룹/인터랙터블/미니맵/포탈을 모두 설정.
+    worldMode = 'hub';   // travelTo가 force로 home으로 전환하되, 널 hub를 캐시하지 않도록 world는 null 상태 유지
+    travelTo('home', true);
     const api0 = econApi();
-    travelTo('home');
     if (api0.isFresh && api0.isFresh()) {
       if (typeof toast === 'function') setTimeout(() => toast('🌱 스카이블럭에 온 걸 환영해요! 나무를 캐서 도구를 만들고, 포탈로 허브에 가보세요', true), 600);
     } else if (typeof toast === 'function') setTimeout(() => toast('🏝️ 프라이빗 섬으로 돌아왔어요 — 포탈로 허브에 갈 수 있어요', true), 600);
@@ -3372,6 +3393,8 @@
       ID, BLOCKS,
       // V3: 프라이빗 섬/건축/이동
       travelTo, worldMode: () => worldMode, genHome, PORTALS, HOME_MINION_SLOTS, HOME_BOUNDS, HOME_CENTER,
+      chunkMeshCount: () => Object.keys(chunkMeshes).length,   // V12 크래시 검증용
+      buildQueueLen: () => buildQueue.length,
       raycastBlock, homeBreakBlock, homePlaceBlock, BUILD_BLOCKS,
       setSelectedBlock: i => { selectedBlock = i; }, getSelectedBlock: () => selectedBlock,
       flushWorldEdits,
