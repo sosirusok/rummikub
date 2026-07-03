@@ -92,6 +92,17 @@
   [['smooth_stone', 'smooth_stone'], ['chiseled_stone_bricks', 'chiseled_stone_bricks'], ['mossy_cobblestone', 'mossy_cobble'],
    ['polished_andesite', 'polished_andesite'], ['prismarine', 'prismarine'], ['bookshelf', 'bookshelf'],
    ['hay_block', { top: 'hay_top', side: 'hay_side', bottom: 'hay_top' }]].forEach(([k, tex]) => BLOCKS.push({ key: k, tex }));
+  // V17: 모든 나무 판자(다크오크/정글/아카시아 신규) + 계단/반블럭 형태 블럭(모든 나무 + 돌 계열)
+  ['dark_oak_planks', 'jungle_planks', 'acacia_planks'].forEach(k => BLOCKS.push({ key: k, tex: k }));
+  const SHAPE_MATS = [
+    { k: 'oak_planks', tex: 'planks' }, { k: 'birch_planks', tex: 'birch_planks' }, { k: 'spruce_planks', tex: 'spruce_planks' },
+    { k: 'dark_oak_planks', tex: 'dark_oak_planks' }, { k: 'jungle_planks', tex: 'jungle_planks' }, { k: 'acacia_planks', tex: 'acacia_planks' },
+    { k: 'stone', tex: 'stone' }, { k: 'cobblestone', tex: 'cobble' }, { k: 'stone_bricks', tex: 'stonebrick' },
+  ];
+  SHAPE_MATS.forEach(m => {
+    BLOCKS.push({ key: m.k + '_slab', tex: m.tex, shape: 'slab', opaque: false });
+    for (let f = 0; f < 4; f++) BLOCKS.push({ key: m.k + '_stairs_' + f, tex: m.tex, shape: 'stairs', facing: f, opaque: false });
+  });
   const ID = {};
   BLOCKS.forEach((b, i) => { b.id = i; ID[b.key] = i; if (b.solid === undefined) b.solid = true; if (b.opaque === undefined) b.opaque = true; });
 
@@ -113,10 +124,16 @@
   }
   /* V12: 설치 가능한 아이템 키 → 블럭 ID(자원 키 별칭 포함) */
   const PLACE_BLOCK = {};
-  BLOCKS.forEach(b => { if (b.key !== 'air' && b.key !== 'bedrock' && !b.liquid) PLACE_BLOCK[b.key] = b.id; });
+  BLOCKS.forEach(b => { if (b.key !== 'air' && b.key !== 'bedrock' && !b.liquid && !/_stairs_\d$/.test(b.key)) PLACE_BLOCK[b.key] = b.id; });   // 계단 방향변형은 아이템 아님
   PLACE_BLOCK.oaklog = ID.oak_log; PLACE_BLOCK.birchlog = ID.birch_log; PLACE_BLOCK.sprucelog = ID.spruce_log;
   PLACE_BLOCK.sugarcane = ID.sugar_cane;
+  // V17: 계단 제네릭 아이템 → 설치 시 방향 재계산(기본 남향), 방향변형은 파괴 시 제네릭 아이템 드롭
+  SHAPE_MATS.forEach(m => {
+    PLACE_BLOCK[m.k + '_stairs'] = ID[m.k + '_stairs_0'];
+    for (let f = 0; f < 4; f++) BLOCK_DROP[m.k + '_stairs_' + f] = m.k + '_stairs';
+  });
   function isPlaceable(key) { return key != null && PLACE_BLOCK[key] != null; }
+  function isStairsItem(key) { return typeof key === 'string' && /_stairs$/.test(key); }
 
   /* ---------------- 하늘 위 메가 허브(448×448, 실제 스카이블럭 허브 구역 구성) ----------------
      바다가 아니라 "공허 하늘"에 떠 있는 거대한 섬 하나. 중앙 마을 광장을 중심으로
@@ -1558,6 +1575,9 @@
       case 'planks': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { f(x, y, ((y >> 2) % 2) ? '#9c7a44' : '#b08a4f'); if (y % 4 === 0) f(x, y, '#7a5f34'); } break;
       case 'birch_planks': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { f(x, y, ((y >> 2) % 2) ? '#c8b787' : '#d8c99a'); if (y % 4 === 0) f(x, y, '#b0a074'); } break;
       case 'spruce_planks': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { f(x, y, ((y >> 2) % 2) ? '#5b4226' : '#6b4f2e'); if (y % 4 === 0) f(x, y, '#4a3720'); } break;
+      case 'dark_oak_planks': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { f(x, y, ((y >> 2) % 2) ? '#3a2a16' : '#432f19'); if (y % 4 === 0) f(x, y, '#281b0e'); } break;
+      case 'jungle_planks': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { f(x, y, ((y >> 2) % 2) ? '#9a6a44' : '#a9784f'); if (y % 4 === 0) f(x, y, '#7a5232'); } break;
+      case 'acacia_planks': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { f(x, y, ((y >> 2) % 2) ? '#a85526' : '#b8622f'); if (y % 4 === 0) f(x, y, '#8a4018'); } break;
       case 'log_top': { fillNoise('#b59b6a', '#a78c5b', '#c4aa79'); for (let i = 2; i <= 7; i += 2) { c.strokeStyle = '#8a724a'; c.strokeRect(ox + 8 - i + .5, oy + 8 - i + .5, i * 2 - 1, i * 2 - 1); } break; }
       case 'log_side': { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) f(x, y, ((x + (r() < .3 ? 1 : 0)) % 5 === 0) ? '#5b472d' : (r() < 0.5 ? '#6b5436' : '#7c6342')); break; }
       case 'birch_side': { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.6 ? '#d7d3c8' : t < 0.85 ? '#e7e3d8' : '#c4c0b4'); } for (let i = 0; i < 5; i++) { const bx = (r() * 13) | 0, by = (r() * 14) | 0, bw = 2 + ((r() * 3) | 0); c.fillStyle = '#3a3a32'; c.fillRect(ox + bx, oy + by, bw, 1); } break; }
@@ -1654,6 +1674,36 @@
     g.setIndex(idxArr);
     const m = new THREE.Mesh(g, mat); scene.add(m); return m;
   }
+  // V17: 비큐브(계단/반블럭 등) 서브박스 렌더 — UV를 박스 크기에 맞춰 잘라 왜곡 없이 그림
+  function emitBox(T, b, x, y, z, bx0, by0, bz0, bx1, by1, bz1) {
+    for (let fi = 0; fi < 6; fi++) {
+      const f = FACES[fi];
+      const tn = faceTexName(b, f.n || 'side'); const u = atlasUV[tn] || atlasUV.stone;
+      const sh = f.shade;
+      for (let k = 0; k < 4; k++) {
+        const c = f.corners[k];   // 단위 큐브 코너(각 0/1)
+        const px = x + (c[0] ? bx1 : bx0), py = y + (c[1] ? by1 : by0), pz = z + (c[2] ? bz1 : bz0);
+        let fu, fv;
+        if (fi === 0 || fi === 1) { fu = c[2] ? bz1 : bz0; fv = c[1] ? by1 : by0; }        // ±x: u=z, v=y
+        else if (fi === 4 || fi === 5) { fu = c[0] ? bx1 : bx0; fv = c[1] ? by1 : by0; }    // ±z: u=x, v=y
+        else { fu = c[0] ? bx1 : bx0; fv = c[2] ? bz1 : bz0; }                              // ±y: u=x, v=z
+        T.pos.push(px, py, pz); T.col.push(sh, sh, sh);
+        T.uv.push(u.x0 + fu * (u.x1 - u.x0), u.y1 + fv * (u.y0 - u.y1));
+      }
+      T.idx.push(T.vi, T.vi + 1, T.vi + 2, T.vi, T.vi + 2, T.vi + 3); T.vi += 4;
+    }
+  }
+  function emitShapedBlock(b, x, y, z, T) {
+    if (b.shape === 'slab') { emitBox(T, b, x, y, z, 0, 0, 0, 1, 0.5, 1); return; }
+    if (b.shape === 'stairs') {
+      emitBox(T, b, x, y, z, 0, 0, 0, 1, 0.5, 1);   // 바닥 반블럭
+      const f = b.facing || 0;                       // 위 계단(높은 쪽)이 향하는 면
+      if (f === 0) emitBox(T, b, x, y, z, 0, 0.5, 0, 1, 1, 0.5);
+      else if (f === 1) emitBox(T, b, x, y, z, 0.5, 0.5, 0, 1, 1, 1);
+      else if (f === 2) emitBox(T, b, x, y, z, 0, 0.5, 0.5, 1, 1, 1);
+      else emitBox(T, b, x, y, z, 0, 0.5, 0, 0.5, 1, 1);
+    }
+  }
   // ── 청크 메싱: 32×32 기둥 단위로 나눠 블록 하나 캘 때 그 청크만 다시 만든다(즉시 반영) ──
   const CHUNK = 32;
   let chunkMeshes = {};        // "cx,cz" -> {opaque,water,plant,lava}
@@ -1741,6 +1791,7 @@
     for (let x = bx0; x <= bx1; x++) for (let z = bz0; z <= bz1; z++) for (let y = 0; y < H; y++) {
       const id = getBlockLocal(x, y, z); if (id === 0) continue;
       const b = BLOCKS[id]; const liq = b.liquid;
+      if (b.shape) { emitShapedBlock(b, x, y, z, B); continue; }   // V17: 계단/반블럭
       if (b.cross) {
         const tn = faceTexName(b, 'side'); const u = atlasUV[tn] || atlasUV.stone;
         const uvco = [[u.x0, u.y1], [u.x1, u.y1], [u.x1, u.y0], [u.x0, u.y0]];
@@ -2140,8 +2191,10 @@
     P[ax] += amt;
     const minX = P.x - P.w / 2, maxX = P.x + P.w / 2, minZ = P.z - P.w / 2, maxZ = P.z + P.w / 2, minY = P.y, maxY = P.y + P.h;
     for (let x = Math.floor(minX); x <= Math.floor(maxX); x++) for (let z = Math.floor(minZ); z <= Math.floor(maxZ); z++) for (let y = Math.floor(minY); y <= Math.floor(maxY); y++) {
-      if (!solidAt(x, y, z)) continue;
-      if (ax === 'y') { if (amt > 0) { P.y = y - P.h - 0.0001; P.vy = 0; } else { P.y = y + 1 + 0.0001; P.vy = 0; P.onGround = true; } return; }
+      const bb = BLOCKS[getBlockLocal(x, y, z)]; if (!bb || !bb.solid) continue;
+      const hi = y + (bb.shape === 'slab' ? 0.5 : 1);   // V17: 반블럭은 충돌 상단 0.5
+      if (minY >= hi || maxY <= y) continue;             // 플레이어가 이 블럭 세로 범위 밖 → 통과
+      if (ax === 'y') { if (amt > 0) { P.y = y - P.h - 0.0001; P.vy = 0; } else { P.y = hi + 0.0001; P.vy = 0; P.onGround = true; } return; }
       if (ax === 'x') { if (amt > 0) P.x = x - P.w / 2 - 0.0001; else P.x = x + 1 + P.w / 2 + 0.0001; P.vx = 0; return; }
       if (ax === 'z') { if (amt > 0) P.z = z - P.w / 2 - 0.0001; else P.z = z + 1 + P.w / 2 + 0.0001; P.vz = 0; return; }
     }
@@ -2343,7 +2396,12 @@
     const minX = P.x - P.w / 2, maxX = P.x + P.w / 2, minZ = P.z - P.w / 2, maxZ = P.z + P.w / 2, minY = P.y, maxY = P.y + P.h;
     if (nx + 1 > minX && nx < maxX && nz + 1 > minZ && nz < maxZ && ny + 1 > minY && ny < maxY) return false;
     if (!api.takeItem || !api.takeItem(key, 1)) return false;   // 소모
-    const id = PLACE_BLOCK[key];
+    let id = PLACE_BLOCK[key];
+    if (isStairsItem(key)) {   // V17: 계단은 바라보는 방향으로 높은 면 배치
+      const d = lookDir(); let f;
+      if (Math.abs(d.x) > Math.abs(d.z)) f = d.x > 0 ? 1 : 3; else f = d.z > 0 ? 2 : 0;
+      id = ID[key + '_' + f];
+    }
     world[widx(nx, ny, nz)] = id;
     if (api.setHomeEdit) api.setHomeEdit(nx, ny, nz, id);
     markBlockDirty(nx, nz); _mapDirty = true;
