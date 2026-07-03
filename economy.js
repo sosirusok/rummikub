@@ -15,7 +15,7 @@
   /* ---------------- 저장/불러오기 ---------------- */
   function freshPlayer() {
     return {
-      ver: 6, gold: 0, dungeonClass: 'berserk', reforgeBonus: {}, inv: {}, minions: [], maxMinionSlots: 5, minionCrafts: {},
+      ver: 6, gold: 0, dungeonClass: 'berserk', reforgeBonus: {}, inv: { cobblestone: 16, oak_planks: 8, dirt: 8 }, minions: [], maxMinionSlots: 5, minionCrafts: {},   // V12: 스타터 블럭(V13에서 위키 스타터 상자로 정밀화)
       skillsXp: { combat: 0, mining: 0, farming: 0, foraging: 0, fishing: 0, enchanting: 0, taming: 0, social: 0 },
       collections: {}, collectionTier: {},
       slayerBest: {}, dungeonBest: {},
@@ -43,6 +43,8 @@
       daily: null,                           // 일일 퀘스트({date, list})
       fieldDiff: 'normal',                   // 필드 난이도(easy/normal/heroic/hell)
       arenaBest: {},                         // 아레나 난이도별 최고 웨이브
+      // --- V12 필드 ---
+      hotbar: [null, null, null, null, null, null, null, null],   // 핫바 1~8 지정(9번=스카이블럭 메뉴 고정)
     };
   }
   // 구버전 세이브 마이그레이션: 누락 필드를 기본값으로 채움(중첩 객체 포함)
@@ -73,6 +75,7 @@
     for (const k of ['hpb', 'equipPin', 'locked', 'equipLog', 'stats', 'ach', 'arenaBest']) if (!p[k] || typeof p[k] !== 'object') p[k] = {};
     if (p.daily === undefined) p.daily = null;
     if (!p.fieldDiff) p.fieldDiff = 'normal';
+    if (!Array.isArray(p.hotbar) || p.hotbar.length !== 8) p.hotbar = [null, null, null, null, null, null, null, null];   // V12
     return p;
   }
   function todayStr() { return new Date().toISOString().slice(0, 10); }
@@ -2390,6 +2393,14 @@
       treecap: fam === 'axe' && hasItem('treecapitator'),
     }),
     hasTool: fam => (D().TOOLS[fam] || []).some(t => hasItem(t.key)),
+    // V12 블럭 경제: 파괴 시 지급 / 설치 시 소모 / 보유 확인
+    giveItem: (k, n) => { addItem(k, n || 1); addCollection(k, n || 1); if (running) renderZone(); },
+    takeItem: (k, n) => { const ok = removeItem(k, n || 1); if (ok && running) renderZone(); return ok; },
+    hasItem: (k, n) => hasItem(k, n || 1),
+    invCount: k => (P.inv[k] || 0),
+    ownedPlaceable: keys => keys.filter(k => (P.inv[k] || 0) > 0),   // 보유한 설치가능 아이템만
+    setHotbar: (i, k) => { if (i >= 0 && i < 8) { P.hotbar[i] = k; saveNow(); } },
+    getHotbar: () => P.hotbar.slice(),
     gatherBlock: gatherBlock3d,
     fishCatch: fishCatch3d,
     attackMob: attackMob3d,

@@ -86,6 +86,29 @@
   const ID = {};
   BLOCKS.forEach((b, i) => { b.id = i; ID[b.key] = i; if (b.solid === undefined) b.solid = true; if (b.opaque === undefined) b.opaque = true; });
 
+  /* V12 블럭 경제: 파괴 시 드롭 아이템(null=드롭 없음). 대부분 자기 자신, MC식 예외만 명시. */
+  const BLOCK_DROP = {
+    grass: 'dirt', farmland: 'dirt', mycelium: 'dirt',
+    stone: 'cobblestone', coal_ore: 'coal', iron_ore: 'iron', gold_ore: 'gold', lapis_ore: 'lapis',
+    redstone_ore: 'redstone', diamond_ore: 'diamond', emerald_ore: 'emerald',
+    oak_log: 'oaklog', birch_log: 'birchlog', spruce_log: 'sprucelog',
+    oak_leaves: null, spruce_leaves: null, dark_oak_leaves: null, jungle_leaves: null, acacia_leaves: null,
+    tall_grass: null, flower_red: null, flower_yellow: null, sugar_cane: 'sugarcane',
+    wheat_ripe: 'wheat', carrot_ripe: 'carrot', potato_ripe: 'potato',
+    bedrock: null, water: null, lava: null,
+  };
+  function blockDropKey(id) {
+    const b = BLOCKS[id]; if (!b) return null;
+    if (b.key in BLOCK_DROP) return BLOCK_DROP[b.key];
+    return b.key;   // 건축 블럭은 자기 자신을 드롭(재배치 가능)
+  }
+  /* V12: 설치 가능한 아이템 키 → 블럭 ID(자원 키 별칭 포함) */
+  const PLACE_BLOCK = {};
+  BLOCKS.forEach(b => { if (b.key !== 'air' && b.key !== 'bedrock' && !b.liquid) PLACE_BLOCK[b.key] = b.id; });
+  PLACE_BLOCK.oaklog = ID.oak_log; PLACE_BLOCK.birchlog = ID.birch_log; PLACE_BLOCK.sprucelog = ID.spruce_log;
+  PLACE_BLOCK.sugarcane = ID.sugar_cane;
+  function isPlaceable(key) { return key != null && PLACE_BLOCK[key] != null; }
+
   /* ---------------- 하늘 위 메가 허브(448×448, 실제 스카이블럭 허브 구역 구성) ----------------
      바다가 아니라 "공허 하늘"에 떠 있는 거대한 섬 하나. 중앙 마을 광장을 중심으로
      북쪽 설산 / 서쪽 석탄 광산 / 남서 묘지(+지하 크립트) / 동쪽 농지 / 북서 숲 /
@@ -205,7 +228,7 @@
     'oak_planks', 'birch_planks', 'spruce_planks', 'oak_log', 'birch_log', 'spruce_log', 'dark_oak_log', 'jungle_log', 'acacia_log',
     'oak_leaves', 'stone_bricks', 'bricks', 'nether_bricks', 'end_bricks', 'quartz_block', 'purpur', 'obsidian',
     'glass', 'glowstone', 'ice', 'snow_block', 'wool_white', 'wool_red', 'netherrack', 'soul_sand', 'end_stone', 'mycelium', 'magma_block', 'coarse_dirt'];
-  let selectedBlock = 1;                  // BUILD_BLOCKS 인덱스
+  let selectedPlaceKey = null;            // V12: 현재 설치용으로 고른 블럭 아이템 키(보유한 것만)
   const PORTALS = {
     hub: { x: 210, z: 224, target: 'home', label: '🏝️ 내 섬으로' },
     home: { x: 96, z: 82, target: 'hub', label: '🏘️ 허브로' },
@@ -2036,19 +2059,27 @@
     const p = PORTALS.home;   // 프라이빗 섬 귀환 포털은 파괴 불가(고립 방지)
     return Math.abs(x - p.x) <= 2 && Math.abs(z - p.z) <= 1 && getBlockLocal(x, y, z) === ID.obsidian;
   }
+  // V12 블럭 경제: 파괴하면 블럭이 아이템으로 인벤토리에 들어온다(무한 블럭 폐기).
   function homeBreakBlock() {
     if (worldMode !== 'home') return false;
     const t = raycastBlock(); if (!t) return false;
     if (isPortalBlock(t.x, t.y, t.z)) { if (typeof toast === 'function') toast('포털은 부술 수 없어요', false); return false; }
-    const g0 = gatherBlocks()[t.id];
-    if (g0 && g0.res && (g0.chance == null || Math.random() < g0.chance) && econApi().gatherBlock) econApi().gatherBlock(g0.res, g0.fam);
+    if (BLOCKS[t.id] && (BLOCKS[t.id].key === 'bedrock')) { if (typeof toast === 'function') toast('기반암은 부술 수 없어요', false); return false; }
     world[widx(t.x, t.y, t.z)] = 0;
     if (econApi().setHomeEdit) econApi().setHomeEdit(t.x, t.y, t.z, 0);
     markBlockDirty(t.x, t.z); _mapDirty = true;
+    const drop = blockDropKey(t.id);
+    if (drop && econApi().giveItem) econApi().giveItem(drop, 1);   // 파괴 = 아이템 획득
+    updateBuildHud();
     return true;
   }
+  // V12 블럭 경제: 핫바에서 고른 블럭 아이템을 소모해서 설치(보유 필요, 무한 아님).
   function homePlaceBlock() {
     if (worldMode !== 'home') return false;
+    const key = selectedPlaceKey;
+    const api = econApi();
+    if (!isPlaceable(key)) { if (typeof toast === 'function') toast('설치할 블럭을 골라주세요(파괴/조합으로 블럭 확보)', false); return false; }
+    if (!api.hasItem || !api.hasItem(key, 1)) { if (typeof toast === 'function') toast(`${key} 블럭이 없어요 — 캐거나 조합하세요`, false); refreshBuildPalette(); return false; }
     const t = raycastBlock(); if (!t) return false;
     const nx = t.x + t.face[0], ny = t.y + t.face[1], nz = t.z + t.face[2];
     if (!inBounds(nx, ny, nz) || nx < HOME_BOUNDS.x0 || nx > HOME_BOUNDS.x1 || nz < HOME_BOUNDS.z0 || nz > HOME_BOUNDS.z1) return false;
@@ -2056,10 +2087,12 @@
     // 플레이어 몸과 겹치면 설치 불가
     const minX = P.x - P.w / 2, maxX = P.x + P.w / 2, minZ = P.z - P.w / 2, maxZ = P.z + P.w / 2, minY = P.y, maxY = P.y + P.h;
     if (nx + 1 > minX && nx < maxX && nz + 1 > minZ && nz < maxZ && ny + 1 > minY && ny < maxY) return false;
-    const id = ID[BUILD_BLOCKS[selectedBlock]];
+    if (!api.takeItem || !api.takeItem(key, 1)) return false;   // 소모
+    const id = PLACE_BLOCK[key];
     world[widx(nx, ny, nz)] = id;
-    if (econApi().setHomeEdit) econApi().setHomeEdit(nx, ny, nz, id);
+    if (api.setHomeEdit) api.setHomeEdit(nx, ny, nz, id);
     markBlockDirty(nx, nz); _mapDirty = true;
+    updateBuildHud();
     return true;
   }
   function flushWorldEdits() {
@@ -3023,7 +3056,7 @@
     if (lookS.locked && document.exitPointerLock) try { document.exitPointerLock(); } catch (e) {}
     gathering = false;
   }
-  function hidePanel() { const wrap = document.getElementById('econ3dPanelWrap'); if (wrap) wrap.style.display = 'none'; }
+  function hidePanel() { const wrap = document.getElementById('econ3dPanelWrap'); if (wrap) wrap.style.display = 'none'; updateBuildHud(); updateHotbar(); }
 
   function setupOutline() {
     const eg = new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1));
@@ -3159,11 +3192,24 @@
     const fs = document.getElementById('econ3dSouls'); if (fs) fs.textContent = '✨ ' + (P0.fairySouls ? P0.fairySouls.length : 0) + '/12';
   }
   // 건축 팔레트 바(내 섬에서만 표시) + 선택 상태 갱신
-  function updateBuildHud() {
+  function ownedPlaceableList() {
+    const api = econApi(); const P0 = api.getP ? api.getP() : null; if (!P0 || !P0.inv) return [];
+    // 인벤토리에서 설치 가능한 아이템만(개수>0), 안정적인 순서
+    return Object.keys(P0.inv).filter(k => (P0.inv[k] || 0) > 0 && isPlaceable(k)).sort();
+  }
+  function refreshBuildPalette() { updateBuildHud(); }
+  function updateBuildHud() {   // V12: 보유한 블럭만 팔레트에 표시(무한 블럭 폐기)
     const bar = document.getElementById('econ3dBuildBar'); if (!bar) return;
     bar.style.display = worldMode === 'home' ? 'flex' : 'none';
-    const btns = bar.querySelectorAll('.econ3d-blockbtn');
-    btns.forEach((b, i) => b.classList.toggle('is-sel', i === selectedBlock));
+    if (worldMode !== 'home') return;
+    const api = econApi(); const P0 = api.getP ? api.getP() : null; if (!P0) return;
+    const owned = ownedPlaceableList();
+    if (selectedPlaceKey && (P0.inv[selectedPlaceKey] || 0) <= 0) selectedPlaceKey = null;   // 소진 시 선택 해제
+    if (!selectedPlaceKey && owned.length) selectedPlaceKey = owned[0];
+    const iconOf = k => (typeof window.econIcon === 'function' ? `<img class="econ3d-blockimg" src="${window.econIcon(k)}" alt="">` : `<span class="econ3d-blockchip" data-bk="${k}"></span>`);
+    bar.innerHTML = owned.length
+      ? owned.map(k => `<button class="econ3d-blockbtn ${k === selectedPlaceKey ? 'is-sel' : ''}" data-act="econ3d_block" data-key="${k}" title="${k}">${iconOf(k)}<span class="econ3d-blockcount">${P0.inv[k]}</span></button>`).join('')
+      : '<span class="econ3d-buildhint">블럭이 없어요 — 블럭을 부수거나 조합해서 얻으세요</span>';
   }
   // 포털 표식(보라 발광판 + 라벨)
   let portalMarker = null;
@@ -3216,7 +3262,7 @@
       <div class="econ3d-hpwrap"><div class="econ3d-hpbar"><div id="econ3dHpFill" class="econ3d-hpfill"></div></div><span id="econ3dHpTxt" class="econ3d-hptxt">❤</span></div>
       <div class="econ3d-statsrow" id="econ3dStats"></div>
       <div class="econ3d-hotbar" id="econ3dHotbar">${Array.from({ length: 9 }, (_, i) => `<button class="econ3d-slot" data-act="econ3d_hotbar" data-i="${i}" id="econ3dSlot${i}">${i === 8 ? '<span class="econ3d-star">✦</span>' : ''}</button>`).join('')}</div>
-      <div class="econ3d-buildbar" id="econ3dBuildBar" style="display:none">${BUILD_BLOCKS.map((bk, i) => `<button class="econ3d-blockbtn ${i === selectedBlock ? 'is-sel' : ''}" data-act="econ3d_block" data-i="${i}" title="${bk}"><span class="econ3d-blockchip" data-bk="${bk}"></span></button>`).join('')}</div>
+      <div class="econ3d-buildbar" id="econ3dBuildBar" style="display:none"></div>
       ${isTouch ? '<div class="econ3d-jump" data-act="econ3d_jump">⤒</div>' : '<div class="econ3d-controlhint">WASD 이동 · W 더블탭 달리기 · 좌클릭 공격/꾹 눌러 채집 · 우클릭 낚시(물) · E/클릭 NPC · 더블점프 · M 지도</div>'}
       <div class="econ3d-panelwrap" id="econ3dPanelWrap" style="display:none">
         <div class="econ3d-panelbar"><span id="econ3dPanelGold"></span><button class="btn btn--ghost btn--sm" data-act="econ3d_panel_close">✕ 닫기</button></div>
@@ -3362,7 +3408,7 @@
       case 'econ3d_jump': keys.Space = true; setTimeout(() => { keys.Space = false; }, 120); return true;
       case 'econ3d_panel_close': hidePanel(); return true;
       case 'econ3d_map': toggleMinimapSize(); return true;
-      case 'econ3d_block': selectedBlock = Number(el.dataset.i) || 0; updateBuildHud(); return true;
+      case 'econ3d_block': selectedPlaceKey = el.dataset.key; updateBuildHud(); return true;
     }
     return false;
   }
@@ -3396,7 +3442,7 @@
       chunkMeshCount: () => Object.keys(chunkMeshes).length,   // V12 크래시 검증용
       buildQueueLen: () => buildQueue.length,
       raycastBlock, homeBreakBlock, homePlaceBlock, BUILD_BLOCKS,
-      setSelectedBlock: i => { selectedBlock = i; }, getSelectedBlock: () => selectedBlock,
+      setSelectedBlock: k => { selectedPlaceKey = k; }, getSelectedBlock: () => selectedPlaceKey, ownedPlaceableList,
       flushWorldEdits,
       // V4: 멀티(아바타/방문)
       travelVisit, updateNetAvatars, others: () => others, getVisitData: () => visitData,
