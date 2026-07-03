@@ -219,16 +219,11 @@
   let running = false, contextLost = false, raf = 0, lastT = 0;
   let renderer = null, scene = null, camera = null, canvas = null;
   let world = null;
-  let worldMode = 'hub';                  // 'hub'(공용 군도) | 'home'(프라이빗 섬 — 블록 설치/파괴 가능)
+  let worldMode = 'hub';                  // 'hub'(공용 군도) | 'home'(프라이빗 섬 — 서바이벌: 캐서 모은 블럭만 설치)
   let worldHubCache = null;               // 허브 지형 캐시(포털 왕복 시 재생성 방지)
   const HOME_BOUNDS = { x0: 60, x1: 132, z0: 60, z1: 132 };   // 프라이빗 섬 메싱/편집 영역(빠른 리빌드)
   const HOME_CENTER = { x: 96, z: 96, r: 16, top: 20 };
-  // 프라이빗 섬 건축 팔레트(자유 건축 모드)
-  const BUILD_BLOCKS = ['dirt', 'grass', 'stone', 'cobblestone', 'gravel', 'sand', 'sandstone',
-    'oak_planks', 'birch_planks', 'spruce_planks', 'oak_log', 'birch_log', 'spruce_log', 'dark_oak_log', 'jungle_log', 'acacia_log',
-    'oak_leaves', 'stone_bricks', 'bricks', 'nether_bricks', 'end_bricks', 'quartz_block', 'purpur', 'obsidian',
-    'glass', 'glowstone', 'ice', 'snow_block', 'wool_white', 'wool_red', 'netherrack', 'soul_sand', 'end_stone', 'mycelium', 'magma_block', 'coarse_dirt'];
-  let selectedPlaceKey = null;            // V12: 현재 설치용으로 고른 블럭 아이템 키(보유한 것만)
+  let selectedPlaceKey = null;            // V12: 현재 설치용으로 고른 블럭 아이템 키(보유한 것만 — 서바이벌, 무한 아님)
   const PORTALS = {
     hub: { x: 210, z: 224, target: 'home', label: '🏝️ 내 섬으로' },
     home: { x: 96, z: 76, target: 'hub', label: '🏘️ 허브로' },   // V13-A: 포탈섬 위
@@ -614,7 +609,7 @@
     setW(cx, base + 1, cz - 3, ID.quartz_block); setW(cx, base + 2, cz - 3, ID.glowstone);
   }
 
-    /* ---- 프라이빗 섬(스카이블럭의 심장 — 공허에 뜬 나만의 섬, 자유 건축) ---- */  /* ---- 프라이빗 섬(스카이블럭의 심장 — 공허에 뜬 나만의 섬, 자유 건축) ---- */
+    /* ---- 프라이빗 섬(스카이블럭의 심장 — 공허에 뜬 나만의 섬. 허브와 똑같은 서바이벌: 직접 캐서 모은 블럭만 설치) ---- */
   // V13-A: 깔끔한 흑요석 네더 포탈(4폭×5고). 떠 있는 금블럭·보라 슬랩 등 이상 요소 제거.
   function buildPortalFrame(cx, cz) {
     const y = surfaceTop(cx, cz);
@@ -722,7 +717,7 @@
     _lastSkyKey = '';   // 월드별 고정 시간대 즉시 반영
     updateBuildHud();
     if (typeof toast === 'function') {
-      if (mode === 'home') toast('🏝️ 나의 섬에 도착! (좌클릭 파괴 · 우클릭 설치)', true);
+      if (mode === 'home') toast('🏝️ 나의 섬 도착! 서바이벌 — 직접 캐서 모은 블럭만 설치돼요 (좌클릭 채굴 · 우클릭 설치)', true);
       else if (mode === 'visit') toast(`🏝️ ${(visitData && visitData.name) || '친구'}님의 섬에 방문했어요 (구경만 가능)`, true);
       else toast(`${def.name}에 도착!`, true);
     }
@@ -1678,16 +1673,47 @@
   function boxMat(col) { if (!matCache[col]) matCache[col] = new THREE.MeshBasicMaterial({ color: col }); return matCache[col]; }
   function mkBox(w, h, d, col, x, y, z) { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), boxMat(col)); if (x !== undefined) m.position.set(x, y, z); return m; }
   function shade(col, f) { const r = Math.min(255, ((col >> 16) & 255) * f) | 0, g = Math.min(255, ((col >> 8) & 255) * f) | 0, b = Math.min(255, (col & 255) * f) | 0; return (r << 16) | (g << 8) | b; }
-  function buildHumanoid(baseCol) {
+  // V14: 단색 덩어리 폐기 — 스킨/머리카락/얼굴/셔츠/바지 층으로 렌더(직업별 복장 차등)
+  function toLook(x) {
+    if (x && typeof x === 'object') return x;
+    const c = (x == null ? 0x3a6ee0 : x);
+    return { skin: 0xe0ac7e, hair: 0x3b2a1a, shirt: c, pants: shade(c, 0.6) };   // 레거시 단일색 → 셔츠색
+  }
+  function buildHumanoid(colOrLook) {
+    const L = toLook(colOrLook);
     const g = new THREE.Group();
-    const dark = shade(baseCol, 0.75), light = shade(baseCol, 1.15);
-    const legH = 0.75, bodyH = 0.75, headS = 0.5, limbW = 0.24;
-    const legL = mkBox(limbW, legH, 0.24, dark, -0.12, legH / 2, 0), legR = mkBox(limbW, legH, 0.24, dark, 0.12, legH / 2, 0);
+    const legH = 0.72, bodyH = 0.7, headS = 0.5, limbW = 0.22;
+    const pantsD = shade(L.pants, 0.82), shirtD = shade(L.shirt, 0.9);
+    // 신발
+    g.add(mkBox(limbW + 0.03, 0.12, 0.28, L.shoes != null ? L.shoes : 0x2a2018, -0.12, 0.06, 0.02));
+    g.add(mkBox(limbW + 0.03, 0.12, 0.28, L.shoes != null ? L.shoes : 0x2a2018, 0.12, 0.06, 0.02));
+    // 다리(바지) — 좌우 색차로 입체감
+    const legL = mkBox(limbW, legH, 0.24, L.pants, -0.12, legH / 2, 0);
+    const legR = mkBox(limbW, legH, 0.24, pantsD, 0.12, legH / 2, 0);
     g.add(legL); g.add(legR);
-    g.add(mkBox(0.5, bodyH, 0.26, baseCol, 0, legH + bodyH / 2, 0));
-    g.add(mkBox(headS, headS, headS, light, 0, legH + bodyH + headS / 2, 0));
-    g.add(mkBox(limbW, bodyH, limbW, baseCol, -(0.25 + limbW / 2), legH + bodyH * 0.7, 0));
-    g.add(mkBox(limbW, bodyH, limbW, baseCol, (0.25 + limbW / 2), legH + bodyH * 0.7, 0));
+    // 몸통(셔츠) + 벨트
+    g.add(mkBox(0.5, bodyH, 0.26, L.shirt, 0, legH + bodyH / 2, 0));
+    g.add(mkBox(0.53, 0.09, 0.29, shade(L.pants, 0.7), 0, legH + 0.04, 0));
+    if (L.apron != null) g.add(mkBox(0.42, bodyH * 0.78, 0.02, L.apron, 0, legH + bodyH * 0.46, 0.14));   // 앞치마/조끼(직업 표식)
+    // 팔(셔츠 소매 + 손 스킨)
+    [-1, 1].forEach(s => {
+      const ax = s * (0.25 + limbW / 2);
+      g.add(mkBox(limbW, bodyH * 0.66, limbW, shirtD, ax, legH + bodyH * 0.82, 0));
+      g.add(mkBox(limbW, bodyH * 0.3, limbW, L.skin, ax, legH + bodyH * 0.38, 0));
+    });
+    // 머리(스킨) + 얼굴(눈) + 머리카락/모자
+    const hy = legH + bodyH + headS / 2;
+    g.add(mkBox(headS, headS, headS, L.skin, 0, hy, 0));
+    g.add(mkBox(0.09, 0.09, 0.02, 0x241d18, -0.1, hy + 0.02, headS / 2 + 0.005));
+    g.add(mkBox(0.09, 0.09, 0.02, 0x241d18, 0.1, hy + 0.02, headS / 2 + 0.005));
+    if (L.beard) g.add(mkBox(headS * 0.8, 0.14, 0.03, L.hair, 0, hy - 0.2, headS / 2));
+    if (L.hat != null) {
+      g.add(mkBox(headS + 0.06, 0.16, headS + 0.06, L.hat, 0, hy + headS / 2 + 0.02, 0));
+      if (L.brim) g.add(mkBox(headS + 0.3, 0.05, headS + 0.3, L.hat, 0, hy + headS / 2 - 0.02, 0));   // 챙(밀짚/어부)
+    } else {
+      g.add(mkBox(headS + 0.04, 0.18, headS + 0.04, L.hair, 0, hy + headS / 2 - 0.03, 0));
+      g.add(mkBox(headS + 0.04, headS * 0.66, 0.05, L.hair, 0, hy - 0.03, -headS / 2 - 0.01));
+    }
     return { group: g, legL, legR };
   }
   function buildQuadruped(baseCol, size) {
@@ -1759,13 +1785,49 @@
   function disposeGroup(g) { if (!g) return; g.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material && o.material.map && o.material.map.dispose) o.material.map.dispose(); }); }
 
   /* ---------------- NPC/노드/페어리/구름/앰비언트 몹 배치 ---------------- */
+  // V14: 직업별 복장(스킨/머리/셔츠/바지/모자/앞치마/수염) — 단색 폐기
+  const NPC_LOOK = {
+    shopkeeper:   { shirt: 0xffffff, pants: 0x394a5a, apron: 0x2e7d46, hair: 0x5a3b1a },
+    bankTeller:   { shirt: 0x1f2d3d, pants: 0x11151d, hat: 0x22242a, apron: 0xf2d75c },
+    minionManager:{ shirt: 0x6aa84f, pants: 0x3a3a2a, hat: 0xffcf3a },
+    petKeeper:    { shirt: 0xe048c4, pants: 0x6a2b60, hair: 0x2a2a2a },
+    enchanter:    { shirt: 0x5a3aa0, pants: 0x39236a, hat: 0x39236a, hair: 0xdddddd, beard: true },
+    auctioneer:   { shirt: 0xc0392b, pants: 0x5a1a12, hat: 0x2a2a2a },
+    gladiator:    { shirt: 0xb8860b, pants: 0x6a5010, hair: 0x2a2a2a, beard: true },
+    reforgeSmith: { shirt: 0x6b5436, pants: 0x3a2a1a, apron: 0x4a3220, hair: 0x2a2a2a, beard: true },
+    guide:        { shirt: 0x2c82c9, pants: 0x1a4a6a, hat: 0x6a4a2a, brim: true },
+    craftsman:    { shirt: 0x8a6a3a, pants: 0x5a3a1a, apron: 0x6a4a2a },
+    starSmith:    { shirt: 0x54c8e8, pants: 0x2a6a8a, hair: 0xdddddd },
+    mineForeman:  { shirt: 0x787878, pants: 0x3a3a3a, hat: 0xffcf3a, apron: 0x5a5a5a },
+    farmForeman:  { shirt: 0xd8b23a, pants: 0x6a5a2a, hat: 0xe6cf7a, brim: true },
+    lumberjack:   { shirt: 0x9a3b2a, pants: 0x3a2a1a, hat: 0x2e5a3a, hair: 0x3a2a1a, beard: true },
+    fisherman:    { shirt: 0xf2c94c, pants: 0x3a5a6a, hat: 0xf2c94c, brim: true, beard: true, hair: 0xb0b0b0 },
+    slayerMaster: { shirt: 0x2a2040, pants: 0x15102a, hat: 0x15102a, hair: 0x2a2a2a },
+    dungeonGatekeeper: { shirt: 0x5a4327, pants: 0x3a2a15, hat: 0x6a5030 },
+    tia:          { skin: 0xffe0ee, shirt: 0xffb7dd, pants: 0xe088bb, hair: 0xff88cc },
+    // 퀘스트 NPC
+    jerry:    { shirt: 0x4fae5a, pants: 0x2e6a3a, hair: 0x8a6a2a },
+    pat:      { shirt: 0x7cb342, pants: 0x5a4a2a, hat: 0xe6cf7a, brim: true, beard: true },
+    q_village:{ shirt: 0xcaa24a, pants: 0x6a5020, hair: 0xdddddd, beard: true, hat: 0x8a6a2a },
+    q_mine:   { shirt: 0x8a8a8a, pants: 0x3a3a3a, hat: 0xffcf3a, beard: true },
+    q_forest: { shirt: 0x5d8a3a, pants: 0x3a2a1a, hat: 0x2e5a3a, brim: true },
+    q_farm:   { shirt: 0xd8b23a, pants: 0x6a5a2a, hat: 0xe6cf7a, brim: true },
+    q_dock:   { shirt: 0x3f9fd0, pants: 0x2a4a6a, hat: 0x2a3a5a, beard: true },
+    q_grave:  { shirt: 0x584a6a, pants: 0x2a2440, hat: 0x2a2440, hair: 0x9a9a9a },
+    q_arena:  { shirt: 0xb8860b, pants: 0x6a5010, hat: 0x2a2a2a },
+  };
+  function npcLook(key, fallbackColor) {
+    const L = NPC_LOOK[key];
+    if (!L) return fallbackColor;
+    return Object.assign({ skin: 0xe0ac7e, hair: 0x3b2a1a, pants: shade(L.shirt || fallbackColor || 0x808080, 0.6) }, L);
+  }
   function questNpcList() { return ((window.ECON_DATA || {}).QUEST_NPCS) || []; }
   function buildNpcMeshes() {
     npcGroup = new THREE.Group(); scene.add(npcGroup);
     // 서비스 NPC(상점/은행/…) — 현재 월드 소속만
     NPCS.forEach(n => {
       if ((n.world || 'hub') !== worldMode) return;
-      const h = buildHumanoid(n.color);
+      const h = buildHumanoid(npcLook(n.key, n.color));
       n._y = surfaceTop(n.x, n.z);
       h.group.position.set(n.x + 0.5, n._y, n.z + 0.5);
       h.group.rotation.y = hash3(n.x, 5, n.z) * Math.PI * 2;
@@ -1775,7 +1837,7 @@
     // V13-B: 위치기반 퀘스트 NPC(느낌표 표식) — 현재 월드 소속만
     questNpcList().forEach(n => {
       if ((n.world || 'hub') !== worldMode) return;
-      const h = buildHumanoid(n.color);
+      const h = buildHumanoid(npcLook(n.key, n.color));
       n._y = surfaceTop(n.x, n.z);
       h.group.position.set(n.x + 0.5, n._y, n.z + 0.5);
       h.group.rotation.y = hash3(n.x, 9, n.z) * Math.PI * 2;
@@ -3057,9 +3119,9 @@
     if (!g) return;
     const t = g.t || [-1, -1, -1, -1];
     // 투구(머리 위 오버레이) / 흉갑(몸통) / 레깅스(다리) / 부츠(발) — 티어 색
-    if (t[0] >= 0) o.gearGrp.add(mkBox(0.56, 0.3, 0.56, tierColorHexOf(t[0]), 0, 1.86, 0));
-    if (t[1] >= 0) o.gearGrp.add(mkBox(0.62, 0.62, 0.4, tierColorHexOf(t[1]), 0, 1.18, 0));
-    if (t[2] >= 0) o.gearGrp.add(mkBox(0.56, 0.42, 0.34, tierColorHexOf(t[2]), 0, 0.62, 0));
+    if (t[0] >= 0) o.gearGrp.add(mkBox(0.56, 0.3, 0.56, tierColorHexOf(t[0]), 0, 1.8, 0));    // V14: 새 비율에 맞춤
+    if (t[1] >= 0) o.gearGrp.add(mkBox(0.62, 0.6, 0.4, tierColorHexOf(t[1]), 0, 1.07, 0));
+    if (t[2] >= 0) o.gearGrp.add(mkBox(0.56, 0.4, 0.34, tierColorHexOf(t[2]), 0, 0.5, 0));
     if (t[3] >= 0) { o.gearGrp.add(mkBox(0.24, 0.16, 0.36, tierColorHexOf(t[3]), -0.16, 0.08, 0.02)); o.gearGrp.add(mkBox(0.24, 0.16, 0.36, tierColorHexOf(t[3]), 0.16, 0.08, 0.02)); }
     if (g.w) {   // 들고 있는 무기: 티어색 발광 블레이드 + 손잡이
       const wc = tierColorHexOf(g.wt != null ? g.wt : 0);
@@ -3318,7 +3380,7 @@
     if (!html) { hud.style.display = 'none'; return; }
     hud.innerHTML = html; hud.style.display = 'block';
   }
-  // 건축 팔레트 바(내 섬에서만 표시) + 선택 상태 갱신
+  // (구)건축 팔레트 바는 폐지 — 설치는 핫바의 보유 블럭으로만(서바이벌). 하단 스텁만 유지
   function ownedPlaceableList() {
     const api = econApi(); const P0 = api.getP ? api.getP() : null; if (!P0 || !P0.inv) return [];
     // 인벤토리에서 설치 가능한 아이템만(개수>0), 안정적인 순서
@@ -3589,7 +3651,7 @@
       chunkMeshCount: () => Object.keys(chunkMeshes).length,   // V12 크래시 검증용
       buildQueueLen: () => buildQueue.length,
       updateQuestHud, questNpcList,   // V13-B 퀘스트 HUD 검증용
-      raycastBlock, homeBreakBlock, homePlaceBlock, BUILD_BLOCKS,
+      raycastBlock, homeBreakBlock, homePlaceBlock,
       setSelectedBlock: k => { selectedPlaceKey = k; }, getSelectedBlock: () => selectedPlaceKey, ownedPlaceableList,
       getSelectedHotbar: () => selectedHotbar, setSelectedHotbar: i => { selectedHotbar = i; updateHotbar(); }, ensureHotbar, activeHotbarKey, updateHotbar,
       flushWorldEdits,
