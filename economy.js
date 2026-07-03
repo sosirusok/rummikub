@@ -6,7 +6,7 @@
 (function () {
   const D = () => window.ECON_DATA;
   const SAVE_KEY = 'econ_save_v1';
-  let running = false, tickTimer = null, zone = 'hub', hubTab = 'shop', invFilter = 'all';
+  let running = false, tickTimer = null, zone = 'hub', hubTab = 'shop', invFilter = 'all', invDetailKey = null, craftSel = null;
   let P = null;   // 플레이어 상태(로드 후 채워짐)
   let activeCombat = null;   // { kind:'slayer'|'dungeonBoss', hp,maxHp,dmg,playerHp,maxPlayerHp,_hits, onWin, onLose }
   let dungeonRun = null;     // { floor, roomIdx, rooms:[...], score, secretStep }
@@ -713,11 +713,15 @@
     if (!minionUnlocked(key)) { toastFn('먼저 해당 자원 컬렉션 티어 1을 달성하세요', false); return; }
     const cost = minionTierInfo(key, 1).craftCost;
     if (!hasItem(cost.key, cost.n)) { toastFn(`조합 재료 부족: ${itemName(cost.key)} ×${cost.n}`, false); return; }
+    // V13-A: 미니언 자유 배치 — 내가 서 있는 위치에 설치(반경 5×5에서 작동). 프라이빗 섬에서만.
+    const pos = (typeof window.economy3dPlayerHomePos === 'function') ? window.economy3dPlayerHomePos() : null;
+    if (!pos) { toastFn('미니언은 프라이빗 섬에서, 설치하고 싶은 자리에 서서 배치하세요', false); return; }
     removeItem(cost.key, cost.n);
     recordMinionCraft(key, 1);
-    P.minions.push({ key, tier: 1, lastCollectAt: Date.now(), storage: 0, storageUpgraded: false });
-    toastFn('⚙️ 미니언 조합 완료! 섬에 배치됐어요', true);
+    P.minions.push({ key, tier: 1, lastCollectAt: Date.now(), storage: 0, storageUpgraded: false, px: pos.x, pz: pos.z });
+    toastFn('⚙️ 미니언 배치 완료! (서 있던 자리에 설치 · 5×5 범위에서 작동)', true);
     saveNow(); renderZone();
+    if (typeof window.economy3dRebuildMinions === 'function') window.economy3dRebuildMinions();
   }
   function upgradeMinion(idx) {
     const m = P.minions[idx]; if (!m) return;
@@ -1698,24 +1702,73 @@
     if (k.indexOf('enchanted_') === 0 || (sdef && sdef.category === '재료')) return 'mat';
     return 'etc';
   }
+  // V12-D: 핫바 지정 로직
+  function isPlaceableOrTool(k) {
+    if (D().TOOLS) for (const fam in D().TOOLS) if (D().TOOLS[fam].some(t => t.key === k)) return true;
+    // 설치 가능 여부는 3D가 판정 — 대략 블럭/도구/장비면 지정 허용
+    const sd = shopDef(k);
+    return !!(sd && (sd.category === '건축' || sd.category === '제작품' || sd.category === '무기' || sd.category === '방어구' || sd.category === '도구')) || (window.__econ3dPlaceable ? window.__econ3dPlaceable(k) : false);
+  }
+  function assignHotbar(key) {
+    if (!P.hotbar) P.hotbar = [null, null, null, null, null, null, null, null];
+    const at = P.hotbar.indexOf(key);
+    if (at >= 0) { P.hotbar[at] = null; }        // 이미 있으면 해제(토글)
+    else { let i = P.hotbar.indexOf(null); if (i < 0) i = 0; P.hotbar[i] = key; }
+    saveNow(); renderZone();
+    if (typeof window.economy3dRefreshHotbar === 'function') window.economy3dRefreshHotbar();
+  }
+  // V12-D: 실제 마인크래프트 인벤토리 — 방어구 4슬롯 + 9×4 그리드 + 핫바 9칸
   function invHTML() {
-    const all = Object.keys(P.inv).filter(k => (P.inv[k] || 0) > 0);
-    if (!all.length) return `<h4>🎒 인벤토리</h4><p class="econ-note">아직 아이템이 없어요. 섬을 돌아다니며 채굴·벌목·낚시·전투로 모아보세요!</p>`;
-    const FILTERS = [['all', '전체'], ['mat', '재료'], ['equip', '장비/도구'], ['book', '인챈트북'], ['use', '소모품'], ['etc', '기타']];
-    const keys = invFilter === 'all' ? all : all.filter(k => invCatOf(k, shopDef(k)) === invFilter);
-    return `<h4>🎒 인벤토리 (${keys.length}/${all.length}종)</h4>
-      <div class="econ-tierbtns">${FILTERS.map(f => `<button class="btn btn--sm ${invFilter === f[0] ? '' : 'btn--ghost'}" data-act="econ_inv_filter" data-key="${f[0]}">${f[1]}</button>`).join('')}</div>
-      <div class="econ-shopgrid">${keys.map(k => {
-        const sdef = shopDef(k);
-        const sell = sdef && sdef.sellPrice > 0 ? sdef.sellPrice : 0;
-        return `<div class="econ-shopitem econ-tt"${ttAttr(sdef || { key: k, name: itemName(k) })}>
-          ${iconImg(k)}<span>${sdef && sdef.tierKey ? `<span style="color:${tierColorByKey(sdef.tierKey)}">${itemName(k)}</span>` : itemName(k)} <b>×${P.inv[k]}</b></span>
-          <span class="muted econ-idesc">${shopItemDesc(sdef || { key: k })}</span>
-          ${k.indexOf('potion_') === 0 ? `<button class="btn btn--sm" data-act="econ_potion_use" data-key="${k}">🧪 마시기(5분 버프)</button>` : ''}
-          ${sdef && sdef.slot ? `<span><button class="btn btn--sm btn--ghost" data-act="econ_pin" data-key="${k}">${(P.equipPin || {})[sdef.slot] === k ? '📌 고정 해제' : '📌 고정 장착'}</button> <button class="btn btn--sm btn--ghost" data-act="econ_lock" data-key="${k}">${(P.locked || {})[k] ? '🔓' : '🔒'}</button> <button class="btn btn--sm btn--ghost" data-act="econ_salvage" data-key="${k}">⚒️ 분해</button></span>` : ''}
-          ${sell ? `<span><button class="btn btn--sm btn--ghost" data-act="econ_sell" data-key="${k}">1개 판매 ${fmtGold(sell)}</button></span>` : '<span class="muted">판매 불가</span>'}
-        </div>`;
-      }).join('')}</div>`;
+    const all = Object.keys(P.inv).filter(k => (P.inv[k] || 0) > 0).sort((a, b) => {
+      const ca = invCatOf(a, shopDef(a)), cb = invCatOf(b, shopDef(b));
+      return ca < cb ? -1 : ca > cb ? 1 : (a < b ? -1 : 1);
+    });
+    const cell = (k) => {
+      if (!k) return `<div class="mc-slot mc-empty"></div>`;
+      const sd = shopDef(k); const n = P.inv[k] || 0;
+      const border = sd && sd.tierKey ? tierColorByKey(sd.tierKey) : 'rgba(255,255,255,.14)';
+      const inHot = (P.hotbar || []).indexOf(k) >= 0;
+      return `<div class="mc-slot econ-tt ${inHot ? 'is-hot' : ''}" style="border-color:${border}"${ttAttr(sd || { key: k, name: itemName(k) })} data-act="econ_invcell" data-key="${k}">
+        ${iconImg(k)}${n > 1 ? `<span class="mc-cnt">${n > 9999 ? fmtNum(n) : n}</span>` : ''}${inHot ? '<span class="mc-hotmark">▸</span>' : ''}</div>`;
+    };
+    const GRID = 36;
+    const gridCells = []; for (let i = 0; i < GRID; i++) gridCells.push(cell(all[i]));
+    const overflow = all.slice(GRID);
+    // 방어구 4슬롯(자동 장착 표시)
+    const armorSlot = (sl, emoji) => { const p = equippedPiece(sl); return `<div class="mc-slot mc-armor" title="${SLOT_NAMES[sl]}">${p ? iconImg(p.key) : `<span class="mc-armormark">${emoji}</span>`}</div>`; };
+    const wpn = equippedPiece('weapon'), bow = equippedPiece('bow');
+    // 핫바 9칸(1~8 지정 + 9 메뉴)
+    const hot = (P.hotbar || [null, null, null, null, null, null, null, null]);
+    const hotRow = Array.from({ length: 9 }, (_, i) => {
+      if (i === 8) return `<div class="mc-slot mc-hot mc-menu" title="스카이블럭 메뉴">✦</div>`;
+      const k = hot[i];
+      return `<div class="mc-slot mc-hot ${k ? '' : 'mc-empty'}" data-act="${k ? 'econ_assign_hotbar' : ''}" data-key="${k || ''}" title="핫바 ${i + 1}">${k ? `${iconImg(k)}${(P.inv[k] || 0) > 1 ? `<span class="mc-cnt">${P.inv[k]}</span>` : ''}` : `<span class="mc-slotnum">${i + 1}</span>`}</div>`;
+    }).join('');
+    return `<h4>🎒 인벤토리</h4>
+      <div class="mc-invtop">
+        <div class="mc-armorcol">${armorSlot('helmet', '🪖')}${armorSlot('chest', '🛡')}${armorSlot('leggings', '👖')}${armorSlot('boots', '🥾')}</div>
+        <div class="mc-charhint"><div class="mc-slot mc-armor" title="무기">${wpn ? iconImg(wpn.key) : '⚔️'}</div><div class="mc-slot mc-armor" title="활">${bow ? iconImg(bow.key) : '🏹'}</div><span class="muted">방어구/무기는<br>자동 장착</span></div>
+      </div>
+      <div class="mc-grid">${gridCells.join('')}</div>
+      <div class="mc-hotbar-label">핫바 (숫자키 1~8로 선택 · 아이템 클릭 → 핫바 지정)</div>
+      <div class="mc-hotbar">${hotRow}</div>
+      ${overflow.length ? `<p class="muted">+ ${overflow.length}칸 초과(정리 필요) — 아이템을 팔거나 써서 공간을 확보하세요</p>` : ''}
+      <p class="muted">아이템을 클릭하면 상세(판매/장착/분해/핫바지정)가 열려요.</p>
+      ${invDetailKey ? invCellActions(invDetailKey) : ''}`;
+  }
+  function invCellActions(k) {
+    const sdef = shopDef(k);
+    const sell = sdef && sdef.sellPrice > 0 ? sdef.sellPrice : 0;
+    const canHot = isPlaceableOrTool(k);
+    return `<div class="econ-cellact">
+      <b>${iconImg(k)} ${itemName(k)} ×${P.inv[k] || 0}</b>
+      <div class="econ-tierbtns">
+        ${canHot ? `<button class="btn btn--sm" data-act="econ_assign_hotbar" data-key="${k}">${(P.hotbar || []).indexOf(k) >= 0 ? '핫바에서 빼기' : '➕ 핫바에 넣기'}</button>` : ''}
+        ${k.indexOf('potion_') === 0 ? `<button class="btn btn--sm" data-act="econ_potion_use" data-key="${k}">🧪 마시기</button>` : ''}
+        ${sdef && sdef.slot ? `<button class="btn btn--sm btn--ghost" data-act="econ_pin" data-key="${k}">${(P.equipPin || {})[sdef.slot] === k ? '📌 고정 해제' : '📌 고정 장착'}</button><button class="btn btn--sm btn--ghost" data-act="econ_lock" data-key="${k}">${(P.locked || {})[k] ? '🔓 잠금해제' : '🔒 잠금'}</button><button class="btn btn--sm btn--ghost" data-act="econ_salvage" data-key="${k}">⚒️ 분해</button>` : ''}
+        ${sell ? `<button class="btn btn--sm btn--ghost" data-act="econ_sell" data-key="${k}">1개 판매 ${fmtGold(sell)}</button>${(P.inv[k] || 0) > 1 ? `<button class="btn btn--sm btn--ghost" data-act="econ_sell_all" data-key="${k}">전부 판매</button>` : ''}` : ''}
+      </div>
+    </div>`;
   }
   // 아이템 자동 설명(상점/인벤토리 카드용)
   function shopItemDesc(sdef) {
@@ -1988,14 +2041,37 @@
     scored.sort((a, b) => (b.canNow ? 1 : 0) - (a.canNow ? 1 : 0) || b.ratio - a.ratio);
     return scored.slice(0, 3);
   }
+  // V13-A: 실제 마인크래프트 3×3 제작대 그리드(레시피 재료를 칸에 채우고 결과 표시)
+  function craftGridHTML(r) {
+    if (!r) return '';
+    const needKeys = Object.keys(r.needs);
+    // 재료를 3×3에 분배(레시피에 배치 데이터가 없으므로 종류별로 필요한 만큼 칸을 채움)
+    const cells = [];
+    needKeys.forEach(k => { for (let i = 0; i < Math.min(r.needs[k], 9 - cells.length); i++) cells.push(k); });
+    while (cells.length < 9) cells.push(null);
+    const cell = k => k ? `<div class="mc-slot econ-tt"${ttAttr(shopDef(k) || { key: k, name: itemName(k) })}>${iconImg(k)}</div>` : '<div class="mc-slot mc-empty"></div>';
+    const ok = canCraft(r), un = recipeUnlocked(r);
+    return `<div class="econ-crafttable">
+      <div class="mc-craftgrid">${cells.map(cell).join('')}</div>
+      <div class="mc-craftarrow">➜</div>
+      <div class="mc-craftout"><div class="mc-slot" style="width:52px;height:52px">${iconImg(r.key)}${(r.gives || 1) > 1 ? `<span class="mc-cnt">${r.gives}</span>` : ''}</div>
+        <div class="muted">${itemName(r.key)}${(r.gives || 1) > 1 ? ` ×${r.gives}` : ''}</div>
+        <button class="btn btn--sm" data-act="econ_craft" data-key="${r.key}" ${ok ? '' : 'disabled'}>${un ? (ok ? '제작' : '재료 부족') : '🔒 미해금'}</button>
+      </div>
+    </div>
+    <p class="muted">필요: ${needKeys.map(k => `${itemName(k)} ${P.inv[k] || 0}/${r.needs[k]}`).join(', ')}</p>`;
+  }
   function craftHTML() {
     const recs = craftRecommendations();
     const recHTML = recs.length ? `<div class="econ-craftrec"><b>✨ 추천 제작 (보유 재료 기준)</b>${recs.map(x => {
       const needsTxt = Object.keys(x.r.needs).map(k => `${itemName(k)} ${P.inv[k] || 0}/${x.r.needs[k]}`).join(', ');
       return `<div class="econ-recitem">${iconImg(x.r.key)}<span>${itemName(x.r.key)} <span class="muted">(${needsTxt})</span></span><button class="btn btn--sm" data-act="econ_craft" data-key="${x.r.key}" ${x.canNow ? '' : 'disabled'}>${x.canNow ? '제작' : '재료 부족'}</button></div>`;
     }).join('')}</div>` : '';
-    return `<h4>⚒️ 제작대 (메뉴에서 바로 제작 · 바닐라 조합 + 스카이블럭 레시피)</h4>
+    const sel = D().RECIPES.find(r => r.key === craftSel) || (recs[0] && recs[0].r) || D().RECIPES.find(r => recipeUnlocked(r));
+    return `<h4>⚒️ 제작대 (메뉴에서 바로 3×3 제작 · 바닐라 + 스카이블럭 레시피)</h4>
+      ${craftGridHTML(sel)}
       ${recHTML}
+      <h4 class="muted">전체 레시피</h4>
       <div class="econ-shopgrid">${D().RECIPES.map(r => {
         const unlocked = recipeUnlocked(r);
         const needsTxt = Object.keys(r.needs).map(k => `${itemName(k)} ×${r.needs[k]} (${P.inv[k] || 0})`).join(', ');
@@ -2007,6 +2083,7 @@
         return `<div class="econ-shopitem ${unlocked ? '' : 'is-locked'}">
           ${iconImg(r.key)}<span>${itemName(r.key)}</span>
           <span class="muted">${unlocked ? `재료: ${needsTxt}` : lockTxt}</span>
+          <button class="btn btn--sm btn--ghost" data-act="econ_craft_sel" data-key="${r.key}">3×3 보기</button>
           <button class="btn btn--sm" data-act="econ_craft" data-key="${r.key}" ${canCraft(r) ? '' : 'disabled'}>제작</button>
         </div>`;
       }).join('')}</div>`;
@@ -2280,6 +2357,9 @@
       case 'minion_fuel': useMinionFuel(el.dataset.key); break;
       case 'minion_collect_all': collectAllMinions(); break;
       case 'inv_filter': invFilter = el.dataset.key; renderZone(); break;
+      case 'invcell': invDetailKey = (invDetailKey === el.dataset.key ? null : el.dataset.key); renderZone(); break;
+      case 'assign_hotbar': assignHotbar(el.dataset.key); break;
+      case 'craft_sel': craftSel = el.dataset.key; renderZone(); break;
       case 'hpb': applyHpb(el.dataset.key); break;
       case 'salvage': salvageItem(el.dataset.key); break;
       case 'lock': toggleLock(el.dataset.key); break;
