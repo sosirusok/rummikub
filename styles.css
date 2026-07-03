@@ -1422,7 +1422,16 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
   background:linear-gradient(180deg,#160f24,#0d0a18); border:2px solid #6a3fb5; border-radius:8px; padding:9px 12px;
   color:#e8e2f8; font-size:12px; line-height:1.55; white-space:pre-line; min-width:180px; max-width:280px;
   box-shadow:0 8px 22px rgba(0,0,0,.6); pointer-events:none;}
-.econ3d-statsrow{position:absolute; left:50%; transform:translateX(-50%); bottom:84px; display:flex; gap:14px; z-index:5; font-size:12.5px; font-weight:800; text-shadow:0 1px 3px #000; background:rgba(0,0,0,.35); padding:3px 12px; border-radius:8px; pointer-events:none;}
+/* V15: 하이픽셀 액션바 스타일(핫바 위, 배경 없이 굵은 텍스트 + 검정 외곽선) */
+.econ3d-statsrow{position:absolute; left:50%; transform:translateX(-50%); bottom:86px; display:flex; gap:18px; z-index:5; font-size:15px; font-weight:900; letter-spacing:.2px; pointer-events:none; white-space:nowrap; font-family:'Segoe UI',system-ui,sans-serif;}
+.econ3d-statsrow .ab{text-shadow:1px 1px 0 #000,-1px 1px 0 #000,1px -1px 0 #000,-1px -1px 0 #000,0 2px 4px rgba(0,0,0,.6);}
+.econ3d-statsrow .ab b{font-weight:900; margin:0 1px;}
+.econ3d-statsrow .ab-hp{color:#ff5555;}
+.econ3d-statsrow .ab-def{color:#55ff55;}
+.econ3d-statsrow .ab-mana{color:#55ffff;}
+.econ3d-statsrow .ab-spd{color:#ffffff;}
+.econ3d-statsrow .ab-buff{color:#e0a6ff;}
+@media (max-width:640px){ .econ3d-statsrow{font-size:12px; gap:11px;} .econ3d-statsrow .ab-def, .econ3d-statsrow .ab-mana{font-size:0;} .econ3d-statsrow .ab-def b, .econ3d-statsrow .ab-mana b{font-size:12px;} }
 .econ3d-buildbar{flex-wrap:wrap; max-width:min(560px,86vw); justify-content:center;}
 
 /* V13-B: 위치기반 퀘스트 HUD(우측 중앙) */

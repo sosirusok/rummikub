@@ -1873,6 +1873,9 @@
     q_dock:   { shirt: 0x3f9fd0, pants: 0x2a4a6a, hat: 0x2a3a5a, beard: true },
     q_grave:  { shirt: 0x584a6a, pants: 0x2a2440, hat: 0x2a2440, hair: 0x9a9a9a },
     q_arena:  { shirt: 0xb8860b, pants: 0x6a5010, hat: 0x2a2a2a },
+    q_wizard: { shirt: 0x6a3aa8, pants: 0x452474, hat: 0x452474, hair: 0xdedede, beard: true },
+    q_ruins:  { shirt: 0x8a7b5a, pants: 0x5a4a30, hat: 0x6a5a3a, brim: true },
+    q_snow:   { shirt: 0x9fd4e8, pants: 0x4a7a9a, hat: 0xe8f4fa, beard: true, hair: 0xdedede },
   };
   function npcLook(key, fallbackColor) {
     const L = NPC_LOOK[key];
@@ -3090,11 +3093,13 @@
     if (row && api.hudStats) {
       const st = api.hudStats();
       const buffs = api.activeBuffs ? api.activeBuffs() : [];   // V10 ㉖: 물약 버프 잔여시간
-      row.innerHTML = `<span style="color:#ff5555">❤ ${php ? Math.max(0, Math.ceil(php.hp)) : st.hp}/${st.hp}</span>`
-        + `<span style="color:#55ff55">❈ 방어 ${st.def}</span>`
-        + `<span style="color:#55aaff">✎ 마나 ${st.mana}</span>`
-        + `<span style="color:#f2f2f2">✦ 속도 ${st.speed}</span>`
-        + buffs.map(bf => `<span style="color:#c084fc">🧪 ${bf.name} ${Math.floor(bf.left / 60)}:${String(bf.left % 60).padStart(2, '0')}</span>`).join('');
+      const curHp = php ? Math.max(0, Math.ceil(php.hp)) : st.hp;
+      // V15: 하이픽셀 액션바 정확 재현 — 숫자 뒤 기호, 체력 빨강/방어 초록/마나 하늘, 속도는 보조
+      row.innerHTML = `<span class="ab ab-hp">${curHp}/${st.hp}<b>❤</b></span>`
+        + `<span class="ab ab-def">${st.def}<b>❈</b> Defense</span>`
+        + `<span class="ab ab-mana">${st.mana}/${st.mana}<b>✎</b> Mana</span>`
+        + `<span class="ab ab-spd">✦ ${st.speed}</span>`
+        + buffs.map(bf => `<span class="ab ab-buff">🧪 ${bf.name} ${Math.floor(bf.left / 60)}:${String(bf.left % 60).padStart(2, '0')}</span>`).join('');
     }
   }
 
