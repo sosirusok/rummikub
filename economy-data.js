@@ -893,6 +893,18 @@
   // 핫 포테이토 북 규칙
   const HPB = { maxBooks: 10, fumingMax: 15, weaponDmgPerBook: 2, armorDefPerBook: 2, armorHpPerBook: 4 };
 
+  /* V15: 마인크래프트 16색 염료 팔레트 — 양털/콘크리트/테라코타 생성의 단일 출처 */
+  const DYES = [
+    { k: 'white', name: '하양', hex: '#e9ecec' }, { k: 'orange', name: '주황', hex: '#f07613' },
+    { k: 'magenta', name: '자홍', hex: '#bd44b3' }, { k: 'lightblue', name: '하늘', hex: '#3aafd9' },
+    { k: 'yellow', name: '노랑', hex: '#f8c527' }, { k: 'lime', name: '연두', hex: '#70b919' },
+    { k: 'pink', name: '분홍', hex: '#ed8dac' }, { k: 'gray', name: '회색', hex: '#3e4447' },
+    { k: 'lightgray', name: '연회색', hex: '#8e8e86' }, { k: 'cyan', name: '청록', hex: '#158991' },
+    { k: 'purple', name: '보라', hex: '#792aac' }, { k: 'blue', name: '파랑', hex: '#35399d' },
+    { k: 'brown', name: '갈색', hex: '#724728' }, { k: 'green', name: '초록', hex: '#546d1b' },
+    { k: 'red', name: '빨강', hex: '#a12722' }, { k: 'black', name: '검정', hex: '#1d1d21' },
+  ];
+
   /* V14: 건축가 빌더 상점 — 건축 블럭을 코인으로 대량(스택) 구매(설치는 서바이벌 소모) */
   const BUILDER_SHOP = [
     { key: 'cobblestone', name: '조약돌', amount: 16, price: 40 },
@@ -914,6 +926,16 @@
     { key: 'sand', name: '모래', amount: 16, price: 40 },
     { key: 'gravel', name: '자갈', amount: 16, price: 40 },
   ];
+  // V15: 16색 양털·콘크리트·테라코타를 빌더 상점에 자동 편성(색상 건축)
+  DYES.forEach(d => {
+    BUILDER_SHOP.push({ key: 'wool_' + d.k, name: d.name + ' 양털', amount: 16, price: 100 });
+    BUILDER_SHOP.push({ key: 'concrete_' + d.k, name: d.name + ' 콘크리트', amount: 16, price: 130 });
+    BUILDER_SHOP.push({ key: 'terracotta_' + d.k, name: d.name + ' 테라코타', amount: 16, price: 120 });
+  });
+  // V15: 장식 석재/목재
+  [['smooth_stone', '매끄러운 돌', 90], ['chiseled_stone_bricks', '조각된 석재벽돌', 150], ['mossy_cobblestone', '이끼 낀 조약돌', 90],
+   ['polished_andesite', '윤나는 안산암', 90], ['prismarine', '프리즈머린', 200], ['bookshelf', '책장', 260], ['hay_block', '건초 더미', 80]]
+    .forEach(([k, n, p]) => BUILDER_SHOP.push({ key: k, name: n, amount: 16, price: p }));
 
   /* ---------------- V13-B: 위치 기반 퀘스트 시스템 ----------------
      퀘스트를 주는 NPC는 특정 월드의 특정 좌표에 서 있다. 플레이어가 그 반경(region) 안에
@@ -1015,7 +1037,7 @@
     MINION_STORAGE_UPGRADE_COST, MINION_OFFLINE_CAP_HOURS, MINION_SLOT_MAX, MINION_SLOT_COST_BASE, MINION_SLOT_COST_MUL,
     MINION_FUEL, MINION_FUEL2, SLAYERS, DUNGEON, DUNGEON_ROOM_SCORE, ESSENCE_SHOP, SHOP, DAILY_SELL_LIMIT_PER_STACK,
     EQUIPMENT, STARFORCE, REFORGES, ITEM_ROLL,
-    TRAITS, EQUIP_SETS, FIELD_DIFF, ARENA, ACHIEVEMENTS, DAILY_QUESTS, SALVAGE, WEEKLY, HPB, QUESTS, QUEST_NPCS, BUILDER_SHOP,
+    TRAITS, EQUIP_SETS, FIELD_DIFF, ARENA, ACHIEVEMENTS, DAILY_QUESTS, SALVAGE, WEEKLY, HPB, QUESTS, QUEST_NPCS, BUILDER_SHOP, DYES,
     TALISMANS, MAGICAL_POWER, PETS, PET_XP_BASE, PET_XP_EXP, PET_MAX_LEVEL,
     ENCHANTS, CHAOS_ENCHANT, RECIPES, MASTER_MODE,
     FAIRY_SOULS, BANK, DAILY_DEALS, DUNGEON_CLASSES, ZONES, EASTER_EGGS,
