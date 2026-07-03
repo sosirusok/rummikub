@@ -196,15 +196,16 @@
 
   /* ---------------- 슬레이어 5종(실제 스카이블럭 라인업) ---------------- */
   // rareDropTable: 실제 아이템 키 배열(승리 시 인벤토리에 실제 지급). [자주(60%), 가끔(30%), 희귀(10%)]
-  // V10: 실제처럼 기하급수 난이도 — 티어당 HP ×6, 피해 ×2.6. mulScale(계열 배율)이 ×6.9씩 커져서
-  //       "다음 계열 T(n)"이 "이전 계열 T(n+1)"보다 딱 15% 더 어렵다(요청 규칙).
-  function mkSlayerTiers(baseHp, baseDmg, baseXp, baseCoin, mulScale, lootByTier) {
-    const costMul = [1, 4, 16, 60, 200], hpMul = [1, 6, 36, 216, 1296], dmgMul = [1, 2.6, 6.8, 17.6, 45.7], xpMul = [1, 5, 20, 100, 300], coinMul = [1, 8, 24, 80, 240];
+  // V17: 실제 하이픽셀 보스 HP — 리븐넌트(좀비) 500/20k/400k/1.5M/10M 확정 앵커 기준, 계열별 실측 스케일.
+  //   HP는 명시 테이블(hpTable), 피해는 계열배율(mulScale)^0.30로 완만화(실제 HP에서도 엔드게임 유효체력으로 생존 가능).
+  //   피해 감소·유효체력이 함께 실제 규모로 커지므로(V17-A/C) 만렙이 10M~수억 HP 보스를 실제처럼 잡을 수 있음.
+  function mkSlayerTiers(hpTable, baseDmg, baseXp, baseCoin, mulScale, lootByTier) {
+    const costMul = [1, 4, 16, 60, 200], dmgMul = [1, 2.6, 6.8, 17.6, 45.7], xpMul = [1, 5, 20, 100, 300], coinMul = [1, 8, 24, 80, 240];
     return lootByTier.map((loot, i) => ({
       tier: i + 1,
       turnInGold: Math.round(500 * costMul[i] * Math.pow(mulScale, 0.5)),
-      hp: Math.round(baseHp * hpMul[i] * mulScale),
-      dmg: Math.round(baseDmg * dmgMul[i] * Math.pow(mulScale, 0.45)),
+      hp: hpTable[i],
+      dmg: Math.round(baseDmg * dmgMul[i] * Math.pow(mulScale, 0.30)),
       xpReward: Math.round(baseXp * xpMul[i]),
       coinReward: Math.round(baseCoin * coinMul[i] * Math.pow(mulScale, 0.6)),
       rareDropTable: loot,
@@ -215,35 +216,35 @@
   const SLAYER_XP_LEVELS = [5, 15, 200, 1000, 5000, 20000, 100000, 400000, 1000000];
   const SLAYER_QUEST = { killsNeeded: [5, 10, 15, 20, 25], xpPerTier: [5, 25, 100, 500, 1500] };   // 티어별 처치 수/보스 XP
   const SLAYERS = [
-    { key: 'zombie_slayer', uniqueDrop: 'revenant_falchion', name: '좀비 슬레이어', flavor: '리븐넌트 호러', dropResource: 'rotten_flesh', tiers: mkSlayerTiers(800, 25, 5, 300, 1, [
+    { key: 'zombie_slayer', uniqueDrop: 'revenant_falchion', name: '좀비 슬레이어', flavor: '리븐넌트 호러', dropResource: 'rotten_flesh', tiers: mkSlayerTiers([500, 20000, 400000, 1500000, 10000000], 25, 5, 300, 1, [
       ['rotten_flesh', 'reforge_stone_common', 'talisman_zombie'],
       ['rotten_flesh', 'enchant_book_sharpness', 'talisman_campfire'],
       ['rotten_flesh', 'weapon_epic', 'enchant_book_growth'],
       ['rotten_flesh', 'talisman_dragon_claw', 'pet_egg_enderman'],
       ['rotten_flesh', 'reforge_stone_rare', 'hot_potato_book'],
     ]) },
-    { key: 'spider_slayer', uniqueDrop: 'scorpion_foil', name: '거미 슬레이어', flavor: '타란튤라 브루드파더', dropResource: 'string', tiers: mkSlayerTiers(800, 25, 5, 300, 6.9, [
+    { key: 'spider_slayer', uniqueDrop: 'scorpion_foil', name: '거미 슬레이어', flavor: '타란튤라 브루드파더', dropResource: 'string', tiers: mkSlayerTiers([1000, 40000, 900000, 3200000, 12000000], 25, 5, 300, 6.9, [
       ['string', 'reforge_stone_common', 'talisman_spider_ring'],
       ['string', 'enchant_book_critical', 'talisman_wolf_claw'],
       ['string', 'armor_epic', 'enchant_book_protection'],
       ['string', 'talisman_lava_charm', 'pet_egg_wolf'],
       ['string', 'reforge_stone_rare', 'hot_potato_book'],
     ]) },
-    { key: 'wolf_slayer', uniqueDrop: 'pooch_sword', name: '늑대 슬레이어', flavor: '스벤 팩마스터', dropResource: 'bone', tiers: mkSlayerTiers(800, 25, 6, 400, 47.6, [
+    { key: 'wolf_slayer', uniqueDrop: 'pooch_sword', name: '늑대 슬레이어', flavor: '스벤 팩마스터', dropResource: 'bone', tiers: mkSlayerTiers([2500, 60000, 1200000, 5000000, 20000000], 25, 6, 400, 47.6, [
       ['bone', 'reforge_stone_rare', 'talisman_wolf_claw'],
       ['bone', 'enchant_book_first_strike', 'talisman_fisher_anklet'],
       ['bone', 'weapon_legendary', 'enchant_book_growth'],
       ['bone', 'talisman_dragon_heart', 'pet_egg_wolf'],
       ['bone', 'reforge_stone_rare', 'fuming_potato_book'],
     ]) },
-    { key: 'enderman_slayer', uniqueDrop: 'voidedge_katana', name: '엔더맨 슬레이어', flavor: '보이드글룸 세라프', dropResource: 'ender_pearl', tiers: mkSlayerTiers(800, 25, 8, 600, 328, [
+    { key: 'enderman_slayer', uniqueDrop: 'voidedge_katana', name: '엔더맨 슬레이어', flavor: '보이드글룸 세라프', dropResource: 'ender_pearl', tiers: mkSlayerTiers([8000, 300000, 6000000, 30000000, 80000000], 25, 8, 600, 328, [
       ['ender_pearl', 'reforge_stone_rare', 'talisman_deep_pearl'],
       ['ender_pearl', 'aspect_of_the_end', 'talisman_hourglass'],
       ['ender_pearl', 'armor_mythic', 'enchant_book_protection'],
       ['ender_pearl', 'aspect_of_the_dragons', 'pet_egg_enderman'],
       ['ender_pearl', 'reforge_stone_rare', 'fuming_potato_book'],
     ]) },
-    { key: 'blaze_slayer', uniqueDrop: 'fire_fury_staff', name: '블레이즈 슬레이어', flavor: '인페르노 데몬로드', dropResource: 'blaze_rod', tiers: mkSlayerTiers(800, 25, 10, 900, 2266, [
+    { key: 'blaze_slayer', uniqueDrop: 'fire_fury_staff', name: '블레이즈 슬레이어', flavor: '인페르노 데몬로드', dropResource: 'blaze_rod', tiers: mkSlayerTiers([40000, 1500000, 20000000, 80000000, 200000000], 25, 10, 900, 2266, [
       ['blaze_rod', 'reforge_stone_rare', 'talisman_lava_charm'],
       ['blaze_rod', 'enchant_book_looting', 'talisman_wealth_rune'],
       ['blaze_rod', 'midas_sword', 'enchant_book_sharpness'],
