@@ -1354,6 +1354,7 @@
       case 'craft': return statValue('itemsCrafted');
       case 'place': return statValue('blocksPlaced');
       case 'gold': return statValue('goldEarned');
+      case 'souls': return statValue('fairySouls');
       case 'talk': return 0;   // 대화형: 수락 즉시 목표 도달로 취급
       default: return 0;
     }
