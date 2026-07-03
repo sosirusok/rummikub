@@ -3289,12 +3289,13 @@
     bindInput(); running = true; lastT = 0; contextLost = false;
     rebuildMinionVisuals(true);
     updateHud();
-    // 진짜 처음 시작(세이브 없음): 실제 스카이블럭처럼 프라이빗 섬에서 시작
+    // V12: 실제 하이픽셀 스카이블럭처럼 — 접속/재접속 시 항상 프라이빗 섬에서 스폰(허브 아님)
+    //       (기존엔 신규 유저만 섬으로 보내고 복귀 유저는 허브에 남아 "튕기면 허브" 버그가 있었음)
     const api0 = econApi();
+    travelTo('home');
     if (api0.isFresh && api0.isFresh()) {
-      travelTo('home');
       if (typeof toast === 'function') setTimeout(() => toast('🌱 스카이블럭에 온 걸 환영해요! 나무를 캐서 도구를 만들고, 포탈로 허브에 가보세요', true), 600);
-    }
+    } else if (typeof toast === 'function') setTimeout(() => toast('🏝️ 프라이빗 섬으로 돌아왔어요 — 포탈로 허브에 갈 수 있어요', true), 600);
     raf = requestAnimationFrame(loop);
   }
   function stop() {
