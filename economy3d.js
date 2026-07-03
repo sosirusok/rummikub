@@ -1804,7 +1804,9 @@
     list.sort((a, b) => a[2] - b[2]);
     let i = 0;
     for (; i < list.length && list[i][2] <= 3.2; i++) buildChunk(list[i][0], list[i][1]);
-    buildQueue = list.slice(i);
+    // V18 튕김 수정: 초기엔 뷰 거리 안 청크만 큐잉(전 월드 196청크 메싱 → VRAM 폭발 방지). 나머지는 접근 시 tickChunkCulling이 로드
+    const viewCh = VIEW_DIST / CHUNK + 1.5;
+    buildQueue = list.slice(i).filter(c => c[2] <= viewCh);
     _queuedChunks.clear();
     for (const c of buildQueue) _queuedChunks.add(c[0] + ',' + c[1]);
   }
@@ -1816,8 +1818,8 @@
   // V12 크래시 수정: 거리 컬링을 "숨김(.visible=false)"이 아니라 "실제 메시 해제(VRAM 반환)"로 승격.
   //   원거리 청크 지오메트리를 dispose해 GPU 메모리를 비우고, 재접근하면 다시 빌드한다.
   //   지형은 world Uint8Array에 그대로 남아 재구성 안전 — 448² 허브 VRAM 소진→컨텍스트 손실→"튕김" 방지.
-  const VIEW_DIST = 120;           // 이 반경 안의 미빌드 청크는 큐잉해 복원
-  const CULL_DIST = 176;           // 이 밖의 청크 메시는 해제(히스테리시스로 스래싱 방지)
+  const VIEW_DIST = 96;           // 이 반경 안의 미빌드 청크는 큐잉해 복원
+  const CULL_DIST = 140;           // 이 밖의 청크 메시는 해제(히스테리시스로 스래싱 방지)
   let _cullT = 0;
   function chunkDistToPlayer(cx, cz) {
     const wx = cx * CHUNK + CHUNK / 2, wz = cz * CHUNK + CHUNK / 2;
@@ -1914,41 +1916,51 @@
     const c = (x == null ? 0x3a6ee0 : x);
     return { skin: 0xe0ac7e, hair: 0x3b2a1a, shirt: c, pants: shade(c, 0.6) };   // 레거시 단일색 → 셔츠색
   }
-  function buildHumanoid(colOrLook) {
+  // V18: 여러 박스를 하나의 지오메트리로 병합(정점색) → 정적 NPC/미니언 1 드로우콜(원래 17)
+  let _humMat = null;
+  function humanoidMat() { if (!_humMat) _humMat = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }); return _humMat; }
+  const _CUBE_FACES = [[0, 1, 2, 3], [5, 4, 7, 6], [4, 0, 3, 7], [1, 5, 6, 2], [3, 2, 6, 7], [4, 5, 1, 0]];
+  function mergeBoxes(specs) {
+    const pos = [], col = [], idx = []; let vi = 0;
+    for (const s of specs) {
+      const hx = s.w / 2, hy = s.h / 2, hz = s.d / 2;
+      const r = ((s.col >> 16) & 255) / 255, gg = ((s.col >> 8) & 255) / 255, bl = (s.col & 255) / 255;
+      const C = [[-hx, -hy, -hz], [hx, -hy, -hz], [hx, hy, -hz], [-hx, hy, -hz], [-hx, -hy, hz], [hx, -hy, hz], [hx, hy, hz], [-hx, hy, hz]];
+      for (const c of C) { pos.push(s.x + c[0], s.y + c[1], s.z + c[2]); col.push(r, gg, bl); }
+      for (const f of _CUBE_FACES) idx.push(vi + f[0], vi + f[1], vi + f[2], vi + f[0], vi + f[2], vi + f[3]);
+      vi += 8;
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    g.setIndex(idx);
+    return new THREE.Mesh(g, humanoidMat());
+  }
+  function buildHumanoid(colOrLook, opts) {
+    const merged = !!(opts && opts.merged);
     const L = toLook(colOrLook);
     const g = new THREE.Group();
     const legH = 0.72, bodyH = 0.7, headS = 0.5, limbW = 0.22;
     const pantsD = shade(L.pants, 0.82), shirtD = shade(L.shirt, 0.9);
-    // 신발
-    g.add(mkBox(limbW + 0.03, 0.12, 0.28, L.shoes != null ? L.shoes : 0x2a2018, -0.12, 0.06, 0.02));
-    g.add(mkBox(limbW + 0.03, 0.12, 0.28, L.shoes != null ? L.shoes : 0x2a2018, 0.12, 0.06, 0.02));
-    // 다리(바지) — 좌우 색차로 입체감
-    const legL = mkBox(limbW, legH, 0.24, L.pants, -0.12, legH / 2, 0);
-    const legR = mkBox(limbW, legH, 0.24, pantsD, 0.12, legH / 2, 0);
-    g.add(legL); g.add(legR);
-    // 몸통(셔츠) + 벨트
-    g.add(mkBox(0.5, bodyH, 0.26, L.shirt, 0, legH + bodyH / 2, 0));
-    g.add(mkBox(0.53, 0.09, 0.29, shade(L.pants, 0.7), 0, legH + 0.04, 0));
-    if (L.apron != null) g.add(mkBox(0.42, bodyH * 0.78, 0.02, L.apron, 0, legH + bodyH * 0.46, 0.14));   // 앞치마/조끼(직업 표식)
-    // 팔(셔츠 소매 + 손 스킨)
-    [-1, 1].forEach(s => {
-      const ax = s * (0.25 + limbW / 2);
-      g.add(mkBox(limbW, bodyH * 0.66, limbW, shirtD, ax, legH + bodyH * 0.82, 0));
-      g.add(mkBox(limbW, bodyH * 0.3, limbW, L.skin, ax, legH + bodyH * 0.38, 0));
-    });
-    // 머리(스킨) + 얼굴(눈) + 머리카락/모자
+    const specs = []; const add = (w, h, d, col, x, y, z) => specs.push({ w, h, d, col, x, y, z });
+    add(limbW + 0.03, 0.12, 0.28, L.shoes != null ? L.shoes : 0x2a2018, -0.12, 0.06, 0.02);
+    add(limbW + 0.03, 0.12, 0.28, L.shoes != null ? L.shoes : 0x2a2018, 0.12, 0.06, 0.02);
+    const legLi = specs.length; add(limbW, legH, 0.24, L.pants, -0.12, legH / 2, 0);
+    const legRi = specs.length; add(limbW, legH, 0.24, pantsD, 0.12, legH / 2, 0);
+    add(0.5, bodyH, 0.26, L.shirt, 0, legH + bodyH / 2, 0);
+    add(0.53, 0.09, 0.29, shade(L.pants, 0.7), 0, legH + 0.04, 0);
+    if (L.apron != null) add(0.42, bodyH * 0.78, 0.02, L.apron, 0, legH + bodyH * 0.46, 0.14);
+    [-1, 1].forEach(s => { const ax = s * (0.25 + limbW / 2); add(limbW, bodyH * 0.66, limbW, shirtD, ax, legH + bodyH * 0.82, 0); add(limbW, bodyH * 0.3, limbW, L.skin, ax, legH + bodyH * 0.38, 0); });
     const hy = legH + bodyH + headS / 2;
-    g.add(mkBox(headS, headS, headS, L.skin, 0, hy, 0));
-    g.add(mkBox(0.09, 0.09, 0.02, 0x241d18, -0.1, hy + 0.02, headS / 2 + 0.005));
-    g.add(mkBox(0.09, 0.09, 0.02, 0x241d18, 0.1, hy + 0.02, headS / 2 + 0.005));
-    if (L.beard) g.add(mkBox(headS * 0.8, 0.14, 0.03, L.hair, 0, hy - 0.2, headS / 2));
-    if (L.hat != null) {
-      g.add(mkBox(headS + 0.06, 0.16, headS + 0.06, L.hat, 0, hy + headS / 2 + 0.02, 0));
-      if (L.brim) g.add(mkBox(headS + 0.3, 0.05, headS + 0.3, L.hat, 0, hy + headS / 2 - 0.02, 0));   // 챙(밀짚/어부)
-    } else {
-      g.add(mkBox(headS + 0.04, 0.18, headS + 0.04, L.hair, 0, hy + headS / 2 - 0.03, 0));
-      g.add(mkBox(headS + 0.04, headS * 0.66, 0.05, L.hair, 0, hy - 0.03, -headS / 2 - 0.01));
-    }
+    add(headS, headS, headS, L.skin, 0, hy, 0);
+    add(0.09, 0.09, 0.02, 0x241d18, -0.1, hy + 0.02, headS / 2 + 0.005);
+    add(0.09, 0.09, 0.02, 0x241d18, 0.1, hy + 0.02, headS / 2 + 0.005);
+    if (L.beard) add(headS * 0.8, 0.14, 0.03, L.hair, 0, hy - 0.2, headS / 2);
+    if (L.hat != null) { add(headS + 0.06, 0.16, headS + 0.06, L.hat, 0, hy + headS / 2 + 0.02, 0); if (L.brim) add(headS + 0.3, 0.05, headS + 0.3, L.hat, 0, hy + headS / 2 - 0.02, 0); }
+    else { add(headS + 0.04, 0.18, headS + 0.04, L.hair, 0, hy + headS / 2 - 0.03, 0); add(headS + 0.04, headS * 0.66, 0.05, L.hair, 0, hy - 0.03, -headS / 2 - 0.01); }
+    if (merged) { g.add(mergeBoxes(specs)); return { group: g, legL: null, legR: null }; }
+    let legL = null, legR = null;
+    specs.forEach((s, i) => { const m = mkBox(s.w, s.h, s.d, s.col, s.x, s.y, s.z); g.add(m); if (i === legLi) legL = m; else if (i === legRi) legR = m; });
     return { group: g, legL, legR };
   }
   function buildQuadruped(baseCol, size) {
@@ -2066,7 +2078,7 @@
     // 서비스 NPC(상점/은행/…) — 현재 월드 소속만
     NPCS.forEach(n => {
       if ((n.world || 'hub') !== worldMode) return;
-      const h = buildHumanoid(npcLook(n.key, n.color));
+      const h = buildHumanoid(npcLook(n.key, n.color), { merged: true });
       n._y = surfaceTop(n.x, n.z);
       h.group.position.set(n.x + 0.5, n._y, n.z + 0.5);
       h.group.rotation.y = hash3(n.x, 5, n.z) * Math.PI * 2;
@@ -2076,7 +2088,7 @@
     // V13-B: 위치기반 퀘스트 NPC(느낌표 표식) — 현재 월드 소속만
     questNpcList().forEach(n => {
       if ((n.world || 'hub') !== worldMode) return;
-      const h = buildHumanoid(npcLook(n.key, n.color));
+      const h = buildHumanoid(npcLook(n.key, n.color), { merged: true });
       n._y = surfaceTop(n.x, n.z);
       h.group.position.set(n.x + 0.5, n._y, n.z + 0.5);
       h.group.rotation.y = hash3(n.x, 9, n.z) * Math.PI * 2;
@@ -2180,7 +2192,7 @@
   /* ---------------- 미니언 3D 표시(허브: 자원 존 배치 / 내 섬: 받침대 전체 정렬) ---------------- */
   function placeMinionMesh(P0, D0, entry, slot) {
     const y = surfaceTop(slot[0], slot[1]);
-    const h = buildHumanoid(MINION_COLORS[entry.def.resource] || 0x999999);
+    const h = buildHumanoid(MINION_COLORS[entry.def.resource] || 0x999999, { merged: true });
     h.group.position.set(slot[0] + 0.5, y, slot[1] + 0.5);
     const cap = entry.m.storageUpgraded ? D0.MINION_STORAGE_UPGRADED : D0.MINION_STORAGE_BASE;
     const label = makeMinionLabel(entry.def.name, entry.m.tier, entry.m.storage, cap);
@@ -3800,7 +3812,7 @@
     if (typeof setScreen === 'function') setScreen('econ');
     if (typeof app === 'function') app().innerHTML = screenHTML();
     canvas = document.getElementById('econ3dCanvas');
-    try { renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: true, powerPreference: 'low-power' }); }
+    try { renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: true, powerPreference: 'high-performance' }); }
     catch (e) { if (typeof app === 'function') app().innerHTML = fallbackErr('이 기기/브라우저가 3D(WebGL)를 지원하지 않아요.'); return; }
     renderer.setPixelRatio(1); renderer.setClearColor(0x000000, 0);
     canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); contextLost = true; }, false);
@@ -3816,7 +3828,7 @@
         if (typeof toast === 'function') toast('그래픽을 복구했어요', true);
       } catch (err) { console.error('econ3d ctx restore', err); }
     }, false);
-    scene = new THREE.Scene(); scene.background = null; scene.fog = new THREE.Fog(0xbfe0f5, 60, 150);
+    scene = new THREE.Scene(); scene.background = null; scene.fog = new THREE.Fog(0xbfe0f5, 48, 108);
     camera = new THREE.PerspectiveCamera(72, 1, 0.1, 500);
     buildAtlas();
     buildClouds();
