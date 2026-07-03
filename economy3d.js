@@ -1890,8 +1890,18 @@
   function blockAtFeet() { return getBlockLocal(Math.floor(P.x), Math.floor(P.y + 0.2), Math.floor(P.z)); }
   function feetInWater() { return blockAtFeet() === ID.water; }
   function feetInLava() { return blockAtFeet() === ID.lava; }
+  // V12 Sneak: 슬금 중 지상에서 발밑 지면이 사라지는 이동이면 그 축을 취소(가장자리 낙하 방지, MC식)
+  function wouldFallOffEdge() {
+    const fy = Math.floor(P.y - 0.05);   // 발밑 한 칸
+    for (let x = Math.floor(P.x - P.w / 2); x <= Math.floor(P.x + P.w / 2); x++)
+      for (let z = Math.floor(P.z - P.w / 2); z <= Math.floor(P.z + P.w / 2); z++)
+        if (solidAt(x, fy, z)) return false;   // 발밑 어딘가 지면 있으면 안전
+    return true;
+  }
   function moveAxis(ax, amt) {
-    if (amt === 0) return; P[ax] += amt;
+    if (amt === 0) return;
+    const before = P[ax];
+    P[ax] += amt;
     const minX = P.x - P.w / 2, maxX = P.x + P.w / 2, minZ = P.z - P.w / 2, maxZ = P.z + P.w / 2, minY = P.y, maxY = P.y + P.h;
     for (let x = Math.floor(minX); x <= Math.floor(maxX); x++) for (let z = Math.floor(minZ); z <= Math.floor(maxZ); z++) for (let y = Math.floor(minY); y <= Math.floor(maxY); y++) {
       if (!solidAt(x, y, z)) continue;
@@ -1899,6 +1909,7 @@
       if (ax === 'x') { if (amt > 0) P.x = x - P.w / 2 - 0.0001; else P.x = x + 1 + P.w / 2 + 0.0001; P.vx = 0; return; }
       if (ax === 'z') { if (amt > 0) P.z = z - P.w / 2 - 0.0001; else P.z = z + 1 + P.w / 2 + 0.0001; P.vz = 0; return; }
     }
+    if ((ax === 'x' || ax === 'z') && P._sneaking && P.onGround && wouldFallOffEdge()) { P[ax] = before; P['v' + ax] = 0; }
   }
   function respawnAtHub(msg) {
     if (worldMode === 'home' || worldMode === 'visit') { P.x = 96.5; P.z = 100.5; P.y = surfaceTop(96, 100) + 0.02; }
@@ -1914,8 +1925,9 @@
     const inWater = feetInWater();
     if (mf <= 0) P._sprintLatch = false;                    // 전진을 멈추면 스프린트 해제
     const sprint = (P._sprintLatch || keys.ControlLeft || keys.ControlRight) && mf > 0 && !inWater;
+    P._sneaking = !!(keys.ShiftLeft || keys.ShiftRight) && P.onGround && !inWater;   // V12 Sneak 상태
     const sin = Math.sin(P.yaw), cos = Math.cos(P.yaw);
-    let speed = keys.ShiftLeft ? 2.6 : (sprint ? 5.8 : 4.3);
+    let speed = P._sneaking ? 1.3 : (sprint ? 5.8 : 4.3);   // V12: 슬금 = 걷기 30%(위키)
     if (inWater) speed *= 0.55;
     // 슈가 러시 인챈트 이동속도 보너스
     if (window.econApi && window.econApi.moveSpeedPct) speed *= 1 + window.econApi.moveSpeedPct() / 100;
