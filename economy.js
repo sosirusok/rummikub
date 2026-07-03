@@ -470,7 +470,7 @@
       + (reforgeOf('weapon').dmgPct || 0) / 100 + (reforgeOf('bow').dmgPct || 0) * 0.3 / 100
       + starAtkPct() / 100 + setStat('dmgPct') / 100;
     const w = equippedWeapon();
-    const abilityMul = (w && w.caster) ? (1 + st.intelligence / 1500) : 1;   // 캐스터(히페리온식): 지력 스케일 어빌리티 피해
+    const abilityMul = (w && w.caster) ? (1 + st.intelligence / 800) : 1;   // 캐스터(히페리온식): 지력 스케일 어빌리티 피해
     const mul = (1 + st.strength / 100) * additive * (1 + st.ferocity / 100) * abilityMul * mpStatMul();
     return flat * mul;
   }
@@ -1635,7 +1635,7 @@
     if (cost == null) { toastFn('장착 중인 장비가 없어요', false); return; }
     if (P.gold < cost) { toastFn('골드가 부족해요', false); return; }
     addGold(-cost);
-    const pool = D().REFORGES[reforgePoolType(slot)];
+    const pool = D().REFORGES[reforgePoolType(slot)].filter(r => !r.stone);   // V17: 스톤 전용 리포지는 무작위 풀 제외
     const pick = pool[Math.floor(Math.random() * pool.length)];
     P.reforgeSlots[slot] = Object.assign({}, pick);
     toastFn(`리포지 결과: [${pick.name}] ${SLOT_NAMES[slot] || slot}!`, true);
