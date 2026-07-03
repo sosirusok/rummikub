@@ -712,7 +712,7 @@
     P.vx = P.vy = P.vz = 0;
     buildIslandMesh((mode === 'home' || mode === 'visit') ? HOME_BOUNDS : null);   // 플레이어 주변 청크부터 즉시 빌드
     if (mode === 'hub') { buildNpcMeshes(); buildNodeMeshes(); buildAmbientMobs(); }
-    else { propGroup = new THREE.Group(); scene.add(propGroup); }
+    else { propGroup = new THREE.Group(); scene.add(propGroup); if (mode === 'home') buildNpcMeshes(); }   // V13-B: 홈에도 퀘스트 NPC(제리/팻)
     buildFairyMeshes(); refreshFairyVisibility();   // V9: 소울은 모든 월드에
     buildStaticInteractables();
     rebuildMinionVisuals(true);
@@ -1759,9 +1759,12 @@
   function disposeGroup(g) { if (!g) return; g.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material && o.material.map && o.material.map.dispose) o.material.map.dispose(); }); }
 
   /* ---------------- NPC/노드/페어리/구름/앰비언트 몹 배치 ---------------- */
+  function questNpcList() { return ((window.ECON_DATA || {}).QUEST_NPCS) || []; }
   function buildNpcMeshes() {
     npcGroup = new THREE.Group(); scene.add(npcGroup);
+    // 서비스 NPC(상점/은행/…) — 현재 월드 소속만
     NPCS.forEach(n => {
+      if ((n.world || 'hub') !== worldMode) return;
       const h = buildHumanoid(n.color);
       n._y = surfaceTop(n.x, n.z);
       h.group.position.set(n.x + 0.5, n._y, n.z + 0.5);
@@ -1769,6 +1772,31 @@
       const label = makeLabel(n.name); label.position.set(0, 2.2, 0); h.group.add(label);
       npcGroup.add(h.group);
     });
+    // V13-B: 위치기반 퀘스트 NPC(느낌표 표식) — 현재 월드 소속만
+    questNpcList().forEach(n => {
+      if ((n.world || 'hub') !== worldMode) return;
+      const h = buildHumanoid(n.color);
+      n._y = surfaceTop(n.x, n.z);
+      h.group.position.set(n.x + 0.5, n._y, n.z + 0.5);
+      h.group.rotation.y = hash3(n.x, 9, n.z) * Math.PI * 2;
+      const label = makeLabel('❗ ' + n.name); label.position.set(0, 2.35, 0); h.group.add(label);
+      // 머리 위 노란 느낌표 발광 마커
+      const mark = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.5, 0.16), new THREE.MeshBasicMaterial({ color: 0xffe14a }));
+      mark.position.set(0, 2.85, 0); mark.userData.qbob = 1; h.group.add(mark);
+      npcGroup.add(h.group);
+    });
+    if (worldMode === 'home') buildHomeStarterChest();
+  }
+  // 포탈섬 스타터 상자(프롭) — 시작 안내 겸 장식
+  function buildHomeStarterChest() {
+    const cx = HOME_PISLE.x - 3, cz = HOME_PISLE.z + 1, cy = surfaceTop(cx, cz);
+    const g = new THREE.Group();
+    g.add(mkBox(0.86, 0.56, 0.86, 0x8a5a2b, 0, 0.3, 0));       // 상자 몸통(나무색)
+    g.add(mkBox(0.9, 0.12, 0.9, 0x5c3c1c, 0, 0.62, 0));         // 뚜껑 테두리
+    g.add(mkBox(0.14, 0.14, 0.06, 0xffd257, 0, 0.36, 0.44));    // 자물쇠(금색)
+    g.position.set(cx + 0.5, cy, cz + 0.5);
+    const label = makeLabel('📦 스타터 상자'); label.position.set(cx + 0.5, cy + 1.3, cz + 0.5);
+    npcGroup.add(g); npcGroup.add(label);
   }
   function buildNodeMeshes() {
     nodeGroup = new THREE.Group(); scene.add(nodeGroup);
@@ -2957,6 +2985,12 @@
       NPCS.forEach(n => interactables.push({ type: 'npc', ref: n, x: n.x + 0.5, y: n._y + 1.0, z: n.z + 0.5 }));
       NODES.forEach(n => interactables.push({ type: 'node', ref: n, x: n.x + 0.5, y: n._y + 0.6, z: n.z + 0.5 }));
     }
+    // V13-B: 위치기반 퀘스트 NPC(현재 월드) — E/클릭 대화로 퀘스트 수락
+    questNpcList().forEach(n => {
+      if ((n.world || 'hub') !== worldMode) return;
+      const qy = (n._y != null ? n._y : surfaceTop(n.x, n.z));
+      interactables.push({ type: 'questnpc', ref: n, x: n.x + 0.5, y: qy + 1.0, z: n.z + 0.5 });
+    });
     const portal = PORTALS[worldMode];
     if (portal) {
       const py = surfaceTop(portal.x, portal.z);
@@ -3089,6 +3123,7 @@
   function doInteract(t) {
     if (!t) return;
     if (t.type === 'npc') openPanelForZone(t.ref.zone, t.ref.tab);
+    else if (t.type === 'questnpc') { const api = econApi(); if (api.talkQuest) api.talkQuest(t.ref.key); }
     else if (t.type === 'minion' || t.type === 'emptySlot') openPanelForZone('hub', 'minions');
     else if (t.type === 'fairy') { econApi().collectFairySoul(t.ref.id); refreshFairyVisibility(); }
     else if (t.type === 'player') openPanelForZone('hub', 'multi');
@@ -3253,6 +3288,36 @@
     const pg = document.getElementById('econ3dPanelGold'); if (pg) pg.textContent = '💰 ' + P0.gold.toLocaleString('ko-KR') + 'G · 🏦 ' + (P0.bank || 0).toLocaleString('ko-KR') + 'G';
     const fs = document.getElementById('econ3dSouls'); if (fs) fs.textContent = '✨ ' + (P0.fairySouls ? P0.fairySouls.length : 0) + '/12';
   }
+  // V13-B: 우측 중앙 위치기반 퀘스트 HUD(진행 중 퀘스트 + 근처 NPC 수락 제안)
+  let _lastQuestOffer = '';
+  function updateQuestHud() {
+    const hud = document.getElementById('econ3dQuestHud'); if (!hud) return;
+    const api = econApi();
+    if (!api.questHud || worldMode === 'dungeon') { hud.style.display = 'none'; return; }
+    const data = api.questHud(worldMode, P.x, P.z);
+    if (!data) { hud.style.display = 'none'; return; }
+    let html = '';
+    if (data.active && data.active.length) {
+      html += '<div class="econ3d-qh-head">📜 진행 중인 퀘스트</div>';
+      data.active.slice(0, 4).forEach(a => {
+        const pct = Math.max(0, Math.min(100, Math.round(a.cur / a.goal * 100)));
+        html += `<div class="econ3d-qh-item"><div class="econ3d-qh-name">${a.name}</div>`
+          + `<div class="econ3d-qh-obj">${a.label} <b>${a.cur}/${a.goal}</b></div>`
+          + `<div class="econ3d-qh-bar"><i style="width:${pct}%"></i></div></div>`;
+      });
+    }
+    if (data.offer) {
+      html += `<div class="econ3d-qh-offer"><div class="econ3d-qh-name">❗ ${data.offer.npcName}</div>`
+        + `<div class="econ3d-qh-story">${data.offer.story}</div>`
+        + `<div class="econ3d-qh-accept">💬 다가가 <b>E</b> (또는 클릭)로 [${data.offer.name}] 수락</div></div>`;
+    }
+    if (!data.offer && !(data.active && data.active.length) && data.guide) {
+      html += `<div class="econ3d-qh-offer"><div class="econ3d-qh-name">❗ 새 퀘스트</div>`
+        + `<div class="econ3d-qh-accept"><b>${data.guide.npcName}</b>(${data.guide.dist}m)에게 가서 대화하세요</div></div>`;
+    }
+    if (!html) { hud.style.display = 'none'; return; }
+    hud.innerHTML = html; hud.style.display = 'block';
+  }
   // 건축 팔레트 바(내 섬에서만 표시) + 선택 상태 갱신
   function ownedPlaceableList() {
     const api = econApi(); const P0 = api.getP ? api.getP() : null; if (!P0 || !P0.inv) return [];
@@ -3317,6 +3382,8 @@
       <div class="econ3d-statsrow" id="econ3dStats"></div>
       <div class="econ3d-hotbar" id="econ3dHotbar">${Array.from({ length: 9 }, (_, i) => `<button class="econ3d-slot" data-act="econ3d_hotbar" data-i="${i}" id="econ3dSlot${i}">${i === 8 ? '<span class="econ3d-star">✦</span>' : ''}</button>`).join('')}</div>
       <div class="econ3d-buildbar" id="econ3dBuildBar" style="display:none"></div>
+      <div class="econ3d-questhud" id="econ3dQuestHud" style="display:none"></div>
+      <div class="econ3d-questbanner" id="econ3dQuestBanner" style="display:none"></div>
       ${isTouch ? '<div class="econ3d-jump" data-act="econ3d_jump">⤒</div>' : '<div class="econ3d-controlhint">WASD 이동 · W 더블탭 달리기 · 좌클릭 공격/꾹 눌러 채집 · 우클릭 낚시(물) · E/클릭 NPC · 더블점프 · M 지도</div>'}
       <div class="econ3d-panelwrap" id="econ3dPanelWrap" style="display:none">
         <div class="econ3d-panelbar"><span id="econ3dPanelGold"></span><button class="btn btn--ghost btn--sm" data-act="econ3d_panel_close">✕ 닫기</button></div>
@@ -3367,10 +3434,12 @@
       if (cloudGroup) cloudGroup.children.forEach(g => { g.position.x += g.userData.speed * dt; if (g.position.x > W + 10) g.position.x = -10; });
       _hudT += dt;
       if (_hudT > 0.4) {
-        _hudT = 0; updateHud(); updateHotbar(); rebuildMinionVisuals(false);
+        _hudT = 0; updateHud(); updateHotbar(); rebuildMinionVisuals(false); updateQuestHud();
         if (_mapDirty) { _mapDirty = false; buildMinimapBase(); }
         drawMinimap();
       }
+      // 퀘스트 NPC 느낌표 마커 바운스
+      if (npcGroup) npcGroup.children.forEach(ch => { ch.children && ch.children.forEach(c => { if (c.userData && c.userData.qbob) c.position.y = 2.85 + Math.sin(_fairyBobT * 3) * 0.12; }); });
       renderer.render(scene, camera);
     } catch (e) { console.error('econ3d loop', e); }
   }
@@ -3519,6 +3588,7 @@
       travelTo, worldMode: () => worldMode, genHome, PORTALS, HOME_MINION_SLOTS, HOME_BOUNDS, HOME_CENTER,
       chunkMeshCount: () => Object.keys(chunkMeshes).length,   // V12 크래시 검증용
       buildQueueLen: () => buildQueue.length,
+      updateQuestHud, questNpcList,   // V13-B 퀘스트 HUD 검증용
       raycastBlock, homeBreakBlock, homePlaceBlock, BUILD_BLOCKS,
       setSelectedBlock: k => { selectedPlaceKey = k; }, getSelectedBlock: () => selectedPlaceKey, ownedPlaceableList,
       getSelectedHotbar: () => selectedHotbar, setSelectedHotbar: i => { selectedHotbar = i; updateHotbar(); }, ensureHotbar, activeHotbarKey, updateHotbar,
