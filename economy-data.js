@@ -682,6 +682,9 @@
     { key: 'birch_trapdoor', needs: { birch_planks: 6 }, gives: 2, unlock: null },
     { key: 'spruce_fence', needs: { spruce_planks: 4, stick: 2 }, gives: 3, unlock: null },
     { key: 'spruce_trapdoor', needs: { spruce_planks: 6 }, gives: 2, unlock: null },
+    { key: 'oak_door', needs: { oak_planks: 6 }, gives: 3, unlock: null },
+    { key: 'birch_door', needs: { birch_planks: 6 }, gives: 3, unlock: null },
+    { key: 'spruce_door', needs: { spruce_planks: 6 }, gives: 3, unlock: null },
     { key: 'iron_pickaxe', needs: { iron: 3, stick: 2 }, gives: 1, unlock: { resource: 'iron', tier: 2 } },
     { key: 'iron_axe', needs: { iron: 3, stick: 2 }, gives: 1, unlock: { resource: 'iron', tier: 2 } },
     { key: 'minion_fuel_coal', needs: { coal: 32 }, gives: 1, unlock: { resource: 'coal', tier: 2 } },
@@ -972,6 +975,7 @@
   WOOD_KO.forEach(([w, n]) => {
     BUILDER_SHOP.push({ key: w + '_fence', name: n + ' 울타리', amount: 16, price: 80 });
     BUILDER_SHOP.push({ key: w + '_trapdoor', name: n + ' 트랩도어', amount: 8, price: 70 });
+    BUILDER_SHOP.push({ key: w + '_door', name: n + ' 문', amount: 4, price: 90 });
   });
 
   /* ---------------- V13-B: 위치 기반 퀘스트 시스템 ----------------
