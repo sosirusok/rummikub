@@ -103,6 +103,12 @@
     BLOCKS.push({ key: m.k + '_slab', tex: m.tex, shape: 'slab', opaque: false });
     for (let f = 0; f < 4; f++) BLOCKS.push({ key: m.k + '_stairs_' + f, tex: m.tex, shape: 'stairs', facing: f, opaque: false });
   });
+  // V17-B: 울타리(자동 연결) + 트랩도어 — 모든 나무
+  const WOOD_SHAPES = [['oak', 'planks'], ['birch', 'birch_planks'], ['spruce', 'spruce_planks'], ['dark_oak', 'dark_oak_planks'], ['jungle', 'jungle_planks'], ['acacia', 'acacia_planks']];
+  WOOD_SHAPES.forEach(([w, tex]) => {
+    BLOCKS.push({ key: w + '_fence', tex, shape: 'fence', opaque: false });
+    BLOCKS.push({ key: w + '_trapdoor', tex, shape: 'trapdoor', opaque: false, collTop: 0.1875 });
+  });
   const ID = {};
   BLOCKS.forEach((b, i) => { b.id = i; ID[b.key] = i; if (b.solid === undefined) b.solid = true; if (b.opaque === undefined) b.opaque = true; });
 
@@ -1702,7 +1708,18 @@
       else if (f === 1) emitBox(T, b, x, y, z, 0.5, 0.5, 0, 1, 1, 1);
       else if (f === 2) emitBox(T, b, x, y, z, 0, 0.5, 0.5, 1, 1, 1);
       else emitBox(T, b, x, y, z, 0, 0.5, 0, 0.5, 1, 1);
+      return;
     }
+    if (b.shape === 'fence') {
+      emitBox(T, b, x, y, z, 0.375, 0, 0.375, 0.625, 1, 0.625);   // 중앙 기둥
+      const conn = (dx, dz) => { const nb = BLOCKS[getBlockLocal(x + dx, y, z + dz)]; return !!(nb && (nb.opaque || nb.shape === 'fence')); };
+      if (conn(1, 0)) { emitBox(T, b, x, y, z, 0.625, 0.3, 0.44, 1, 0.5, 0.56); emitBox(T, b, x, y, z, 0.625, 0.66, 0.44, 1, 0.86, 0.56); }
+      if (conn(-1, 0)) { emitBox(T, b, x, y, z, 0, 0.3, 0.44, 0.375, 0.5, 0.56); emitBox(T, b, x, y, z, 0, 0.66, 0.44, 0.375, 0.86, 0.56); }
+      if (conn(0, 1)) { emitBox(T, b, x, y, z, 0.44, 0.3, 0.625, 0.56, 0.5, 1); emitBox(T, b, x, y, z, 0.44, 0.66, 0.625, 0.56, 0.86, 1); }
+      if (conn(0, -1)) { emitBox(T, b, x, y, z, 0.44, 0.3, 0, 0.56, 0.5, 0.375); emitBox(T, b, x, y, z, 0.44, 0.66, 0, 0.56, 0.86, 0.375); }
+      return;
+    }
+    if (b.shape === 'trapdoor') { emitBox(T, b, x, y, z, 0, 0, 0, 1, 0.1875, 1); return; }   // 닫힘: 바닥 얇은 판
   }
   // ── 청크 메싱: 32×32 기둥 단위로 나눠 블록 하나 캘 때 그 청크만 다시 만든다(즉시 반영) ──
   const CHUNK = 32;
@@ -2192,7 +2209,7 @@
     const minX = P.x - P.w / 2, maxX = P.x + P.w / 2, minZ = P.z - P.w / 2, maxZ = P.z + P.w / 2, minY = P.y, maxY = P.y + P.h;
     for (let x = Math.floor(minX); x <= Math.floor(maxX); x++) for (let z = Math.floor(minZ); z <= Math.floor(maxZ); z++) for (let y = Math.floor(minY); y <= Math.floor(maxY); y++) {
       const bb = BLOCKS[getBlockLocal(x, y, z)]; if (!bb || !bb.solid) continue;
-      const hi = y + (bb.shape === 'slab' ? 0.5 : 1);   // V17: 반블럭은 충돌 상단 0.5
+      const hi = y + (bb.collTop != null ? bb.collTop : (bb.shape === 'slab' ? 0.5 : 1));   // V17: 형태별 충돌 상단(반블럭0.5/트랩도어0.1875)
       if (minY >= hi || maxY <= y) continue;             // 플레이어가 이 블럭 세로 범위 밖 → 통과
       if (ax === 'y') { if (amt > 0) { P.y = y - P.h - 0.0001; P.vy = 0; } else { P.y = hi + 0.0001; P.vy = 0; P.onGround = true; } return; }
       if (ax === 'x') { if (amt > 0) P.x = x - P.w / 2 - 0.0001; else P.x = x + 1 + P.w / 2 + 0.0001; P.vx = 0; return; }
