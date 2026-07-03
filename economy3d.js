@@ -806,20 +806,49 @@
     const wy = base + 1;
     for (let x = x0 + 1; x < x0 + wdt - 1; x += 2) { setW(x, wy, z0, ID.glass); setW(x, wy, z0 + dpt - 1, ID.glass); }
     for (let z = z0 + 1; z < z0 + dpt - 1; z += 2) { setW(x0, wy, z, ID.glass); setW(x0 + wdt - 1, wy, z, ID.glass); }
-    // 남쪽 문(2칸) + 문 양옆 랜턴 기둥(통나무+발광석)
+    // V17-D: 남쪽에 진짜 나무 문(2칸) + 문 위 트랩도어 차양 + 양옆 울타리 난간 + 랜턴
     const dxc = x0 + (wdt >> 1);
-    setW(dxc, base, z0 + dpt - 1, 0); setW(dxc, base + 1, z0 + dpt - 1, 0);
-    for (const lx of [dxc - 1, dxc + 1]) { if (lx > x0 - 1 && lx < x0 + wdt) { setW(lx, base, z0 + dpt, trimId); setW(lx, base + 1, z0 + dpt, ID.glowstone); } }
-    // 계단식 경사 지붕(사방 1칸씩 좁혀 올라가며 채움 — 완전 밀폐, 처마 1칸 돌출)
+    const doorId = ID[(doorWoodFor(wallId) || 'oak') + '_door_c_0'];
+    setW(dxc, base, z0 + dpt - 1, doorId); setW(dxc, base + 1, z0 + dpt - 1, doorId);
+    const trapId = ID[(doorWoodFor(wallId) || 'oak') + '_trapdoor'];
+    if (trapId != null) setW(dxc, base + 2, z0 + dpt, trapId);   // 문 위 차양
+    const stepSlab = slabIdFor(ID.stone_bricks);
+    if (stepSlab != null) setW(dxc, base - 1, z0 + dpt, stepSlab);   // 문 앞 석재 반블럭 계단참(기초 테두리 위 덧댐)
+    const fenceId = ID[(doorWoodFor(wallId) || 'oak') + '_fence'];
+    for (const lx of [dxc - 1, dxc + 1]) {
+      if (lx > x0 - 1 && lx < x0 + wdt) {
+        if (fenceId != null) setW(lx, base, z0 + dpt, fenceId);   // 현관 난간
+        setW(lx, base + 1, z0 + dpt, ID.glowstone);               // 랜턴
+      }
+    }
+    // V17-D: 계단 경사 지붕(밀폐 큐브 위에 계단 오버레이로 진짜 물매) — 처마 1칸 돌출
     let a = x0 - 1, b = z0 - 1, c = x0 + wdt, d = z0 + dpt, ry = base + wallH;
     const maxRy = base + wallH + 4;
     while (a <= c && b <= d && ry <= maxRy) {
-      for (let x = a; x <= c; x++) for (let z = b; z <= d; z++) setW(x, ry, z, roofId);
+      for (let x = a; x <= c; x++) for (let z = b; z <= d; z++) {
+        const onEdge = x === a || x === c || z === b || z === d;
+        let id = roofId;
+        if (onEdge && a < c && b < d) {   // 가장자리는 바깥쪽 향한 계단으로(물매)
+          let f = (x === a) ? 1 : (x === c) ? 3 : (z === b) ? 2 : 0;
+          const sid = stairIdFor(roofId, f); if (sid != null) id = sid;
+        }
+        setW(x, ry, z, id);
+      }
       a++; b++; c--; d--; ry++;
     }
-    if (a <= c && b <= d) for (let x = a; x <= c; x++) for (let z = b; z <= d; z++) setW(x, ry, z, roofId);   // 넓은 건물 지붕 마감(평평한 꼭대기)
-    // 실내 조명(천장 밑)
-    setW(dxc, base + wallH - 1, z0 + (dpt >> 1), ID.glowstone);
+    if (a <= c && b <= d) for (let x = a; x <= c; x++) for (let z = b; z <= d; z++) setW(x, ry, z, roofId);   // 용마루 마감
+    setW(dxc, base + wallH - 1, z0 + (dpt >> 1), ID.glowstone);   // 실내 조명
+  }
+  // 블럭 → 계단/반블럭/나무종 매핑(형태 변형이 있으면 그 id, 없으면 null)
+  function stairIdFor(blockId, f) { const b = BLOCKS[blockId]; if (!b) return null; const k = b.key.replace(/_stairs_\d$/, ''); const id = ID[k + '_stairs_' + f]; return id != null ? id : null; }
+  function slabIdFor(blockId) { const b = BLOCKS[blockId]; if (!b) return null; const id = ID[b.key + '_slab']; return id != null ? id : null; }
+  function doorWoodFor(wallId) {   // 벽 재질에 어울리는 문 나무종
+    const k = (BLOCKS[wallId] || {}).key || '';
+    if (/spruce|dark_oak|nether/.test(k)) return 'spruce';
+    if (/birch|sandstone|quartz/.test(k)) return 'birch';
+    if (/jungle/.test(k)) return 'jungle';
+    if (/acacia|brick/.test(k)) return 'acacia';
+    return 'oak';
   }
   function lampPost(x, z) {
     const y = surfaceTop(x, z);
