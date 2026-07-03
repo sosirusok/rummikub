@@ -29,10 +29,20 @@
       minionSlotsBought: 0, minionFuelUntil: 0,
       dealsBought: {}, dealsDate: null,
       // --- V3 필드 ---
-      starForce: { weapon: 0, armor: 0 },   // 스타포스(메이플식 성 강화) 0~15성
+      starForce: { weapon: 0, bow: 0, helmet: 0, chest: 0, leggings: 0, boots: 0 },   // V11: 6슬롯 개별 스타포스
       itemRolls: {},                         // 장비 초기 능력치 롤({key: 굴려진 수치}) — 획득 시 ±8% 무작위 고정
-      reforgeSlots: { weapon: null, armor: null },   // 명명 리포지({key,name,dmgPct,def,hp,sellBonus})
+      reforgeSlots: { weapon: null, bow: null, helmet: null, chest: null, leggings: null, boots: null },   // V11: 6슬롯 개별 리포지
       homeEdits: {},                         // 프라이빗 섬 블록 편집("x,y,z" -> blockId, 0=제거)
+      // --- V11 필드 ---
+      hpb: {},                               // 핫 포테이토 북({itemKey: 권수, 최대 10/퓨밍 15})
+      equipPin: {},                          // 슬롯별 수동 장착 고정({slot: itemKey}) — 없으면 자동 최적
+      locked: {},                            // 장비 잠금(판매/분해 방지)
+      equipLog: {},                          // 장비 도감(획득 이력)
+      stats: {},                             // 통계 카운터(kills/maxHit/goldEarned/...)
+      ach: {},                               // 달성한 업적
+      daily: null,                           // 일일 퀘스트({date, list})
+      fieldDiff: 'normal',                   // 필드 난이도(easy/normal/heroic/hell)
+      arenaBest: {},                         // 아레나 난이도별 최고 웨이브
     };
   }
   // 구버전 세이브 마이그레이션: 누락 필드를 기본값으로 채움(중첩 객체 포함)
@@ -51,9 +61,18 @@
     if (!p.enchants.weapon) p.enchants.weapon = {};
     if (!p.enchants.armor) p.enchants.armor = {};
     if (!p.enchants.tool) p.enchants.tool = {};
-    if (typeof p.starForce.weapon !== 'number') p.starForce = { weapon: 0, armor: 0 };
+    if (typeof p.starForce.weapon !== 'number') p.starForce = { weapon: 0, bow: 0, helmet: 0, chest: 0, leggings: 0, boots: 0 };
     if (!p.itemRolls || typeof p.itemRolls !== 'object') p.itemRolls = {};
-    if (!p.reforgeSlots.weapon && p.reforgeSlots.weapon !== null) p.reforgeSlots = { weapon: null, armor: null };
+    if (!p.reforgeSlots || (!p.reforgeSlots.weapon && p.reforgeSlots.weapon !== null)) p.reforgeSlots = { weapon: null, bow: null, helmet: null, chest: null, leggings: null, boots: null };
+    // V11: 구 2슬롯(weapon/armor) 세이브 → 6슬롯. 구 armor 값은 흉갑으로 이전
+    for (const sl of ['bow', 'helmet', 'chest', 'leggings', 'boots']) {
+      if (typeof p.starForce[sl] !== 'number') p.starForce[sl] = sl === 'chest' && typeof p.starForce.armor === 'number' ? p.starForce.armor : 0;
+      if (p.reforgeSlots[sl] === undefined) p.reforgeSlots[sl] = sl === 'chest' && p.reforgeSlots.armor !== undefined ? p.reforgeSlots.armor : null;
+    }
+    delete p.starForce.armor; delete p.reforgeSlots.armor;
+    for (const k of ['hpb', 'equipPin', 'locked', 'equipLog', 'stats', 'ach', 'arenaBest']) if (!p[k] || typeof p[k] !== 'object') p[k] = {};
+    if (p.daily === undefined) p.daily = null;
+    if (!p.fieldDiff) p.fieldDiff = 'normal';
     return p;
   }
   function todayStr() { return new Date().toISOString().slice(0, 10); }
@@ -70,7 +89,20 @@
   async function loadCloud() { if (!cloudReady()) return null; try { const { data } = await sb.rpc('econ_load_player', { p_token: ME.token }); return data ? migrate(data) : null; } catch (e) { return null; } }
 
   /* ---------------- 인벤토리/골드 유틸 ---------------- */
-  function addItem(k, n) { if (n <= 0) return; P.inv[k] = (P.inv[k] || 0) + n; rollItemStat(k); }
+  function stat(k, n) { if (!P) return; if (!P.stats) P.stats = {}; P.stats[k] = (P.stats[k] || 0) + (n == null ? 1 : n); }
+  function statMax(k, v) { if (!P) return; if (!P.stats) P.stats = {}; if (v > (P.stats[k] || 0)) P.stats[k] = v; }
+  function addItem(k, n) {
+    if (n <= 0) return;
+    P.inv[k] = (P.inv[k] || 0) + n; rollItemStat(k); bumpInv();
+    const sd = shopDef(k);
+    if (sd && (sd.category === '무기' || sd.category === '방어구') && !(P.equipLog || {})[k]) {
+      if (!P.equipLog) P.equipLog = {};
+      P.equipLog[k] = 1;
+      // V11: 전설+ 신규 장비 획득은 전서버 알림
+      const ti = D().ITEM_TIERS.findIndex(t => t.key === sd.tierKey);
+      if (ti >= 4 && window.econNet && window.econNet.announce) window.econNet.announce(`✨ ${sd.name} 획득!`);
+    }
+  }
   // 장비(무기/방어구) 최초 획득 시 기본 수치를 ±8% 범위에서 1회 굴려 고정(인챈트/리포지/강화와 별개의 "생 초기치")
   function equipBase(k) {
     const w = D().EQUIPMENT.weapons.find(x => x.key === k); if (w) return { stat: 'dmg', base: w.dmg };
@@ -86,8 +118,8 @@
   function rolledStat(k, base) { return P.itemRolls[k] !== undefined ? P.itemRolls[k] : base; }
   function rollRangeText(base) { const pct = D().ITEM_ROLL.pct; return `${Math.max(1, Math.round(base * (1 - pct)))}~${Math.round(base * (1 + pct))}`; }
   function hasItem(k, n) { return (P.inv[k] || 0) >= (n || 1); }
-  function removeItem(k, n) { n = n || 1; if (!hasItem(k, n)) return false; P.inv[k] -= n; if (P.inv[k] <= 0) delete P.inv[k]; return true; }
-  function addGold(n) { P.gold = Math.max(0, P.gold + n); }
+  function removeItem(k, n) { n = n || 1; if (!hasItem(k, n)) return false; P.inv[k] -= n; if (P.inv[k] <= 0) delete P.inv[k]; bumpInv(); return true; }
+  function addGold(n) { P.gold = Math.max(0, P.gold + n); if (n > 0) stat('goldEarned', n); }
 
   /* ---------------- 스킬 레벨 ---------------- */
   function skillDef(key) { return D().SKILLS.find(s => s.key === key); }
@@ -252,6 +284,7 @@
     if (P.gold < fee) { toastFn(`부여 비용 ${fmtGold(fee)}이 부족해요`, false); return false; }
     removeItem(bookKey, 1); addGold(-fee);
     P.enchants[slot][key] = cur + 1;
+    stat('enchantsApplied');
     addSkillXp('enchanting', 30 + cur * 20);
     toastFn(`${def.name} ${cur + 1}레벨 부여 완료!`, true);
     saveNow(); renderZone(); return true;
@@ -287,44 +320,123 @@
   /* ---------------- 전투력(장비+펫+부적+인챈트+스타포스+리포지+스킬 통합) ---------------- */
   function dungeonClassDef(key) { return D().DUNGEON_CLASSES.find(c => c.key === key) || D().DUNGEON_CLASSES[0]; }
   function bestOwnedEquip(list) { for (let i = list.length - 1; i >= 0; i--) if (hasItem(list[i].key)) return list[i]; return null; }
-  // 무기: 검/활/지팡이 3계열 중 보유한 최고 위력 자동 장착(실제 스카이블럭처럼 직업 제한 없음)
-  function equippedWeapon() {
-    let best = null, bestDmg = -1;
+  /* ======== V11: 6슬롯 장착(무기/활/투구/흉갑/레깅스/부츠) — 자동 최적 + 수동 고정(핀) ======== */
+  const EQUIP_SLOTS = ['weapon', 'bow', 'helmet', 'chest', 'leggings', 'boots'];
+  const SLOT_NAMES = { weapon: '무기', bow: '활', helmet: '투구', chest: '흉갑', leggings: '레깅스', boots: '부츠' };
+  const SLOT_EMOJI = { weapon: '⚔️', bow: '🏹', helmet: '🪖', chest: '🛡', leggings: '👖', boots: '🥾' };
+  let _invRev = 0, _equipCache = null, _equipCacheKey = '';
+  function bumpInv() { _invRev++; }
+  function equipListFor(slot) {
+    const E = D().EQUIPMENT;
+    if (slot === 'weapon') return E.weapons;   // wclass sword/staff — 아래 필터에서 bow 제외
+    if (slot === 'bow') return E.weapons;
+    return E.armor;
+  }
+  function pieceScore(it) { return it.dmg != null ? it.dmg : (it.defense || 0) * 2 + (it.hp || 0) * 0.5; }
+  let _equipCacheAt = 0;
+  function equippedPiece(slot) {
+    const key = _invRev + ':' + Object.keys(P.inv).length + ':' + skillLevel('combat') + ':' + JSON.stringify(P.equipPin || {});   // 키 수 = 직접 변조 감지
+    const now = Date.now();
+    // 캐시는 500ms TTL — 클라우드 로드/직접 인벤 변조처럼 bumpInv를 우회하는 경로도 안전
+    if (!_equipCache || _equipCacheKey !== key || now - _equipCacheAt > 500) { _equipCache = {}; _equipCacheKey = key; _equipCacheAt = now; }
+    if (slot in _equipCache) return _equipCache[slot];
     const cl = skillLevel('combat');
-    for (const w of D().EQUIPMENT.weapons) {
-      if (!hasItem(w.key)) continue;
-      if ((w.reqCombat || 0) > cl) continue;   // V7: 요구 전투 레벨 미달 장비는 착용 불가
-      if (w.dmg >= bestDmg) { bestDmg = w.dmg; best = w; }
+    let best = null, bestScore = -1;
+    const pin = (P.equipPin || {})[slot];
+    for (const it of equipListFor(slot)) {
+      const isBow = it.wclass === 'bow';
+      if (slot === 'weapon' && isBow) continue;
+      if (slot === 'bow' && !isBow) continue;
+      if (slot !== 'weapon' && slot !== 'bow' && (it.slot || 'chest') !== slot) continue;
+      if (!hasItem(it.key)) continue;
+      if ((it.reqCombat || 0) > cl) continue;
+      if (pin && it.key === pin) { best = it; break; }   // 핀 우선(보유+착용 가능 시)
+      if (!pin && pieceScore(it) >= bestScore) { bestScore = pieceScore(it); best = it; }
     }
-    return best;
+    if (pin && (!best || best.key !== pin)) {   // 핀 아이템 미보유/미달 → 자동 최적으로 폴백
+      best = null; bestScore = -1;
+      for (const it of equipListFor(slot)) {
+        const isBow = it.wclass === 'bow';
+        if (slot === 'weapon' && isBow) continue;
+        if (slot === 'bow' && !isBow) continue;
+        if (slot !== 'weapon' && slot !== 'bow' && (it.slot || 'chest') !== slot) continue;
+        if (!hasItem(it.key) || (it.reqCombat || 0) > cl) continue;
+        if (pieceScore(it) >= bestScore) { bestScore = pieceScore(it); best = it; }
+      }
+    }
+    return (_equipCache[slot] = best);
   }
-  function equippedArmor() {
-    const cl = skillLevel('combat');
-    const list = D().EQUIPMENT.armor;
-    for (let i = list.length - 1; i >= 0; i--) if (hasItem(list[i].key) && (list[i].reqCombat || 0) <= cl) return list[i];
-    return null;
-  }
+  function equippedWeapon() { return equippedPiece('weapon'); }
+  function equippedBow() { return equippedPiece('bow'); }
+  function equippedArmor() { return equippedPiece('chest'); }   // 레거시 호환(흉갑)
+  function armorPieces() { return ['helmet', 'chest', 'leggings', 'boots'].map(equippedPiece).filter(Boolean); }
+  function equippedAll() { return EQUIP_SLOTS.map(equippedPiece).filter(Boolean); }
+  function hpbOf(key) { return (P.hpb || {})[key] || 0; }
   function equippedWeaponDmg() {
     const w = equippedWeapon(); if (!w) return 0;
-    return rolledStat(w.key, w.dmg) + (P.reforgeBonus[w.key] || 0);
+    let d = rolledStat(w.key, w.dmg) + (P.reforgeBonus[w.key] || 0) + hpbOf(w.key) * D().HPB.weaponDmgPerBook;
+    const b = equippedBow();
+    if (b) d += Math.round((rolledStat(b.key, b.dmg) + hpbOf(b.key) * D().HPB.weaponDmgPerBook) * 0.3);   // 활 보조 기여 30%
+    return d;
   }
+  /* ---- V11 특성(트레잇) 엔진: 정적 합산 + 세트 보너스 ---- */
+  const SET_TRAIT_MAP = { minerPct: 'miner', anglerPct: 'angler', gathererPct: 'gatherer', lifestealPct: 'lifesteal', regenFlat: 'regeneration' };
+  function activeSetBonuses() {
+    const cnt = {};
+    for (const sl of ['helmet', 'chest', 'leggings', 'boots']) { const p = equippedPiece(sl); if (p && p.set) cnt[p.set] = (cnt[p.set] || 0) + 1; }
+    const out = [];
+    for (const k in cnt) if (cnt[k] >= 4 && D().EQUIP_SETS[k]) out.push({ key: k, def: D().EQUIP_SETS[k] });
+    return out;
+  }
+  function traitSum(k) {
+    let v = 0;
+    for (const it of equippedAll()) if (it.traits) for (const t of it.traits) if (t.k === k) v += t.v;
+    for (const sb of activeSetBonuses()) {
+      const bo = sb.def.bonus;
+      for (const bk in bo) { if (bk === k) v += bo[bk]; else if (SET_TRAIT_MAP[bk] === k) v += bo[bk]; }
+    }
+    return v;
+  }
+  function setStat(k) { let v = 0; for (const sb of activeSetBonuses()) v += sb.def.bonus[k] || 0; return v; }
+  // 문맥 특성 배율(공격 시): ctx {hitIdx, hp, maxHp, isBoss, mobType, phpPct, golds}
+  const VS_MAP = { zombie_slayer: 'vs_undead', spider_slayer: 'vs_arachnid', wolf_slayer: 'vs_beast', enderman_slayer: 'vs_ender', blaze_slayer: 'vs_demon' };
+  function traitCtxMul(ctx) {
+    let pct = 0;
+    if (ctx.maxHp > 0 && ctx.hp / ctx.maxHp <= 0.3) pct += traitSum('execute');
+    if ((ctx.hitIdx || 0) < 2) pct += traitSum('first_strike');
+    const combo = traitSum('combo'); if (combo) pct += Math.min(5, ctx.hitIdx || 0) * combo;
+    if (ctx.isBoss) pct += traitSum('giant_slayer');
+    if (ctx.phpPct != null && ctx.phpPct <= 0.4) pct += traitSum('rage');
+    if (ctx.phpPct != null && ctx.phpPct >= 0.9) pct += traitSum('focus');
+    const fam = ctx.mobType ? SLAYER_MOB_MAP[ctx.mobType] : null;
+    if (fam && VS_MAP[fam]) pct += traitSum(VS_MAP[fam]);
+    const midas = traitSum('midas'); if (midas) pct += Math.min(5, Math.floor((P.gold || 0) / 100000)) * midas;
+    return 1 + pct / 100;
+  }
+  function guardPct() { return Math.min(60, traitSum('guard')) / 100; }
   function reforgeOf(slot) { return P.reforgeSlots[slot] || {}; }
   // ── 실제 스카이블럭 스탯 시트: 기본 HP100/방어0/힘0/속도100/크리확률30/크리피해50/지능100 ──
   function playerStats() {
-    const B = D().BASE_STATS;
+    const B = D().BASE_STATS, HB = D().HPB;
     const ts = talismanStats(), ps = petStats(), fb = fairyBonus();
-    const a = equippedArmor();
+    // V11: 4부위 방어구 합산(초기롤 + 핫포북 + 아이템 HP)
+    let armorDef = 0, armorHp = 0, armorRfDef = 0, armorRfHp = 0;
+    for (const sl of ARMOR_SLOTS) {
+      const p = equippedPiece(sl);
+      if (p) { armorDef += rolledStat(p.key, p.defense) + hpbOf(p.key) * HB.armorDefPerBook; armorHp += (p.hp || 0) + hpbOf(p.key) * HB.armorHpPerBook; }
+      const rf = reforgeOf(sl); armorRfDef += rf.def || 0; armorRfHp += rf.hp || 0;
+    }
     const st = {
       hp: B.hp + skillLevel('farming') * 2 + skillLevel('fishing') + enchSum('hp') + ts.hp + ps.hp + fb.hp
-        + (reforgeOf('weapon').hp || 0) + (reforgeOf('armor').hp || 0) + starHpFlat() + buffBonus('hp'),
+        + (reforgeOf('weapon').hp || 0) + armorRfHp + starHpFlat() + buffBonus('hp')
+        + armorHp + traitSum('vitality') + setStat('hp'),
       defense: B.defense + skillLevel('mining') + ts.def + ps.def + enchSum('def')
-        + (reforgeOf('armor').def || 0) + starDefFlat()
-        + (a ? rolledStat(a.key, a.defense) : 0),
-      strength: B.strength + skillLevel('foraging') + ts.str + ps.str + fb.str + buffBonus('strength'),
-      speed: B.speed + enchSum('speed') + buffBonus('speed'),
-      critChance: Math.min(100, B.critChance + skillLevel('combat') * 0.5),
-      critDamage: B.critDamage + skillLevel('combat'),
-      intelligence: B.intelligence + skillLevel('enchanting') * 2,
+        + armorRfDef + starDefFlat() + armorDef + traitSum('bulwark') + setStat('def'),
+      strength: B.strength + skillLevel('foraging') + ts.str + ps.str + fb.str + buffBonus('strength') + setStat('str'),
+      speed: B.speed + enchSum('speed') + buffBonus('speed') + traitSum('swift') + traitSum('swiftness') + setStat('speed'),
+      critChance: Math.min(100, B.critChance + skillLevel('combat') * 0.5 + traitSum('crit_eye') + setStat('critChance')),
+      critDamage: B.critDamage + skillLevel('combat') + traitSum('brutality') + setStat('critDamage'),
+      intelligence: B.intelligence + skillLevel('enchanting') * 2 + traitSum('mana_well') + setStat('intelligence'),
     };
     st.defense = Math.round(st.defense * mpStatMul());
     st.hp = Math.round(st.hp);
@@ -337,7 +449,8 @@
     const flat = 5 + equippedWeaponDmg() + st.strength / 5;
     const mul = (1 + st.strength / 100)
       * (1 + skillLevel('combat') * 0.04 + enchSum('dmg') / 100 + bestiaryBonusPct() / 100
-        + (reforgeOf('weapon').dmgPct || 0) / 100 + starAtkPct() / 100)
+        + (reforgeOf('weapon').dmgPct || 0) / 100 + (reforgeOf('bow').dmgPct || 0) * 0.3 / 100
+        + starAtkPct() / 100 + setStat('dmgPct') / 100)
       * mpStatMul();
     return flat * mul;
   }
@@ -365,12 +478,17 @@
     for (let i = 1; i <= stars; i++) sum += bands[i <= 5 ? 0 : i <= 10 ? 1 : 2];
     return sum;
   }
-  function starAtkPct() { return starBandSum(P.starForce.weapon, D().STARFORCE.weaponAtkPctByBand); }
-  function starDefFlat() { return starBandSum(P.starForce.armor, D().STARFORCE.armorDefByBand); }
-  function starHpFlat() { return starBandSum(P.starForce.armor, D().STARFORCE.armorHpByBand); }
+  function starAtkPct() {   // 무기 100% + 활 30%(보조)
+    return starBandSum(P.starForce.weapon, D().STARFORCE.weaponAtkPctByBand)
+      + Math.round(starBandSum(P.starForce.bow || 0, D().STARFORCE.weaponAtkPctByBand) * 0.3);
+  }
+  const ARMOR_SLOTS = ['helmet', 'chest', 'leggings', 'boots'];
+  function starDefFlat() { return ARMOR_SLOTS.reduce((n, sl) => n + starBandSum(P.starForce[sl] || 0, D().STARFORCE.armorDefByBand), 0); }
+  function starHpFlat() { return ARMOR_SLOTS.reduce((n, sl) => n + starBandSum(P.starForce[sl] || 0, D().STARFORCE.armorHpByBand), 0); }
   function enhanceStar(slot) {
     const SF = D().STARFORCE;
-    if (!P.starChance) P.starChance = { weapon: 0, armor: 0 };
+    if (!P.starChance) P.starChance = {};
+    if (P.starChance[slot] === undefined) P.starChance[slot] = 0;
     const cur = P.starForce[slot];
     if (cur >= SF.maxStars) { toastFn('이미 최대 성 강화예요 (★15)', false); return 'max'; }
     const cost = starCost(slot);
@@ -467,7 +585,11 @@
   }
 
   /* ---------------- 상점/특가 ---------------- */
-  function shopDef(key) { return D().SHOP.find(s => s.key === key); }
+  let _shopMap = null;   // V11: SHOP 1700+ 아이템 O(1) 조회 캐시(데이터는 로드 후 불변)
+  function shopDef(key) {
+    if (!_shopMap) { _shopMap = new Map(); for (const s of D().SHOP) _shopMap.set(s.key, s); }
+    return _shopMap.get(key);
+  }
   function dailySoldCheck() { if (P.dailySoldDate !== todayStr()) { P.dailySoldDate = todayStr(); P.dailySold = {}; } }
   function sellBonusPct() { return Math.min(10, Math.floor(skillLevel('social') / 5)) + talismanStats().sellBonus; }
   function minionSlotCost() { return Math.round(D().MINION_SLOT_COST_BASE * Math.pow(D().MINION_SLOT_COST_MUL, P.minionSlotsBought)); }
@@ -495,9 +617,11 @@
     const already = P.dailySold[key] || 0;
     const room = limit - already; if (room <= 0) { toastFn('오늘 이 아이템의 판매 한도에 도달했어요', false); return; }
     const sellN = Math.min(n, room, P.inv[key] || 0); if (sellN <= 0) { toastFn('보유 수량이 부족해요', false); return; }
+    if ((P.locked || {})[key]) { toastFn('🔒 잠긴 장비예요 — 인벤토리에서 잠금 해제 후 판매하세요', false); return; }
     removeItem(key, sellN);
     addGold(Math.round(def.sellPrice * sellN * (1 + sellBonusPct() / 100)));
     P.dailySold[key] = already + sellN;
+    stat('itemsSold', sellN);
     saveNow(); renderZone();
   }
   // 일일 특가(날짜 시드 고정 3종, 각 1회 구매)
@@ -712,6 +836,21 @@
     addItem(it.key, 1);
     return it;
   }
+  // V11: src(획득처)별 장비 드롭 — 1400종 DB의 field/dungeon_fN/slayer_계열/fishing/chest/arena/miniboss/hell_boss 풀
+  function equipDropFromSrc(src, maxTierIdx) {
+    const E = D().EQUIPMENT, tiers = D().ITEM_TIERS;
+    const pool = [];
+    for (const list of [E.weapons, E.armor]) for (const it of list) {
+      if (it.src !== src) continue;
+      const ti = tiers.findIndex(t => t.key === it.tierKey);
+      if (maxTierIdx != null && ti > maxTierIdx) continue;
+      pool.push(it);
+    }
+    if (!pool.length) return null;
+    const it = pool[Math.floor(Math.random() * pool.length)];
+    addItem(it.key, 1);
+    return it;
+  }
   function startSlayer(key, tier) {
     const def = slayerDef(key); const tinfo = def.tiers.find(t => t.tier === tier); if (!tinfo) return;
     if (skillLevel('combat') < tinfo.minCombatLevel) { toastFn(`전투 스킬 레벨 ${tinfo.minCombatLevel} 필요`, false); return; }
@@ -736,9 +875,11 @@
           addItem(def.uniqueDrop, 1);
           toastFn(`🌟 슬레이어 유니크 드롭! ${itemName(def.uniqueDrop)}`, true);
         }
-        // 보너스 장비 드롭(드롭 전용 풀) — 슬레이어 티어가 높을수록 좋은 티어까지 등장
-        if (Math.random() < 0.25) {
-          const bonus = randomEquipDrop(Math.min(6, tier + 1));
+        stat('slayerBosses'); stat('bossKills');
+        // V11: 계열 전용 장비 풀(slayer_계열) 우선, 없으면 범용 드롭
+        if (Math.random() < 0.35) {
+          const fam = key.replace('_slayer', '');
+          const bonus = equipDropFromSrc('slayer_' + fam, Math.min(8, tier + 3)) || randomEquipDrop(Math.min(6, tier + 1));
           if (bonus) toastFn(`🎁 희귀 장비 드롭! ${bonus.name}`, true);
         }
         P.slayerBest[key] = Math.max(P.slayerBest[key] || 0, tier);
@@ -766,7 +907,16 @@
     for (const [name, min] of th) if (score >= min) g = name;
     return g;
   }
-  function canEnterFloor(f) { if (f <= 1) return true; const prev = P.dungeonBest[f - 1]; return !!prev && prev !== 'F'; }   // F0/F1 상시 개방
+  function canEnterFloor(f) {
+    if (f <= 1) return true;
+    if (f >= 8) {   // V11 지옥층: M7 클리어 + 이전 지옥층 순차 해금
+      const m7 = (P.dungeonMasterBest || {})[7];
+      if (!m7 || m7 === 'F') return false;
+      if (f === 8) return true;
+      const prevH = P.dungeonBest[f - 1]; return !!prevH && prevH !== 'F';
+    }
+    const prev = P.dungeonBest[f - 1]; return !!prev && prev !== 'F';
+  }   // F0/F1 상시 개방
   // V3: "지나가며 몬스터 처치" 웨이브 던전 — 방마다 실제 몬스터 무리가 나오고, 한 마리씩 처치하며 전진.
   // 플레이어 HP는 층 전체에서 이어짐(방 클리어 시 15% 회복) — 진짜 던전 공략감.
   function mkRoomMobs(fd, type) {
@@ -927,6 +1077,9 @@
     if (fortune > 0 && Math.random() * 100 < fortune) n += Math.max(1, Math.floor(n * 0.5));   // 행운: 추가 드롭
     addItem(resKey, n); addCollection(resKey, n);
     addSkillXp(sk === 'combat' ? 'combat' : sk, RES_XP[resKey] || 2);
+    stat('blocksMined');   // V11 카운터(전 채집 공통) + 계열별
+    if (sk === 'foraging') stat('treesChopped');
+    else if (sk === 'farming') stat('cropsHarvested');
     if (++_gatherSaveN % 10 === 0) saveNow(); else saveLocal();
     return n;
   }
@@ -939,10 +1092,16 @@
     const qty = Math.max(1, Math.round((pick.min + Math.floor(Math.random() * (pick.max - pick.min + 1))) * bestToolMul('rod')));
     addItem(pick.key, qty); addCollection(pick.key, qty);
     addSkillXp('fishing', RES_XP[pick.key] || 20);
+    stat('fishCaught');   // V11
     let extra = null;
     const roll = Math.random();
-    if (roll < 0.05) { const coins = 100 + Math.floor(Math.random() * 400); addGold(coins); extra = { kind: 'treasure', coins }; }
-    else if (roll < 0.17) extra = { kind: 'seaCreature' };   // 3D 레이어가 바다 생물을 스폰
+    const fishLv = skillLevel('fishing');
+    if (roll < 0.012 * (1 + traitSum('lucky') / 100)) {   // V11: 낚시 전용 장비 풀
+      const eq = equipDropFromSrc(fishLv >= 15 && Math.random() < 0.3 ? 'deep_fishing' : 'fishing', Math.min(8, 2 + Math.floor(fishLv / 4)));
+      if (eq) extra = { kind: 'equip', name: eq.name };
+    }
+    else if (roll < 0.05) { const coins = 100 + Math.floor(Math.random() * 400); addGold(coins); extra = { kind: 'treasure', coins }; }
+    else if (roll < 0.17) extra = { kind: 'seaCreature', deep: fishLv >= 15 && Math.random() < 0.25 };   // V11: 낚시 Lv15+ 심해 생물
     saveLocal();
     return { key: pick.key, name: itemName(pick.key), n: qty, extra };
   }
@@ -951,26 +1110,46 @@
     const crit = playerCritRoll();
     let dmg = playerAttackPower() * crit;
     dmg *= enchCondMul({ hitIdx: ctx.hitIdx || 0, targetHp: ctx.hp, targetMaxHp: ctx.maxHp, isBoss: !!ctx.isBoss, slayerKey: ctx.slayerKey || null });
-    return { dmg, crit: crit > 1, heal: enchHitHeal(dmg) };
+    dmg *= traitCtxMul(ctx);                              // V11: 특성 문맥 배율(처형/연격/특효/분노...)
+    dmg += traitSum('shred');                             // V11: 파쇄(고정 추가 피해)
+    let ds = false;
+    if (Math.random() * 100 < traitSum('double_strike')) { dmg *= 2; ds = true; }   // V11: 이도류
+    statMax('maxHit', Math.round(dmg));
+    const heal = enchHitHeal(dmg) + dmg * traitSum('lifesteal') / 100;   // V11: 흡혈
+    return { dmg, crit: crit > 1 || ds, heal };
   }
   function mobKilled3d(mob) {
     if (!P) return 0;
     const msgs = [];
-    const coins = Math.round((mob.coins || 0) * enchCoinMul());
+    const goldMul = 1 + (traitSum('gold_rush') + traitSum('greed') + setStat('goldPct')) / 100;   // V11 특성
+    const xpMul = 1 + (traitSum('wisdom') + traitSum('scholar') + setStat('xpPct')) / 100;
+    const rewardMul = mob.rewardMul || 1;                       // V11: 필드 난이도/주간 보스 배율
+    const coins = Math.round((mob.coins || 0) * enchCoinMul() * goldMul * rewardMul);
     if (coins) addGold(coins);
-    addSkillXp('combat', Math.round((mob.xp || 5) * enchXpMul()));
+    const xpGain = Math.round((mob.xp || 5) * enchXpMul() * xpMul * rewardMul);
+    addSkillXp('combat', xpGain);
+    stat('kills');
+    if (mob.boss) stat('bossKills');
+    // V11: 파티 근접 사냥 XP 공유(절반)
+    if (window.econNet && window.econNet.party && window.econNet.party() && window.econNet.partySendXp) window.econNet.partySendXp(Math.round(xpGain * 0.5));
+    const lucky = traitSum('lucky');                            // V11: 행운(희귀 드롭 확률 증가)
     const lootLv = enchantLvl('weapon', 'looting');
     for (const d of mob.drops || []) {
-      if (d.chance != null && Math.random() > d.chance * (1 + lootLv * 0.15)) continue;   // 약탈: 희귀 드롭 확률도 +15%/레벨
+      if (d.chance != null && Math.random() > d.chance * (1 + lootLv * 0.15) * (1 + lucky / 100)) continue;   // 약탈: 희귀 드롭 확률도 +15%/레벨
       // V9: 기본 드롭은 약탈 0 기준 0~n개 랜덤(마인크래프트식), 약탈 레벨당 최대 +1
       let n = d.chance != null ? (d.n || 1) : Math.floor(Math.random() * ((d.n || 1) + 1 + lootLv));
       if (n <= 0) continue;
       addItem(d.key, n); addCollection(d.key, n);
       if ((d.chance == null ? 1 : d.chance) <= 0.25) msgs.push(`✨ ${itemName(d.key)} ×${n}`);
     }
-    if (Math.random() < 0.03) {   // 희귀: 드롭 전용 장비
-      const bonus = randomEquipDrop(Math.min(6, mob.tierCap == null ? 2 : mob.tierCap));
+    if (Math.random() < 0.03 * (1 + traitSum('lucky') / 100)) {   // 희귀: 드롭 전용 장비(V11: field 풀 우선)
+      const bonus = equipDropFromSrc('field', Math.min(8, (mob.tierCap == null ? 2 : mob.tierCap) + (mob.rewardMul >= 3 ? 2 : 0))) || randomEquipDrop(Math.min(6, mob.tierCap == null ? 2 : mob.tierCap));
       if (bonus) msgs.push(`🎁 ${bonus.name}`);
+    }
+    // V11: 미니보스/지옥 보스 전용 풀
+    if (mob.equipSrc && Math.random() < (mob.equipSrcChance || 0.25)) {
+      const sp = equipDropFromSrc(mob.equipSrc, 8);
+      if (sp) msgs.push(`🌟 ${sp.name}`);
     }
     // V7: 몹별 인챈트북 드롭(몹마다 다른 북 — 정예는 3배 확률)
     if (mob.books && mob.books.length && Math.random() < (mob.elite ? 0.06 : 0.02)) {
@@ -998,6 +1177,7 @@
   }
   function playerDied3d() {
     if (!P) return;
+    stat('deaths');   // V11
     const loss = P.gold < 10000 ? 0 : Math.floor(P.gold * 0.05);   // V10: 1만G 미만 면제
     if (loss > 0) { addGold(-loss); toastFn(`💀 사망... 골드 ${fmtGold(loss)}을 잃고 스폰으로 돌아갑니다`, false); }
     else toastFn('💀 사망... 스폰으로 돌아갑니다', false);
@@ -1017,9 +1197,11 @@
     const itemKey = fd.lootTable[Math.floor(Math.random() * fd.lootTable.length)];
     addItem(itemKey, 1);
     addSkillXp('combat', Math.round(fd.essenceReward * rewardMul * enchXpMul() * 10));
+    stat('dungeonClears'); stat('bossKills');   // V11
     let bonusMsg = '';
-    if (Math.random() < (master ? 0.8 : 0.40)) {
-      const bonus = randomEquipDrop(Math.min(6, Math.max(1, floor) + (master ? 0 : 0)));
+    if (Math.random() < (master || fd.hell ? 0.8 : 0.40)) {
+      const src = fd.hell ? 'dungeon_hell' : 'dungeon_f' + floor;   // V11: 층별 전용 장비 풀
+      const bonus = equipDropFromSrc(src, null) || randomEquipDrop(Math.min(6, Math.max(1, floor)));
       if (bonus) bonusMsg = ` + 🎁 ${bonus.name}`;
     }
     toastFn(`🏆 ${master ? '☠M' + floor + ' ' : ''}${fd.bossName} 처치! 등급 ${grade} (점수 ${score}) · 정수 +${fd.essenceReward * rewardMul} · ${itemName(itemKey)}${bonusMsg}`, true);
@@ -1027,6 +1209,154 @@
     return grade;
   }
 
+  /* ================ V11 시스템: 핫포북/분해/잠금/핀/장비점수/업적/일퀘/난이도/주간/아레나 ================ */
+  function applyHpb(itemKey) {
+    const HB = D().HPB;
+    const sd = shopDef(itemKey);
+    if (!sd || (sd.category !== '무기' && sd.category !== '방어구')) { toastFn('핫 포테이토 북은 무기/방어구에만!', false); return false; }
+    if (!hasItem(itemKey)) { toastFn('그 장비를 보유하고 있지 않아요', false); return false; }
+    const cur = hpbOf(itemKey);
+    const useFuming = cur >= HB.maxBooks;
+    if (cur >= HB.fumingMax) { toastFn('이미 +15권 최대예요!', false); return false; }
+    const book = useFuming ? 'fuming_potato_book' : 'hot_potato_book';
+    if (!hasItem(book)) { toastFn(`${itemName(book)}이 필요해요 (${useFuming ? '11권째부터는 퓨밍' : '드롭/제작'})`, false); return false; }
+    removeItem(book, 1);
+    if (!P.hpb) P.hpb = {};
+    P.hpb[itemKey] = cur + 1;
+    const isW = sd.category === '무기';
+    toastFn(`🥔 ${sd.name} +${cur + 1}권! (${isW ? `공격 +${HB.weaponDmgPerBook}` : `방어 +${HB.armorDefPerBook}·체력 +${HB.armorHpPerBook}`})`, true);
+    saveNow(); renderZone(); return true;
+  }
+  function salvageItem(key) {
+    const sd = shopDef(key);
+    if (!sd || (sd.category !== '무기' && sd.category !== '방어구')) { toastFn('무기/방어구만 분해할 수 있어요', false); return; }
+    if ((P.locked || {})[key]) { toastFn('🔒 잠긴 장비예요', false); return; }
+    if (!removeItem(key, 1)) { toastFn('보유하고 있지 않아요', false); return; }
+    const SV = D().SALVAGE;
+    const ti = Math.max(0, D().ITEM_TIERS.findIndex(t => t.key === sd.tierKey));
+    const ess = SV.essenceByTier[ti] || 1;
+    addItem('dungeon_essence', ess);
+    let msg = `⚒️ ${sd.name} 분해 → 던전 정수 ×${ess}`;
+    if (Math.random() < SV.bonusChance) { addItem(SV.bonusItem, 1); msg += ` + ${itemName(SV.bonusItem)}`; }
+    toastFn(msg, true);
+    saveNow(); renderZone();
+  }
+  function toggleLock(key) {
+    if (!P.locked) P.locked = {};
+    if (P.locked[key]) delete P.locked[key]; else P.locked[key] = 1;
+    toastFn(P.locked[key] ? `🔒 ${itemName(key)} 잠금 — 판매/분해 방지` : `🔓 ${itemName(key)} 잠금 해제`, true);
+    saveNow(); renderZone();
+  }
+  function togglePin(key) {
+    const sd = shopDef(key); if (!sd || !sd.slot) { toastFn('장착 가능한 장비가 아니에요', false); return; }
+    if (!P.equipPin) P.equipPin = {};
+    if (P.equipPin[sd.slot] === key) { delete P.equipPin[sd.slot]; toastFn(`📌 해제 — ${sd.slot} 슬롯 자동 최적 장착으로 복귀`, true); }
+    else { P.equipPin[sd.slot] = key; toastFn(`📌 ${sd.name} 고정 장착!`, true); }
+    bumpInv(); saveNow(); renderZone();
+  }
+  function gearScore() {
+    let sc = 0;
+    for (const sl of EQUIP_SLOTS) {
+      const p = equippedPiece(sl); if (!p) continue;
+      sc += (p.dmg != null ? p.dmg * (sl === 'bow' ? 0.5 : 1) : (p.defense || 0) * 2 + (p.hp || 0) * 0.5);
+      sc += (p.traits || []).length * 8 + hpbOf(p.key) * 3;
+      sc += (P.starForce[sl] || 0) * 5;
+      if (P.reforgeSlots[sl]) sc += 12;
+    }
+    sc += activeSetBonuses().length * 60;
+    return Math.round(sc);
+  }
+  function equipLogCount() { return Object.keys(P.equipLog || {}).length; }
+  function equipTotalCount() { const E = D().EQUIPMENT; return E.weapons.length + E.armor.length; }
+  // ---- 업적: statValue 기반 자동 달성 ----
+  function statValue(k) {
+    const st = P.stats || {};
+    switch (k) {
+      case 'equipLog': return equipLogCount();
+      case 'fairySouls': return (P.fairySouls || []).length;
+      case 'minionSlots': return P.maxMinionSlots || 0;
+      case 'combatLv': return skillLevel('combat');
+      case 'starMax': return Math.max.apply(null, EQUIP_SLOTS.map(sl => P.starForce[sl] || 0));
+      default: return st[k] || 0;
+    }
+  }
+  let _achT = 0;
+  function checkAchievements(force) {
+    if (!P) return;
+    const now = Date.now();
+    if (!force && now - _achT < 3000) return;
+    _achT = now;
+    if (!P.ach) P.ach = {};
+    for (const a of D().ACHIEVEMENTS) {
+      if (P.ach[a.key]) continue;
+      if (statValue(a.stat) >= a.gte) {
+        P.ach[a.key] = 1;
+        addGold(a.gold || 0);
+        if (a.item) addItem(a.item, 1);
+        toastFn(`🏅 업적 달성! [${a.name}] ${a.desc} — +${fmtGold(a.gold || 0)}${a.item ? ` + ${itemName(a.item)}` : ''}`, true);
+      }
+    }
+  }
+  // ---- 일일 퀘스트: 매일 3종(날짜 시드), 카운터 스냅샷 기반 ----
+  function ensureDaily() {
+    const day = todayStr();
+    if (P.daily && P.daily.date === day) return;
+    const rnd = seededRand('daily' + day);
+    const pool = D().DAILY_QUESTS.slice();
+    const list = [];
+    for (let i = 0; i < 3 && pool.length; i++) list.push(pool.splice(Math.floor(rnd() * pool.length), 1)[0]);
+    P.daily = { date: day, list: list.map(q => ({ k: q.key, base: statValue(q.counter), claimed: false })) };
+    saveNow();
+  }
+  function dailyQuestDef(k) { return D().DAILY_QUESTS.find(q => q.key === k); }
+  function dailyProgress(entry) { const q = dailyQuestDef(entry.k); return Math.min(q.goal, statValue(q.counter) - entry.base); }
+  function claimDaily(idx) {
+    ensureDaily();
+    const e = P.daily.list[idx]; if (!e || e.claimed) return;
+    const q = dailyQuestDef(e.k);
+    if (dailyProgress(e) < q.goal) { toastFn('아직 목표에 도달하지 못했어요', false); return; }
+    e.claimed = true;
+    addGold(q.gold); stat('questsDone');
+    toastFn(`📜 일일 퀘스트 [${q.name}] 완료! +${fmtGold(q.gold)}`, true);
+    checkAchievements(true); saveNow(); renderZone();
+  }
+  // ---- 필드 난이도(쉬움/일반/영웅/지옥) ----
+  function setFieldDiff(key) {
+    const fd = D().FIELD_DIFF[key]; if (!fd) return;
+    if (skillLevel('combat') < fd.req) { toastFn(`${fd.name} 난이도는 전투 스킬 ${fd.req}레벨부터!`, false); return; }
+    P.fieldDiff = key;
+    toastFn(`${fd.emoji} 필드 난이도: ${fd.name} — 몹 강함 ×${fd.hpMul}, 보상 ×${fd.rewardMul}`, true);
+    saveNow(); renderZone();
+  }
+  function fieldDiffDef() { return D().FIELD_DIFF[P.fieldDiff || 'normal'] || D().FIELD_DIFF.normal; }
+  // ---- 주간 순환 강화 보스(ISO 주차 → 계열) ----
+  function weeklyFamily() { return D().WEEKLY.families[Math.floor(Date.now() / 604800000) % D().WEEKLY.families.length]; }
+  // ---- 아레나(콜로세움 웨이브) ----
+  function arenaDiffDef(k) { return D().ARENA.difficulties.find(d => d.key === k); }
+  function startArena(diffKey) {
+    const ad = arenaDiffDef(diffKey); if (!ad) return;
+    if (skillLevel('combat') < ad.req) { toastFn(`${ad.name}은(는) 전투 스킬 ${ad.req}레벨부터!`, false); return; }
+    if (typeof window.economy3dArenaStart !== 'function') { toastFn('3D 월드에서만 시작할 수 있어요', false); return; }
+    if (!window.economy3dArenaStart(diffKey)) return;
+    toastFn(`🏟️ ${ad.name} 개막! 10웨이브를 버텨내세요!`, true);
+    if (typeof window.economy3dClosePanel === 'function') window.economy3dClosePanel();
+  }
+  function arenaWaveCleared(diffKey, wave) {
+    const ad = arenaDiffDef(diffKey); if (!ad || !P) return;
+    addGold(ad.waveGold); stat('arenaWaves');
+    P.arenaBest[diffKey] = Math.max(P.arenaBest[diffKey] || 0, wave);
+    toastFn(`🏟️ 웨이브 ${wave}/${D().ARENA.waves} 클리어! +${fmtGold(ad.waveGold)}`, true);
+    checkAchievements(); saveNow();
+  }
+  function arenaComplete(diffKey) {
+    const ad = arenaDiffDef(diffKey); if (!ad || !P) return;
+    addGold(ad.finalGold); stat('bossKills');
+    let msg = `🏆 ${ad.name} 완전 제패!! +${fmtGold(ad.finalGold)}`;
+    if (Math.random() < D().ARENA.equipChance) { const eq = equipDropFromSrc('arena', null); if (eq) msg += ` + 🎁 ${eq.name}`; }
+    toastFn(msg, true);
+    if (window.econNet && window.econNet.announce) window.econNet.announce(`🏟️ ${ad.name} 제패!`);
+    saveNow(); renderZone();
+  }
   /* ---------------- V9 물약 버프(3분 지속 — 스탯에 합산) ---------------- */
   const POTION_FX = { potion_strength: { stat: 'strength', v: 25 }, potion_speed: { stat: 'speed', v: 20 }, potion_healing: { stat: 'hp', v: 40 } };
   function usePotion(key) {
@@ -1142,20 +1472,21 @@
 
   /* ---------------- 리포지(실제 스카이블럭식: 무작위 명명 리포지 + 스톤 확정 리포지) ---------------- */
   function reforgeSlotCost(slot) {
-    const eq = slot === 'weapon' ? equippedWeapon() : equippedArmor();
+    const eq = equippedPiece(slot);   // V11: 6슬롯 공통
     if (!eq) return null;
     const tierDef = D().ITEM_TIERS.find(t => t.key === eq.tierKey) || D().ITEM_TIERS[0];
     return tierDef.reforgeCost;
   }
+  function reforgePoolType(slot) { return slot === 'weapon' || slot === 'bow' ? 'weapon' : 'armor'; }
   function reforgeSlot(slot) {
     const cost = reforgeSlotCost(slot);
     if (cost == null) { toastFn('장착 중인 장비가 없어요', false); return; }
     if (P.gold < cost) { toastFn('골드가 부족해요', false); return; }
     addGold(-cost);
-    const pool = D().REFORGES[slot];
+    const pool = D().REFORGES[reforgePoolType(slot)];
     const pick = pool[Math.floor(Math.random() * pool.length)];
     P.reforgeSlots[slot] = Object.assign({}, pick);
-    toastFn(`리포지 결과: [${pick.name}] ${slot === 'weapon' ? '무기' : '방어구'}!`, true);
+    toastFn(`리포지 결과: [${pick.name}] ${SLOT_NAMES[slot] || slot}!`, true);
     saveNow(); renderZone();
   }
   function reforgePremium(slot) {
@@ -1164,7 +1495,7 @@
     if (cost == null) { toastFn('장착 중인 장비가 없어요', false); return; }
     if (P.gold < cost * 2) { toastFn(`스톤 리포지는 ${fmtGold(cost * 2)}이 필요해요`, false); return; }
     removeItem('reforge_stone_rare', 1); addGold(-cost * 2);
-    const pick = D().REFORGES.premium[slot];
+    const pick = D().REFORGES.premium[reforgePoolType(slot)];
     P.reforgeSlots[slot] = Object.assign({}, pick);
     toastFn(`💎 스톤 리포지! [${pick.name}] 확정 부여!`, true);
     saveNow(); renderZone();
@@ -1235,8 +1566,29 @@
   function itemLore(sdef) {
     if (!sdef) return '';
     const lines = [sdef.name];
-    if (sdef.dmg) lines.push(`공격력: +${hasItem(sdef.key) ? rolledStat(sdef.key, sdef.dmg) : sdef.dmg}`);
-    if (sdef.defense) lines.push(`방어력: +${hasItem(sdef.key) ? rolledStat(sdef.key, sdef.defense) : sdef.defense}`);
+    if (sdef.slot) lines.push(`[${SLOT_NAMES[sdef.slot] || sdef.slot}]${(P.equipPin || {})[sdef.slot] === sdef.key ? ' 📌 고정 장착' : ''}${(P.locked || {})[sdef.key] ? ' 🔒' : ''}`);
+    if (sdef.dmg) lines.push(`공격력: +${hasItem(sdef.key) ? rolledStat(sdef.key, sdef.dmg) : sdef.dmg}${hpbOf(sdef.key) ? ` (🥔+${hpbOf(sdef.key) * D().HPB.weaponDmgPerBook})` : ''}`);
+    if (sdef.defense) lines.push(`방어력: +${hasItem(sdef.key) ? rolledStat(sdef.key, sdef.defense) : sdef.defense}${hpbOf(sdef.key) ? ` (🥔+${hpbOf(sdef.key) * D().HPB.armorDefPerBook})` : ''}`);
+    if (sdef.hp) lines.push(`체력: +${sdef.hp}`);
+    // V11: 특성 라인(실동작 설명)
+    if (sdef.traits && sdef.traits.length) {
+      const T = D().TRAITS;
+      for (const t of sdef.traits) { const td = T[t.k]; if (td) lines.push(`◈ ${td.n}: ${td.f.replace('{v}', t.v)}`); }
+    }
+    if (sdef.set && D().EQUIP_SETS[sdef.set]) {
+      const sb = D().EQUIP_SETS[sdef.set];
+      const cnt = ['helmet', 'chest', 'leggings', 'boots'].filter(sl => { const p = equippedPiece(sl); return p && p.set === sdef.set; }).length;
+      lines.push(`✦ 세트: ${sb.name} (${cnt}/4) — ${sb.desc}`);
+    }
+    if (sdef.flavor) lines.push(`"${sdef.flavor}"`);
+    // V11: 장착 중 장비와 비교(증감)
+    if (sdef.slot) {
+      const eq = equippedPiece(sdef.slot);
+      if (eq && eq.key !== sdef.key) {
+        const d = sdef.dmg != null ? (sdef.dmg - eq.dmg) : ((sdef.defense || 0) - (eq.defense || 0));
+        lines.push(`장착 중(${eq.name}) 대비: ${d >= 0 ? '▲ +' : '▼ '}${d} ${sdef.dmg != null ? '공격' : '방어'}`);
+      } else if (eq && eq.key === sdef.key) lines.push('✔ 장착 중');
+    }
     const d = shopItemDesc(sdef); if (d) lines.push(d);
     if (sdef.reqCombat) lines.push(`⚔ 요구 전투 레벨: ${sdef.reqCombat}`);
     for (const fam in D().TOOLS) {
@@ -1281,6 +1633,11 @@
       case 'inv': return invHTML();
       case 'menu': return menuHTML();
       case 'slayer': return slayerZoneHTML();
+      case 'ach': return achievementsHTML();
+      case 'daily': return dailyHTML();
+      case 'difficulty': return difficultyHTML();
+      case 'equiplog': return equipLogHTML();
+      case 'arena': return arenaZoneHTML();
       case 'bestiary': return bestiaryHTML();
       case 'skills': return skillsHTML();
     }
@@ -1292,6 +1649,8 @@
       ['stats', '📊', '내 프로필', '스탯 시트'], ['skills', '🧠', '스킬', '8종 스킬 진행도'],
       ['collections', '📚', '컬렉션', '자원 39종 티어'], ['inv', '🎒', '인벤토리', '보유 아이템'],
       ['slayer', '💀', '슬레이어', '의뢰·보스·레벨'], ['minions', '⚙️', '미니언', '조합·컬렉션·수거'],
+      ['ach', '🏅', '업적', `${Object.keys(P.ach || {}).length}/${D().ACHIEVEMENTS.length} 달성`], ['daily', '📜', '일일 퀘스트', '매일 3종·보상'],
+      ['difficulty', '🎚️', '난이도', `현재: ${fieldDiffDef().name}`], ['equiplog', '📔', '장비 도감', `${fmtNum(equipLogCount())}/${fmtNum(equipTotalCount())}종`],
       ['pets', '🐾', '펫', '펫 관리'], ['talismans', '📿', '장신구 가방', '부적/마력'],
       ['craft', '⚒️', '레시피 북', '제작(장인 NPC와 동일)'], ['bestiary', '📕', '도감', '처치 기록·마일스톤 보너스'], ['multi', '🌐', '멀티', '거래·파티·섬 방문'],
     ];
@@ -1350,6 +1709,7 @@
           ${iconImg(k)}<span>${sdef && sdef.tierKey ? `<span style="color:${tierColorByKey(sdef.tierKey)}">${itemName(k)}</span>` : itemName(k)} <b>×${P.inv[k]}</b></span>
           <span class="muted econ-idesc">${shopItemDesc(sdef || { key: k })}</span>
           ${k.indexOf('potion_') === 0 ? `<button class="btn btn--sm" data-act="econ_potion_use" data-key="${k}">🧪 마시기(5분 버프)</button>` : ''}
+          ${sdef && sdef.slot ? `<span><button class="btn btn--sm btn--ghost" data-act="econ_pin" data-key="${k}">${(P.equipPin || {})[sdef.slot] === k ? '📌 고정 해제' : '📌 고정 장착'}</button> <button class="btn btn--sm btn--ghost" data-act="econ_lock" data-key="${k}">${(P.locked || {})[k] ? '🔓' : '🔒'}</button> <button class="btn btn--sm btn--ghost" data-act="econ_salvage" data-key="${k}">⚒️ 분해</button></span>` : ''}
           ${sell ? `<span><button class="btn btn--sm btn--ghost" data-act="econ_sell" data-key="${k}">1개 판매 ${fmtGold(sell)}</button></span>` : '<span class="muted">판매 불가</span>'}
         </div>`;
       }).join('')}</div>`;
@@ -1384,7 +1744,12 @@
     if (t) return tradeHTML(t);
     if (pt) return partyHTML(pt);
     const list = n.peerList();
+    const worldNames = (typeof window.economy3dWorlds === 'function') ? window.economy3dWorlds() : [];
+    const byWorld = {};
+    list.forEach(p => { byWorld[p.world] = (byWorld[p.world] || 0) + 1; });
+    const worldRow = Object.keys(byWorld).map(w => { const wn = worldNames.find(x => x.key === w); return `${wn ? wn.name : w} <b>${byWorld[w]}</b>`; }).join(' · ');
     return `<h4>🌐 멀티플레이 — 접속 중인 플레이어 ${list.length}명</h4>
+      ${worldRow ? `<p class="muted">🗺️ 월드별: ${worldRow} — 프라이빗 섬 외 모든 월드가 공유돼요(장비까지 보여요!)</p>` : ''}
       ${list.length === 0 ? '<p class="econ-note">지금 허브에 다른 플레이어가 없어요. 친구를 초대해보세요!</p>' : ''}
       <div class="econ-shopgrid">${list.map(p => `
         <div class="econ-shopitem">
@@ -1560,16 +1925,17 @@
   }
   function starForceHTML() {
     const SF = D().STARFORCE;
-    const rows = ['weapon', 'armor'].map(slot => {
-      const eq = slot === 'weapon' ? equippedWeapon() : equippedArmor();
+    const rows = EQUIP_SLOTS.map(slot => {
+      const eq = equippedPiece(slot);
       const cur = P.starForce[slot];
       const row = starRow(slot);
       const chance = starChanceTime(slot);
       const bandNow = cur < 5 ? 0 : cur < 10 ? 1 : 2;
-      const gain = slot === 'weapon' ? `공격 +${SF.weaponAtkPctByBand[bandNow]}%` : `방어 +${SF.armorDefByBand[bandNow]} · 체력 +${SF.armorHpByBand[bandNow]}`;
+      const isW = slot === 'weapon' || slot === 'bow';
+      const gain = isW ? `공격 +${SF.weaponAtkPctByBand[bandNow]}%${slot === 'bow' ? '(활은 30% 반영)' : ''}` : `방어 +${SF.armorDefByBand[bandNow]} · 체력 +${SF.armorHpByBand[bandNow]}`;
       return `<div class="econ-starcard">
-        <h4>${slot === 'weapon' ? '⚔️ 무기' : '🛡 방어구'} ★${cur}${chance ? ' <span style="color:#f6c945">🌟 찬스 타임(100%)</span>' : ''}</h4>
-        <p class="muted">${eq ? eq.name : '장착 장비 없음'} · 누적: ${slot === 'weapon' ? `공격 +${starAtkPct()}%` : `방어 +${starDefFlat()} · 체력 +${starHpFlat()}`}</p>
+        <h4>${SLOT_EMOJI[slot]} ${SLOT_NAMES[slot]} ★${cur}${chance ? ' <span style="color:#f6c945">🌟 찬스 타임(100%)</span>' : ''}</h4>
+        <p class="muted">${eq ? eq.name : '장착 장비 없음'} · 전 슬롯 누적: 공격 +${starAtkPct()}% · 방어 +${starDefFlat()} · 체력 +${starHpFlat()}</p>
         ${cur >= SF.maxStars ? '<p><b>★15 최대 강화 달성!</b></p>' : `
         <div class="econ-colgrid">
           <div class="econ-colrow"><span>성공 ${Math.round((chance ? 1 : row[0]) * 100)}%</span><span>유지 ${Math.round((chance ? 0 : row[1]) * 100)}%</span><span>하락 ${Math.round((chance ? 0 : row[2]) * 100)}%</span><span>${row[3] > 0 ? `💣 파괴 ${Math.round((chance ? 0 : row[3]) * 100)}% (★${SF.boomResetTo} 리셋)` : '파괴 없음'}</span></div>
@@ -1579,7 +1945,7 @@
         <p class="muted">2연속 하락 시 다음 강화는 찬스 타임(100% 성공) — 메이플 방식</p>`}
       </div>`;
     }).join('');
-    return `<h4>⭐ 스타포스 강화(메이플식 체계)</h4>${rows}`;
+    return `<h4>⭐ 스타포스 강화(메이플식 체계) — V11: 6슬롯 개별 강화</h4>${rows}`;
   }
   function reforgeHTML() {
     const row = (slot, label, eq) => {
@@ -1589,13 +1955,25 @@
         <h4>${label} — ${eq ? `<span style="color:${tierColorByKey(eq.tierKey)}">${cur ? `[${cur.name}] ` : ''}${eq.name}</span>` : '<span class="muted">장비 없음</span>'}</h4>
         <p class="muted">${cur ? `현재 보너스: ${cur.dmgPct ? `공격 +${cur.dmgPct}% ` : ''}${cur.def ? `방어 +${cur.def} ` : ''}${cur.hp ? `체력 +${cur.hp} ` : ''}${cur.sellBonus ? `판매가 +${cur.sellBonus}%` : ''}` : '리포지 없음 — 무작위 접두어를 부여해보세요'}</p>
         <button class="btn btn--sm" data-act="econ_reforge_slot" data-slot="${slot}" ${eq ? '' : 'disabled'}>🎲 무작위 리포지 ${cost != null ? `(${fmtGold(cost)})` : ''}</button>
-        <button class="btn btn--sm btn--ghost" data-act="econ_reforge_premium" data-slot="${slot}" ${eq && hasItem('reforge_stone_rare') ? '' : 'disabled'}>💎 스톤 확정 [${D().REFORGES.premium[slot].name}] (스톤 1 + ${cost != null ? fmtGold(cost * 2) : '-'})</button>
+        <button class="btn btn--sm btn--ghost" data-act="econ_reforge_premium" data-slot="${slot}" ${eq && hasItem('reforge_stone_rare') ? '' : 'disabled'}>💎 스톤 확정 [${D().REFORGES.premium[reforgePoolType(slot)].name}] (스톤 1 + ${cost != null ? fmtGold(cost * 2) : '-'})</button>
       </div>`;
     };
-    return `<h4>🔨 재련소 — 무작위 리포지로 대박을 노리거나, 리포지 스톤으로 확정 최상급을!</h4>
-      ${row('weapon', '무기', equippedWeapon())}
-      ${row('armor', '방어구', equippedArmor())}
-      <p class="muted">보유 리포지 스톤(희귀): ${P.inv.reforge_stone_rare || 0}</p>`;
+    const HB = D().HPB;
+    const hpbRows = EQUIP_SLOTS.map(sl => {
+      const eq = equippedPiece(sl); if (!eq) return '';
+      const cur = hpbOf(eq.key);
+      const isW = sl === 'weapon' || sl === 'bow';
+      return `<div class="econ-shopitem">
+        ${iconImg(eq.key)}<span>${SLOT_EMOJI[sl]} <span style="color:${tierColorByKey(eq.tierKey)}">${eq.name}</span> <b>🥔+${cur}</b>/${HB.fumingMax}</span>
+        <span class="muted">${isW ? `권당 공격 +${HB.weaponDmgPerBook}` : `권당 방어 +${HB.armorDefPerBook}·체력 +${HB.armorHpPerBook}`} · 10권까지 핫포북, 11~15권 퓨밍</span>
+        <button class="btn btn--sm" data-act="econ_hpb" data-key="${eq.key}" ${cur >= HB.fumingMax ? 'disabled' : ''}>${cur >= HB.maxBooks ? `퓨밍 먹이기(보유 ${P.inv.fuming_potato_book || 0})` : `핫포북 먹이기(보유 ${P.inv.hot_potato_book || 0})`}</button>
+      </div>`;
+    }).join('');
+    return `<h4>🔨 재련소 — 무작위 리포지로 대박을 노리거나, 리포지 스톤으로 확정 최상급을! (V11: 6슬롯)</h4>
+      ${EQUIP_SLOTS.map(sl => row(sl, `${SLOT_EMOJI[sl]} ${SLOT_NAMES[sl]}`, equippedPiece(sl))).join('')}
+      <p class="muted">보유 리포지 스톤(희귀): ${P.inv.reforge_stone_rare || 0}</p>
+      <h4>🥔 핫 포테이토 북 — 장비당 최대 15권(10권부터 퓨밍 필요)</h4>
+      <div class="econ-shopgrid">${hpbRows || '<p class="muted">장착 중인 장비가 없어요</p>'}</div>`;
   }
   function craftHTML() {
     return `<h4>⚒️ 제작대 — 컬렉션 티어를 올리면 레시피가 해금돼요(실제 스카이블럭 방식)</h4>
@@ -1660,8 +2038,92 @@
       </div>
       <h4>스킬</h4>
       <div class="econ-colgrid">${D().SKILLS.map(s => `<div class="econ-colrow"><span>${s.name}</span><span>Lv.${skillLevel(s.key)}</span><span class="muted">${s.bonusText}</span></div>`).join('')}</div>
+      <h4>🗡 전투력(장비 점수): ${fmtNum(gearScore())}</h4>
+      <div class="econ-colgrid">
+        ${EQUIP_SLOTS.map(sl => { const p = equippedPiece(sl); return `<div class="econ-colrow"><span>${SLOT_EMOJI[sl]} ${SLOT_NAMES[sl]}</span><span>${p ? `<span style="color:${tierColorByKey(p.tierKey)}">${p.name}</span>` : '<span class="muted">없음</span>'}</span><span class="muted">${p ? `★${P.starForce[sl] || 0} 🥔${hpbOf(p.key)}${p.set && D().EQUIP_SETS[p.set] ? ` · ${D().EQUIP_SETS[p.set].name}` : ''}` : ''}</span></div>`; }).join('')}
+        ${activeSetBonuses().map(sb => `<div class="econ-colrow"><span>✦ 세트 발동</span><span><b>${sb.def.name}</b></span><span class="muted">${sb.def.desc}</span></div>`).join('')}
+      </div>
+      <h4>📊 전투 통계</h4>
+      <div class="econ-colgrid">
+        <div class="econ-colrow"><span>처치</span><span>${fmtNum(statValue('kills'))}</span><span class="muted">보스급 ${fmtNum(statValue('bossKills'))}</span></div>
+        <div class="econ-colrow"><span>최대 한 방</span><span>${fmtNum(statValue('maxHit'))}</span><span class="muted">사망 ${fmtNum(statValue('deaths'))}회</span></div>
+        <div class="econ-colrow"><span>누적 골드</span><span>${fmtGold(statValue('goldEarned'))}</span><span class="muted">판매 ${fmtNum(statValue('itemsSold'))}개</span></div>
+      </div>
       <h4>펫 · 던전 클래스</h4>
       <p class="muted">${P.activePet ? `활성 펫: ${petDef(P.activePet).name} Lv.${petLevel(P.activePet)}` : '활성 펫 없음'} · 던전 클래스: ${dungeonClassDef(P.dungeonClass).emoji} ${dungeonClassDef(P.dungeonClass).name}</p>`;
+  }
+  /* ---- V11 패널: 업적 · 일일 퀘스트 · 필드 난이도 · 아레나 · 장비 도감 ---- */
+  function achievementsHTML() {
+    checkAchievements(true);
+    const done = Object.keys(P.ach || {}).length;
+    return `<h4>🏅 업적 (${done}/${D().ACHIEVEMENTS.length})</h4>
+      <div class="econ-colgrid">${D().ACHIEVEMENTS.map(a => {
+        const got = !!(P.ach || {})[a.key];
+        const cur = statValue(a.stat);
+        return `<div class="econ-colrow" style="${got ? '' : 'opacity:.65'}"><span>${got ? '🏅' : '🔒'} <b>${a.name}</b></span><span class="muted">${a.desc}</span><span class="muted">${got ? '달성!' : `${fmtNum(Math.min(cur, a.gte))}/${fmtNum(a.gte)}`} · ${fmtGold(a.gold)}${a.item ? ` + ${itemName(a.item)}` : ''}</span></div>`;
+      }).join('')}</div>`;
+  }
+  function dailyHTML() {
+    ensureDaily();
+    return `<h4>📜 일일 퀘스트 — 매일 3종, 자정 리셋</h4>
+      <div class="econ-shopgrid">${P.daily.list.map((e, i) => {
+        const q = dailyQuestDef(e.k); const pr = dailyProgress(e);
+        return `<div class="econ-shopitem">
+          <span>${e.claimed ? '✅' : pr >= q.goal ? '🎁' : '⏳'} <b>${q.name}</b></span>
+          <span class="muted">${fmtNum(pr)}/${fmtNum(q.goal)} · 보상 ${fmtGold(q.gold)}</span>
+          <button class="btn btn--sm" data-act="econ_daily_claim" data-i="${i}" ${!e.claimed && pr >= q.goal ? '' : 'disabled'}>${e.claimed ? '수령 완료' : '보상 받기'}</button>
+        </div>`;
+      }).join('')}</div>
+      <p class="muted">완료 횟수 누적: ${fmtNum(statValue('questsDone'))}회 (업적 연동)</p>`;
+  }
+  function difficultyHTML() {
+    const cur = P.fieldDiff || 'normal';
+    const wk = weeklyFamily(); const wkDef = slayerDef(wk);
+    return `<h4>🎚️ 필드 난이도 — 쉬움부터 극악(지옥)까지</h4>
+      <p class="econ-note">던전·프라이빗 섬을 제외한 <b>모든 필드 몬스터</b>에 적용돼요. 어려울수록 몹 레벨·체력이 오르고 보상 배율과 전용 드롭이 붙어요.</p>
+      <div class="econ-shopgrid">${Object.keys(D().FIELD_DIFF).map(k => {
+        const fd = D().FIELD_DIFF[k]; const ok = skillLevel('combat') >= fd.req;
+        return `<div class="econ-shopitem ${cur === k ? '' : 'is-locked'}">
+          <span>${fd.emoji} <b>${fd.name}</b>${cur === k ? ' <span style="color:#4ade80">✔ 적용 중</span>' : ''}</span>
+          <span class="muted">${fd.desc}</span>
+          <span class="muted">몹 Lv ×${fd.lvMul} · HP ×${fd.hpMul} · 공격 ×${fd.dmgMul} · 보상 ×${fd.rewardMul}</span>
+          <button class="btn btn--sm" data-act="econ_field_diff" data-key="${k}" ${ok && cur !== k ? '' : 'disabled'}>${ok ? '적용' : `전투 Lv${fd.req} 필요`}</button>
+        </div>`;
+      }).join('')}</div>
+      <p class="muted">⭐ 이번 주 주간 보스 계열: <b>${wkDef ? wkDef.name : wk}</b> — 해당 계열 몹 HP·보상 ×${D().WEEKLY.hpMul} (매주 순환)</p>`;
+  }
+  function arenaZoneHTML() {
+    return `<div class="econ-panel"><h4>🏟️ 콜로세움 — 웨이브 아레나(10웨이브 생존전)</h4>
+      <p class="econ-note">검투사 마스터: "몰려오는 적을 전부 쓰러뜨리면 다음 웨이브다. 물러설 곳은 없다!"</p>
+      <div class="econ-shopgrid">${D().ARENA.difficulties.map(ad => {
+        const ok = skillLevel('combat') >= ad.req; const best = (P.arenaBest || {})[ad.key] || 0;
+        return `<div class="econ-shopitem">
+          <span><b>${ad.name}</b> <span class="muted">몹 Lv${ad.lv}</span></span>
+          <span class="muted">웨이브당 ${fmtGold(ad.waveGold)} · 완주 ${fmtGold(ad.finalGold)} + 아레나 전용 장비 ${Math.round(D().ARENA.equipChance * 100)}%</span>
+          <span class="muted">최고 기록: ${best}/${D().ARENA.waves}웨이브</span>
+          <button class="btn btn--sm" data-act="econ_arena_start" data-key="${ad.key}" ${ok ? '' : 'disabled'}>${ok ? '개막!' : `전투 Lv${ad.req} 필요`}</button>
+        </div>`;
+      }).join('')}</div>
+    </div>`;
+  }
+  function equipLogHTML() {
+    const E = D().EQUIPMENT;
+    const bySlot = {};
+    for (const list of [E.weapons, E.armor]) for (const it of list) {
+      const sl = it.slot || 'chest';
+      (bySlot[sl] = bySlot[sl] || { total: 0, got: 0 }).total++;
+      if ((P.equipLog || {})[it.key]) bySlot[sl].got++;
+    }
+    const tot = equipTotalCount(), got = equipLogCount();
+    return `<h4>📔 장비 도감 — ${fmtNum(got)}/${fmtNum(tot)}종 (${(got / tot * 100).toFixed(1)}%)</h4>
+      <div class="econ-colgrid">${EQUIP_SLOTS.map(sl => {
+        const b = bySlot[sl] || { total: 0, got: 0 };
+        const pct = b.total ? b.got / b.total * 100 : 0;
+        return `<div class="econ-colrow"><span>${SLOT_EMOJI[sl]} ${SLOT_NAMES[sl]}</span>
+          <span class="econ-hpbar" style="flex:1;height:12px"><span class="econ-hpbar__fill" style="width:${pct.toFixed(0)}%;background:linear-gradient(90deg,#f6c945,#f97316)"></span></span>
+          <span class="muted">${b.got}/${b.total}종</span></div>`;
+      }).join('')}</div>
+      <p class="muted">100종/400종 등록 시 업적 보상! 장비는 몹·던전·슬레이어·낚시·상자·아레나·지옥 보스가 떨어뜨려요.</p>`;
   }
   function bankSecretHTML() {
     const seedDay = new Date().getDate();
@@ -1722,16 +2184,16 @@
   function dungeonZoneHTML() {
     const MM = D().MASTER_MODE;
     const masterUnlocked = !!P.dungeonBest[MM.unlockFloor] && P.dungeonBest[MM.unlockFloor] !== 'F';
-    return `<div class="econ-panel"><h4>🗝️ 카타콤 — 총 15개 난이도(입구 + 층 7 + 마스터 7)</h4>
+    return `<div class="econ-panel"><h4>🗝️ 카타콤 — 총 18개 난이도(입구 + 층 7 + 마스터 7 + ☠☠지옥 3)</h4>
       <p class="muted">던전 클래스: ${D().DUNGEON_CLASSES.map(c => `<button class="btn btn--sm ${P.dungeonClass === c.key ? '' : 'btn--ghost'}" data-act="econ_dungeon_class" data-key="${c.key}">${c.emoji} ${c.name}</button>`).join(' ')}</p>
       <div class="econ-shopgrid">${D().DUNGEON.floors.map(fd => {
         const ok = canEnterFloor(fd.floor);
         const best = P.dungeonBest[fd.floor];
         return `<div class="econ-floorcard">
-          <h4>${fd.floor === 0 ? '🚪 입구(F0)' : `F${fd.floor}`} — ${fd.bossName}</h4>
-          <p class="muted">보스 HP ${fd.bossHp.toLocaleString()} · 정수 +${fd.essenceReward} · 최고 등급 ${best || '-'}</p>
-          <button class="btn btn--sm" data-act="econ_dungeon_start" data-floor="${fd.floor}" ${ok ? '' : 'disabled'}>${ok ? '입장' : '이전 층 클리어 필요'}</button>
-          ${fd.floor >= 1 ? `<button class="btn btn--sm btn--ghost" data-act="econ_dungeon_start" data-floor="${fd.floor}" data-master="1" ${masterUnlocked ? '' : 'disabled'} title="F7 클리어 시 해금">☠ M${fd.floor} (몹 ×${MM.hpMul} · 보상 ×${MM.rewardMul})</button>` : ''}
+          <h4>${fd.floor === 0 ? '🚪 입구(F0)' : fd.hell ? `☠☠ 지옥 M${fd.floor}` : `F${fd.floor}`} — ${fd.bossName}</h4>
+          <p class="muted">보스 HP ${fmtNum(fd.bossHp)} · 정수 +${fd.essenceReward} · 최고 등급 ${best || '-'}${fd.hell ? ' · <b style="color:#ff5470">극악 난이도</b>' : ''}</p>
+          <button class="btn btn--sm" data-act="econ_dungeon_start" data-floor="${fd.floor}" ${ok ? '' : 'disabled'}>${ok ? '입장' : fd.hell ? 'M7 클리어 필요' : '이전 층 클리어 필요'}</button>
+          ${fd.floor >= 1 && !fd.hell ? `<button class="btn btn--sm btn--ghost" data-act="econ_dungeon_start" data-floor="${fd.floor}" data-master="1" ${masterUnlocked ? '' : 'disabled'} title="F7 클리어 시 해금">☠ M${fd.floor} (몹 ×${MM.hpMul} · 보상 ×${MM.rewardMul})</button>` : ''}
         </div>`;
       }).join('')}</div>
       <p class="muted">☠ 마스터 모드: F7 클리어 후 해금 — 모든 몹이 강화되고 보상 ${MM.rewardMul}배</p>
@@ -1799,6 +2261,13 @@
       case 'minion_fuel': useMinionFuel(el.dataset.key); break;
       case 'minion_collect_all': collectAllMinions(); break;
       case 'inv_filter': invFilter = el.dataset.key; renderZone(); break;
+      case 'hpb': applyHpb(el.dataset.key); break;
+      case 'salvage': salvageItem(el.dataset.key); break;
+      case 'lock': toggleLock(el.dataset.key); break;
+      case 'pin': togglePin(el.dataset.key); break;
+      case 'daily_claim': claimDaily(Number(el.dataset.i)); break;
+      case 'field_diff': setFieldDiff(el.dataset.key); break;
+      case 'arena_start': startArena(el.dataset.key); break;
       case 'pet_hatch': hatchPet(el.dataset.key); break;
       case 'pet_activate': activatePet(el.dataset.key); break;
       case 'enchant': applyEnchant(el.dataset.key); break;
@@ -1863,8 +2332,9 @@
     dailySoldCheck();
     bankInterestTick();
     tickMinions();
+    ensureDaily(); checkAchievements(true);   // V11
     running = true;
-    tickTimer = setInterval(() => { tickMinions(); if (running) renderZone(); }, 3000);
+    tickTimer = setInterval(() => { tickMinions(); ensureDaily(); checkAchievements(); if (running) renderZone(); }, 3000);
     // 멀티플레이 채널 접속(오프라인이면 조용히 비활성)
     if (window.econNet) {
       window.econNet.start();
@@ -1913,7 +2383,8 @@
     // 3D 인월드 게임플레이 브리지
     toolMul: fam => bestToolMul(fam),
     toolPower: fam => ({
-      speedMul: bestToolMul(fam) * (1 + enchantLvl('tool', 'efficiency') * 0.12) * (fam === 'pickaxe' && hasItem('stonk') ? 1.6 : 1),
+      speedMul: bestToolMul(fam) * (1 + enchantLvl('tool', 'efficiency') * 0.12) * (fam === 'pickaxe' && hasItem('stonk') ? 1.6 : 1)
+        * (1 + (traitSum('gatherer') + (fam === 'pickaxe' ? traitSum('miner') : fam === 'axe' ? traitSum('lumber') : 0)) / 100),   // V11 특성
       fortunePct: enchantLvl('tool', 'fortune') * 20,
       area: enchantLvl('tool', 'area_mining'),
       treecap: fam === 'axe' && hasItem('treecapitator'),
@@ -1939,7 +2410,25 @@
       return out;
     },
     canEnterFloor,
-    dungeonFloorInfo: f => { const fd = dungeonFloorDef(f); return fd ? { floor: fd.floor, bossName: fd.bossName, bossHp: fd.bossHp, bossDmg: fd.bossDmg, mobList: fd.mobList, essenceReward: fd.essenceReward } : null; },
+    // ---- V11 브리지 ----
+    fieldDiff: () => fieldDiffDef(),
+    weeklyFamily,
+    slayerFamilyOf: t => SLAYER_MOB_MAP[t] || null,
+    arenaDiff: k => arenaDiffDef(k),
+    arenaWaveCleared, arenaComplete,
+    traitSum, guardPct,
+    anglerPct: () => traitSum('angler'),
+    checkAch: () => checkAchievements(),
+    equipDropFromSrc,
+    addSharedXp: v => { if (P && v > 0) { addSkillXp('combat', Math.round(v)); toastFn(`🤝 파티 사냥 XP +${Math.round(v)}`, true); } },
+    gearScore,
+    peerGear: () => {   // V11: 프레즌스에 싣는 장착 요약(무기 키 + 티어 인덱스 5개)
+      if (!P) return null;
+      const tIdx = k => { const p = equippedPiece(k); return p ? D().ITEM_TIERS.findIndex(t => t.key === p.tierKey) : -1; };
+      const w = equippedPiece('weapon');
+      return { w: w ? w.key : null, wt: tIdx('weapon'), t: [tIdx('helmet'), tIdx('chest'), tIdx('leggings'), tIdx('boots')], gs: gearScore() };
+    },
+    dungeonFloorInfo: f => { const fd = dungeonFloorDef(f); return fd ? { floor: fd.floor, bossName: fd.bossName, bossHp: fd.bossHp, bossDmg: fd.bossDmg, mobList: fd.mobList, essenceReward: fd.essenceReward, hell: !!fd.hell } : null; },   // V11: hell 플래그
     dungeonComplete: dungeon3dComplete,
     isFresh: () => !!P && Object.keys(P.collections).length === 0 && P.minions.length === 0 && Object.keys(P.homeEdits).length === 0,
   };
@@ -1967,6 +2456,10 @@
       dealsForToday, buyDeal, bestToolMul, sellBonusPct, minionSlotCost,
       freshPlayer, migrate, saveNow, saveLocal, loadLocal, loadCloud, cloudReady,
       setZone: z => { zone = z; }, getZone: () => zone, setHubTab: t => { hubTab = t; }, getHubTab: () => hubTab,
+      // V11 테스트 노출
+      equippedPiece, equippedBow, applyHpb, salvageItem, toggleLock, togglePin, gearScore, statValue,
+      checkAchievements, ensureDaily, claimDaily, setFieldDiff, weeklyFamily, startArena, arenaWaveCleared, arenaComplete,
+      traitSum, traitCtxMul, activeSetBonuses, equipDropFromSrc, hpbOf, equippedWeaponDmg,
     };
   }
 })();

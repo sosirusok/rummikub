@@ -148,6 +148,7 @@
     { key: 'petKeeper', name: '펫 상인', zone: 'hub', tab: 'pets', x: 250, z: 241, color: 0xe048c4 },
     { key: 'enchanter', name: '마법부여사', zone: 'hub', tab: 'enchant', x: 224, z: 201, color: 0x9365b8 },
     { key: 'auctioneer', name: '경매인', zone: 'hub', tab: 'deals', x: 212, z: 226, color: 0xc0392b },
+    { key: 'gladiator', name: '검투사 마스터', zone: 'hub', tab: 'arena', x: 224, z: 346, color: 0xb8860b },   // V11: 콜로세움 아레나
     { key: 'reforgeSmith', name: '재련 대장장이', zone: 'hub', tab: 'reforge', x: 238, z: 226, color: 0x6b5436 },
     { key: 'guide', name: '모험 안내인', zone: 'hub', tab: 'stats', x: 224, z: 247, color: 0x2c82c9 },
     { key: 'craftsman', name: '장인(제작대)', zone: 'hub', tab: 'craft', x: 214, z: 210, color: 0x8a6a3a },
@@ -1208,8 +1209,11 @@
     const fd = api.dungeonFloorInfo ? api.dungeonFloorInfo(floor) : null;
     if (!fd) return false;
     const MM = window.ECON_DATA.MASTER_MODE;
+    const isHell = !!fd.hell;   // V11: 지옥층(M8~M10) — 자체 배율, 마스터 토글 무시
+    if (isHell) master = false;
     if (master && !(api.canEnterFloor && api.canEnterFloor(MM.unlockFloor + 1))) { if (typeof toast === 'function') toast('☠ 마스터 모드는 F7 클리어 후 해금!', false); return true; }
-    dungeonState = { floor, fd, rooms: [], t0: performance.now(), deaths: 0, kills: 0, bossSpawned: false, done: false, master: !!master };
+    const hellMul = isHell ? [3, 6, 12][Math.min(2, floor - 8)] : 1;
+    dungeonState = { floor, fd, rooms: [], t0: performance.now(), deaths: 0, kills: 0, bossSpawned: false, done: false, master: !!master, hell: isHell };
     hidePanel();
     travelTo('dungeon', true);
     // 방 5개: 몬스터 배치(방마다 4마리, 층 몹 이름/스탯)
@@ -1224,12 +1228,14 @@
       dynamicInteractables.push({ type: 'dgSecret', ref: { room: i, done: false }, x: sx + 0.5, y: 4, z: sz + 0.5 });
       for (let k = 0; k < room.need; k++) {
         // V8: 층별 던전 몹 15종 풀에서 랜덤(총 105종) — 방마다 조합이 다르다
-        const typeKey = `dg_f${Math.max(1, floor)}_${Math.floor(Math.random() * 15)}`;
+        const typeKey = `dg_f${Math.min(7, Math.max(1, floor))}_${Math.floor(Math.random() * 15)}`;   // V11: 지옥층은 F7 풀 재사용
         const area = { x: room.x0 + 4 + Math.random() * (room.x1 - room.x0 - 8), z: 14 + Math.random() * 20, r: 3, world: 'dungeon' };
         let def0 = MOB_TYPES[typeKey];
         if (floor === 0) def0 = Object.assign({}, def0, { hp: Math.round(def0.hp * 0.4), dmg: Math.round(def0.dmg * 0.5), name: def0.name.replace(/F\d+/, 'F0') });
         if (master) def0 = Object.assign({}, def0, { name: '☠ ' + def0.name.replace('F' + floor, 'M' + floor), hp: Math.round(def0.hp * MM.hpMul), dmg: Math.round(def0.dmg * MM.dmgMul) });
-        const mob = spawnMob(area, typeKey, floor * 4 + 1 + Math.floor(Math.random() * 4), (floor === 0 || master) ? def0 : null);
+        if (isHell) def0 = Object.assign({}, def0, { name: '☠☠ ' + def0.name.replace('F7', 'M' + floor), hp: Math.round(def0.hp * hellMul), dmg: Math.round(def0.dmg * hellMul * 0.6) });   // V11
+        const mobLv = isHell ? [65, 80, 95][Math.min(2, floor - 8)] + Math.floor(Math.random() * 5) : floor * 4 + 1 + Math.floor(Math.random() * 4);
+        const mob = spawnMob(area, typeKey, mobLv, (floor === 0 || master || isHell) ? def0 : null);
         if (mob) mob.dungeonRoom = i;
       }
     }
@@ -2194,7 +2200,8 @@
       const r = api.fishCatch();
       if (r) {
         if (typeof toast === 'function') toast(`🎣 ${r.name} ×${r.n}${r.extra && r.extra.kind === 'treasure' ? ` + 보물 ${r.extra.coins}G!` : ''}`, true);
-        if (r.extra && r.extra.kind === 'seaCreature') spawnSeaCreature(fishing.x, fishing.z);
+        if (r.extra && r.extra.kind === 'seaCreature') spawnSeaCreature(fishing.x, fishing.z, r.extra.deep);
+        if (r.extra && r.extra.kind === 'equip' && typeof toast === 'function') toast(`🎣💎 낚시 대어! 장비 [${r.extra.name}] 획득!!`, true);
       }
     }
     const cross = document.getElementById('econ3dCross'); if (cross) cross.textContent = '+';
@@ -2216,6 +2223,12 @@
     slime: { name: '슬라임', kind: 'slime', color: 0x5ac26a, hp: 120, dmg: 14, xp: 8, coins: 2, speed: 1.4, books: ['magnet', 'big_brain'], drops: [{ key: 'emerald', n: 1, chance: 0.08 }], tierCap: 2 },
     miner_zombie: { name: '광부 좀비', kind: 'humanoid', color: 0x7a6a4a, hp: 200, dmg: 28, xp: 15, coins: 5, speed: 1.8, books: ['efficiency'], drops: [{ key: 'iron', n: 1, chance: 0.4 }, { key: 'coal', n: 2, chance: 0.5 }], tierCap: 2 },
     lapis_zombie: { name: '청금석 좀비', kind: 'humanoid', color: 0x2a4fc0, hp: 260, dmg: 32, xp: 18, coins: 6, speed: 1.8, books: ['fortune'], drops: [{ key: 'lapis', n: 3 }], tierCap: 3 },
+    // V11: 지옥 난이도 전용 필드 보스 5종(hellOnly 구역 — 전용 장비 풀 hell_boss)
+    hell_reaper: { name: '지옥 사신 카론', kind: 'tall', color: 0x1a0a0a, hp: 5200, dmg: 60, xp: 400, coins: 500, speed: 2.6, scale: 2.0, fixedLv: 88, hellBoss: true, equipSrc: 'hell_boss', equipSrcChance: 0.6, books: ['giant_killer', 'execute'], drops: [{ key: 'fuming_potato_book', n: 1, chance: 0.3 }, { key: 'ender_shard', n: 4 }], tierCap: 8 },
+    hell_broodmatron: { name: '지옥 모충 니드호그', kind: 'spider', color: 0x3a0a14, hp: 4400, dmg: 52, xp: 360, coins: 450, speed: 3.0, scale: 1.9, fixedLv: 82, hellBoss: true, equipSrc: 'hell_boss', equipSrcChance: 0.6, books: ['venomous', 'triple_strike'], drops: [{ key: 'spider_eye', n: 6 }, { key: 'hot_potato_book', n: 1, chance: 0.4 }], tierCap: 8 },
+    hell_infernal: { name: '겁화의 군주 수르트', kind: 'blaze', color: 0xff3a00, hp: 6000, dmg: 70, xp: 450, coins: 600, speed: 2.4, scale: 1.8, fixedLv: 92, hellBoss: true, equipSrc: 'hell_boss', equipSrcChance: 0.6, books: ['sharpness', 'last_stand'], drops: [{ key: 'blaze_rod', n: 6 }, { key: 'fuming_potato_book', n: 1, chance: 0.3 }], tierCap: 8 },
+    hell_voidtyrant: { name: '공허 폭군 제로스', kind: 'tall', color: 0x14061f, hp: 6800, dmg: 78, xp: 520, coins: 700, speed: 2.7, scale: 2.1, fixedLv: 96, hellBoss: true, equipSrc: 'hell_boss', equipSrcChance: 0.6, books: ['ender_slayer', 'true_protection'], drops: [{ key: 'ender_pearl', n: 6 }, { key: 'fuming_potato_book', n: 1, chance: 0.35 }], tierCap: 8 },
+    hell_abysswarden: { name: '심층 감시자 모르드', kind: 'humanoid', color: 0x0a1a2a, hp: 5600, dmg: 64, xp: 420, coins: 550, speed: 2.2, scale: 2.0, fixedLv: 85, hellBoss: true, equipSrc: 'hell_boss', equipSrcChance: 0.6, books: ['fortune', 'efficiency'], drops: [{ key: 'diamond', n: 5 }, { key: 'hot_potato_book', n: 1, chance: 0.4 }], tierCap: 8 },
     // V10 ⑱: 필드 미니보스 3종 — 고정 레벨 + 유니크 전리품(희귀)
     yeti: { name: '❄ 예티', kind: 'tall', color: 0xe8f2f6, hp: 2400, dmg: 31, xp: 150, coins: 200, speed: 2.2, scale: 1.9, fixedLv: 40, miniboss: true, books: ['giant_killer', 'protection'], drops: [{ key: 'yeti_fur', n: 1, chance: 0.34 }, { key: 'diamond', n: 3, chance: 0.5 }, { key: 'emerald', n: 2, chance: 0.3 }], tierCap: 5 },
     gold_golem: { name: '⛏ 골드 골렘', kind: 'tall', color: 0xd8b23a, hp: 2200, dmg: 29, xp: 130, coins: 240, speed: 1.6, scale: 1.7, fixedLv: 35, miniboss: true, books: ['fortune', 'efficiency'], drops: [{ key: 'golem_core', n: 1, chance: 0.34 }, { key: 'gold', n: 6 }, { key: 'emerald', n: 2, chance: 0.4 }], tierCap: 5 },
@@ -2355,6 +2368,12 @@
     { world: 'hub', x: 224, z: 110, r: 14, types: ['yeti'], lv: [40, 40], cap: 1, respawn: 90 },          // 설산 정상
     { world: 'gold', x: 56, z: 46, r: 16, types: ['gold_golem'], lv: [35, 35], cap: 1, respawn: 90 },     // 골드 광산 심부
     { world: 'mushroom', x: 72, z: 72, r: 20, types: ['mushroom_king'], lv: [25, 25], cap: 1, respawn: 90 },   // 버섯 사막 중앙
+    // V11: 지옥 난이도 전용 보스 구역(각 월드 1) — hellOnly
+    { world: 'hub', x: 152, z: 330, r: 12, types: ['hell_reaper'], lv: [88, 88], cap: 1, respawn: 150, hellOnly: true },       // 묘지 심부
+    { world: 'spider', x: 64, z: 64, r: 8, types: ['hell_broodmatron'], lv: [82, 82], cap: 1, respawn: 150, hellOnly: true },  // 거미산 정상
+    { world: 'nether', x: 64, z: 64, r: 14, types: ['hell_infernal'], lv: [92, 92], cap: 1, respawn: 150, hellOnly: true },
+    { world: 'end', x: 64, z: 64, r: 16, types: ['hell_voidtyrant'], lv: [96, 96], cap: 1, respawn: 150, hellOnly: true },
+    { world: 'deep', x: 48, z: 48, r: 14, y: 10, types: ['hell_abysswarden'], lv: [85, 85], cap: 1, respawn: 150, hellOnly: true },
   ]);
   let mobs = [];               // {type,def,lv,elite,hp,maxHp,dmg,mesh,label,labelCv,area,state,tx,tz,atkCd,hitIdx,dead}
   let _spawnT = 0;
@@ -2462,11 +2481,25 @@
     const y = area.y != null ? groundBelow(Math.floor(x), Math.floor(z), area.y + 2) : surfaceTop(Math.floor(x), Math.floor(z));
     if (y <= SEA + 1 && worldMode === 'hub') return null;   // 물 위 스폰 방지
     const elite = !customDef && !def.miniboss && Math.random() < 0.05;   // 미니보스는 정예 중첩 제외(설계 난이도 고정)
+    // V11: 필드 난이도(쉬움~지옥) — 던전/프라이빗/방문 제외 전 필드 적용
+    const apiF = econApi();
+    const isField = worldMode !== 'dungeon' && worldMode !== 'home' && worldMode !== 'visit' && !customDef;
+    const fdiff = isField && apiF.fieldDiff ? apiF.fieldDiff() : null;
+    let hpMulD = 1, dmgMulD = 1, rewardMul = 1;
+    if (fdiff) {
+      lv = Math.max(1, Math.min(100, Math.round(lv * fdiff.lvMul)));   // V11: 지옥은 Lv100까지
+      hpMulD = fdiff.hpMul; dmgMulD = fdiff.dmgMul; rewardMul = fdiff.rewardMul;
+    }
+    let weekly = false;   // V11: 주간 순환 강화 보스 계열(⭐ HP·보상 2배)
+    if (isField && apiF.weeklyFamily && apiF.slayerFamilyOf && apiF.slayerFamilyOf(typeKey) === apiF.weeklyFamily()) {
+      weekly = true;
+      const WK = window.ECON_DATA.WEEKLY; hpMulD *= WK.hpMul; rewardMul *= WK.rewardMul;
+    }
     const mul = 1 + (lv - 1) * 0.35;
     const mob = {
-      type: typeKey, def, lv, elite,
-      maxHp: Math.round(def.hp * mul * (elite ? 2.5 : 1)),
-      dmg: Math.round(def.dmg * mul * (elite ? 1.5 : 1)),
+      type: typeKey, def, lv, elite, rewardMul, weekly,
+      maxHp: Math.round(def.hp * mul * (elite ? 2.5 : 1) * hpMulD),
+      dmg: Math.round(def.dmg * mul * (elite ? 1.5 : 1) * dmgMulD),
       state: 'wander', tx: x, tz: z, atkCd: 0, hitIdx: 0, area, walkT: Math.random() * 6,
     };
     mob.hp = mob.maxHp;
@@ -2481,6 +2514,7 @@
       mob.mesh.add(ring); mob.auraRing = ring;
     }
     mob.mesh.position.set(x, y, z);
+    if (weekly) mob.def = Object.assign({}, mob.def, { name: '⭐ ' + mob.def.name });
     const lbl = mkMobLabel(mob);
     lbl.position.set(0, def.kind === 'tall' ? 3.2 : 2.4, 0);
     mob.mesh.add(lbl);
@@ -2488,13 +2522,79 @@
     mobs.push(mob);
     return mob;
   }
-  function spawnSeaCreature(x, z) {
+  /* ---- V11: 콜로세움 웨이브 아레나(10웨이브 × 4난이도) ---- */
+  let arenaState = null;   // {diff, ad, wave, pending}
+  const ARENA_POS = { x: 224, z: 352, r: 10 };
+  const ARENA_WAVE_MOBS = ['zombie', 'skeleton', 'spider', 'wolf', 'blaze', 'wither_skeleton', 'magma_cube', 'enderman'];
+  function economy3dArenaStart(diffKey) {
+    if (!running || worldMode !== 'hub') { if (typeof toast === 'function') toast('아레나는 허브 콜로세움에서!', false); return false; }
+    const api = econApi();
+    const ad = api.arenaDiff ? api.arenaDiff(diffKey) : null;
+    if (!ad || arenaState) return false;
+    arenaState = { diff: diffKey, ad, wave: 0, pending: 0 };
+    P.x = ARENA_POS.x + 0.5; P.z = ARENA_POS.z + 6.5; P.y = surfaceTop(ARENA_POS.x, ARENA_POS.z + 6) + 0.02;
+    arenaNextWave();
+    return true;
+  }
+  function arenaNextWave() {
+    if (!arenaState) return;
+    arenaState.wave++;
+    const W10 = window.ECON_DATA.ARENA.waves;
+    if (arenaState.wave > W10) {
+      const api = econApi(); if (api.arenaComplete) api.arenaComplete(arenaState.diff);
+      arenaState = null;
+      return;
+    }
+    const ad = arenaState.ad;
+    const n = 3 + Math.floor(arenaState.wave / 2);   // 3~8마리
+    arenaState.pending = n;
+    for (let i = 0; i < n; i++) {
+      const tk = ARENA_WAVE_MOBS[Math.floor(Math.random() * ARENA_WAVE_MOBS.length)];
+      const base = MOB_TYPES[tk];
+      const def = Object.assign({}, base, {
+        name: `🏟️ ${base.name}`, passive: false,
+        hp: Math.round(base.hp * ad.hpMul * (1 + arenaState.wave * 0.25)),
+        dmg: Math.round(base.dmg * (0.8 + ad.hpMul * 0.25)),
+      });
+      const mob = spawnMob({ x: ARENA_POS.x, z: ARENA_POS.z, r: ARENA_POS.r, world: 'hub' }, tk, ad.lv + arenaState.wave, def);
+      if (mob) { mob.arena = true; mob.state = 'chase'; }
+    }
+    if (typeof toast === 'function') toast(`🏟️ 웨이브 ${arenaState.wave}/${W10} — ${n}마리!`, arenaState.wave === 1);
+  }
+  function onArenaMobDead(m) {
+    if (!arenaState) return;
+    arenaState.pending--;
+    if (arenaState.pending <= 0) {
+      const api = econApi();
+      if (api.arenaWaveCleared) api.arenaWaveCleared(arenaState.diff, arenaState.wave);
+      setTimeout(() => { if (running && arenaState) arenaNextWave(); }, 1800);
+    }
+  }
+  function cancelArena() {
+    if (!arenaState) return;
+    for (let i = mobs.length - 1; i >= 0; i--) if (mobs[i].arena) { scene.remove(mobs[i].mesh); disposeGroup(mobs[i].mesh); mobs.splice(i, 1); }
+    arenaState = null;
+  }
+  window.economy3dArenaStart = economy3dArenaStart;
+  const DEEP_SEA = [   // V11: 낚시 Lv15+ 심해 전설 생물(전용 장비 풀 deep_fishing)
+    { name: '심해 아귀 어둠니', kind: 'quad', color: 0x0a2a3a, hp: 2600, dmg: 34, xp: 250, coins: 350, speed: 2.4, scale: 1.6, fixedLv: 40, equipSrc: 'deep_fishing', equipSrcChance: 0.45, books: ['magnet'], drops: [{ key: 'prismarine', n: 4 }, { key: 'sponge', n: 2, chance: 0.5 }], tierCap: 6 },
+    { name: '심연 리바이어던', kind: 'dragon', color: 0x123a5a, hp: 4200, dmg: 46, xp: 380, coins: 550, speed: 2.2, scale: 1.4, fixedLv: 60, equipSrc: 'deep_fishing', equipSrcChance: 0.5, books: ['giant_killer'], drops: [{ key: 'enchanted_iron', n: 1, chance: 0.4 }, { key: 'clay', n: 5 }], tierCap: 7 },
+    { name: '바다 황제 포세돈', kind: 'tall', color: 0x1a5a7a, hp: 5600, dmg: 56, xp: 480, coins: 750, speed: 2.5, scale: 1.9, fixedLv: 80, equipSrc: 'deep_fishing', equipSrcChance: 0.55, books: ['last_stand'], drops: [{ key: 'pufferfish', n: 6 }, { key: 'hot_potato_book', n: 1, chance: 0.35 }], tierCap: 8 },
+  ];
+  function spawnSeaCreature(x, z, deep) {
     const area = { x, z, r: 3, world: worldMode };
-    const mob = spawnMob(area, 'sea_walker', 5 + Math.floor(Math.random() * 20));
-    if (mob && typeof toast === 'function') toast('🌊 바다 생물이 낚였다! 전투 준비!', false);
+    let mob;
+    if (deep) {   // V11: 심해 생물 — 커스텀 def 소환
+      const def = DEEP_SEA[Math.floor(Math.random() * DEEP_SEA.length)];
+      mob = spawnMob(area, 'sea_walker', def.fixedLv, def);
+      if (mob && typeof toast === 'function') toast(`🌊🌊 심해가 요동친다... ${def.name}이(가) 낚였다!!`, false);
+    } else {
+      mob = spawnMob(area, 'sea_walker', 5 + Math.floor(Math.random() * 20));
+      if (mob && typeof toast === 'function') toast('🌊 바다 생물이 낚였다! 전투 준비!', false);
+    }
     if (mob) { mob.state = 'chase'; }
   }
-  function clearMobs() { for (const m of mobs) { scene.remove(m.mesh); disposeGroup(m.mesh); } mobs = []; }
+  function clearMobs() { arenaState = null; for (const m of mobs) { scene.remove(m.mesh); disposeGroup(m.mesh); } mobs = []; }   // V11: 월드 전환 시 아레나 종료
   function tickMobs(dt) {
     // 스폰 유지(구역별 밀도 관리)
     _spawnT += dt;
@@ -2502,8 +2602,10 @@
       _spawnT = 0;
       const apiS = econApi();
       const quest = apiS.slayerQuest ? apiS.slayerQuest() : null;   // V10 ⑰: 퀘스트 중 계열 스폰 +50%
+      const fdiffS = apiS.fieldDiff ? apiS.fieldDiff() : null;
       for (const area of SPAWN_AREAS) {
         if (area.world !== worldMode) continue;
+        if (area.hellOnly && (!fdiffS || fdiffS.hpMul < 5)) continue;   // V11: 지옥 난이도 전용 구역
         if (area._cd > 0) { area._cd -= 2.5; continue; }   // V10: 보스 구역 리스폰 쿨다운
         let cap = area.cap;
         if (quest && apiS.slayerMobMap && area.types.some(t => apiS.slayerMobMap[t] === quest.key)) cap = Math.ceil(cap * 1.5);
@@ -2544,7 +2646,15 @@
         if (distP < 1.8 && m.atkCd <= 0) {
           m.atkCd = 1.3;
           const defPct = api.defensePct ? api.defensePct(php && php.hp <= php.max * 0.3) : 0;
-          damagePlayer(m.dmg * (0.85 + Math.random() * 0.3) * (1 - defPct));
+          const dealt = m.dmg * (0.85 + Math.random() * 0.3) * (1 - defPct);
+          damagePlayer(dealt);
+          const th = api.traitSum ? api.traitSum('thorns') : 0;   // V11: 가시 — 받은 피해 반사
+          if (th > 0 && !m.ghost && !m.dead && mobs.indexOf(m) >= 0) {   // 사망→리스폰으로 몹이 정리됐으면 스킵
+            m.hp -= dealt * th / 100;
+            spawnDmgText(m.mesh.position, dealt * th / 100, false);
+            if (m.hp <= 0 && !m.dead) { attackMobFinish(m); continue; }   // V11: 가시로 처치 시 이번 반복 종료(스플라이스 후 잔여 처리 방지)
+            else drawMobLabel(m);
+          }
         }
       } else {
         const wdx = m.tx - mp.x, wdz = m.tz - mp.z;
@@ -2600,35 +2710,48 @@
       if (window.econNet) window.econNet.partySendAttack3(m.netId, rg.dmg);
       return;
     }
-    const r = api.attackMob({ hitIdx: m.hitIdx, hp: m.hp, maxHp: m.maxHp, isBoss: false });
+    const isBossGrade = !!(m.isBoss || m.def.miniboss || m.def.hellBoss || m.def.kind === 'dragon' || m.type === 'arachne' || m.type === 'broodmother');
+    const r = api.attackMob({ hitIdx: m.hitIdx, hp: m.hp, maxHp: m.maxHp, isBoss: isBossGrade, mobType: m.type, phpPct: php ? php.hp / php.max : 1 });
     m.hitIdx++;
     m.hp -= r.dmg;
-    if (php && r.heal) php.hp = Math.min(php.max, php.hp + r.heal);
+    if (php && r.heal) { php.hp = Math.min(php.max, php.hp + r.heal); }
     spawnDmgText(m.mesh.position, r.dmg, r.crit);
     // 넉백
     const kb = 0.7; const dx = m.mesh.position.x - P.x, dz = m.mesh.position.z - P.z; const l = Math.hypot(dx, dz) || 1;
     m.mesh.position.x += dx / l * kb; m.mesh.position.z += dz / l * kb;
     m.state = 'chase';
-    if (m.hp <= 0) {
-      m.dead = true;
-      const lvMul = 1 + (m.lv - 1) * 0.12;
-      if (api.mobKilled) api.mobKilled({
-        name: `[Lv ${m.lv}] ${m.def.name}${m.elite ? '★' : ''}`,
-        coins: Math.round(m.def.coins * lvMul * (m.elite ? 3 : 1)),
-        xp: Math.round(m.def.xp * lvMul * (m.elite ? 3 : 1)),
-        drops: m.def.drops, tierCap: m.def.tierCap + (m.elite ? 1 : 0),
-        books: m.def.books || [], elite: m.elite, lv: m.lv,
-        equipChance: m.def.equipChance,   // 몹별 상이(없으면 economy.js가 레벨·티어로 산출)
-      });
-      if (m.area && m.area.cap === 1 && m.area.respawn) m.area._cd = m.area.respawn;   // V10: 단일 보스 리스폰 대기
-      // V10 ㉑: 보스급 처치는 전서버 알림(멀티 접속 시)
-      if ((m.isBoss || m.def.miniboss || m.def.kind === 'dragon' || m.type === 'arachne' || m.type === 'broodmother') && window.econNet && window.econNet.announce) {
-        window.econNet.announce(`⚔ [Lv ${m.lv}] ${m.def.name} 처치!`);
-      }
-      scene.remove(m.mesh); disposeGroup(m.mesh);
-      mobs.splice(mobs.indexOf(m), 1);
-      if (worldMode === 'dungeon') onDungeonMobDead(m);
-    } else drawMobLabel(m);
+    if (m.hp <= 0) attackMobFinish(m);
+    else drawMobLabel(m);
+  }
+  // V11: 처치 정산(직접 타격·가시 반사 공용) — 보상/알림/던전/아레나 훅 일원화
+  function attackMobFinish(m) {
+    if (m.dead) return;
+    m.dead = true;
+    const api = econApi();
+    const isBossGrade = !!(m.isBoss || m.def.miniboss || m.def.hellBoss || m.def.kind === 'dragon' || m.type === 'arachne' || m.type === 'broodmother');
+    const lvMul = 1 + (m.lv - 1) * 0.12;
+    if (api.mobKilled) api.mobKilled({
+      name: `[Lv ${m.lv}] ${m.def.name}${m.elite ? '★' : ''}`,
+      coins: Math.round(m.def.coins * lvMul * (m.elite ? 3 : 1)),
+      xp: Math.round(m.def.xp * lvMul * (m.elite ? 3 : 1)),
+      drops: m.def.drops, tierCap: m.def.tierCap + (m.elite ? 1 : 0),
+      books: m.def.books || [], elite: m.elite, lv: m.lv,
+      equipChance: m.def.equipChance,   // 몹별 상이(없으면 economy.js가 레벨·티어로 산출)
+      boss: isBossGrade,                             // V11: 보스급 카운터
+      rewardMul: m.rewardMul || 1,                   // V11: 난이도/주간 보상 배율
+      equipSrc: m.def.equipSrc || null,              // V11: 전용 장비 풀(미니보스/지옥 보스)
+      equipSrcChance: m.def.equipSrcChance,
+    });
+    if (php && api.traitSum) { const vk = api.traitSum('vampiric_kill'); if (vk > 0) { php.hp = Math.min(php.max, php.hp + vk); updateHpHud(); } }   // V11: 흡혼
+    if (m.area && m.area.cap === 1 && m.area.respawn) m.area._cd = m.area.respawn;   // V10: 단일 보스 리스폰 대기
+    // V10 ㉑: 보스급 처치는 전서버 알림(멀티 접속 시)
+    if (isBossGrade && window.econNet && window.econNet.announce) {
+      window.econNet.announce(`⚔ [Lv ${m.lv}] ${m.def.name} 처치!`);
+    }
+    scene.remove(m.mesh); disposeGroup(m.mesh);
+    mobs.splice(mobs.indexOf(m), 1);
+    if (worldMode === 'dungeon') onDungeonMobDead(m);
+    if (m.arena && arenaState) onArenaMobDead(m);   // V11: 아레나 웨이브 진행
   }
   // 떠오르는 피해 숫자
   let dmgTexts = [];
@@ -2663,6 +2786,8 @@
   }
   function damagePlayer(dmg) {
     if (!php) return;
+    const apiG = econApi();
+    if (apiG.guardPct) dmg *= (1 - apiG.guardPct());   // V11: 수호 특성(받는 피해 감소)
     php.hp -= dmg; php.lastHitAt = performance.now();
     spawnDmgText({ x: P.x, y: P.y, z: P.z }, dmg, false);
     if (php.hp <= 0) {
@@ -2674,11 +2799,19 @@
     }
     updateHpHud();
   }
+  let _regenT = 0;
   function tickPlayerVitals(dt) {
     ensurePhp();
     if (php.hp < php.max && performance.now() - php.lastHitAt > 5000) {
       php.hp = Math.min(php.max, php.hp + php.max * 0.02 * dt);   // 전투 이탈 5초 후 초당 2% 재생
       updateHpHud();
+    }
+    _regenT += dt;   // V11: 재생 특성 — 2초마다 고정 회복(전투 중에도)
+    if (_regenT >= 2) {
+      _regenT = 0;
+      const api = econApi();
+      const rg = api.traitSum ? api.traitSum('regeneration') : 0;
+      if (rg > 0 && php.hp < php.max) { php.hp = Math.min(php.max, php.hp + rg); updateHpHud(); }
     }
   }
   let _hpHudT = 0;
@@ -2732,7 +2865,7 @@
     const api = econApi();
     let all = interactables.concat(dynamicInteractables);
     // 다른 플레이어 아바타도 조준 대상(E키 → 멀티 패널: 거래/파티/방문)
-    if (worldMode === 'hub') {
+    if (worldMode !== 'home' && worldMode !== 'visit' && worldMode !== 'dungeon') {   // V11: 공유 월드 전체
       for (const id in others) {
         const o = others[id];
         all = all.concat([{ type: 'player', ref: { id }, x: o.mesh.position.x, y: o.mesh.position.y + 1.0, z: o.mesh.position.z }]);
@@ -2749,14 +2882,42 @@
     }
     return best;
   }
-  /* ---------------- 멀티: 다른 플레이어 아바타(허브 공유 월드) ---------------- */
+  /* ---------------- 멀티: 다른 플레이어 아바타 — V11: 프라이빗 제외 전 월드 공유 + 장착 장비 표시 ---------------- */
+  function tierColorHexOf(idx) {
+    const T = (window.ECON_DATA || {}).ITEM_TIERS || [];
+    return idx >= 0 && T[idx] ? parseInt(T[idx].colorHex.slice(1), 16) : 0x8a8a8a;
+  }
   function makeOtherAvatar(name) {
     const h = buildHumanoid(0x2b6cb0);   // 파란 스킨 = 다른 플레이어
     const tag = makeLabel(String(name || 'Player').slice(0, 12));
     tag.position.set(0, 2.35, 0);
     h.group.add(tag);
+    // V11: 장비 오버레이(투구/흉갑/레깅스/부츠 색 + 손 무기) — 프레즌스 g 패킷으로 갱신
+    const gearGrp = new THREE.Group();
+    h.group.add(gearGrp);
     scene.add(h.group);
-    return { mesh: h.group, legL: h.legL, legR: h.legR, walkT: 0, walkAmp: 0, tx: null, ty: null, tz: null, tyaw: 0 };
+    return { mesh: h.group, legL: h.legL, legR: h.legR, walkT: 0, walkAmp: 0, tx: null, ty: null, tz: null, tyaw: 0, gearGrp, gearSig: '' };
+  }
+  function applyAvatarGear(o, g) {
+    const sig = JSON.stringify(g || null);
+    if (sig === o.gearSig) return;
+    o.gearSig = sig;
+    while (o.gearGrp.children.length) { const c = o.gearGrp.children[0]; o.gearGrp.remove(c); if (c.geometry) c.geometry.dispose(); if (c.material) c.material.dispose(); }
+    if (!g) return;
+    const t = g.t || [-1, -1, -1, -1];
+    // 투구(머리 위 오버레이) / 흉갑(몸통) / 레깅스(다리) / 부츠(발) — 티어 색
+    if (t[0] >= 0) o.gearGrp.add(mkBox(0.56, 0.3, 0.56, tierColorHexOf(t[0]), 0, 1.86, 0));
+    if (t[1] >= 0) o.gearGrp.add(mkBox(0.62, 0.62, 0.4, tierColorHexOf(t[1]), 0, 1.18, 0));
+    if (t[2] >= 0) o.gearGrp.add(mkBox(0.56, 0.42, 0.34, tierColorHexOf(t[2]), 0, 0.62, 0));
+    if (t[3] >= 0) { o.gearGrp.add(mkBox(0.24, 0.16, 0.36, tierColorHexOf(t[3]), -0.16, 0.08, 0.02)); o.gearGrp.add(mkBox(0.24, 0.16, 0.36, tierColorHexOf(t[3]), 0.16, 0.08, 0.02)); }
+    if (g.w) {   // 들고 있는 무기: 티어색 발광 블레이드 + 손잡이
+      const wc = tierColorHexOf(g.wt != null ? g.wt : 0);
+      const blade = mkBox(0.09, 0.72, 0.09, wc, 0.42, 1.25, 0.22);
+      blade.material = new THREE.MeshBasicMaterial({ color: wc });   // 발광(무조명)
+      blade.rotation.x = -0.5;
+      o.gearGrp.add(blade);
+      o.gearGrp.add(mkBox(0.12, 0.16, 0.12, 0x4a3722, 0.42, 0.92, 0.1));
+    }
   }
   function removeOtherAvatar(id) {
     const o = others[id]; if (!o) return;
@@ -2766,14 +2927,16 @@
   function updateNetAvatars(dt) {
     const n = window.econNet; if (!n || !n.isActive()) { for (const id in others) removeOtherAvatar(id); return; }
     const peers = n.peers();
-    // 같은 허브(공유 월드)에 있는 플레이어만 렌더 — 프라이빗 섬은 각자의 공간
+    // V11: 프라이빗 섬(home)·방문(visit)·던전(파티 별도)만 제외 — 나머지 모든 월드는 완전 공유
+    const shared = worldMode !== 'home' && worldMode !== 'visit' && worldMode !== 'dungeon';
     for (const id in peers) {
       const p = peers[id];
-      const sameWorld = worldMode === 'hub' && p.world === 'hub';
+      const sameWorld = shared && p.world === worldMode;
       if (!sameWorld) { if (others[id]) removeOtherAvatar(id); continue; }
       let o = others[id];
       if (!o) { o = others[id] = makeOtherAvatar(p.name); o.mesh.position.set(p.x, p.y, p.z); }
       o.tx = p.x; o.ty = p.y; o.tz = p.z; o.tyaw = p.yaw || 0;
+      applyAvatarGear(o, p.g);   // V11: 장착 장비 표시(변경 시에만 리빌드)
     }
     for (const id in others) if (!peers[id]) removeOtherAvatar(id);
     // 지수 감쇠 보간(프레임레이트 무관) + 걷기 스윙
@@ -2826,7 +2989,9 @@
       if (api2 && api2.getP && api2.getP()) {
         const P2 = api2.getP();
         P2.inv.dungeon_essence = (P2.inv.dungeon_essence || 0) + 3;
-        if (typeof toast === 'function') toast(`🗝️ 시크릿 발견! 던전 정수 +3 (점수 보너스)${Math.random() < 0.15 ? ' + 📖 인챈트북!' : ''}`, true);
+        let chestMsg = '';
+        if (api2.equipDropFromSrc && Math.random() < 0.35) { const eq = api2.equipDropFromSrc('chest', null); if (eq) chestMsg = ` + 🎁 ${eq.name}`; }   // V11: 상자 전용 장비 풀
+        if (typeof toast === 'function') toast(`🗝️ 시크릿 발견! 던전 정수 +3 (점수 보너스)${chestMsg}`, true);
       }
     }
     else if (t.type === 'portal') travelTo(t.ref.target);
@@ -3181,6 +3346,7 @@
   }
 
   window.economy3dStart = start;
+  window.economy3dClosePanel = () => { hidePanel(); };   // V11: 아레나 시작 시 패널 닫기
   window.economy3dStop = stop;
   window.economy3dAct = act;
   window.economy3dVisit = travelVisit;   // 멀티: 다른 플레이어 섬 방문(economy-net.js가 호출)

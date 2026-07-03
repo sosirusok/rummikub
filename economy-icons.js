@@ -105,6 +105,22 @@
     px(c, 12, 14, 16, 16, shade(col, 0.95)); px(c, 14, 16, 5, 6, shade(col, 1.25));                          // 몸통+광
     px(c, 18, 8, 4, 3, '#20242c');                                                                            // 목선
   }
+  function drawHelmet(c, col) {   // V11: 투구 — 돔 + 챙
+    c.fillStyle = col; c.beginPath(); c.arc(20, 20, 10, Math.PI, 0); c.fill();
+    c.fillRect(10, 20, 20, 4);
+    c.fillStyle = 'rgba(0,0,0,0.35)'; c.fillRect(13, 16, 14, 3);
+  }
+  function drawLeggings(c, col) {   // V11: 레깅스 — 허리 + 두 다리
+    c.fillStyle = col; c.fillRect(12, 10, 16, 6);
+    c.fillRect(12, 16, 6, 14); c.fillRect(22, 16, 6, 14);
+    c.fillStyle = 'rgba(0,0,0,0.3)'; c.fillRect(12, 14, 16, 2);
+  }
+  function drawBoots(c, col) {   // V11: 부츠 — 두 짝
+    c.fillStyle = col;
+    c.fillRect(9, 14, 7, 10); c.fillRect(9, 24, 11, 5);
+    c.fillRect(24, 14, 7, 10); c.fillRect(24, 24, 11, 5);
+    c.fillStyle = 'rgba(255,255,255,0.25)'; c.fillRect(9, 14, 7, 2); c.fillRect(24, 14, 7, 2);
+  }
   function drawRing(c, col) {
     c.strokeStyle = col; c.lineWidth = 4; c.beginPath(); c.arc(20, 23, 9, 0, Math.PI * 2); c.stroke();
     px(c, 16, 8, 8, 8, shade(col, 1.3)); px(c, 18, 10, 3, 3, '#ffffff');       // 보석
@@ -184,6 +200,13 @@
   }
 
   function categoryOf(key) {
+    if (/^sw_/.test(key)) return 'sword';        // V11: 신규 검 400종
+    if (/^bw_/.test(key)) return 'bow';          // V11: 신규 활 200종
+    if (/^hm_/.test(key)) return 'helmet';       // V11: 투구
+    if (/^lg_/.test(key)) return 'leggings';     // V11: 레깅스
+    if (/^bt_/.test(key)) return 'boots';        // V11: 부츠
+    if (/^ch_/.test(key)) return 'armor';        // V11: 흉갑
+    if (/^(hot|fuming)_potato_book$/.test(key)) return 'book';
     if (/^(weapon|bow_|staff_)|_(sword|blade|dagger)$|bonzo_staff|spirit_bow|livid_dagger|giant_sword|necron_blade/.test(key)) {
       if (/^bow_|spirit_bow/.test(key)) return 'bow';
       if (/^staff_|bonzo_staff/.test(key)) return 'staff';
@@ -254,6 +277,9 @@
       case 'bow': drawBow(c, col); break;
       case 'staff': drawStaff(c, col); break;
       case 'armor': drawArmor(c, col); break;
+      case 'helmet': drawHelmet(c, col); break;
+      case 'leggings': drawLeggings(c, col); break;
+      case 'boots': drawBoots(c, col); break;
       case 'ring': drawRing(c, col); break;
       case 'book': drawBook(c, col); break;
       case 'egg': drawEgg(c, col); break;
