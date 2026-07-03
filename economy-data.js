@@ -663,6 +663,18 @@
     { key: 'stone_axe', needs: { cobblestone: 3, stick: 2 }, gives: 1, unlock: { resource: 'stone', tier: 1 } },
     { key: 'stone_hoe', needs: { cobblestone: 2, stick: 2 }, gives: 1, unlock: { resource: 'stone', tier: 1 } },
     { key: 'stone_sword', needs: { cobblestone: 2, stick: 1 }, gives: 1, unlock: { resource: 'stone', tier: 1 } },
+    // V17: 계단/반블럭 조합(MC 정확: 판자 3→반블럭 6, 판자 6→계단 4). 재료 있는 흔한 종류만 조합 지원(나머지는 빌더 구매).
+    { key: 'oak_planks_slab', needs: { oak_planks: 3 }, gives: 6, unlock: null },
+    { key: 'oak_planks_stairs', needs: { oak_planks: 6 }, gives: 4, unlock: null },
+    { key: 'birch_planks_slab', needs: { birch_planks: 3 }, gives: 6, unlock: null },
+    { key: 'birch_planks_stairs', needs: { birch_planks: 6 }, gives: 4, unlock: null },
+    { key: 'spruce_planks_slab', needs: { spruce_planks: 3 }, gives: 6, unlock: null },
+    { key: 'spruce_planks_stairs', needs: { spruce_planks: 6 }, gives: 4, unlock: null },
+    { key: 'cobblestone_slab', needs: { cobblestone: 3 }, gives: 6, unlock: null },
+    { key: 'cobblestone_stairs', needs: { cobblestone: 6 }, gives: 4, unlock: null },
+    { key: 'stone_bricks', needs: { cobblestone: 4 }, gives: 4, unlock: { resource: 'stone', tier: 1 } },
+    { key: 'stone_bricks_slab', needs: { stone_bricks: 3 }, gives: 6, unlock: { resource: 'stone', tier: 1 } },
+    { key: 'stone_bricks_stairs', needs: { stone_bricks: 6 }, gives: 4, unlock: { resource: 'stone', tier: 1 } },
     { key: 'iron_pickaxe', needs: { iron: 3, stick: 2 }, gives: 1, unlock: { resource: 'iron', tier: 2 } },
     { key: 'iron_axe', needs: { iron: 3, stick: 2 }, gives: 1, unlock: { resource: 'iron', tier: 2 } },
     { key: 'minion_fuel_coal', needs: { coal: 32 }, gives: 1, unlock: { resource: 'coal', tier: 2 } },
@@ -936,6 +948,18 @@
   [['smooth_stone', '매끄러운 돌', 90], ['chiseled_stone_bricks', '조각된 석재벽돌', 150], ['mossy_cobblestone', '이끼 낀 조약돌', 90],
    ['polished_andesite', '윤나는 안산암', 90], ['prismarine', '프리즈머린', 200], ['bookshelf', '책장', 260], ['hay_block', '건초 더미', 80]]
     .forEach(([k, n, p]) => BUILDER_SHOP.push({ key: k, name: n, amount: 16, price: p }));
+  // V17: 모든 나무 판자(신규 3종) + 계단·반블럭(모든 나무 + 돌 계열) — 건축의 핵심 형태
+  const SHAPE_NAMES = [
+    ['oak_planks', '참나무'], ['birch_planks', '자작나무'], ['spruce_planks', '가문비'],
+    ['dark_oak_planks', '짙은참나무'], ['jungle_planks', '정글'], ['acacia_planks', '아카시아'],
+    ['stone', '돌'], ['cobblestone', '조약돌'], ['stone_bricks', '석재벽돌'],
+  ];
+  [['dark_oak_planks', '짙은참나무 판자'], ['jungle_planks', '정글 판자'], ['acacia_planks', '아카시아 판자']]
+    .forEach(([k, n]) => BUILDER_SHOP.push({ key: k, name: n, amount: 16, price: 80 }));
+  SHAPE_NAMES.forEach(([k, n]) => {
+    BUILDER_SHOP.push({ key: k + '_slab', name: n + ' 반블럭', amount: 16, price: 70 });
+    BUILDER_SHOP.push({ key: k + '_stairs', name: n + ' 계단', amount: 16, price: 90 });
+  });
 
   /* ---------------- V13-B: 위치 기반 퀘스트 시스템 ----------------
      퀘스트를 주는 NPC는 특정 월드의 특정 좌표에 서 있다. 플레이어가 그 반경(region) 안에
