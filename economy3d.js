@@ -98,6 +98,9 @@
     { k: 'oak_planks', tex: 'planks' }, { k: 'birch_planks', tex: 'birch_planks' }, { k: 'spruce_planks', tex: 'spruce_planks' },
     { k: 'dark_oak_planks', tex: 'dark_oak_planks' }, { k: 'jungle_planks', tex: 'jungle_planks' }, { k: 'acacia_planks', tex: 'acacia_planks' },
     { k: 'stone', tex: 'stone' }, { k: 'cobblestone', tex: 'cobble' }, { k: 'stone_bricks', tex: 'stonebrick' },
+    // V18-B: 석재/장식 계열 확장(계단·반블럭 더 다양하게)
+    { k: 'quartz_block', tex: 'quartz' }, { k: 'sandstone', tex: 'sandstone' }, { k: 'bricks', tex: 'bricks' },
+    { k: 'purpur', tex: 'purpur' }, { k: 'smooth_stone', tex: 'smooth_stone' }, { k: 'prismarine', tex: 'prismarine' },
   ];
   SHAPE_MATS.forEach(m => {
     BLOCKS.push({ key: m.k + '_slab', tex: m.tex, shape: 'slab', opaque: false });
@@ -704,6 +707,8 @@
         }
       }
     }
+    // V18-B: 스폰섬 스타터 통나무 오두막(문/유리창/계단 지붕/현관 난간 — 아늑한 시작 집)
+    buildHouse(HOME_SPAWN.x - 2, HOME_SPAWN.z - 6, 6, 5, HOME_TOP + 1, ID.oak_planks, ID.spruce_planks, ID.oak_log);
     // 스폰섬 꽃/풀 장식
     for (let i = 0; i < 8; i++) {
       const x = HOME_SPAWN.x + Math.round((hash3(i, 81, 3) - 0.5) * HOME_SPAWN.r * 1.3);

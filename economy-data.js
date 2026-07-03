@@ -963,6 +963,8 @@
     ['oak_planks', '참나무'], ['birch_planks', '자작나무'], ['spruce_planks', '가문비'],
     ['dark_oak_planks', '짙은참나무'], ['jungle_planks', '정글'], ['acacia_planks', '아카시아'],
     ['stone', '돌'], ['cobblestone', '조약돌'], ['stone_bricks', '석재벽돌'],
+    ['quartz_block', '석영'], ['sandstone', '사암'], ['bricks', '벽돌'],
+    ['purpur', '퍼퍼'], ['smooth_stone', '매끄러운 돌'], ['prismarine', '프리즈머린'],
   ];
   [['dark_oak_planks', '짙은참나무 판자'], ['jungle_planks', '정글 판자'], ['acacia_planks', '아카시아 판자']]
     .forEach(([k, n]) => BUILDER_SHOP.push({ key: k, name: n, amount: 16, price: 80 }));
