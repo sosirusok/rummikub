@@ -184,7 +184,7 @@
   ];
   const MINION_STORAGE_BASE = 15, MINION_STORAGE_UPGRADED = 24, MINION_STORAGE_UPGRADE_COST = 5000;
   const MINION_OFFLINE_CAP_HOURS = 48;
-  const MINION_SLOT_MAX = 30, MINION_SLOT_COST_BASE = 6000, MINION_SLOT_COST_MUL = 1.6;
+  const MINION_SLOT_MAX = 31, MINION_SLOT_COST_BASE = 6000, MINION_SLOT_COST_MUL = 1.6;
   // V10 ⑱: 필드 미니보스 유니크 전리품(드롭 전용)
   const MINIBOSS_LOOT = [
     { key: 'yeti_fur', name: '예티의 모피', category: '전리품', buyPrice: 0, sellPrice: 2800 },

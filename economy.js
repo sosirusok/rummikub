@@ -603,19 +603,22 @@
   function sellBonusPct() { return Math.min(10, Math.floor(skillLevel('social') / 5)) + talismanStats().sellBonus; }
   function minionSlotCost() { return Math.round(D().MINION_SLOT_COST_BASE * Math.pow(D().MINION_SLOT_COST_MUL, P.minionSlotsBought)); }
   function buyItem(key) {
-    const sdef = shopDef(key);
-    if (!sdef || !(sdef.buyPrice > 0)) { toastFn('이 게임의 골드는 강화·합성·리포지 전용! 아이템은 채집·드롭·조합으로 얻어요', false); return; }
-
-    const def = shopDef(key); if (!def || def.buyPrice <= 0) return;
-    // 특수: 미니언 슬롯 확장권(즉시 적용, 가격 누진)
+    // 특수: 미니언 슬롯 확장권(가격 없는 상점 아이템 — 골드 즉시 소모, 가격 누진, 최대 5칸)
     if (key === 'minion_slot_expander') {
       if (P.maxMinionSlots >= D().MINION_SLOT_MAX) { toastFn('미니언 슬롯이 최대예요', false); return; }
+      if ((P.minionSlotsBought || 0) >= 5) { toastFn('상점 슬롯은 최대 5칸까지! 나머지는 미니언 고유 조합으로 확장돼요', false); return; }
       const cost = minionSlotCost();
       if (P.gold < cost) { toastFn('골드가 부족해요', false); return; }
-      addGold(-cost); P.maxMinionSlots++; P.minionSlotsBought++;
-      toastFn(`미니언 슬롯 확장! (${P.maxMinionSlots}칸)`, true);
+      addGold(-cost); P.minionSlotsBought++;
+      // 조합 보너스 + 상점 구매 합산으로 슬롯 재계산(감소 없음)
+      const uniq = Object.keys(P.minionCrafts || {}).length;
+      P.maxMinionSlots = Math.max(P.maxMinionSlots, Math.min(D().MINION_SLOT_MAX, 5 + minionSlotBonus(uniq) + Math.min(5, P.minionSlotsBought)));
+      toastFn(`미니언 슬롯 확장! (${P.maxMinionSlots}칸 · 상점 ${P.minionSlotsBought}/5)`, true);
       saveNow(); renderZone(); return;
     }
+    const sdef = shopDef(key);
+    if (!sdef || !(sdef.buyPrice > 0)) { toastFn('이 게임의 골드는 강화·합성·리포지 전용! 아이템은 채집·드롭·조합으로 얻어요', false); return; }
+    const def = sdef;
     if (P.gold < def.buyPrice) { toastFn('골드가 부족해요', false); return; }
     addGold(-def.buyPrice); addItem(key, 1); saveNow(); renderZone();
   }
@@ -707,11 +710,16 @@
     const def = minionDef(key); if (!def) return false;
     return collectionTierIdx(def.unlockCollection || def.resource) >= 1;
   }
+  // V16: 실제 하이픽셀 미니언 슬롯 보너스(고유 미니언-티어 조합 수 → 계단식). 650 조합 = +21(최대)
+  function minionSlotBonus(uniq) {
+    if (uniq >= 650) return 21; if (uniq >= 350) return 15; if (uniq >= 200) return 10;
+    if (uniq >= 100) return 6; if (uniq >= 50) return 4; if (uniq >= 15) return 2; if (uniq >= 5) return 1; return 0;
+  }
   function recordMinionCraft(key, tier) {
     if (!P.minionCrafts) P.minionCrafts = {};
     P.minionCrafts[`${key}:${tier}`] = 1;
     const uniq = Object.keys(P.minionCrafts).length;
-    const slots = Math.min(D().MINION_SLOT_MAX, 5 + Math.floor(uniq / 2) + (P.minionSlotsBought || 0));
+    const slots = Math.min(D().MINION_SLOT_MAX, 5 + minionSlotBonus(uniq) + Math.min(5, P.minionSlotsBought || 0));   // 실제: 기본5 + 조합보너스(최대21) + 상점(최대5) = 31
     if (slots > P.maxMinionSlots) { P.maxMinionSlots = slots; toastFn(`🎉 고유 미니언 조합 ${uniq}개 — 미니언 슬롯 ${slots}칸으로 확장!`, true); }
   }
   function placeMinion(key) {
@@ -2062,7 +2070,7 @@
     const fuelLeft = P.minionFuelUntil > Date.now() ? Math.ceil((P.minionFuelUntil - Date.now()) / 3600000) : 0;
     const F1 = D().MINION_FUEL, F2 = D().MINION_FUEL2;
     const uniq = Object.keys(P.minionCrafts || {}).length;
-    const nextSlotAt = (Math.floor(uniq / 2) + 1) * 2;   // 다음 슬롯이 열리는 고유 조합 수
+    const nextSlotAt = [5, 15, 50, 100, 200, 350, 650].find(t => t > uniq) || 650;   // 다음 슬롯이 열리는 고유 조합 수(실제 계단식)
     const storedTotal = P.minions.reduce((n, m) => n + m.storage, 0);
     return `<h4>⚙️ 미니언 (슬롯 ${P.minions.length}/${P.maxMinionSlots})</h4>
       <div class="econ-tierbtns">
@@ -2074,7 +2082,11 @@
       <div class="econ-note">📗 <b>미니언 컬렉션</b>: 고유 조합 <b>${uniq}</b>종 — 슬롯 ${P.maxMinionSlots}/${D().MINION_SLOT_MAX}칸
         ${P.maxMinionSlots < D().MINION_SLOT_MAX ? ` · 다음 슬롯까지 고유 조합 ${Math.max(0, nextSlotAt - uniq)}개 (누적 ${nextSlotAt}개 시 +1칸)` : ' · <b>최대 확장 완료!</b>'}<br>
         <span class="muted">새 종류·새 티어의 미니언을 조합할 때마다 컬렉션이 쌓여요. 컬렉션 티어당 해당 미니언 생산 +2%</span></div>
-      <p class="muted">실제 스카이블럭처럼 미니언은 <b>자원으로 조합</b>해요. 컬렉션 티어 1 달성 시 해금, 고유 조합 2개마다 슬롯 +1!</p>
+      <div class="econ-tierbtns">
+        <button class="btn btn--sm" data-act="econ_buy" data-key="minion_slot_expander" ${(P.minionSlotsBought || 0) >= 5 || P.maxMinionSlots >= D().MINION_SLOT_MAX ? 'disabled' : ''}>🪙 슬롯 확장권 (${(P.minionSlotsBought || 0)}/5 · ${minionSlotCost().toLocaleString()}G)</button>
+        <span class="muted">기본 5 + 고유조합 최대 +21 + 상점 최대 +5 = <b>${D().MINION_SLOT_MAX}칸</b>(실제 하이픽셀 상한)</span>
+      </div>
+      <p class="muted">실제 스카이블럭처럼 미니언은 <b>자원으로 조합</b>해요. 컬렉션 티어 1 달성 시 해금, 고유 조합 마일스톤(5·15·50·100·200·350·650)마다 슬롯 확장!</p>
       <div class="econ-minionplace">${D().MINIONS.map(m => {
         const c = m.tiers[0].craftCost; const un = minionUnlocked(m.key); const have = (P.inv[c.key] || 0);
         return `<button class="btn btn--sm ${un ? '' : 'btn--ghost'}" data-act="econ_minion_place" data-key="${m.key}" ${un ? '' : 'disabled'}>${m.name}<br><span class="muted">${un ? `${itemName(c.key)} ${have}/${c.n}` : '컬렉션 티어1 필요'}</span></button>`;
