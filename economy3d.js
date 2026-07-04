@@ -1475,9 +1475,84 @@
   }
 
   // V18-C: 테마 월드별 컨셉 시그니처 건물(새 형태 블럭 활용)
+  // V20-AH: 포탈 도착 광장 — 섬마다 완전히 다른 고유 컨셉을 좌표 한 칸씩 손 배치.
+  //   스폰(플레이어가 떨어지는 지점) 주위에 테마 포장·관문 아치·조명·벤치·중심 조형을 세운다.
+  function buildArrivalPlaza(mode) {
+    const SP = { park: [72, 128], barn: [72, 128], gold: [56, 100], deep: [48, 84], spider: [64, 100], nether: [64, 96], end: [64, 100], mushroom: [72, 120] };
+    if (!SP[mode]) return;
+    const [cx, cz] = SP[mode]; const gy = surfaceTop(cx, cz);
+    const B = (dx, dy, dz, id) => { if (id != null) setW(cx + dx, gy + dy, cz + dz, id); };
+    const clr = (dx, dy, dz) => { if (inBounds(cx + dx, gy + dy, cz + dz)) setW(cx + dx, gy + dy, cz + dz, 0); };
+    // 공통: 원형 포장 바닥(반경 6, 테마별 재질 2종 무늬) + 머리 위 공간 클리어
+    const pave = (a, b) => { for (let dx = -6; dx <= 6; dx++) for (let dz = -6; dz <= 6; dz++) { if (dx * dx + dz * dz > 40) continue; B(dx, 0, dz, ((dx + dz) & 1) ? a : b); for (let y = 1; y <= 4; y++) clr(dx, y, dz); } };
+    const glow = ID.glowstone;
+    if (mode === 'nether') {
+      // 🔥 지옥문 광장: 네더벽돌 포장 + 흑요석 대아치(마그마 키스톤) + 용암 화로 4기
+      pave(ID.nether_bricks, ID.obsidian);
+      for (let y = 1; y <= 4; y++) { B(-3, y, -5, ID.obsidian); B(3, y, -5, ID.obsidian); }
+      B(-2, 5, -5, ID.obsidian); B(2, 5, -5, ID.obsidian); B(-1, 6, -5, ID.obsidian); B(1, 6, -5, ID.obsidian); B(0, 7, -5, ID.magma_block);   // 뾰족 아치머리
+      for (const [ox, oz] of [[-5, -3], [5, -3], [-5, 3], [5, 3]]) { B(ox, 1, oz, ID.nether_bricks); B(ox, 2, oz, ID.magma_block); B(ox + (ox < 0 ? 1 : -1), 1, oz, ID.lava); B(ox, 3, oz, glow); }   // 용암 화로
+      B(0, 1, 0, ID.magma_block); B(0, 2, 0, glow);   // 중앙 화심
+    } else if (mode === 'end') {
+      // 🌌 공허 관문: 자수정 포장(흑요석 상감) + 엔드로드 기둥 4주 + 부유 아치
+      pave(ID.purpur, ID.obsidian);
+      for (const [ox, oz] of [[-4, -4], [4, -4], [-4, 4], [4, 4]]) { for (let y = 1; y <= 3; y++) B(ox, y, oz, ID.purpur); B(ox, 4, oz, ID.oak_fence); B(ox, 5, oz, glow); }   // 엔드로드 기둥
+      for (let y = 1; y <= 4; y++) { B(-3, y, -5, ID.purpur); B(3, y, -5, ID.purpur); } for (let dx = -3; dx <= 3; dx++) B(dx, 5, -5, ID.purpur); B(0, 6, -5, glow);   // 부유 아치
+      B(0, 1, 0, ID.obsidian); B(0, 2, 0, ID.purpur); B(0, 3, 0, glow);   // 중앙 엔더 수정
+    } else if (mode === 'spider') {
+      // 🕷️ 거미굴 초입: 이끼조약돌 포장 + 다크오크 관문 + 거미줄 장막
+      pave(ID.mossy_cobblestone, ID.cobblestone);
+      const dlog = ID.dark_oak_log != null ? ID.dark_oak_log : ID.oak_log;
+      for (let y = 1; y <= 4; y++) { B(-3, y, -5, dlog); B(3, y, -5, dlog); } for (let dx = -3; dx <= 3; dx++) B(dx, 5, -5, dlog);
+      B(-2, 4, -5, ID.wool_white); B(0, 4, -5, ID.wool_white); B(2, 4, -5, ID.wool_white); B(-1, 3, -5, ID.wool_white); B(1, 3, -5, ID.wool_white);   // 거미줄 장막
+      for (const [ox, oz] of [[-5, -2], [5, -2], [-5, 2], [5, 2]]) { B(ox, 1, oz, ID.oak_fence); B(ox, 2, oz, glow); }
+      B(0, 1, 0, ID.mossy_cobblestone); B(0, 2, 0, ID.wool_white); B(0, 3, 0, glow);
+    } else if (mode === 'gold') {
+      // ⛏️ 광산 정문: 석재 포장 + 목재 헤드프레임 아치 + 광차 + 랜턴
+      pave(ID.stone_bricks, ID.polished_andesite != null ? ID.polished_andesite : ID.stone);
+      const log = ID.dark_oak_log != null ? ID.dark_oak_log : ID.oak_log;
+      for (let y = 1; y <= 4; y++) { B(-3, y, -5, log); B(3, y, -5, log); } for (let dx = -3; dx <= 3; dx++) B(dx, 5, -5, log);
+      B(-1, 6, -5, ID.oak_planks); B(1, 6, -5, ID.oak_planks); B(0, 6, -5, log);   // 헤드프레임 꼭대기
+      B(3, 1, 2, ID.oak_planks_slab != null ? ID.oak_planks_slab : ID.oak_planks); B(3, 2, 2, ID.oak_fence); B(4, 1, 2, ID.gold_ore);   // 광차 + 금광
+      for (const [ox, oz] of [[-5, -3], [5, -3], [-5, 3], [5, 3]]) { B(ox, 1, oz, ID.oak_fence); B(ox, 2, oz, glow); }
+      B(0, 1, 0, ID.gold_ore); B(0, 2, 0, glow);
+    } else if (mode === 'deep') {
+      // 💎 지하 승강장: 석벽돌 포장 + 보석 램프 기둥 + 리프트 케이지 아치
+      pave(ID.stone_bricks, ID.chiseled_stone_bricks != null ? ID.chiseled_stone_bricks : ID.stone_bricks);
+      const seaL = ID.sea_lantern != null ? ID.sea_lantern : glow;
+      for (const [ox, oz, gem] of [[-4, -4, ID.diamond_ore], [4, -4, ID.emerald_ore], [-4, 4, ID.lapis_ore], [4, 4, ID.redstone_ore]]) { for (let y = 1; y <= 2; y++) B(ox, y, oz, ID.stone_bricks); B(ox, 3, oz, gem); B(ox, 4, oz, seaL); }   // 보석 램프 기둥
+      for (let y = 1; y <= 4; y++) { B(-2, y, -5, ID.oak_fence); B(2, y, -5, ID.oak_fence); } for (let dx = -2; dx <= 2; dx++) B(dx, 5, -5, ID.stone_bricks);   // 리프트 케이지
+      B(0, 1, 0, ID.diamond_ore); B(0, 2, 0, seaL);
+    } else if (mode === 'mushroom') {
+      // 🍄 버섯 관문: 균사 포장 + 거대버섯 아치(버섯대+붉은 갓) + 포자 램프
+      pave(ID.mycelium, ID.sand);
+      for (let y = 1; y <= 4; y++) { B(-3, y, -5, ID.mushroom_stem); B(3, y, -5, ID.mushroom_stem); }
+      for (let dx = -3; dx <= 3; dx++) { B(dx, 5, -5, ID.mushroom_red_block); B(dx, 4, -5, dx % 2 ? ID.mushroom_red_block : ID.quartz_block); }   // 붉은 갓 아치(흰 점박이)
+      for (const [ox, oz] of [[-5, -2], [5, -2], [-5, 2], [5, 2]]) { B(ox, 1, oz, ID.mushroom_stem); B(ox, 2, oz, glow); }   // 포자 램프
+      B(0, 1, 0, ID.mushroom_stem); B(0, 2, 0, ID.mushroom_red_block); B(0, 3, 0, glow);
+    } else if (mode === 'barn') {
+      // 🌾 농장 정문: 판자 포장 + 목재 게이트 아치 + 건초 + 울타리
+      pave(ID.oak_planks, ID.dirt);
+      const log = ID.dark_oak_log != null ? ID.dark_oak_log : ID.oak_log, hay = ID.hay_block != null ? ID.hay_block : ID.wool_yellow;
+      for (let y = 1; y <= 4; y++) { B(-3, y, -5, log); B(3, y, -5, log); } for (let dx = -3; dx <= 3; dx++) B(dx, 5, -5, log);
+      B(-2, 5, -5, ID.wool_red); B(0, 5, -5, ID.wool_red); B(2, 5, -5, ID.wool_red);   // 붉은 간판 띠
+      B(-4, 1, 3, hay); B(-3, 1, 3, hay); B(-4, 2, 3, hay); B(4, 1, -3, hay);   // 건초 더미
+      for (let d = -5; d <= 5; d += 2) { B(d, 1, 5, ID.oak_fence); }
+      for (const [ox, oz] of [[-5, 0], [5, 0]]) { B(ox, 1, oz, ID.oak_fence); B(ox, 2, oz, glow); }
+    } else if (mode === 'park') {
+      // 🌲 삼림 입구: 스프루스 포장 + 통나무 아치 + 꽃 화분 + 랜턴
+      pave(ID.spruce_planks, ID.oak_planks);
+      for (let y = 1; y <= 4; y++) { B(-3, y, -5, ID.spruce_log); B(3, y, -5, ID.spruce_log); } for (let dx = -3; dx <= 3; dx++) B(dx, 5, -5, ID.spruce_log);
+      B(-2, 6, -5, ID.spruce_planks_slab != null ? ID.spruce_planks_slab : ID.spruce_planks); B(2, 6, -5, ID.spruce_planks_slab != null ? ID.spruce_planks_slab : ID.spruce_planks);
+      for (const [ox, oz] of [[-5, -3], [5, -3], [-5, 3], [5, 3]]) { B(ox, 1, oz, ID.oak_fence); B(ox, 2, oz, glow); }
+      B(-4, 1, 3, ID.oak_leaves != null ? ID.oak_leaves : ID.spruce_planks); B(4, 1, -3, ID.oak_leaves != null ? ID.oak_leaves : ID.spruce_planks);   // 화분(잎)
+      B(0, 1, 0, ID.spruce_log); B(0, 2, 0, glow);
+    }
+  }
   function buildThemeStructures(mode) {
     const ok = (x, z) => surfaceTop(x, z) > 3;
     const base = (x, z) => surfaceTop(x, z) + 1;
+    buildArrivalPlaza(mode);   // V20-AH: 섬마다 고유 컨셉 포탈 도착 광장(손 배치)
     if (mode === 'park' && ok(70, 100)) buildHouse(67, 97, 7, 6, base(70, 100), ID.spruce_planks, ID.oak_planks, ID.oak_log);   // 삼림 산장
     else if (mode === 'barn' && ok(58, 100)) buildBarnEstate();   // V20-AB: 손 배치 대형 농장(박공 붉은 헛간+원통 사일로+풍차+건초 야적+가축 우리+밀밭)
     else if (mode === 'gold' && ok(50, 90)) buildGoldOutpost();   // V20-W: 손 배치 대형 광산 전초기지(헤드프레임+갱도+광차 데크+창고+감독관 오두막)
