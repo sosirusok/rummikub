@@ -2004,7 +2004,7 @@
     buildArrivalPlaza(mode);   // V20-AH: 섬마다 고유 컨셉 포탈 도착 광장(손 배치)
     if (mode === 'park' && ok(70, 100)) { buildHouse(67, 97, 7, 6, base(70, 100), ID.spruce_planks, ID.oak_planks, ID.oak_log); buildOtherDetail('park'); }   // 삼림 산장 + V20-BA(6차) 디테일
     else if (mode === 'barn' && ok(58, 100)) { buildBarnEstate(); buildOtherDetail('barn'); }   // V20-AB 대형 농장 + V20-BA(6차) 디테일
-    else if (mode === 'gold' && ok(50, 90)) { buildGoldOutpost(); buildGoldDetail(); }   // V20-W 전초기지 + V20-AX(3차) 채광 디테일
+    else if (mode === 'gold' && ok(50, 90)) { buildGoldOutpost(); buildGoldDetail(); buildGoldLandmarks(); }   // V20-W 전초기지 + V20-AX 디테일 + V20-BG(7차) 노란림 플랫폼/딥캐번 포탈/용암류
     else if (mode === 'deep' && ok(48, 80)) buildDeepDepot();   // V20-X: 손 배치 지하 크리스탈 채광 정거장
     else if (mode === 'spider' && ok(74, 88)) { buildSpiderNest(); buildSpiderRegions(); buildMonsterDetail('spider'); }   // V20-AA 거미굴 + V20-BD(7차) 실제 6구역 + V20-AZ 디테일
     else if (mode === 'nether' && ok(62, 78)) { buildNetherKeep(); buildMonsterDetail('nether'); }   // V20-Y 네더 요새 + V20-AZ(5차) 디테일
@@ -2204,6 +2204,33 @@
         else if (h < 0.18) { setW(x, t, z, pur); setW(x, t + 1, z, glow); }                                // 엔드로드 조형
       }
     }
+  }
+  // V20-BG 7차: 골드마인 시그니처(리서치 반영) — 수직 노란림 채굴 플랫폼(높이 차등) + 딥캐번 포탈 + 좌측 산 용암류.
+  function buildGoldLandmarks() {
+    const gold = ID.gold_ore, iron = ID.iron_ore, coal = ID.coal_ore, yel = ID.wool_yellow != null ? ID.wool_yellow : gold;
+    const sb = ID.stone_bricks, and_ = ID.polished_andesite != null ? ID.polished_andesite : ID.stone, glow = ID.glowstone, obs = ID.obsidian, lava = ID.lava, fence = ID.oak_fence, mag = ID.magma_block != null ? ID.magma_block : lava;
+    const S = (x, y, z, id) => { if (id != null) setW(x, y, z, id); };
+    // ── 노란림 채굴 플랫폼 3곳(산 슬로프, 높이 차등) — 발판+노란 테두리+광석 노두+랜턴 ──
+    const platform = (cx, cz, rad) => {
+      const gy = surfaceTop(cx, cz);
+      for (let dx = -rad; dx <= rad; dx++) for (let dz = -rad; dz <= rad; dz++) {
+        if (dx * dx + dz * dz > rad * rad) continue;
+        for (let y = gy; y <= gy + 3; y++) setW(cx + dx, y, cz + dz, 0);              // 머리 위 클리어
+        setW(cx + dx, gy - 1, cz + dz, (dx * dx + dz * dz >= (rad - 1) * (rad - 1)) ? yel : and_);   // 발판 + 노란 테두리
+      }
+      for (const [ox, oz, o] of [[-rad, 0, gold], [rad, 0, iron], [0, -rad, coal], [0, rad, gold]]) S(cx + ox, gy - 1, cz + oz, o);   // 광석 노두
+      S(cx, gy, cz, fence); S(cx, gy + 1, cz, glow);                                   // 랜턴
+    };
+    platform(50, 50, 3); platform(62, 46, 3); platform(46, 58, 2);
+    // ── 딥캐번 포탈(기저 남측) — 석재 아치 프레임 + 흑요석 문지방/바닥 + 하강 발광 표식 ──
+    { const px = 56, pz = 74, gy = surfaceTop(px, pz);
+      for (let dy = 1; dy <= 4; dy++) { S(px - 2, gy + dy, pz, sb); S(px + 2, gy + dy, pz, sb); }
+      for (let dx = -2; dx <= 2; dx++) S(px + dx, gy + 5, pz, sb);
+      for (let dx = -1; dx <= 1; dx++) for (let dy = 1; dy <= 4; dy++) setW(px + dx, gy + dy, pz, dy === 1 ? obs : 0);   // 개구부 + 흑요석 문지방
+      for (let dx = -1; dx <= 1; dx++) S(px + dx, gy, pz - 1, obs);                    // 하강 바닥
+      S(px, gy + 2, pz, glow); S(px - 2, gy + 5, pz, glow); S(px + 2, gy + 5, pz, glow); }
+    // ── 좌측(서) 산 용암 폭포 ──
+    { const lx = 44, lz = 50, gy = surfaceTop(lx, lz); for (let j = 0; j <= 6; j++) setW(lx, gy - j, lz, lava); S(lx, gy + 1, lz, mag); S(lx + 1, gy - 3, lz, lava); }
   }
   // V20-AX 3차: 골드 광산 섬 채광 디테일 — 좌표 한 칸씩 손 배치(해시). 노출 바위 슬로프에
   //   광석 노두·목재 갱목·랜턴·광차 조각·자갈 무더기를 흩뿌려 돌산 허허벌판을 채운다.
