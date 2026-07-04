@@ -2028,7 +2028,7 @@
   const HUB_TABS = [
     ['shop', '🛒 상점'], ['bank', '🏦 은행'], ['minions', '⚙️ 미니언'], ['pets', '🐾 펫'],
     ['talismans', '📿 장신구'], ['enchant', '✨ 인챈트'], ['star', '⭐ 강화'], ['reforge', '🔨 리포지'], ['hotm', '⛰️ 산의 심장'],
-    ['craft', '⚒️ 제작'], ['bazaar', '🏪 바자회'], ['auction', '🏛️ 경매장'], ['deals', '🎪 특가'], ['collections', '📚 컬렉션'], ['stats', '📊 스탯'],
+    ['craft', '⚒️ 제작'], ['bazaar', '🏪 바자회'], ['auction', '🏛️ 경매장'], ['deals', '🎪 특가'], ['collections', '📚 컬렉션'], ['halloffame', '🏆 명예의 전당'], ['stats', '📊 스탯'],
     ['multi', '🌐 멀티'],
   ];
   function iconImg(key) { return (typeof window.econIcon === 'function') ? `<img class="econ-icon" src="${window.econIcon(key)}" alt="">` : ''; }
@@ -2099,6 +2099,7 @@
       case 'craft': return craftHTML();
       case 'bazaar': return bazaarHTML();
       case 'auction': return auctionHTML();
+      case 'halloffame': return hallOfFameHTML();
       case 'hotm': return hotmHTML();
       case 'deals': return dealsHTML();
       case 'collections': return collectionsHTML();
@@ -2127,6 +2128,7 @@
       ['difficulty', '🎚️', '난이도', `현재: ${fieldDiffDef().name}`], ['equiplog', '📔', '장비 도감', `${fmtNum(equipLogCount())}/${fmtNum(equipTotalCount())}종`],
       ['pets', '🐾', '펫', '펫 관리'], ['talismans', '📿', '장신구 가방', '부적/마력'],
       ['craft', '⚒️', '레시피 북', '제작(장인 NPC와 동일)'], ['bestiary', '📕', '도감', '처치 기록·마일스톤 보너스'], ['multi', '🌐', '멀티', '거래·파티·섬 방문'],
+      ['halloffame', '🏆', '명예의 전당', '전 시스템 기록·마일스톤'],
     ];
     const worlds = (typeof window.economy3dWorlds === 'function') ? window.economy3dWorlds() : [];
     return `<h4>✦ 스카이블럭 메뉴</h4>
@@ -2475,6 +2477,53 @@
           ${overBtn}
         </div>`;
       }).join('')}</div>`;
+  }
+  // V20-J: 명예의 전당 — 전 시스템 개인 기록 + 마일스톤 등급(순수 표시, 밸런스 무관)
+  function hofTier(v, thresholds) { let t = 0; for (const th of thresholds) { if (v >= th) t++; else break; } return t; }   // 0~5
+  function hofBadge(t) { return ['⬜', '🥉', '🥈', '🥇', '💎', '👑'][Math.min(5, t)]; }
+  function hallOfFameHTML() {
+    const S = P.stats || {};
+    const slayers = D().SLAYERS.map(s => slayerLevel(s.key));
+    const maxSlayer = slayers.length ? Math.max(...slayers) : 0;
+    const skills = ['combat', 'mining', 'farming', 'foraging', 'fishing', 'enchanting', 'taming', 'social'];
+    const totalSkill = skills.reduce((a, k) => a + skillLevel(k), 0);
+    let colMax = 0, colTotal = 0;
+    for (const cat of D().COLLECTIONS) for (const r of cat.resources) { colTotal++; if (collectionTierIdx(r.key) >= r.tierThresholds.length) colMax++; }
+    const bestFloor = Object.keys(P.dungeonBest || {}).map(Number).filter(f => P.dungeonBest[f] && P.dungeonBest[f] !== 'F').reduce((a, b) => Math.max(a, b), 0);
+    const hotm = P.hotm || {};
+    const bazaarTraded = (P.bazaarBought || 0) + (P.bazaarSold || 0);
+    const recs = [
+      { ic: '💥', label: '최고 단일 타격', val: S.maxHit || 0, th: [1000, 50000, 500000, 2000000, 5000000], fmt: fmtNum },
+      { ic: '⚔️', label: '총 처치', val: S.kills || 0, th: [100, 1000, 10000, 50000, 200000], fmt: fmtNum },
+      { ic: '👹', label: '보스 처치', val: S.bossKills || 0, th: [10, 100, 500, 2000, 8000], fmt: fmtNum },
+      { ic: '💀', label: '최고 슬레이어 레벨', val: maxSlayer, th: [1, 3, 5, 7, 9], fmt: v => v },
+      { ic: '🏰', label: '최고 던전 층', val: bestFloor, th: [1, 4, 7, 9, 11], fmt: v => 'F' + v },
+      { ic: '📚', label: '컬렉션 MAX', val: colMax, th: [1, 5, 15, 25, colTotal], fmt: v => `${v}/${colTotal}` },
+      { ic: '🧠', label: '스킬 레벨 총합', val: totalSkill, th: [50, 150, 300, 420, 480], fmt: fmtNum },
+      { ic: '💰', label: '누적 골드 획득', val: S.goldEarned || 0, th: [1e5, 1e6, 1e7, 1e8, 1e9], fmt: fmtGold },
+      { ic: '🏛️', label: '경매 낙찰', val: S.ahSold || 0, th: [1, 10, 50, 200, 1000], fmt: fmtNum },
+      { ic: '🏪', label: '바자 거래량', val: bazaarTraded, th: [64, 1000, 10000, 100000, 1e6], fmt: fmtNum },
+      { ic: '⛰️', label: '산의 심장 티어', val: hotm.tier || 1, th: [2, 3, 4, 6, 7], fmt: v => 'T' + v },
+      { ic: '🔹', label: '미스릴 가루 보유', val: hotm.mithril || 0, th: [5000, 50000, 3e5, 1e6, 5e6], fmt: fmtNum },
+      { ic: '🧚', label: '페어리 소울', val: (P.fairySouls || []).length, th: [5, 20, 40, 60, D().FAIRY_SOULS.total], fmt: v => `${v}/${D().FAIRY_SOULS.total}` },
+      { ic: '📔', label: '장비 도감', val: equipLogCount(), th: [50, 200, 500, 1000, 1400], fmt: fmtNum },
+      { ic: '⛏️', label: '채굴 블록', val: S.blocksMined || 0, th: [500, 5000, 50000, 2e5, 1e6], fmt: fmtNum },
+      { ic: '🎣', label: '낚시 성공', val: S.fishCaught || 0, th: [100, 1000, 10000, 50000, 2e5], fmt: fmtNum },
+    ];
+    const totalTier = recs.reduce((a, r) => a + hofTier(r.val, r.th), 0);
+    const maxTier = recs.length * 5;
+    const rows = recs.map(r => {
+      const t = hofTier(r.val, r.th);
+      const nextTh = r.th[t];
+      return `<div class="econ-colrow">
+        <span>${r.ic} ${r.label} ${hofBadge(t)}</span>
+        <span><b>${r.fmt(r.val)}</b></span>
+        <span class="muted">${t >= 5 ? '👑 완전 정복!' : `다음 ${hofBadge(t + 1)} @ ${r.fmt(nextTh)}`}</span>
+      </div>`;
+    }).join('');
+    return `<h4>🏆 명예의 전당 — 나의 기록</h4>
+      <p class="econ-note">전 시스템 개인 기록과 마일스톤 등급(⬜→🥉→🥈→🥇→💎→👑). 명예 점수 <b>${totalTier}/${maxTier}</b>.</p>
+      <div class="econ-colgrid">${rows}</div>`;
   }
   function starForceHTML() {
     const SF = D().STARFORCE;
