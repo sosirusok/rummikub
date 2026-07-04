@@ -3055,7 +3055,38 @@
         if (p2[0] > 1 && p2[0] < W - 1) { for (let y = 3; y <= 5; y++) setW(p2[0], y, p2[1], ID.stone_bricks); setW(p2[0], 6, p2[1], ID.glowstone); }
       });
     }
+    buildDungeonDetail(ROOM_W, ROOMS);   // V20-AY(4차): 카타콤 폐허 디테일(바닥 파손·부서진 기둥·석관·화로·사슬·뼈)
     buildWarpPads();
+  }
+  // V20-AY 4차: 카타콤 던전 디테일 — 좌표 한 칸씩 손 배치. 방마다 바닥 질감 변주 + 부서진 기둥 +
+  //   석관 + 화로 + 천장 사슬/거미줄 + 뼈 무더기. 중앙 통로(z20~26)·게이트는 비워 통행 유지.
+  function buildDungeonDetail(ROOM_W, ROOMS) {
+    const sb = ID.stone_bricks, moss = ID.mossy_cobblestone, cob = ID.cobblestone, ch = ID.chiseled_stone_bricks != null ? ID.chiseled_stone_bricks : sb;
+    const web = ID.wool_white, glow = ID.glowstone, mag = ID.magma_block, fence = ID.oak_fence, q = ID.quartz_block;
+    const st = (f) => (ID['stone_bricks_stairs_' + f] != null ? ID['stone_bricks_stairs_' + f] : sb);
+    const slab = ID.stone_bricks_slab != null ? ID.stone_bricks_slab : sb, banner = ID.wool_red != null ? ID.wool_red : sb;
+    const put = (x, y, z, id) => { if (x > 1 && x < W - 1 && z >= 9 && z <= 38) setW(x, y, z, id); };
+    for (let ri = 0; ri <= ROOMS; ri++) {
+      const cx = ri * ROOM_W + 11; if (cx < 4 || cx > W - 4) continue;
+      // 바닥 질감 변주(이끼/자갈/균열) — 방 전역
+      for (let x = cx - 9; x <= cx + 9; x++) for (let z = 10; z <= 37; z++) {
+        if (getBlockLocal(x, 2, z) !== sb) continue;
+        const h = hash3(x, 50 + ri, z);
+        if (h < 0.12) put(x, 2, z, moss); else if (h < 0.20) put(x, 2, z, cob); else if (h < 0.26) put(x, 2, z, ch);
+      }
+      // 부서진 기둥 4곳(높이 차등, 부러진 꼭대기)
+      for (const [ox, oz, hh] of [[-7, 12, 3], [7, 12, 4], [-7, 35, 2], [7, 35, 3]]) { for (let y = 3; y <= 2 + hh; y++) put(cx + ox, y, oz, sb); put(cx + ox, 3 + hh, oz, st(0)); }
+      // 석관(관 + 슬랩 뚜껑 + 머리돌)
+      for (const [ox, oz] of [[-8, 16], [8, 30]]) { put(cx + ox, 3, oz, sb); put(cx + ox, 3, oz + 1, sb); put(cx + ox, 4, oz, slab); put(cx + ox, 4, oz + 1, slab); put(cx + ox, 3, oz + 2, ch); }
+      // 화로(코블 + 마그마 화심 + 발광) 4모서리
+      for (const [ox, oz] of [[-8, 11], [8, 11], [-8, 36], [8, 36]]) { put(cx + ox, 3, oz, cob); put(cx + ox, 4, oz, mag); put(cx + ox, 5, oz, glow); }
+      // 천장 사슬(울타리) + 거미줄 장막(중앙 통로 위쪽, 바닥 통행 무방해)
+      for (const [ox, oz] of [[-3, 20], [3, 26], [0, 14], [0, 33]]) { put(cx + ox, 9, oz, fence); put(cx + ox, 8, oz, fence); put(cx + ox, 7, oz, web); }
+      // 뼈 무더기(석영)
+      for (const [ox, oz] of [[-5, 35], [5, 12], [-6, 28]]) { put(cx + ox, 3, oz, q); if (hash3(cx + ox, 55, oz) < 0.5) put(cx + ox + 1, 3, oz, q); }
+      // 벽 배너(붉은) 양측
+      put(cx - 9, 5, 13, banner); put(cx - 9, 6, 13, banner); put(cx + 9, 5, 34, banner); put(cx + 9, 6, 34, banner);
+    }
   }
   function startDungeon3d(floor, master) {
     if (!running || !scene) return false;
