@@ -507,6 +507,43 @@
     buildClocktower();  // V20-AL: 손 배치 수직 랜드마크(대시계탑) — 허브 동측 광장
     buildMarketStalls(); // V20-AM: 손 배치 시장 노점 거리 — 허브 남측
     buildHeroGarden();   // V20-AN: 손 배치 영웅 동상 정원 — 허브 서측
+    buildObservatory();  // V20-AP: 손 배치 원형 천문 관측탑 — 허브 북동측
+  }
+  // V20-AP: 천문 관측탑 — 좌표 한 칸씩 손 배치(대칭 함수 아님). 각진 시계탑과 대비되는 '원통+돔'.
+  //   원통 탑신 + 석영 띠 + 아치문/창 → 돔 지붕(개폐 슬릿) + 망원경. 허브 북동(264,200) 개방 구역.
+  function buildObservatory() {
+    const cx = 264, cz = 200, gy = 19;
+    flattenSite(256, 192, 272, 208, gy);
+    const B = (dx, dy, dz, id) => { if (id != null) setW(cx + dx, gy + dy, cz + dz, id); };
+    const sb = ID.stone_bricks, q = ID.quartz_block, and_ = ID.polished_andesite != null ? ID.polished_andesite : ID.stone;
+    const glow = ID.glowstone, fence = ID.oak_fence, pur = ID.purpur, log = ID.spruce_log;
+    const ring = (r) => { const out = []; for (let dx = -r - 1; dx <= r + 1; dx++) for (let dz = -r - 1; dz <= r + 1; dz++) if (Math.round(Math.hypot(dx, dz)) === r) out.push([dx, dz]); return out; };
+    // ── 포디움(반경 6 원형) + 진입 계단 ──
+    for (let dx = -6; dx <= 6; dx++) for (let dz = -6; dz <= 6; dz++) { if (dx * dx + dz * dz > 40) continue; B(dx, 0, dz, ((dx + dz) & 1) ? sb : and_); }
+    for (const [ox, oz] of [[-6, 0], [6, 0], [0, -6], [0, 6]]) { B(ox, 0, oz, fence); B(ox, 1, oz, glow); }   // 포디움 가로등
+    // ── 원통 탑신(반경 4, y1~14, hollow) + 석영 띠(4·9층) + 아치문(남)/창 ──
+    for (let dy = 1; dy <= 14; dy++) {
+      const band = (dy === 4 || dy === 9 || dy === 14);
+      for (const [dx, dz] of ring(4)) {
+        const door = dz >= 3 && Math.abs(dx) <= 1 && dy <= 2;         // 남면 아치문
+        const win = (dy === 6 || dy === 11) && (Math.abs(dx) <= 1 || Math.abs(dz) <= 1) && ((dx === 0) !== (dz === 0)) === false && (Math.abs(dx) >= 3 || Math.abs(dz) >= 3) && (dx === 0 || dz === 0);
+        if (door) continue;
+        B(dx, dy, dz, win ? ID.glass : (band ? q : sb));
+      }
+    }
+    B(0, 3, 4, q); B(-1, 3, 4, q); B(1, 3, 4, q);   // 아치문 상인방
+    for (let dx = -3; dx <= 3; dx++) for (let dz = -3; dz <= 3; dz++) { if (dx * dx + dz * dz <= 10) { B(dx, 0, dz, and_); B(dx, 7, dz, dx * dx + dz * dz <= 4 ? sb : 0); } }   // 바닥 + 중간 관측 데크(중앙만)
+    B(0, 2, 0, glow); B(0, 8, 0, glow);   // 내부 조명
+    // 내부 나선 계단(코벨) 1→관측층
+    for (let s = 0, dy = 1; dy <= 13; dy++, s++) { const a = s * 0.9; B(Math.round(Math.cos(a) * 3), dy, Math.round(Math.sin(a) * 3), sb); }
+    // ── 돔 지붕(수렴, 석영/자수정) + 개폐 슬릿(관측구) ──
+    for (const [dx, dz] of ring(4)) B(dx, 15, dz, ID['quartz_block_stairs_' + (dx < 0 ? 1 : dx > 0 ? 3 : dz < 0 ? 0 : 2)] != null ? ID['quartz_block_stairs_' + (dx < 0 ? 1 : dx > 0 ? 3 : dz < 0 ? 0 : 2)] : q);   // 처마
+    for (let dy = 15; dy <= 18; dy++) { const r = 18 - dy + 1; for (let dx = -r; dx <= r; dx++) for (let dz = -r; dz <= r; dz++) { if (Math.round(Math.hypot(dx, dz)) !== r) continue; const slit = dx === 0 && dz <= 0;   // 북향 개폐 슬릿(열림)
+      if (slit) continue; B(dx, dy, dz, ((dx + dz) & 1) ? q : pur); } }
+    B(0, 19, 0, pur); B(0, 20, 0, glow);   // 돔 정점 + 발광
+    // ── 망원경(관측 데크 위, 경사 배럴 + 렌즈 발광) ──
+    B(1, 8, 1, log); B(1, 9, 1, log); B(2, 10, 1, fence); B(2, 11, 2, glow);   // 삼각대 + 경통 + 렌즈
+    B(0, 8, 1, ID.oak_planks);   // 관측 의자
   }
   // V20-AN: 영웅 동상 정원 — 좌표 한 칸씩 손 배치(대칭 함수 아님). 잔디 정원 + 산울타리 + 꽃밭 +
   //   중앙 블록 영웅 동상(검을 든). 허브 서측(160~176, 216~232) 개방 구역.
