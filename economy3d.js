@@ -1480,12 +1480,61 @@
     const base = (x, z) => surfaceTop(x, z) + 1;
     if (mode === 'park' && ok(70, 100)) buildHouse(67, 97, 7, 6, base(70, 100), ID.spruce_planks, ID.oak_planks, ID.oak_log);   // 삼림 산장
     else if (mode === 'barn' && ok(58, 100)) { buildHouse(54, 96, 10, 8, base(58, 100), ID.bricks, ID.dark_oak_log, ID.dark_oak_log); const by = base(52, 98); for (const [hx, hz] of [[52, 98], [53, 98], [52, 99]]) { setW(hx, by, hz, ID.hay_block); setW(hx, by + 1, hz, ID.hay_block); } }   // 붉은 헛간 + 건초더미
-    else if (mode === 'gold' && ok(42, 90)) buildHouse(40, 88, 6, 5, base(42, 90), ID.cobblestone, ID.oak_planks, ID.oak_log);   // 광부 오두막
+    else if (mode === 'gold' && ok(50, 90)) buildGoldOutpost();   // V20-W: 손 배치 대형 광산 전초기지(헤드프레임+갱도+광차 데크+창고+감독관 오두막)
     else if (mode === 'deep' && ok(46, 74)) { buildHouse(44, 72, 6, 6, base(46, 74), ID.stone_bricks, ID.stone_bricks, ID.stone_bricks); const gy = base(46, 74); setW(43, gy + 1, 71, ID.glowstone); setW(50, gy + 1, 78, ID.glowstone); }   // 지하 전초기지 + 발광석
     else if (mode === 'spider' && ok(74, 88)) { buildHouse(72, 86, 6, 5, base(74, 88), ID.dark_oak_planks, ID.dark_oak_planks, ID.dark_oak_log); const wy = base(74, 88); for (let i = 0; i < 5; i++) setW(71 + (i % 4), wy + 3 + (i % 2), 85 + (i % 3), ID.wool_white); }   // 어두운 오두막 + 거미줄
     else if (mode === 'nether' && ok(62, 78)) { buildHouse(60, 76, 7, 6, base(62, 78), ID.nether_bricks, ID.nether_bricks, ID.nether_bricks); const ny = base(62, 78); setW(59, ny, 75, ID.magma_block); setW(67, ny, 82, ID.glowstone); }   // 네더 요새 + 마그마
     else if (mode === 'end' && ok(62, 84)) { buildHouse(60, 82, 6, 6, base(62, 84), ID.purpur, ID.purpur, ID.obsidian); const ey = base(62, 84); setW(59, ey, 81, ID.glowstone); setW(66, ey + 5, 88, ID.glowstone); }   // 엔드 성소 + 엔드로드
     else if (mode === 'mushroom' && ok(58, 100)) buildMushroomHouse(58, 100, base(58, 100));   // 거대 버섯 집
+  }
+  // V20-W: 골드 광산 대형 전초기지 — 좌표 한 칸씩 손 배치(대칭 함수 아님).
+  //   중심(50,90): 갱도 + 목재 헤드프레임 타워 + 도르래 + 광차 데크 + 광석 창고 + 감독관 오두막.
+  function buildGoldOutpost() {
+    const cx = 50, cz = 90, gy = surfaceTop(cx, cz);
+    const B = (dx, dy, dz, id) => { if (id != null) setW(cx + dx, gy + dy, cz + dz, id); };
+    const log = ID.dark_oak_log != null ? ID.dark_oak_log : ID.oak_log, plank = ID.oak_planks, cob = ID.cobblestone, sb = ID.stone_bricks;
+    const and_ = ID.polished_andesite != null ? ID.polished_andesite : ID.stone, gold = ID.gold_ore, glow = ID.glowstone, fence = ID.oak_fence, chest = ID.chest != null ? ID.chest : plank;
+    const st = (mat, f) => (ID[mat + '_stairs_' + f] != null ? ID[mat + '_stairs_' + f] : (mat === 'oak_planks' ? plank : sb));
+    const slab = ID.oak_planks_slab != null ? ID.oak_planks_slab : plank;
+    // ── 석재 기단(넓은 데크) + 갱도 개구부(3×3) ──
+    for (let dx = -5; dx <= 6; dx++) for (let dz = -5; dz <= 6; dz++) B(dx, -1, dz, ((dx + dz) & 1) ? cob : and_);
+    for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) { for (let y = -1; y >= -6; y--) B(dx, y, dz, 0); B(dx, -7, dz, sb); }   // 갱도 수직굴
+    B(0, -7, 0, glow);                                                             // 갱도 바닥 발광
+    for (let y = -2; y >= -6; y--) { B(-2, y, 0, gold); B(2, y, 0, gold); B(0, y, -2, gold); B(0, y, 2, gold); }   // 갱벽 금맥
+    // 갱도 테두리 통나무 틀 + 안전난간(울타리)
+    for (const [ex, ez] of [[-2, -2], [2, -2], [-2, 2], [2, 2]]) { B(ex, 0, ez, log); B(ex, 1, ez, log); }
+    for (let d = -2; d <= 2; d++) { B(d, 0, -2, fence); B(d, 0, 2, fence); B(-2, 0, d, fence); B(2, 0, d, fence); }
+    B(0, 0, 2, 0); B(1, 0, 2, 0);                                                  // 진입 틈(난간 열기)
+    // ── 목재 헤드프레임 타워(갱도 위 A자 골조 + 도르래 바퀴 + 밧줄) ──
+    for (const [lx, lz] of [[-2, -2], [2, -2], [-2, 2], [2, 2]]) for (let y = 2; y <= 7; y++) B(lx, y, lz, log);   // 4다리
+    for (let d = -2; d <= 2; d++) { B(d, 7, -2, log); B(d, 7, 2, log); B(-2, 7, d, log); B(2, 7, d, log); }        // 상단 사각 보
+    B(-1, 8, -1, st('oak_planks', 0)); B(1, 8, -1, st('oak_planks', 2)); B(-1, 8, 1, st('oak_planks', 0)); B(1, 8, 1, st('oak_planks', 2));   // A자 경사
+    B(0, 9, 0, log); B(0, 10, 0, and_);                                            // 정상 도르래 축 + 바퀴
+    B(0, 8, 0, fence); B(0, 7, 0, fence); B(0, 6, 0, fence);                       // 도르래 밧줄(갱도로 내려감)
+    // 대각 브레이스(계단)
+    B(-2, 3, -1, st('oak_planks', 3)); B(2, 3, 1, st('oak_planks', 1)); B(-1, 3, 2, st('oak_planks', 0)); B(1, 3, -2, st('oak_planks', 2));
+    // ── 광차 데크 + 레일(안산암 띠) + 광차 2대(슬랩+울타리 표현) ──
+    for (let dx = 3; dx <= 6; dx++) B(dx, -1, 0, and_);                            // 레일 라인(동→창고)
+    B(3, 0, 0, slab); B(3, 1, 0, fence); B(4, 0, 0, gold);                         // 광차1(광석 실림)
+    B(5, 0, -1, slab); B(5, 1, -1, fence);                                         // 광차2
+    // ── 광석 창고(오픈 셸터: 기둥 4 + 지붕 + 광석 더미 + 상자) ──
+    for (const [px, pz] of [[4, -4], [6, -4], [4, -2], [6, -2]]) { B(px, 0, pz, log); B(px, 1, pz, log); B(px, 2, pz, log); }
+    for (let dx = 4; dx <= 6; dx++) for (let dz = -4; dz <= -2; dz++) B(dx, 3, dz, st('oak_planks', 0));   // 셸터 지붕(경사)
+    B(5, 0, -3, gold); B(4, 0, -3, gold); B(6, 0, -3, chest); B(5, 1, -3, gold);   // 금 더미 + 상자
+    B(4, 2, -4, glow); B(6, 2, -2, glow);                                          // 창고 랜턴
+    // ── 감독관 오두막(작은 방: 벽+문+창+책상+등불) ──
+    for (let dx = -6; dx <= -3; dx++) for (let dz = -4; dz <= -1; dz++) { const edge = dx === -6 || dx === -3 || dz === -4 || dz === -1; if (edge) { B(dx, 0, dz, cob); B(dx, 1, dz, ((dx + dz) & 1) ? plank : cob); B(dx, 2, dz, cob); } }
+    B(-4, 0, -1, 0); B(-4, 1, -1, 0);                                              // 문 개구부
+    B(-4, 0, -1, ID.oak_door_c_0 != null ? ID.oak_door_c_0 : 0); B(-4, 1, -1, ID.oak_door_c_0 != null ? ID.oak_door_c_0 : 0);
+    B(-5, 1, -4, ID.glass); B(-6, 1, -3, ID.glass);                               // 창
+    for (let dx = -5; dx <= -4; dx++) for (let dz = -3; dz <= -2; dz++) B(dx, 2, dz, plank);   // 지붕
+    B(-5, 0, -3, st('oak_planks', 2)); B(-5, 1, -3, slab);                         // 책상
+    B(-4, 2, -2, glow);                                                            // 실내 등불
+    // ── 주변 손 배치 디테일: 통나무 더미·양동이(울타리)·가로등·마른덤불 대신 조약돌 바위 ──
+    B(3, 0, 3, log); B(4, 0, 3, log); B(3, 1, 3, log);                             // 통나무 더미
+    B(-3, 0, 4, cob); B(-2, 0, 4, cob); B(-3, 1, 4, cob);                          // 바위 무더기
+    B(6, 0, 4, fence); B(6, 1, 4, glow);                                           // 가로등
+    B(-5, 0, 3, fence); B(-5, 1, 3, glow);                                         // 가로등2
   }
   function buildMushroomHouse(cx, cz, base) {
     // V18: 동화풍 버섯 오두막 — 버섯대 몸통 + 흰 점박이 붉은 갓 + 둥근 창 + 반블럭 처마 + 현관 랜턴
