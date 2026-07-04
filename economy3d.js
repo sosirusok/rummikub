@@ -2271,6 +2271,32 @@
       const y = surfaceTop(x, z) - 1;
       if (getBlockLocal(x, y, z) === ID.netherrack) setW(x, y, z, hash3(i, 93, 3) < 0.6 ? ID.soul_sand : ID.magma_block);
     }
+    // ── V20-AJ: 손 사각 네더 분위기 조형 — 흑요석 현무암 첨탑 + 발광석 천장 군집 + 용암 폭포 ──
+    for (let n = 0; n < 18; n++) {   // 현무암(흑요석) 첨탑 — 섬 곳곳 비대칭, 높이 차등
+      const a = hash3(n, 300, 1) * Math.PI * 2, rr = 12 + hash3(n, 301, 2) * 34;
+      const x = Math.round(64 + Math.cos(a) * rr), z = Math.round(64 + Math.sin(a) * rr);
+      if (surfaceTop(x, z) < 6) continue;
+      const y0 = surfaceTop(x, z), h = 4 + Math.floor(hash3(n, 302, 3) * 9);
+      for (let j = 0; j < h; j++) { setW(x, y0 + j, z, ID.obsidian); if (j < 2) { setW(x + 1, y0 + j, z, ID.obsidian); setW(x, y0 + j, z + 1, ID.obsidian); } }   // 밑동 두껍게
+      setW(x, y0 + h, z, ID.magma_block);   // 첨탑 정상 마그마
+      if (hash3(n, 303, 4) < 0.4) setW(x, y0 + h + 1, z, ID.glowstone);
+    }
+    for (let n = 0; n < 10; n++) {   // 발광석 천장 군집(공중 부유 — 네더 특유 조명)
+      const a = hash3(n, 310, 1) * Math.PI * 2, rr = hash3(n, 311, 2) * 40;
+      const x = Math.round(64 + Math.cos(a) * rr), z = Math.round(64 + Math.sin(a) * rr);
+      if (surfaceTop(x, z) < 6) continue;
+      const cy = surfaceTop(x, z) + 10 + Math.floor(hash3(n, 312, 3) * 6);
+      for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) if (Math.abs(dx) + Math.abs(dz) <= 1) setW(x + dx, cy, z + dz, ID.glowstone);
+      setW(x, cy - 1, z, ID.glowstone);   // 군집 아래로 한 칸 늘어뜨림
+    }
+    for (let n = 0; n < 5; n++) {   // 용암 폭포(섬 가장자리에서 용암 바다로 떨어짐)
+      const a = hash3(n, 320, 1) * Math.PI * 2;
+      const x = Math.round(64 + Math.cos(a) * 46), z = Math.round(64 + Math.sin(a) * 46);
+      if (surfaceTop(x, z) < 6) continue;
+      const y0 = surfaceTop(x, z);
+      for (let j = 0; j <= 6; j++) setW(x, y0 - j, z, ID.lava);   // 절벽면 용암 줄기
+      setW(x, y0 + 1, z, ID.magma_block);
+    }
     // 요새 복도망(십자 + 외곽 회랑 — 벽 있는 진짜 던전 복도)
     function corridor(x0, z0, x1, z1) {
       const dx = Math.sign(x1 - x0), dz = Math.sign(z1 - z0);
