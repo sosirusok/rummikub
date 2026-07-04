@@ -2715,51 +2715,60 @@
   function genDeepCaverns() {
     world = new Uint8Array(W * H * Dp);
     for (let x = 6; x < W - 6; x++) for (let z = 6; z < Dp - 6; z++) for (let y = 2; y <= 40; y++) setW(x, y, z, ID.stone);
-    // 층 챔버(y대역별 대형 공동)
-    const layers = [
-      { y: 34, ore: ID.coal_ore, n: 40 }, { y: 29, ore: ID.iron_ore, n: 36 }, { y: 24, ore: ID.gold_ore, n: 30 },
-      { y: 24, ore: ID.lapis_ore, n: 24 }, { y: 19, ore: ID.redstone_ore, n: 30 }, { y: 14, ore: ID.emerald_ore, n: 20 },
-      { y: 9, ore: ID.diamond_ore, n: 22 }, { y: 5, ore: ID.obsidian, n: 16 },
+    // ── V20-BC 정통 재건: 실제 딥 캐번의 6개 명명 층(위→아래) — 리서치(위키) 반영 ──
+    //   Gunpowder Mines(석탄) → Lapis Quarry(청금) → Pigmen's Den(금/네더랙) → Slimehill(슬라임/이끼)
+    //   → Diamond Reserve(다이아) → Obsidian Sanctuary(조약돌 바닥+흑요석+다이아, 최심).
+    const netherrack = ID.netherrack, moss = ID.mossy_cobblestone, cob = ID.cobblestone;
+    const LAYERS = [
+      { name: 'Gunpowder Mines', y: 33, ore: ID.coal_ore, n: 40, acc: ID.gravel },
+      { name: 'Lapis Quarry', y: 28, ore: ID.lapis_ore, n: 34, acc: ID.stone },
+      { name: "Pigmen's Den", y: 22, ore: ID.gold_ore, n: 26, acc: netherrack },
+      { name: 'Slimehill', y: 17, ore: ID.emerald_ore, n: 20, acc: moss },
+      { name: 'Diamond Reserve', y: 11, ore: ID.diamond_ore, n: 26, acc: ID.stone },
+      { name: 'Obsidian Sanctuary', y: 5, ore: ID.obsidian, n: 24, acc: cob, floor: cob, gem: ID.diamond_ore },
     ];
-    const uniq = [34, 29, 24, 19, 14, 9, 5];
-    uniq.forEach(ly => {
+    // 각 층 챔버(3칸 높이 대형 공동) + 층 바닥/광석/발광 + 층 재질 악센트
+    LAYERS.forEach((L, li) => {
+      const ly = L.y;
       for (let x = 14; x < W - 14; x++) for (let z = 14; z < Dp - 14; z++) {
         const d = Math.hypot(x - 48, z - 48) / 34 + (hash3(x, ly, z) - 0.5) * 0.2;
-        if (d < 1) for (let y = ly - 2; y <= ly + 1; y++) setW(x, y, z, 0);
+        if (d >= 1) continue;
+        for (let y = ly - 2; y <= ly + 1; y++) setW(x, y, z, 0);
+        if (L.floor) setW(x, ly - 3, z, L.floor);                                    // 흑요석 성소: 조약돌 바닥
+        if (L.acc && hash3(x, 300 + li, z) < 0.10) setW(x, ly - 3, z, L.acc);         // 층 재질 악센트(자갈/네더랙/이끼)
       }
+      scatterOre(48, 48, 34, ly - 2, ly + 1, L.ore, L.n, 71 + li);                    // 층 고유 광석
+      if (L.gem) scatterOre(48, 48, 30, ly - 2, ly + 1, L.gem, 12, 90 + li);          // 성소: 다이아 추가
+      // 발광(층 조명) + 종유석/석순 + 정동
       [[30, 34], [64, 60], [48, 30], [36, 62]].forEach((p2, i) => setW(p2[0], ly - 2, p2[1] + i, ID.glowstone));
-    });
-    layers.forEach((L, i) => { scatterOre(48, 48, 34, L.y - 2, L.y + 1, L.ore, L.n, 71 + i); });
-    // ── V20-AI: 손 사각 자연 동굴 조형 — 층별 챔버에 종유석/석순 기둥 + 발광 정동(지오드) ──
-    layers.forEach((L, li) => {
-      const ly = L.y;
-      // 석순(바닥에서 솟음)/종유석(천장에서 매달림) — 챔버 내 흩뿌림(해시 위치, 층마다 다른 시드)
-      for (let n = 0; n < 26; n++) {
+      for (let n = 0; n < 24; n++) {
         const a = hash3(n, 200 + li, 1) * Math.PI * 2, rr = 6 + hash3(n, 201 + li, 2) * 24;
         const x = Math.round(48 + Math.cos(a) * rr), z = Math.round(48 + Math.sin(a) * rr);
-        if (Math.hypot(x - 48, z - 48) > 32) continue;
-        if (getBlockLocal(x, ly - 2, z) !== 0) continue;   // 챔버 내부만
+        if (Math.hypot(x - 48, z - 48) > 32 || getBlockLocal(x, ly - 2, z) !== 0) continue;
         const stal = ID.polished_andesite != null ? ID.polished_andesite : ID.stone;
-        if (hash3(n, 202 + li, 3) < 0.5) { setW(x, ly - 2, z, stal); if (hash3(n, 203, 4) < 0.5) setW(x, ly - 1, z, stal); }   // 석순 1~2칸
-        else { setW(x, ly + 1, z, stal); if (hash3(n, 204, 5) < 0.5) setW(x, ly, z, stal); }                                   // 종유석 1~2칸
+        if (hash3(n, 202 + li, 3) < 0.5) { setW(x, ly - 2, z, stal); if (hash3(n, 203, 4) < 0.5) setW(x, ly - 1, z, stal); }
+        else { setW(x, ly + 1, z, stal); if (hash3(n, 204, 5) < 0.5) setW(x, ly, z, stal); }
       }
-      // 발광 정동(지오드): 층 광물색 정동 3군데 — 벽면에 보석+발광 코어
-      for (let g = 0; g < 3; g++) {
-        const a = hash3(g, 210 + li, 1) * Math.PI * 2;
-        const x = Math.round(48 + Math.cos(a) * 30), z = Math.round(48 + Math.sin(a) * 30);
-        for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) if (Math.abs(dx) + Math.abs(dz) <= 1) setW(x + dx, ly - 1, z + dz, L.ore);
-        setW(x, ly - 1, z, ID.glowstone);   // 정동 발광 코어
-      }
+      for (let g = 0; g < 3; g++) { const a = hash3(g, 210 + li, 1) * Math.PI * 2; const x = Math.round(48 + Math.cos(a) * 30), z = Math.round(48 + Math.sin(a) * 30);
+        for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) if (Math.abs(dx) + Math.abs(dz) <= 1) setW(x + dx, ly - 1, z + dz, L.ore); setW(x, ly - 1, z, ID.glowstone); }
     });
-    // 중앙 리프트 수직 통로 + 층별 착지대(계단식)
+    // ── 중앙 리프트 수직 갱도(3×3, 상단~최심) + 층별 착지 정거장(석재 착지판+발광+케이지) ──
     for (let y = 3; y <= 40; y++) for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) setW(48 + dx, y, 48 + dz, 0);
-    let py = 40;
-    uniq.forEach(ly => { for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) setW(48 + dx, ly - 3, 48 + dz, ID.stone_bricks); });
-    // 나선 계단(리프트 대용 — 층 사이 이동)
+    LAYERS.forEach(L => {
+      const ly = L.y;
+      for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) setW(48 + dx, ly - 3, 48 + dz, ID.stone_bricks);   // 착지판
+      for (const [ox, oz] of [[-2, -2], [2, -2], [-2, 2], [2, 2]]) { setW(48 + ox, ly - 2, 48 + oz, ID.oak_fence); setW(48 + ox, ly - 1, 48 + oz, ID.glowstone); }   // 정거장 케이지 + 랜턴
+      // 리프트 호출 표식(중앙 발광)
+      setW(48, ly - 2, 46, ID.oak_fence); setW(48, ly - 1, 46, ID.sea_lantern != null ? ID.sea_lantern : ID.glowstone);
+    });
+    // 리프트 케이지 밧줄(갱도 중심 축) — 상단 도르래
+    for (let y = 4; y <= 40; y++) setW(48, y, 48, ID.oak_fence);
+    setW(48, 41, 48, ID.dark_oak_log != null ? ID.dark_oak_log : ID.oak_log);
+    // 나선 계단(층 사이 실제 이동 수단)
     const ring = [[-3, -3], [-1, -3], [1, -3], [3, -3], [3, -1], [3, 1], [3, 3], [1, 3], [-1, 3], [-3, 3], [-3, 1], [-3, -1]];
-    let sy = 3; let ri = 0;
+    let sy = 3, ri = 0;
     while (sy <= 38) { const o = ring[ri % ring.length]; setW(48 + o[0], sy, 48 + o[1], ID.stone_bricks); clearAbove(48 + o[0], 48 + o[1], sy + 1, 3); ri++; if (ri % 2 === 0) sy++; }
-    // 입구 방(스폰)
+    // ── 입구 방(스폰, 최상단 Gunpowder Mines 위) + 리프트 정거장 연결 통로 ──
     for (let x = 42; x <= 54; x++) for (let z = 80; z <= 92; z++) for (let y = 36; y <= 41; y++) setW(x, y, z, y === 36 ? ID.stone_bricks : 0);
     for (let z = 52; z <= 80; z++) { for (let dx = -1; dx <= 1; dx++) { setW(48 + dx, 36, z, ID.stone_bricks); clearAbove(48 + dx, z, 37, 4); } }
     [[44, 82], [52, 90], [48, 86]].forEach(p2 => setW(p2[0], 37, p2[1], ID.glowstone));
