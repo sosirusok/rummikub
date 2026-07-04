@@ -2009,7 +2009,7 @@
     else if (mode === 'spider' && ok(74, 88)) { buildSpiderNest(); buildSpiderRegions(); buildMonsterDetail('spider'); }   // V20-AA 거미굴 + V20-BD(7차) 실제 6구역 + V20-AZ 디테일
     else if (mode === 'nether' && ok(62, 78)) { buildNetherKeep(); buildMonsterDetail('nether'); }   // V20-Y 네더 요새 + V20-AZ(5차) 디테일
     else if (mode === 'end' && ok(62, 84)) { buildEndSanctum(); buildEndLandmarks(); buildMonsterDetail('end'); }   // V20-Z 성소 + V20-BE(7차) Dragon's Nest/View + V20-AZ 디테일
-    else if (mode === 'mushroom' && ok(58, 100)) { buildMushroomColony(); buildOtherDetail('mushroom'); }   // V20-AC 거대버섯 군락 + V20-BA(6차) 디테일
+    else if (mode === 'mushroom' && ok(58, 100)) { buildMushroomColony(); buildMushroomZones(); buildOtherDetail('mushroom'); }   // V20-AC 군락 + V20-BH(7차) 명명 구역 + V20-BA 디테일
   }
   // V20-W: 골드 광산 대형 전초기지 — 좌표 한 칸씩 손 배치(대칭 함수 아님).
   //   중심(50,90): 갱도 + 목재 헤드프레임 타워 + 도르래 + 광차 데크 + 광석 창고 + 감독관 오두막.
@@ -2059,6 +2059,37 @@
     B(-3, 0, 4, cob); B(-2, 0, 4, cob); B(-3, 1, 4, cob);                          // 바위 무더기
     B(6, 0, 4, fence); B(6, 1, 4, glow);                                           // 가로등
     B(-5, 0, 3, fence); B(-5, 1, 3, glow);                                         // 가로등2
+  }
+  // V20-BH 7차: 버섯 사막 명명 구역(리서치 반영) — Desert Settlement(동측 사막 사암 마을) +
+  //   Trapper's/Jake's Shack(서측 균사 오두막) + Oasis 강조. (실제 서브존: Desert Settlement·Oasis·
+  //   Mushroom Gorge·Trapper's Shack 등)
+  function buildMushroomZones() {
+    const sand = ID.sandstone, sst = (f) => (ID['sandstone_stairs_' + f] != null ? ID['sandstone_stairs_' + f] : sand), sslab = ID.sandstone_slab != null ? ID.sandstone_slab : sand;
+    const glow = ID.glowstone, water = ID.water, stem = ID.mushroom_stem, rcap = ID.mushroom_red_block, glass = ID.glass, fence = ID.oak_fence;
+    const dpl = ID.dark_oak_planks != null ? ID.dark_oak_planks : ID.spruce_planks, dlog = ID.dark_oak_log != null ? ID.dark_oak_log : ID.oak_log;
+    const S = (x, y, z, id) => { if (id != null) setW(x, y, z, id); };
+    const flat = (x0, z0, x1, z1) => { const gy = surfaceTop((x0 + x1) >> 1, (z0 + z1) >> 1); flattenSite(x0, z0, x1, z1, gy - 1); return gy; };
+    // ── Desert Settlement(동측 사막, 100,72): 사암 오두막 2채 + 우물 + 야자 없이 사암 첨탑 ──
+    const hut = (bx, bz) => { const gy = flat(bx - 1, bz - 1, bx + 5, bz + 4);
+      for (let y = gy; y < gy + 3; y++) for (let dx = 0; dx <= 4; dx++) for (let dz = 0; dz <= 3; dz++) { const edge = dx === 0 || dx === 4 || dz === 0 || dz === 3; if (edge) S(bx + dx, y, bz + dz, sand); }
+      S(bx + 2, gy, bz + 3, 0); S(bx + 2, gy + 1, bz + 3, 0);                                  // 문
+      S(bx, gy + 1, bz + 1, glass); S(bx + 4, gy + 1, bz + 1, glass);                          // 창
+      for (let dx = 0; dx <= 4; dx++) for (let dz = 0; dz <= 3; dz++) S(bx + dx, gy + 3, bz + dz, sslab);   // 평지붕
+      S(bx + 2, gy + 2, bz + 1, glow); return gy; };
+    hut(98, 70); hut(104, 74);
+    { const wx = 101, wz = 78, gy = surfaceTop(wx, wz);   // 우물
+      for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) { const edge = dx !== 0 || dz !== 0; S(wx + dx, gy, wz + dz, edge ? sand : water); if (edge) S(wx + dx, gy + 1, wz + dz, dx === 0 || dz === 0 ? 0 : sand); }
+      S(wx - 1, gy + 1, wz - 1, fence); S(wx + 1, gy + 1, wz - 1, fence); for (let dx = -1; dx <= 1; dx++) S(wx + dx, gy + 3, wz - 1, sslab); S(wx, gy + 2, wz - 1, glow); }
+    // ── Trapper's / Jake's Shack(서측 균사, 40,60): 다크오크 오두막 + 붉은 버섯 지붕 + 랜턴 ──
+    { const bx = 38, bz = 58, gy = flat(bx - 1, bz - 1, bx + 5, bz + 5);
+      for (let y = gy; y < gy + 3; y++) for (let dx = 0; dx <= 4; dx++) for (let dz = 0; dz <= 4; dz++) { const edge = dx === 0 || dx === 4 || dz === 0 || dz === 4; if (edge) S(bx + dx, y, bz + dz, ((dx === 0 || dx === 4) && (dz === 0 || dz === 4)) ? dlog : dpl); }
+      S(bx + 2, gy, bz + 4, 0); S(bx + 2, gy + 1, bz + 4, 0);                                  // 문
+      S(bx, gy + 1, bz + 2, glass); S(bx + 4, gy + 1, bz + 2, glass);
+      for (let dx = -1; dx <= 5; dx++) for (let dz = -1; dz <= 5; dz++) S(bx + dx, gy + 3, bz + dz, rcap);   // 붉은 버섯 갓 지붕
+      for (let dx = 0; dx <= 4; dx += 4) for (let dz = 0; dz <= 4; dz += 4) S(bx + dx, gy + 4, bz + dz, glow);   // 모서리 랜턴
+      S(bx + 2, gy + 2, bz + 2, glow); }
+    // ── Oasis 강조(못가에 야자 대용 버섯 기둥 + 갈대 대용 키큰풀) ──
+    { const ox = 82, oz = 96; for (const [dx, dz] of [[-2, 0], [2, 1], [0, -2]]) { const gy = surfaceTop(ox + dx, oz + dz); if (gy > 4) { S(ox + dx, gy, oz + dz, stem); S(ox + dx, gy + 1, oz + dz, stem); S(ox + dx, gy + 2, oz + dz, rcap); } } }
   }
   // V20-BE 7차: 엔드 시그니처 랜드마크(리서치 반영) — Dragon's Nest(소환 제단) + Dragon's View(사암/흑요석 탑).
   function buildEndLandmarks() {
