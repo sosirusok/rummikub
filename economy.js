@@ -52,6 +52,8 @@
       ahSeq: 0,                              // 매물 고유 id 시퀀스
       // --- V20-G 필드 ---
       hotm: { tier: 1, mithril: 0, gemstone: 0, nodes: {} },   // 산의 심장(채광 퍼크 트리)
+      // --- V20-I 필드 ---
+      selectedPower: 'none',                 // 전능의 힘(Accessory Power)
     };
   }
   // 구버전 세이브 마이그레이션: 누락 필드를 기본값으로 채움(중첩 객체 포함)
@@ -92,6 +94,7 @@
     if (typeof p.hotm.gemstone !== 'number') p.hotm.gemstone = 0;
     if (typeof p.hotm.tier !== 'number') p.hotm.tier = 1;
     if (!p.hotm.nodes || typeof p.hotm.nodes !== 'object') p.hotm.nodes = {};
+    if (typeof p.selectedPower !== 'string') p.selectedPower = 'none';   // V20-I 전능의 힘
     return p;
   }
   function todayStr() { return new Date().toISOString().slice(0, 10); }
@@ -256,6 +259,25 @@
   }
   function magicalPower() { return talismanStats().mp; }
   function mpStatMul() { return 1 + (magicalPower() / 10) * (D().MAGICAL_POWER.statPctPer10MP / 100); }
+  // V20-I: 전능의 힘 — 선택한 힘이 마력에 비례해 스탯 부여(mpScale = MP^scaleExp)
+  function selectedPowerDef() { const MP = D().MAGICAL_POWER; return (MP.powers || []).find(p => p.key === (P.selectedPower || 'none')) || MP.powers[0]; }
+  function mpScale() { const mp = magicalPower(); return mp > 0 ? Math.pow(mp, D().MAGICAL_POWER.scaleExp) : 0; }
+  function powerStats() {
+    const out = { str: 0, def: 0, hp: 0, intelligence: 0, critChance: 0, critDamage: 0 };
+    const pw = selectedPowerDef(); if (!pw || !pw.per) return out;
+    const scale = mpScale();
+    for (const k in pw.per) out[k] = (out[k] || 0) + pw.per[k] * scale;
+    for (const k in out) out[k] = Math.round(out[k]);
+    return out;
+  }
+  function selectPower(key) {
+    const ok = (D().MAGICAL_POWER.powers || []).some(p => p.key === key);
+    if (!ok) return;
+    P.selectedPower = key;
+    const pw = selectedPowerDef();
+    toastFn(`✨ 전능의 힘: ${pw.name} 선택!`, true);
+    saveNow(); renderZone();
+  }
   function fairyBonus() {
     const sets = Math.floor(P.fairySouls.length / 5);
     return { hp: sets * D().FAIRY_SOULS.per5Bonus.hp, str: sets * D().FAIRY_SOULS.per5Bonus.str };
@@ -510,21 +532,21 @@
       const rf = reforgeOf(sl); armorRfDef += rf.def || 0; armorRfHp += rf.hp || 0; armorRfStr += rf.str || 0; armorRfCd += rf.critDamage || 0; armorRfFero += rf.ferocity || 0;
     }
     const rw = reforgeOf('weapon');
-    const B2 = D().BASE_STATS2, gs = gemStats();
+    const B2 = D().BASE_STATS2, gs = gemStats(), pw = powerStats();   // V20-I: 전능의 힘
     const st = {
       hp: B.hp + skillLevel('farming') * 2 + skillLevel('fishing') + enchSum('hp') + ts.hp + ps.hp + fb.hp
         + (rw.hp || 0) + armorRfHp + starHpFlat() + buffBonus('hp')
-        + armorHp + traitSum('vitality') + setStat('hp') + weaponStat('hp') + (gs.hp || 0),
+        + armorHp + traitSum('vitality') + setStat('hp') + weaponStat('hp') + (gs.hp || 0) + pw.hp,
       defense: B.defense + skillLevel('mining') + ts.def + ps.def + enchSum('def')
-        + armorRfDef + starDefFlat() + armorDef + traitSum('bulwark') + setStat('def') + weaponStat('defense') + (gs.defense || 0),
+        + armorRfDef + starDefFlat() + armorDef + traitSum('bulwark') + setStat('def') + weaponStat('defense') + (gs.defense || 0) + pw.def,
       strength: B.strength + skillLevel('foraging') + ts.str + ps.str + fb.str + buffBonus('strength') + setStat('str')
-        + weaponStat('str') + (rw.str || 0) + armorRfStr + (gs.str || 0),
+        + weaponStat('str') + (rw.str || 0) + armorRfStr + (gs.str || 0) + pw.str,
       speed: B.speed + enchSum('speed') + buffBonus('speed') + traitSum('swift') + traitSum('swiftness') + setStat('speed'),
-      critChance: Math.min(100, B.critChance + skillLevel('combat') * 0.5 + traitSum('crit_eye') + setStat('critChance') + weaponStat('critChance') + (gs.critChance || 0)),
-      critDamage: B.critDamage + skillLevel('combat') + traitSum('brutality') + setStat('critDamage') + weaponStat('critDamage') + (rw.critDamage || 0) + armorRfCd + (gs.critDamage || 0) + (ps.critDamage || 0),
+      critChance: Math.min(100, B.critChance + skillLevel('combat') * 0.5 + traitSum('crit_eye') + setStat('critChance') + weaponStat('critChance') + (gs.critChance || 0) + pw.critChance),
+      critDamage: B.critDamage + skillLevel('combat') + traitSum('brutality') + setStat('critDamage') + weaponStat('critDamage') + (rw.critDamage || 0) + armorRfCd + (gs.critDamage || 0) + (ps.critDamage || 0) + pw.critDamage,
       // V17: 광포(추가타) — 무기/리포지/특성/세트. 실제: floor(광포/100) 확정 추가타 + 나머지% 확률(기댓값 1+광포/100배)
       ferocity: weaponStat('ferocity') + (rw.ferocity || 0) + armorRfFero + traitSum('ferocity') + setStat('ferocity'),
-      intelligence: B.intelligence + skillLevel('enchanting') * 4 + traitSum('mana_well') + setStat('intelligence') + weaponStat('intelligence') + Math.round(magicalPower() * 0.6) + (gs.intelligence || 0) + (ps.intelligence || 0),
+      intelligence: B.intelligence + skillLevel('enchanting') * 4 + traitSum('mana_well') + setStat('intelligence') + weaponStat('intelligence') + Math.round(magicalPower() * 0.6) + (gs.intelligence || 0) + (ps.intelligence || 0) + pw.intelligence,
       // V20: 신규 스탯 — 매직파인드/포춘/공격속도
       magicFind: B2.magicFind + setStat('magicFind') + traitSum('lucky') + Math.floor(skillLevel('combat') / 5) + (ps.magicFind || 0),
       miningFortune: B2.miningFortune + skillLevel('mining') * 4 + (gs.miningFortune || 0) + setStat('miningFortune') + (ps.miningFortune || 0) + hotmMiningFortune(),   // V20-G HotM
@@ -2419,7 +2441,14 @@
   }
   function talismansHTML() {
     const ts = talismanStats();
+    const pw = powerStats(), curPw = selectedPowerDef();
+    const pwLine = Object.keys(pw).filter(k => pw[k]).map(k => `${({ str: '힘', def: '방어', hp: '체력', intelligence: '지력', critChance: '크리%', critDamage: '크리피해%' })[k]} +${pw[k]}`).join(' · ') || '없음';
+    const powerBtns = (D().MAGICAL_POWER.powers || []).map(p => `<button class="btn btn--sm ${p.key === curPw.key ? '' : 'btn--ghost'}" data-act="econ_power" data-key="${p.key}">${p.name}</button>`).join('');
     return `<h4>📿 장신구 가방 — 마력 ${magicalPower()} (최종 공격/방어 +${((mpStatMul() - 1) * 100).toFixed(1)}%)</h4>
+      <div class="econ-colgrid" style="margin-bottom:8px">
+        <div class="econ-colrow"><span>✨ 전능의 힘</span><span><b>${curPw.name}</b></span><span class="muted">마력 스케일 ${Math.round(mpScale())} → ${pwLine}</span></div>
+      </div>
+      <div class="econ-tierbtns" style="margin-bottom:8px">${powerBtns}</div>
       <p class="muted">페어리 소울 ${P.fairySouls.length}/${D().FAIRY_SOULS.total} (3D 월드 곳곳에 숨어 있어요)</p>
       <div class="econ-shopgrid">${D().TALISMANS.map(t => `
         <div class="econ-shopitem">
@@ -2977,6 +3006,7 @@
       case 'ah_cancel': ahCancel(Number(el.dataset.id)); break;
       case 'hotm_tier': hotmUnlockTier(); break;
       case 'hotm_up': hotmUpgrade(el.dataset.key); break;
+      case 'power': selectPower(el.dataset.key); break;
       case 'dungeon_attack': dungeonAttack(); break;
       case 'dungeon_loot': dungeonLootTreasure(); break;
       case 'bank_deposit': bankDeposit(el.dataset.amt === 'all' ? 'all' : Number(el.dataset.amt)); break;
@@ -3159,7 +3189,7 @@
       gemStats, socketGem, applyRecomb, gemSlotsOf, recombMul,
       equippedWeapon, dungeonClassDef,
       hatchPet, activatePet, petLevel, petStats, petDef, equipPetItem,
-      talismanStats, magicalPower, mpStatMul, fairyBonus, collectFairySoul,
+      talismanStats, magicalPower, mpStatMul, powerStats, selectPower, mpScale, fairyBonus, collectFairySoul,
       applyEnchant, chaosEnchant, enchantLvl, enchantHardCap, enchantDef,
       enchSum, enchVsSum, enchCondMul, enchHitHeal, enchCoinMul, enchXpMul, randomEquipDrop,
       tradeCanGive, tradeApply, partyStartDungeon, partyRemoteAttack, partyGuestReward, partySnapshot,

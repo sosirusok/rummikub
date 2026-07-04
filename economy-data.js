@@ -619,7 +619,23 @@
     tali('talisman_voidgloom', '보이드글룸 부적', 'epic', 22000, { str: 6 }, '힘 +6 (엔더맨 슬레이어 Lv3 보상)'),
     tali('talisman_inferno', '인페르노 부적', 'legendary', 30000, { str: 7, hp: 20 }, '힘 +7, 체력 +20 (블레이즈 슬레이어 Lv3 보상)'),
   ];
-  const MAGICAL_POWER = { statPctPer10MP: 1.5 };   // 마력 10당 최종 공격/방어 +1.5%
+  // V20-I: 마력(Magical Power) + 전능의 힘(Accessory Power) — 실제 스블 파워 선택 시스템.
+  // 선택한 힘이 마력에 비례해 스탯을 부여(mpScale = MP^0.6, 부드러운 성장 곡선).
+  const MAGICAL_POWER = {
+    statPctPer10MP: 1.5,   // 마력 10당 최종 공격/방어 +1.5%(기존)
+    scaleExp: 0.6,         // 파워 스탯 스케일 = MP^scaleExp
+    powers: [
+      { key: 'none', name: '없음', per: {} },
+      { key: 'fortitude', name: '견고함(Fortitude)', per: { def: 0.5, hp: 2 } },
+      { key: 'warrior', name: '전사(Warrior)', per: { str: 0.5, critDamage: 0.35 } },
+      { key: 'bloody', name: '피의(Bloody)', per: { critChance: 0.12, critDamage: 0.4, str: 0.2 } },
+      { key: 'protected', name: '수호(Protected)', per: { def: 0.7, hp: 3 } },
+      { key: 'healthy', name: '건강(Healthy)', per: { hp: 5 } },
+      { key: 'mana_flux', name: '마나 유동(Mana Flux)', per: { intelligence: 1.2 } },
+      { key: 'sighted', name: '예지(Sighted)', per: { critChance: 0.2, intelligence: 0.6 } },
+      { key: 'demonic', name: '악마(Demonic)', per: { str: 0.6, intelligence: 0.8 } },
+    ],
+  };
 
   /* ---------------- 펫 12종 ---------------- */
   // skill: 해당 스킬 XP 획득 시 펫도 성장(조련 레벨당 +1%). perLvl: 펫 레벨당 스탯.
