@@ -510,6 +510,46 @@
     buildObservatory();  // V20-AP: 손 배치 원형 천문 관측탑 — 허브 북동측
     buildGrandFountain(); // V20-AQ: 손 배치 대형 3단 분수 — 허브 북서측
     buildCathedral();    // V20-AR: 손 배치 대성당(고딕 신전) — 허브 남측
+    buildZiggurat();     // V20-AS: 손 배치 계단식 지구라트(공중정원) — 허브 남동측
+  }
+  // V20-AS: 지구라트(공중정원) — 좌표 한 칸씩 손 배치(대칭 함수 아님). 5단 계단식 피라미드 +
+  //   전면 대계단 + 층마다 매달린 녹지/꽃 + 물못 + 정상 신전. 탑/홀과 다른 '계단식' 실루엣.
+  function buildZiggurat() {
+    const cx = 300, cz = 300, gy = 19;
+    flattenSite(288, 288, 312, 312, gy);
+    const B = (dx, dy, dz, id) => { if (id != null) setW(cx + dx, gy + dy, cz + dz, id); };
+    const ss = ID.sandstone, sm = ID.smooth_stone != null ? ID.smooth_stone : ID.stone, sb = ID.stone_bricks;
+    const leaf = ID.oak_leaves != null ? ID.oak_leaves : ID.spruce_leaves, glow = ID.glowstone, water = ID.water, gold = ID.gold_ore, q = ID.quartz_block;
+    const st = (f) => (ID['sandstone_stairs_' + f] != null ? ID['sandstone_stairs_' + f] : ss);
+    const flowers = [ID.wool_red, ID.wool_yellow != null ? ID.wool_yellow : ID.wool_white, ID.wool_pink != null ? ID.wool_pink : ID.wool_red];
+    // ── 5단 솔리드 계단(반경 9→1, 각 2단 높이) ──
+    for (let t = 0; t <= 4; t++) {
+      const h = 9 - 2 * t, y0 = 1 + 2 * t, y1 = 2 + 2 * t;
+      for (let dx = -h; dx <= h; dx++) for (let dz = -h; dz <= h; dz++) {
+        const edge = Math.abs(dx) === h || Math.abs(dz) === h;
+        for (let y = y0; y <= y1; y++) B(dx, y, dz, edge ? ss : sm);
+      }
+      // 노출 테라스 링 장식(윗면): 석재벽돌 갓돌 + 매달린 녹지/꽃(전면 계단 트렌치는 비움)
+      const inner = h - 2;
+      for (let dx = -h; dx <= h; dx++) for (let dz = -h; dz <= h; dz++) {
+        if (Math.max(Math.abs(dx), Math.abs(dz)) <= inner) continue;   // 다음 단이 덮는 안쪽은 제외
+        if (Math.abs(dx) <= 1 && dz < 0) continue;                     // 전면 대계단 자리 비움
+        const rim = Math.abs(dx) === h || Math.abs(dz) === h;
+        if (rim) { B(dx, y1 + 1, dz, sb); if ((dx + dz) % 3 === 0) B(dx, y1 + 2, dz, leaf); }   // 갓돌 난간 + 매달린 잎
+        else if ((dx * 7 + dz) % 5 === 0) B(dx, y1 + 1, dz, flowers[(dx + dz + 30) % 3]);        // 테라스 꽃
+      }
+    }
+    // ── 전면 대계단(중앙, 지면→정상, 계단 + 머리 위 트렌치 클리어) ──
+    for (let s = 0; s <= 10; s++) { const dz = -10 + s, y = s; B(0, y, dz, st(2)); B(-1, y, dz, st(2)); for (let hy = y + 1; hy <= y + 3; hy++) { B(0, hy, dz, 0); B(-1, hy, dz, 0); } B(0, y - 1, dz, ss); B(-1, y - 1, dz, ss); }
+    // 계단 양옆 발광 난간(4칸마다)
+    for (let s = 1; s <= 9; s += 3) { const dz = -10 + s; B(-2, s, dz, ID.sandstone_slab != null ? ID.sandstone_slab : ss); B(-2, s + 1, dz, glow); B(1, s, dz, ID.sandstone_slab != null ? ID.sandstone_slab : ss); B(1, s + 1, dz, glow); }
+    // ── 층별 물못(테라스 2곳, 벽 있는 담수 — 넘침 없음) ──
+    for (const [tx, tz, ty] of [[5, 4, 3], [-4, -5, 3], [3, -3, 5]]) { for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) { const edge = Math.abs(dx) === 1 || Math.abs(dz) === 1; B(tx + dx, ty, tz + dz, edge ? sb : water); } B(tx, ty + 1, tz - 1, leaf); }
+    // ── 정상 신전(y11~14): 4기둥 + 지붕 + 황금 우상 + 발광 ──
+    for (const [ox, oz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { for (let dy = 11; dy <= 13; dy++) B(ox, dy, oz, q); }
+    for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) B(dx, 14, dz, st(dx < 0 ? 1 : dx > 0 ? 3 : dz < 0 ? 0 : 2));   // 지붕
+    B(0, 14, 0, q); B(0, 11, 0, gold); B(0, 12, 0, gold); B(0, 13, 0, glow);   // 황금 우상 + 성화
+    for (const [ox, oz] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) B(ox, 11, oz, glow);   // 신전 바닥 조명
   }
   // V20-AR: 대성당 — 좌표 한 칸씩 손 배치(대칭 함수 아님). 고딕 신전: 긴 본당 + 버트레스 +
   //   뾰족 아치창 + 장미창 + 쌍둥이 전면탑 + 실내 기둥열·제단·신도석. 허브 남측(224,300) 개방 구역.
