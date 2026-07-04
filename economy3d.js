@@ -1997,7 +1997,7 @@
     else if (mode === 'barn' && ok(58, 100)) { buildBarnEstate(); buildOtherDetail('barn'); }   // V20-AB 대형 농장 + V20-BA(6차) 디테일
     else if (mode === 'gold' && ok(50, 90)) { buildGoldOutpost(); buildGoldDetail(); }   // V20-W 전초기지 + V20-AX(3차) 채광 디테일
     else if (mode === 'deep' && ok(48, 80)) buildDeepDepot();   // V20-X: 손 배치 지하 크리스탈 채광 정거장
-    else if (mode === 'spider' && ok(74, 88)) { buildSpiderNest(); buildMonsterDetail('spider'); }   // V20-AA 거미굴 + V20-AZ(5차) 디테일
+    else if (mode === 'spider' && ok(74, 88)) { buildSpiderNest(); buildSpiderRegions(); buildMonsterDetail('spider'); }   // V20-AA 거미굴 + V20-BD(7차) 실제 6구역 + V20-AZ 디테일
     else if (mode === 'nether' && ok(62, 78)) { buildNetherKeep(); buildMonsterDetail('nether'); }   // V20-Y 네더 요새 + V20-AZ(5차) 디테일
     else if (mode === 'end' && ok(62, 84)) { buildEndSanctum(); buildMonsterDetail('end'); }   // V20-Z 엔드 성소 + V20-AZ(5차) 디테일
     else if (mode === 'mushroom' && ok(58, 100)) { buildMushroomColony(); buildOtherDetail('mushroom'); }   // V20-AC 거대버섯 군락 + V20-BA(6차) 디테일
@@ -2050,6 +2050,54 @@
     B(-3, 0, 4, cob); B(-2, 0, 4, cob); B(-3, 1, 4, cob);                          // 바위 무더기
     B(6, 0, 4, fence); B(6, 1, 4, glow);                                           // 가로등
     B(-5, 0, 3, fence); B(-5, 1, 3, glow);                                         // 가로등2
+  }
+  // V20-BD 7차: 거미굴 실제 6구역 재건(리서치 반영) — Spider Mound(중앙 산=기존) + 5개 명명 구역.
+  //   Grandma's House · Gravel Mines · Arachne's Burrow · Archaeologist's Camp · Arachne's Sanctuary(보스 제단).
+  function buildSpiderRegions() {
+    const dlog = ID.dark_oak_log != null ? ID.dark_oak_log : ID.oak_log, dpl = ID.dark_oak_planks != null ? ID.dark_oak_planks : ID.spruce_planks;
+    const web = ID.wool_white, moss = ID.mossy_cobblestone, cob = ID.cobblestone, gravel = ID.gravel, glow = ID.glowstone;
+    const sand = ID.sandstone, end = ID.end_stone != null ? ID.end_stone : ID.sandstone, fence = ID.dark_oak_fence != null ? ID.dark_oak_fence : ID.oak_fence, glass = ID.glass;
+    const S = (x, y, z, id) => { if (id != null) setW(x, y, z, id); };
+    const flat = (x0, z0, x1, z1) => { const gy = surfaceTop((x0 + x1) >> 1, (z0 + z1) >> 1); flattenSite(x0, z0, x1, z1, gy - 1); return gy; };
+    // ── ① Grandma's House(남서 기슭) — 다크오크 오두막 + 문 + 유리창 + 굴뚝 + 랜턴 ──
+    { const bx = 36, bz = 100, gy = flat(bx - 1, bz - 1, bx + 6, bz + 5);
+      for (let y = gy; y < gy + 3; y++) for (let dx = 0; dx <= 5; dx++) for (let dz = 0; dz <= 4; dz++) { const edge = dx === 0 || dx === 5 || dz === 0 || dz === 4; if (edge) S(bx + dx, y, bz + dz, ((dx === 0 || dx === 5) && (dz === 0 || dz === 4)) ? dlog : dpl); }
+      S(bx + 2, gy, bz + 4, 0); S(bx + 2, gy + 1, bz + 4, 0); S(bx + 2, gy, bz + 4, ID.spruce_door_c_2 != null ? ID.spruce_door_c_2 : 0);   // 문
+      S(bx + 5, gy + 1, bz + 2, glass); S(bx, gy + 1, bz + 2, glass);   // 창
+      for (let dx = 0; dx <= 5; dx++) for (let dz = 0; dz <= 4; dz++) S(bx + dx, gy + 3, bz + dz, dpl);   // 지붕
+      for (let y = gy; y <= gy + 4; y++) S(bx + 4, y, bz + 1, cob); S(bx + 4, gy + 5, bz + 1, glow);   // 굴뚝
+      S(bx + 2, gy + 2, bz + 2, glow); }
+    // ── ② Gravel Mines(동측) — 자갈 채굴 구덩이 + 목재 갱목 + 광차 레일 ──
+    { const cx = 96, cz = 90, gy = surfaceTop(cx, cz);
+      for (let dx = -4; dx <= 4; dx++) for (let dz = -4; dz <= 4; dz++) { if (dx * dx + dz * dz > 18) continue; for (let y = gy; y >= gy - 3; y--) setW(cx + dx, y, cz + dz, 0); setW(cx + dx, gy - 4, cz + dz, gravel); }
+      for (const [ox, oz] of [[-3, -3], [3, -3], [-3, 3], [3, 3]]) { for (let y = gy - 3; y <= gy; y++) S(cx + ox, y, cz + oz, dlog); S(cx + ox, gy + 1, cz + oz, glow); }   // 갱목+랜턴
+      for (let dx = -3; dx <= 3; dx++) S(cx + dx, gy - 4, cz, ID.polished_andesite != null ? ID.polished_andesite : cob);   // 레일
+      S(cx, gy - 3, cz + 2, gravel); S(cx + 1, gy - 3, cz + 2, gravel); }
+    // ── ③ Arachne's Burrow(북측) — 거미줄 가득한 굴 입구 + 알 + 발광 눈 ──
+    { const cx = 64, cz = 34, gy = surfaceTop(cx, cz);
+      for (let dx = -2; dx <= 2; dx++) for (let dy = 0; dy <= 3; dy++) setW(cx + dx, gy + dy, cz, 0);   // 굴 입구
+      for (let dx = -3; dx <= 3; dx++) { S(cx + dx, gy + 4, cz, moss); S(cx + dx, gy - 1, cz, cob); }
+      for (const [dx, dy] of [[-2, 1], [0, 2], [2, 1], [-1, 3], [1, 3]]) S(cx + dx, gy + dy, cz, web);   // 거미줄 장막
+      S(cx, gy, cz - 1, web); S(cx, gy + 1, cz - 1, glow);   // 알 + 발광 눈
+      S(cx - 3, gy, cz + 1, web); S(cx + 3, gy, cz + 1, web); }
+    // ── ④ Archaeologist's Camp(북동) — 텐트(양털 지붕) + 발굴 구덩이 + 유물 + 모닥불 ──
+    { const cx = 96, cz = 45, gy = surfaceTop(cx, cz);
+      for (const [ox, oz] of [[-1, 0], [1, 0]]) { S(cx + ox, gy, cz, fence); S(cx + ox, gy + 1, cz, fence); }
+      for (let dx = -2; dx <= 2; dx++) S(cx + dx, gy + 2, cz, ID.wool_yellow != null ? ID.wool_yellow : web);   // 텐트 지붕(양털)
+      S(cx, gy + 1, cz, ID.wool_yellow != null ? ID.wool_yellow : web);
+      for (let dx = 2; dx <= 4; dx++) for (let dz = -1; dz <= 1; dz++) setW(cx + dx, gy, cz + dz, 0);   // 발굴 구덩이
+      S(cx + 3, gy - 1, cz, sand); S(cx + 4, gy - 1, cz, ID.bone_block != null ? ID.bone_block : ID.quartz_block);   // 유물(뼈/사암)
+      S(cx - 3, gy, cz, cob); S(cx - 3, gy + 1, cz, ID.magma_block != null ? ID.magma_block : glow);   // 모닥불
+    }
+    // ── ⑤ Arachne's Sanctuary(북서) — 보스 제단(엔드석/사암 원형 제단 + 4 소환 페데스탈 + 거미줄 캐노피) ──
+    { const cx = 34, cz = 46, gy = surfaceTop(cx, cz);
+      for (let dx = -4; dx <= 4; dx++) for (let dz = -4; dz <= 4; dz++) { const r = dx * dx + dz * dz; if (r <= 20) S(cx + dx, gy, cz + dz, ((dx + dz) & 1) ? end : sand); }   // 원형 제단 바닥
+      for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) S(cx + dx, gy + 1, cz + dz, end);   // 중앙 제대
+      S(cx, gy + 2, cz, ID.wool_black != null ? ID.wool_black : cob); S(cx, gy + 3, cz, glow);   // 아라크네 코어
+      for (const [ox, oz] of [[-3, -3], [3, -3], [-3, 3], [3, 3]]) { S(cx + ox, gy + 1, cz + oz, sand); S(cx + ox, gy + 2, cz + oz, web); }   // 4 소환 페데스탈(Callings)
+      for (const [ox, oz] of [[-4, 0], [4, 0], [0, -4], [0, 4]]) { S(cx + ox, gy + 1, cz + oz, fence); S(cx + ox, gy + 2, cz + oz, fence); S(cx + ox, gy + 3, cz + oz, web); }   // 거미줄 캐노피 기둥
+      S(cx, gy + 4, cz, web); S(cx - 1, gy + 4, cz, web); S(cx + 1, gy + 4, cz, web);   // 캐노피 그물
+    }
   }
   // V20-BA 6차: 기타 섬(농장/파크/버섯) 디테일 — 좌표 한 칸씩 손 배치(해시). 빈 지면을 섬별 지피로.
   //   저사양·걷기 보장: 대부분 비고체 키큰풀, 고체(건초/버섯/바위)는 희소. 건물·작물·랜드마크 근처 비움.
