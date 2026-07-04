@@ -3542,6 +3542,19 @@
     }
   }
   let _hpHudT = 0;
+  // V19-C: 터치 가상 조이스틱 시각 표시 — 손가락 드래그를 따라 노브 이동, 손 떼면 중앙 복귀. 힌트는 8초 후 페이드.
+  let _joyHintT = 0;
+  function updateJoystick(dt) {
+    const knob = document.getElementById('econ3dJoyKnob');
+    if (knob) {
+      let kx = 0, ky = 0;
+      if (moveT.active) { kx = Math.max(-26, Math.min(26, moveT.x - moveT.ox)); ky = Math.max(-26, Math.min(26, moveT.y - moveT.oy)); }
+      knob.style.transform = `translate(calc(-50% + ${kx}px), calc(-50% + ${ky}px))`;
+      knob.style.opacity = moveT.active ? '0.95' : '0.55';
+    }
+    const hint = document.getElementById('econ3dTouchHint');
+    if (hint && hint.style.opacity !== '0') { _joyHintT += dt; if (_joyHintT > 8) hint.style.opacity = '0'; }
+  }
   function updateHpHud() {
     const bar = document.getElementById('econ3dHpFill'), txt = document.getElementById('econ3dHpTxt');
     if (bar && php) bar.style.width = Math.max(0, php.hp / php.max * 100) + '%';
@@ -3968,7 +3981,7 @@
       <div class="econ3d-buildbar" id="econ3dBuildBar" style="display:none"></div>
       <div class="econ3d-questhud" id="econ3dQuestHud" style="display:none"></div>
       <div class="econ3d-questbanner" id="econ3dQuestBanner" style="display:none"></div>
-      ${isTouch ? '<div class="econ3d-jump" data-act="econ3d_jump">⤒</div>' : '<div class="econ3d-controlhint">WASD 이동 · W 더블탭 달리기 · 좌클릭 공격/꾹 눌러 채집 · 우클릭 낚시(물) · E/클릭 NPC · 더블점프 · M 지도</div>'}
+      ${isTouch ? '<div class="econ3d-joy" id="econ3dJoy"><div class="econ3d-joy__knob" id="econ3dJoyKnob"></div></div><div class="econ3d-jump" data-act="econ3d_jump">⤒</div><div class="econ3d-touchhint" id="econ3dTouchHint">◀ 왼쪽 드래그 이동 · 오른쪽 드래그 시점 · 탭 공격/상호작용 · ⤒ 점프</div>' : '<div class="econ3d-controlhint">WASD 이동 · W 더블탭 달리기 · 좌클릭 공격/꾹 눌러 채집 · 우클릭 낚시(물) · E/클릭 NPC · 더블점프 · M 지도</div>'}
       <div class="econ3d-panelwrap" id="econ3dPanelWrap" style="display:none">
         <div class="econ3d-panelbar"><span id="econ3dPanelGold"></span><button class="btn btn--ghost btn--sm" data-act="econ3d_panel_close">✕ 닫기</button></div>
         <div id="econBody" class="econ-body econ3d-body"></div>
@@ -4004,6 +4017,7 @@
       }
       tickRegen(); tickDmgTexts(dt); tickBuildQueue(); tickChunkCulling(dt);
       _hpHudT += dt; if (_hpHudT > 0.5) { _hpHudT = 0; updateHpHud(); }
+      if (isTouch) updateJoystick(dt);
       flushWorldEdits();   // 블록 편집 → 메시 리빌드(프레임당 1회로 병합, 더티 청크만)
       camera.position.set(P.x, P.y + P.eye, P.z);
       const d = lookDir(); camera.lookAt(P.x + d.x, P.y + P.eye + d.y, P.z + d.z);
