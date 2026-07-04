@@ -1152,6 +1152,15 @@
       for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) setW(a[0] + dx, y, a[1] + dz, ID.stone_bricks);
       setW(a[0], y + 1, a[1], ID.obsidian); setW(a[0], y + 2, a[1], ID.obsidian); setW(a[0], y + 3, a[1], ID.glowstone);
     });
+    // ── V20-BF(7차): Emerald Altar(리서치 반영) — 에메랄드 블럭 2 + 연두 유리 첨탑 + 8 조약돌 기둥 ──
+    { const ax = 150, az = 316, ay = surfaceTop(ax, az) - 1;
+      const emer = ID.emerald_ore, lime = ID.wool_lime != null ? ID.wool_lime : ID.glass, cob = ID.cobblestone;
+      for (let dx = -4; dx <= 4; dx++) for (let dz = -4; dz <= 4; dz++) if (dx * dx + dz * dz <= 18) setW(ax + dx, ay, az + dz, ((dx + dz) & 1) ? cob : ID.mossy_cobblestone);   // 원형 기단
+      setW(ax, ay + 1, az, emer); setW(ax, ay + 2, az, emer);   // 에메랄드 블럭 2
+      setW(ax, ay + 3, az, lime); setW(ax, ay + 4, az, lime); setW(ax, ay + 5, az, ID.glowstone);   // 연두 유리 첨탑 + 발광
+      for (let a = 0; a < 8; a++) { const th = a / 8 * Math.PI * 2; const px = Math.round(ax + Math.cos(th) * 3), pz = Math.round(az + Math.sin(th) * 3);
+        for (let y = 1; y <= 3; y++) setW(px, ay + y, pz, cob); setW(px, ay + 4, pz, lime); }   // 8 조약돌 기둥 + 연두 갓돌
+    }
   }
   function buildFarmZone() {
     // 대형 작물 플롯 6종 + 풍차 + 헛간 + 관개수로
