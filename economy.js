@@ -199,12 +199,32 @@
     P.activePet = petKey; saveNow(); renderZone();
   }
   function petStats() {
-    const out = { str: 0, def: 0, hp: 0 };
+    const out = { str: 0, def: 0, hp: 0, intelligence: 0, critDamage: 0, magicFind: 0, miningFortune: 0 };
     if (!P.activePet || !P.pets[P.activePet]) return out;
     const pd = petDef(P.activePet); if (!pd) return out;
     const lvl = petLevel(P.activePet);
-    out.str = (pd.perLvl.str || 0) * lvl; out.def = (pd.perLvl.def || 0) * lvl; out.hp = (pd.perLvl.hp || 0) * lvl;
+    let mul = 1;
+    // V20-C: 펫 아이템(활성 펫 1개) — mul(기본 능력치 배율) + 고정 스탯
+    const itKey = (P.petItems || {})[P.activePet];
+    const pit = itKey && (D().PET_ITEMS || []).find(x => x.key === itKey);
+    if (pit) { if (pit.mul) mul = pit.mul; if (pit.stat) for (const k in pit.stat) out[k] = (out[k] || 0) + pit.stat[k]; }
+    out.str += (pd.perLvl.str || 0) * lvl * mul; out.def += (pd.perLvl.def || 0) * lvl * mul; out.hp += (pd.perLvl.hp || 0) * lvl * mul;
+    // V20-C: 펫 시그니처 능력(레벨 마일스톤 해금)
+    const abs = (D().PET_ABILITIES || {})[P.activePet];
+    if (abs) for (const ab of abs) if (lvl >= ab.lv) for (const k in ab.stat) out[k] = (out[k] || 0) + ab.stat[k];
+    for (const k in out) out[k] = Math.round(out[k]);
     return out;
+  }
+  // V20-C: 활성 펫에 아이템 장착
+  function equipPetItem(itemKey) {
+    if (!P.activePet) { toastFn('먼저 펫을 활성화하세요', false); return false; }
+    if (!hasItem(itemKey)) { toastFn('펫 아이템이 없어요', false); return false; }
+    if (!(D().PET_ITEMS || []).some(x => x.key === itemKey)) { toastFn('펫 아이템이 아니에요', false); return false; }
+    if (!P.petItems) P.petItems = {};
+    const prev = P.petItems[P.activePet];
+    if (prev) addItem(prev, 1);   // 기존 아이템 반환
+    removeItem(itemKey, 1); P.petItems[P.activePet] = itemKey;
+    toastFn('🐾 펫 아이템 장착!', true); saveNow(); renderZone(); return true;
   }
 
   /* ---------------- 부적(마력) ---------------- */
@@ -489,13 +509,13 @@
         + weaponStat('str') + (rw.str || 0) + armorRfStr + (gs.str || 0),
       speed: B.speed + enchSum('speed') + buffBonus('speed') + traitSum('swift') + traitSum('swiftness') + setStat('speed'),
       critChance: Math.min(100, B.critChance + skillLevel('combat') * 0.5 + traitSum('crit_eye') + setStat('critChance') + weaponStat('critChance') + (gs.critChance || 0)),
-      critDamage: B.critDamage + skillLevel('combat') + traitSum('brutality') + setStat('critDamage') + weaponStat('critDamage') + (rw.critDamage || 0) + armorRfCd + (gs.critDamage || 0),
+      critDamage: B.critDamage + skillLevel('combat') + traitSum('brutality') + setStat('critDamage') + weaponStat('critDamage') + (rw.critDamage || 0) + armorRfCd + (gs.critDamage || 0) + (ps.critDamage || 0),
       // V17: 광포(추가타) — 무기/리포지/특성/세트. 실제: floor(광포/100) 확정 추가타 + 나머지% 확률(기댓값 1+광포/100배)
       ferocity: weaponStat('ferocity') + (rw.ferocity || 0) + armorRfFero + traitSum('ferocity') + setStat('ferocity'),
-      intelligence: B.intelligence + skillLevel('enchanting') * 4 + traitSum('mana_well') + setStat('intelligence') + weaponStat('intelligence') + Math.round(magicalPower() * 0.6) + (gs.intelligence || 0),
+      intelligence: B.intelligence + skillLevel('enchanting') * 4 + traitSum('mana_well') + setStat('intelligence') + weaponStat('intelligence') + Math.round(magicalPower() * 0.6) + (gs.intelligence || 0) + (ps.intelligence || 0),
       // V20: 신규 스탯 — 매직파인드/포춘/공격속도
-      magicFind: B2.magicFind + setStat('magicFind') + traitSum('lucky') + Math.floor(skillLevel('combat') / 5),
-      miningFortune: B2.miningFortune + skillLevel('mining') * 4 + (gs.miningFortune || 0) + setStat('miningFortune'),
+      magicFind: B2.magicFind + setStat('magicFind') + traitSum('lucky') + Math.floor(skillLevel('combat') / 5) + (ps.magicFind || 0),
+      miningFortune: B2.miningFortune + skillLevel('mining') * 4 + (gs.miningFortune || 0) + setStat('miningFortune') + (ps.miningFortune || 0),
       farmingFortune: B2.farmingFortune + skillLevel('farming') * 4 + (gs.farmingFortune || 0) + setStat('farmingFortune'),
       foragingFortune: B2.foragingFortune + skillLevel('foraging') * 4 + setStat('foragingFortune'),
       attackSpeed: B2.attackSpeed + setStat('attackSpeed') + traitSum('swiftness'),
@@ -2785,7 +2805,7 @@
       reforge, reforgeSlot, reforgePremium, playerAttackPower, playerDefensePct, playerMaxHp, playerStr, playerStats, playerCritRoll, skillXpProgress, minionUnlocked, recordMinionCraft,
       gemStats, socketGem, applyRecomb, gemSlotsOf, recombMul,
       equippedWeapon, dungeonClassDef,
-      hatchPet, activatePet, petLevel, petStats, petDef,
+      hatchPet, activatePet, petLevel, petStats, petDef, equipPetItem,
       talismanStats, magicalPower, mpStatMul, fairyBonus, collectFairySoul,
       applyEnchant, chaosEnchant, enchantLvl, enchantHardCap, enchantDef,
       enchSum, enchVsSum, enchCondMul, enchHitHeal, enchCoinMul, enchXpMul, randomEquipDrop,
