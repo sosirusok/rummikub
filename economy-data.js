@@ -237,14 +237,14 @@
       ['bone', 'talisman_dragon_heart', 'pet_egg_wolf'],
       ['bone', 'reforge_stone_rare', 'fuming_potato_book'],
     ]) },
-    { key: 'enderman_slayer', uniqueDrop: 'voidedge_katana', name: '엔더맨 슬레이어', flavor: '보이드글룸 세라프', dropResource: 'ender_pearl', tiers: mkSlayerTiers([8000, 220000, 4000000, 16000000, 40000000], 25, 8, 600, 328, [
+    { key: 'enderman_slayer', uniqueDrop: 'voidedge_katana', name: '엔더맨 슬레이어', flavor: '보이드글룸 세라프', dropResource: 'ender_pearl', tiers: mkSlayerTiers([300000, 12000000, 50000000, 210000000, 500000000], 25, 8, 600, 328, [
       ['ender_pearl', 'reforge_stone_rare', 'talisman_deep_pearl'],
       ['ender_pearl', 'aspect_of_the_end', 'talisman_hourglass'],
       ['ender_pearl', 'armor_mythic', 'enchant_book_protection'],
       ['ender_pearl', 'aspect_of_the_dragons', 'pet_egg_enderman'],
       ['ender_pearl', 'reforge_stone_rare', 'fuming_potato_book'],
     ]) },
-    { key: 'blaze_slayer', uniqueDrop: 'fire_fury_staff', name: '블레이즈 슬레이어', flavor: '인페르노 데몬로드', dropResource: 'blaze_rod', tiers: mkSlayerTiers([40000, 1000000, 12000000, 35000000, 65000000], 25, 10, 900, 2266, [
+    { key: 'blaze_slayer', uniqueDrop: 'fire_fury_staff', name: '블레이즈 슬레이어', flavor: '인페르노 데몬로드', dropResource: 'blaze_rod', tiers: mkSlayerTiers([2500000, 10000000, 45000000, 150000000, 350000000], 25, 10, 900, 2266, [
       ['blaze_rod', 'reforge_stone_rare', 'talisman_lava_charm'],
       ['blaze_rod', 'enchant_book_looting', 'talisman_wealth_rune'],
       ['blaze_rod', 'midas_sword', 'enchant_book_sharpness'],
@@ -269,7 +269,9 @@
       // V11: 지옥층 M8~M10 — M7 클리어 후 해금되는 극악 3난이도(마스터 토글 불가, 자체가 지옥)
       { floor: 8, hell: true, mobList: ['지옥문 파수병', '타락한 위더 기사'], bossName: '지옥문 수문장 아자젤', bossHp: 2600000, bossDmg: 650, lootTable: ['hot_potato_book', 'fuming_potato_book', 'astraea'], essenceReward: 130 },
       { floor: 9, hell: true, mobList: ['심연 포식자', '공허 사도'], bossName: '심연의 폭군 벨페고르', bossHp: 5500000, bossDmg: 950, lootTable: ['fuming_potato_book', 'terminator_bow', 'necron_blade', 'pet_egg_ender_dragon'], essenceReward: 180 },
-      { floor: 10, hell: true, mobList: ['태초의 파편', '시간 포식자'], bossName: '태초의 지배자 아이온', bossHp: 12000000, bossDmg: 1400, lootTable: ['fuming_potato_book', 'hot_potato_book', 'essence_cosmetic_cape'], essenceReward: 300 },
+      { floor: 10, hell: true, mobList: ['태초의 파편', '시간 포식자'], bossName: '태초의 지배자 아이온', bossHp: 300000000, bossDmg: 1400, lootTable: ['fuming_potato_book', 'hot_potato_book', 'essence_cosmetic_cape'], essenceReward: 300 },
+      // V19-B: 종말층 F11 — 스블 최강(보이드글룸 T4 2.1억)을 능가하는 최종 아포칼립스 보스(20억 HP, +α 최강)
+      { floor: 11, hell: true, apex: true, mobList: ['공허의 사도', '무한의 그림자'], bossName: '무한의 종언 아포클립스', bossHp: 2000000000, bossDmg: 2200, lootTable: ['fuming_potato_book', 'hyperion', 'astraea', 'enchant_book_one_for_all', 'enchant_book_soul_eater'], essenceReward: 600 },
     ],
     scoreThresholds: [ ['F', -Infinity], ['D', 0], ['C', 100], ['B', 160], ['A', 230], ['S', 270], ['S+', 300] ],
     roomTypes: ['전투방', '퍼즐방', '함정방', '미니보스방', '보물방'],
@@ -306,7 +308,7 @@
   // (예: Midas' Sword와 Aspect of the Dragons는 다른 무기지만 각자 등급 외형을 공유).
   // V17: 실제 하이픽셀 무기 데미지 사다리 + 부가 스탯(힘/치명피해/광포/지력, caster=지력 스케일 어빌리티)
   const DUNGEON_WEAPONS = [
-    { key: 'bonzo_staff', name: '본조의 지팡이', wclass: 'staff', tierKey: 'rare', dmg: 90, intelligence: 100, caster: true, buyPrice: 0, sellPrice: 800 },
+    { key: 'bonzo_staff', name: '본조의 지팡이', wclass: 'staff', tierKey: 'rare', dmg: 90, intelligence: 100, caster: true, abilityDmg: 800, abilityScaling: 0.5, buyPrice: 0, sellPrice: 800 },
     { key: 'aspect_of_the_end', name: '종말의 형상(AOTE)', wclass: 'sword', tierKey: 'rare', dmg: 100, buyPrice: 0, sellPrice: 1500 },
     { key: 'spirit_bow', name: '영혼의 활', wclass: 'bow', tierKey: 'epic', dmg: 160, buyPrice: 0, sellPrice: 2500 },
     { key: 'livid_dagger', name: '리비드 대거', wclass: 'sword', tierKey: 'legendary', dmg: 180, critDamage: 40, critChance: 10, buyPrice: 0, sellPrice: 7000 },
@@ -315,10 +317,10 @@
     { key: 'giant_sword', name: '거인의 대검', wclass: 'sword', tierKey: 'mythic', dmg: 500, buyPrice: 0, sellPrice: 15000 },
     { key: 'necron_blade', name: '네크론의 검', wclass: 'sword', tierKey: 'ancient', dmg: 190, str: 100, buyPrice: 0, sellPrice: 40000 },
     // V17: 위더 블레이드 4종(네크론의 검 + 촉매) — 실제 최종 캐스터 무기
-    { key: 'hyperion', name: '히페리온', wclass: 'sword', tierKey: 'mythic', dmg: 260, str: 150, intelligence: 350, ferocity: 30, caster: true, buyPrice: 0, sellPrice: 25000 },
-    { key: 'valkyrie', name: '발키리', wclass: 'sword', tierKey: 'mythic', dmg: 260, str: 150, ferocity: 60, caster: true, buyPrice: 0, sellPrice: 25000 },
-    { key: 'scylla', name: '스킬라', wclass: 'sword', tierKey: 'mythic', dmg: 260, str: 150, critChance: 15, critDamage: 40, caster: true, buyPrice: 0, sellPrice: 25000 },
-    { key: 'astraea', name: '아스트라이아', wclass: 'sword', tierKey: 'mythic', dmg: 270, str: 150, defense: 250, intelligence: 50, ferocity: 30, caster: true, buyPrice: 0, sellPrice: 25000 },
+    { key: 'hyperion', name: '히페리온', wclass: 'sword', tierKey: 'mythic', dmg: 260, str: 150, intelligence: 350, ferocity: 30, caster: true, abilityDmg: 10000, abilityScaling: 0.8, buyPrice: 0, sellPrice: 25000 },
+    { key: 'valkyrie', name: '발키리', wclass: 'sword', tierKey: 'mythic', dmg: 260, str: 150, ferocity: 60, caster: true, abilityDmg: 10000, abilityScaling: 0.8, buyPrice: 0, sellPrice: 25000 },
+    { key: 'scylla', name: '스킬라', wclass: 'sword', tierKey: 'mythic', dmg: 260, str: 150, critChance: 15, critDamage: 40, caster: true, abilityDmg: 10000, abilityScaling: 0.8, buyPrice: 0, sellPrice: 25000 },
+    { key: 'astraea', name: '아스트라이아', wclass: 'sword', tierKey: 'mythic', dmg: 270, str: 150, defense: 250, intelligence: 50, ferocity: 30, caster: true, abilityDmg: 11000, abilityScaling: 0.8, buyPrice: 0, sellPrice: 25000 },
     // V17: 최종 활(원거리 캐리)
     { key: 'juju_shortbow', name: '주주 단궁', wclass: 'bow', tierKey: 'legendary', dmg: 310, str: 40, critChance: 10, critDamage: 110, buyPrice: 0, sellPrice: 30000 },
     { key: 'terminator_bow', name: '터미네이터', wclass: 'bow', tierKey: 'mythic', dmg: 300, str: 130, critChance: 25, critDamage: 40, buyPrice: 0, sellPrice: 45000 },
@@ -327,7 +329,7 @@
     { key: 'scorpion_foil', name: '스콜피온 포일', wclass: 'sword', tierKey: 'epic', dmg: 130, critChance: 15, buyPrice: 0, sellPrice: 4200 },
     { key: 'pooch_sword', name: '푸치 소드', wclass: 'sword', tierKey: 'legendary', dmg: 160, str: 60, buyPrice: 0, sellPrice: 9000 },
     { key: 'voidedge_katana', name: '보이드엣지 카타나', wclass: 'sword', tierKey: 'mythic', dmg: 200, str: 80, critDamage: 30, buyPrice: 0, sellPrice: 18000 },
-    { key: 'fire_fury_staff', name: '화염 분노 지팡이', wclass: 'staff', tierKey: 'mythic', dmg: 220, intelligence: 200, ferocity: 20, caster: true, buyPrice: 0, sellPrice: 22000 },
+    { key: 'fire_fury_staff', name: '화염 분노 지팡이', wclass: 'staff', tierKey: 'mythic', dmg: 220, intelligence: 200, ferocity: 20, caster: true, abilityDmg: 9000, abilityScaling: 0.8, buyPrice: 0, sellPrice: 22000 },
   ];
   // 아이템 초기 능력치 무작위 롤(실제 스카이블럭 감성): 같은 이름의 장비라도 획득 시
   // 기본 수치가 ±8% 범위에서 굴려져 고정됨(인챈트/리포지/스타포스와 완전 별개의 "생 초기치").
@@ -608,8 +610,8 @@
     // ── 무기 20종 ──  fx: dmg(상시%), first(첫타%), dmgBig(체력10만+%), dmgLow(적HP50%↓), dmgHigh(적HP50%↑),
     //                  dmgVs(특정 슬레이어%), dmgBoss(던전보스%), third(3타마다%), coin(골드%), xp(전투XP%),
     //                  lifesteal(가한 피해%회복), healHit(타격당 고정회복)
-    { key: 'sharpness', name: '예리함', target: 'weapon', maxLvl: 7, fx: { dmg: 5 }, desc: '레벨당 최종 피해 +5%', bookBasePrice: 500 },
-    { key: 'critical', name: '치명', target: 'weapon', maxLvl: 7, fx: { dmg: 4 }, desc: '레벨당 최종 피해 +4%', bookBasePrice: 600 },
+    { key: 'sharpness', name: '예리함', target: 'weapon', vanilla: true, maxLvl: 7, fx: { dmg: 9 }, desc: '레벨당 최종 피해 +9%(VII=63%, 실제 스블 램프 근사)', bookBasePrice: 500 },
+    { key: 'critical', name: '치명', target: 'weapon', maxLvl: 7, fx: { dmg: 13 }, desc: '레벨당 최종 피해 +13%(VII≈100%)', bookBasePrice: 600 },
     { key: 'first_strike', name: '선제공격', target: 'weapon', maxLvl: 5, fx: { first: 25 }, desc: '첫 공격 피해 +25%/레벨', bookBasePrice: 900 },
     { key: 'triple_strike', name: '삼연격', target: 'weapon', maxLvl: 5, fx: { firstThree: 10 }, desc: '처음 3회 공격 +10%/레벨', bookBasePrice: 950 },
     { key: 'giant_killer', name: '거인 사냥꾼', target: 'weapon', maxLvl: 7, fx: { dmgBig: 8 }, desc: '최대체력 10만+ 적에게 +8%/레벨', bookBasePrice: 1500 },
@@ -618,7 +620,7 @@
     { key: 'prosecute', name: '기소', target: 'weapon', maxLvl: 7, fx: { dmgHigh: 4 }, desc: '적 체력 50% 이상 +4%/레벨', bookBasePrice: 1200 },
     { key: 'smite', name: '강타', target: 'weapon', maxLvl: 7, fx: { dmgVs: 'zombie_slayer', v: 8 }, desc: '좀비 슬레이어 +8%/레벨', bookBasePrice: 800 },
     { key: 'bane_of_arthropods', name: '살충', target: 'weapon', maxLvl: 7, fx: { dmgVs: 'spider_slayer', v: 8 }, desc: '거미 슬레이어 +8%/레벨', bookBasePrice: 800 },
-    { key: 'ender_slayer', name: '엔더 슬레이어', target: 'weapon', maxLvl: 7, fx: { dmgVs: 'enderman_slayer', v: 12 }, desc: '엔더맨 슬레이어 +12%/레벨', bookBasePrice: 1600 },
+    { key: 'ender_slayer', name: '엔더 슬레이어', target: 'weapon', maxLvl: 7, fx: { dmgVs: 'enderman_slayer', v: 18 }, desc: '엔더맨 슬레이어 +18%/레벨(VII≈130%)', bookBasePrice: 1600 },
     { key: 'cubism', name: '큐비즘', target: 'weapon', maxLvl: 5, fx: { dmgVs: 'blaze_slayer', v: 10 }, desc: '블레이즈 슬레이어 +10%/레벨', bookBasePrice: 1400 },
     { key: 'dragon_hunter', name: '용 사냥꾼', target: 'weapon', maxLvl: 5, fx: { dmgBoss: 8 }, desc: '던전 보스 +8%/레벨', bookBasePrice: 1800 },
     { key: 'thunderlord', name: '뇌제', target: 'weapon', maxLvl: 7, fx: { third: 15 }, desc: '3번째 공격마다 +15%/레벨', bookBasePrice: 1700 },

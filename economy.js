@@ -454,7 +454,7 @@
       critDamage: B.critDamage + skillLevel('combat') + traitSum('brutality') + setStat('critDamage') + weaponStat('critDamage') + (rw.critDamage || 0) + armorRfCd,
       // V17: 광포(추가타) — 무기/리포지/특성/세트. 실제: floor(광포/100) 확정 추가타 + 나머지% 확률(기댓값 1+광포/100배)
       ferocity: weaponStat('ferocity') + (rw.ferocity || 0) + armorRfFero + traitSum('ferocity') + setStat('ferocity'),
-      intelligence: B.intelligence + skillLevel('enchanting') * 2 + traitSum('mana_well') + setStat('intelligence') + weaponStat('intelligence'),
+      intelligence: B.intelligence + skillLevel('enchanting') * 4 + traitSum('mana_well') + setStat('intelligence') + weaponStat('intelligence') + Math.round(magicalPower() * 0.6),
     };
     st.defense = Math.round(st.defense * mpStatMul());
     st.hp = Math.round(st.hp);
@@ -470,10 +470,19 @@
       + (reforgeOf('weapon').dmgPct || 0) / 100 + (reforgeOf('bow').dmgPct || 0) * 0.3 / 100
       + starAtkPct() / 100 + setStat('dmgPct') / 100;
     const w = equippedWeapon();
-    const abilityMul = (w && w.caster) ? (1 + st.intelligence / 800) : 1;   // 캐스터(히페리온식): 지력 스케일 어빌리티 피해
-    const mul = (1 + st.strength / 100) * additive * (1 + st.ferocity / 100) * abilityMul * mpStatMul();
-    return flat * mul;
+    const feroMul = 1 + st.ferocity / 100;
+    const melee = flat * (1 + st.strength / 100) * additive * feroMul * mpStatMul();
+    // V19-B: 실제 하이픽셀 어빌리티(능력치) 데미지 채널 — 캐스터 무기 전용, 별도 공식(지력 스케일).
+    //   실제: 피해 = 기본어빌리티 × (1 + 지력/100 × 스케일) × 가산배수 × 곱연산 (힘/크리는 어빌리티에 영향 없음)
+    //   우리 클릭 전투에선 캐스터 무기의 타격을 근접 vs 어빌리티 중 큰 값으로 대체 → 엔드게임 수백만 딜 실현.
+    if (w && w.caster && w.abilityDmg) {
+      const ability = w.abilityDmg * (1 + st.intelligence / 100 * (w.abilityScaling || 0.5)) * additive * feroMul * mpStatMul();
+      return Math.max(melee, ability);
+    }
+    return melee;
   }
+  // V19-B: 현재 무기가 캐스터 어빌리티로 딜하는지(HUD 표기용)
+  function isAbilityWeapon() { const w = equippedWeapon(); return !!(w && w.caster && w.abilityDmg); }
   // 크리티컬 굴림: 확률 critChance%, 성공 시 ×(1 + critDamage/100)
   function playerCritRoll() {
     const st = playerStats();
