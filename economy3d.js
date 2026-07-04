@@ -1970,19 +1970,32 @@
   // 🌾 더 반: 대형 농장(밀/당근/감자/호박/수박/사탕수수 대구획)
   function genBarn() {
     world = new Uint8Array(W * H * Dp);
-    genBlobIsland(72, 72, 62, 15, { flat: true });
+    // ── V20-AF: 손 사각 자연 구릉 농지(평평한 허허벌판 폐기). 스무스노이즈로 완만한 밭두렁 굴곡. ──
+    for (let x = 8; x < W - 8; x++) for (let z = 8; z < Dp - 8; z++) {
+      const d = Math.hypot(x - 72, z - 72) / 62; if (d >= 1) continue;
+      const rim = Math.min(1, (1 - d) * 2.6);   // 가장자리 물매
+      let h = 13 + (smoothNoise(x, z, 20) - 0.5) * 3 * rim;   // 완만한 단일 굴곡(밭 인접 단차 ≤1 보장)
+      h = Math.round(h); if (h < 4) continue;
+      for (let y = 2; y <= h; y++) setW(x, y, z, y === h ? ID.grass : (y >= h - 3 ? ID.dirt : ID.stone));
+    }
+    // ── 대구획 작물밭(6종) — 지면 굴곡을 따라 각 칸 surfaceTop 위에 배치(부양/매몰 없음) ──
     const crops = [ID.wheat_ripe, ID.carrot_ripe, ID.potato_ripe, ID.sugar_cane, ID.pumpkin, ID.melon];
     for (let ci = 0; ci < 6; ci++) {
       const px = 22 + (ci % 3) * 34, pz = 24 + Math.floor(ci / 3) * 40;
       for (let x = px; x < px + 26; x++) for (let z = pz; z < pz + 30; z++) {
         if (Math.hypot(x - 72, z - 72) > 58) continue;
-        setW(x, 15, z, ID.farmland);
-        if (crops[ci] === ID.pumpkin || crops[ci] === ID.melon) { if ((x + z * 3) % 4 === 0) setW(x, 16, z, crops[ci]); }
-        else setW(x, 16, z, crops[ci]);
-        if ((x + z) % 9 === 0) { setW(x, 15, z, ID.water); }   // 관개수로
+        const fy = surfaceTop(x, z); if (fy < 4) continue;
+        if ((x + z) % 9 === 0) { setW(x, fy, z, ID.water); continue; }   // 관개수로(밭 사이 고랑)
+        setW(x, fy, z, ID.farmland);
+        if (crops[ci] === ID.pumpkin || crops[ci] === ID.melon) { if ((x + z * 3) % 4 === 0) setW(x, fy + 1, z, crops[ci]); }
+        else setW(x, fy + 1, z, crops[ci]);
       }
     }
-    buildHouse(66, 60, 9, 8, 16, ID.wool_red, ID.spruce_planks);   // 대형 헛간
+    // ── 밭 사이 흙길(구획 경계 십자로) + 헛간 부지 평탄화 ──
+    for (let x = 12; x < W - 12; x++) { const fy = surfaceTop(x, 72); if (fy >= 4) { setW(x, fy, 72, ID.dirt); setW(x, fy, 71, ID.dirt); } }
+    for (let z = 12; z < Dp - 12; z++) { const fy = surfaceTop(72, z); if (fy >= 4) { setW(72, fy, z, ID.dirt); setW(71, fy, z, ID.dirt); } }
+    const bhy = surfaceTop(70, 62); for (let x = 66; x <= 76; x++) for (let z = 58; z <= 68; z++) { const fy = surfaceTop(x, z); for (let y = Math.min(fy, bhy) + 1; y <= Math.max(fy, bhy); y++) setW(x, y, z, ID.dirt); setW(x, bhy, z, ID.grass); }
+    buildHouse(66, 60, 9, 8, bhy + 1, ID.wool_red, ID.spruce_planks);   // 보조 헛간(평탄 부지 위)
     lampPost(64, 90); lampPost(90, 64);
     buildWarpPads();
   }
