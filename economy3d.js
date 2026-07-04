@@ -1484,7 +1484,7 @@
     else if (mode === 'deep' && ok(48, 80)) buildDeepDepot();   // V20-X: 손 배치 지하 크리스탈 채광 정거장
     else if (mode === 'spider' && ok(74, 88)) { buildHouse(72, 86, 6, 5, base(74, 88), ID.dark_oak_planks, ID.dark_oak_planks, ID.dark_oak_log); const wy = base(74, 88); for (let i = 0; i < 5; i++) setW(71 + (i % 4), wy + 3 + (i % 2), 85 + (i % 3), ID.wool_white); }   // 어두운 오두막 + 거미줄
     else if (mode === 'nether' && ok(62, 78)) buildNetherKeep();   // V20-Y: 손 배치 대형 네더 요새(용암 해자+뾰족아치 다리+블레이즈 제단탑+성첩 망루)
-    else if (mode === 'end' && ok(62, 84)) { buildHouse(60, 82, 6, 6, base(62, 84), ID.purpur, ID.purpur, ID.obsidian); const ey = base(62, 84); setW(59, ey, 81, ID.glowstone); setW(66, ey + 5, 88, ID.glowstone); }   // 엔드 성소 + 엔드로드
+    else if (mode === 'end' && ok(62, 84)) buildEndSanctum();   // V20-Z: 손 배치 대형 엔드 성소(흑요석 첨탑+자수정 나선탑+엔드로드 회랑+공허 다리)
     else if (mode === 'mushroom' && ok(58, 100)) buildMushroomHouse(58, 100, base(58, 100));   // 거대 버섯 집
   }
   // V20-W: 골드 광산 대형 전초기지 — 좌표 한 칸씩 손 배치(대칭 함수 아님).
@@ -1631,6 +1631,47 @@
     B(5, 0, 2, mag); B(5, 0, 3, lava); B(4, 0, 3, nb);                                                            // 용암 화로(테두리)
     B(-5, 0, -3, obs); B(-4, 0, -3, obs); B(-5, 1, -3, glow);                                                     // 흑요석 잔해 + 등불
     B(4, 0, -4, soul); B(5, 0, -4, mag); B(4, 1, -4, glow);                                                       // 뒤뜰 화로
+  }
+  // V20-Z: 대형 엔드 성소 — 좌표 한 칸씩 손 배치(대칭 함수 아님). 공허 위에 뜬 엔드시티 실루엣.
+  //   구성: 엔드석 부양섬 → 흑요석 첨탑 4주 → 자수정(purpur) 나선 본탑 → 엔드로드 회랑 → 공허 다리 + 엔더 제단.
+  function buildEndSanctum() {
+    const cx = 62, cz = 84, gy = surfaceTop(cx, cz);
+    const B = (dx, dy, dz, id) => { if (id != null) setW(cx + dx, gy + dy, cz + dz, id); };
+    const pur = ID.purpur, obs = ID.obsidian, end = ID.end_stone != null ? ID.end_stone : ID.sandstone, glow = ID.glowstone;
+    const st = (f) => (ID['purpur_stairs_' + f] != null ? ID['purpur_stairs_' + f] : pur);
+    const slab = ID.purpur_slab != null ? ID.purpur_slab : pur;
+    // ── 부양 엔드석 섬(원형, 가장자리 물매) ──
+    for (let dx = -6; dx <= 6; dx++) for (let dz = -6; dz <= 6; dz++) { const r = dx * dx + dz * dz; if (r <= 30) B(dx, -1, dz, end); if (r <= 18) B(dx, -2, dz, end); if (r <= 7) B(dx, -3, dz, end); }
+    // ── 흑요석 첨탑 4주(모서리, 높이 차등 — 비대칭) ──
+    const spires = [[-5, -5, 9], [5, -5, 7], [-5, 5, 6], [5, 5, 11]];
+    for (const [sx, sz, h] of spires) { for (let y = 0; y <= h; y++) B(sx, y, sz, obs); B(sx, h + 1, sz, glow); B(sx, h, sz + (sz < 0 ? 1 : -1), glow); }   // 첨탑 + 정상 엔드로드
+    // ── 자수정 나선 본탑(중앙, dx -3..3, 원통 벽, 높이 14, 나선 계단 외벽) ──
+    for (let y = 0; y <= 13; y++) for (let dx = -3; dx <= 3; dx++) for (let dz = -3; dz <= 3; dz++) {
+      const r = dx * dx + dz * dz; const wall = r >= 6 && r <= 11;
+      const door = dz === 3 && Math.abs(dx) <= 1 && y <= 2;                                   // 남면 아치 입구
+      const win = (y % 4 === 1) && ((Math.abs(dx) === 3 && dz === 0) || (Math.abs(dz) === 3 && dx === 0));   // 창
+      if (wall && !door && !win) B(dx, y, dz, ((dx + dz + y) % 3 === 0) ? obs : pur);          // 자수정 벽(흑요석 띠)
+    }
+    B(-1, 3, 3, pur); B(1, 3, 3, pur); B(0, 4, 3, glow);                                       // 입구 아치머리 + 엔드로드
+    for (let f = 0, a = 0; a < 24; a++) { const ang = a * 0.7854; const rx = Math.round(Math.cos(ang) * 3.4), rz = Math.round(Math.sin(ang) * 3.4); B(rx, a % 14, rz, st(a % 4)); }   // 외벽 나선 계단
+    for (let dx = -3; dx <= 3; dx++) for (let dz = -3; dz <= 3; dz++) { if (dx * dx + dz * dz <= 8) { B(dx, 5, dz, pur); B(dx, 10, dz, pur); } }   // 중간/상단 바닥
+    // 본탑 상단 첨두(수렴 계단 지붕 + 엔더 수정)
+    for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) { if (Math.abs(dx) === 2 || Math.abs(dz) === 2) B(dx, 14, dz, st(dx === -2 ? 1 : dx === 2 ? 3 : dz === -2 ? 2 : 0)); }
+    for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) B(dx, 14, dz, pur);
+    B(0, 15, 0, obs); B(0, 16, 0, pur); B(0, 17, 0, glow);                                     // 첨두 엔더 수정(발광정)
+    // ── 엔드로드 회랑(본탑↔첨탑 연결 다리 + 난간 발광) ──
+    for (const [sx, sz] of [[-5, -5], [5, 5]]) {                                               // 대각 2개만(비대칭)
+      const stepX = sx < 0 ? 1 : -1, stepZ = sz < 0 ? 1 : -1;
+      for (let i = 1; i <= 4; i++) { B(sx + stepX * i, 3, sz + stepZ * i, pur); if (i % 2 === 0) B(sx + stepX * i, 4, sz + stepZ * i, glow); }
+    }
+    // ── 공허 다리(입구→섬 밖, 부유 판석 + 엔드로드 가로등) ──
+    for (let dz = 4; dz <= 9; dz++) { B(0, -1, dz, pur); B(-1, -1, dz, slab); B(1, -1, dz, slab); if (dz % 2 === 0) { B(-1, 0, dz, glow); B(1, 0, dz, glow); } }
+    // ── 엔더 제단(섬 중앙 앞뜰, 흑요석 제단 + 엔더 수정 + 발광) ──
+    for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) B(dx, 0, dz + 4, obs);
+    B(0, 1, 4, pur); B(0, 2, 4, glow);                                                         // 제단 엔더 수정
+    for (const [ox, oz] of [[-2, 3], [2, 3], [-2, 5], [2, 5]]) { B(ox, 0, oz, obs); B(ox, 1, oz, glow); }   // 제단 4모서리 성화
+    // ── 부유 자수정 파편(섬 주위 공중, 손 배치 비대칭) ──
+    B(-7, 3, 0, pur); B(-8, 4, 1, glow); B(7, 5, -2, pur); B(6, 6, -3, glow); B(0, 6, -8, pur); B(1, 7, -8, glow); B(-6, 8, 6, pur);
   }
   function buildMushroomHouse(cx, cz, base) {
     // V18: 동화풍 버섯 오두막 — 버섯대 몸통 + 흰 점박이 붉은 갓 + 둥근 창 + 반블럭 처마 + 현관 랜턴
