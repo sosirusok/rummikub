@@ -272,9 +272,9 @@
   const HOME_CENTER = { x: 96, z: 96, r: 16, top: 20 };
   let selectedPlaceKey = null;            // V12: 현재 설치용으로 고른 블럭 아이템 키(보유한 것만 — 서바이벌, 무한 아님)
   const PORTALS = {
-    hub: { x: 210, z: 224, target: 'home', label: '🏝️ 내 섬으로' },
-    home: { x: 96, z: 76, target: 'hub', label: '🏘️ 허브로' },   // V13-A: 포탈섬 위
-    visit: { x: 96, z: 76, target: 'hub', label: '🏘️ 허브로' },
+    hub: { x: 210, z: 224, target: 'home', label: '🏝️ 내 섬으로', fx: 0x3fd977 },   // 내 섬행 = 초록 자연빛
+    home: { x: 96, z: 76, target: 'hub', label: '🏘️ 허브로', fx: 0xffcf4d },        // 허브(도시)행 = 황금빛
+    visit: { x: 96, z: 76, target: 'hub', label: '🏘️ 허브로', fx: 0xffcf4d },
   };
   // 멀티: 다른 플레이어 아바타 + 섬 방문 상태
   let others = {};                          // peerId -> {mesh, tx,ty,tz,tyaw, walkT, walkAmp, legL, legR}
@@ -448,7 +448,7 @@
     // 광장 → 각 구역 대로(자갈길)
     [[224, 92], [110, 208], [156, 314], [326, 224], [146, 136], [318, 318], [224, 348], [318, 124], [294, 372]].forEach(t => pathTo(224, 224, t[0], t[1]));
     decorateWilds();
-    buildPortalFrame(PORTALS.hub.x, PORTALS.hub.z);
+    buildHubPortal();
     buildWarpPads();
     beautifyHub();   // V20-L: 광장 미화(분수·정원·벤치·현수막) — 마지막에 얹어 덮이지 않게
   }
@@ -1011,13 +1011,53 @@
 
     /* ---- 프라이빗 섬(스카이블럭의 심장 — 공허에 뜬 나만의 섬. 허브와 똑같은 서바이벌: 직접 캐서 모은 블럭만 설치) ---- */
   // V13-A: 깔끔한 흑요석 네더 포탈(4폭×5고). 떠 있는 금블럭·보라 슬랩 등 이상 요소 제거.
-  function buildPortalFrame(cx, cz) {
-    const y = surfaceTop(cx, cz);
-    // 바닥/천장 가로 + 양쪽 세로 = 폐곡선 프레임(내부 2×3은 빈 공간, 포탈 마커 평면이 채움)
-    for (let dx = -1; dx <= 2; dx++) { setW(cx + dx, y, cz, ID.obsidian); setW(cx + dx, y + 4, cz, ID.obsidian); }
-    for (let dy = 1; dy <= 3; dy++) { setW(cx - 1, y + dy, cz, ID.obsidian); setW(cx + 2, y + dy, cz, ID.obsidian); }
-    // 발판(주변 조약돌 테두리)로 자연스럽게
-    for (let dx = -1; dx <= 2; dx++) if (getBlockLocal(cx + dx, y - 1, cz) && !getBlockLocal(cx + dx, y - 1, cz + 1)) {}
+  // V20-T: 포탈은 목적지별 고유 생김새 — 함수 대칭 복붙 금지, 한 칸씩 손 지정(비대칭).
+  //   개구부는 (dx 0..1)×(dy 1..3), z=cz 로 비워 둠(이펙트 평면이 그 안에 채워짐).
+  // 허브의 "내 섬행" 포탈 — 이끼 낀 고대 자연 신전(덩굴/꽃/초록 크리스탈)
+  function buildHubPortal() {
+    const cx = PORTALS.hub.x, cz = PORTALS.hub.z, gy = surfaceTop(cx, cz);
+    const B = (dx, dy, dz, id) => { if (id != null) setW(cx + dx, gy + dy, cz + dz, id); };
+    const moss = ID.mossy_cobblestone, cob = ID.cobblestone, sb = ID.stone_bricks, ch = ID.chiseled_stone_bricks, glow = ID.glowstone, leaf = ID.oak_leaves;
+    const seaL = ID.sea_lantern != null ? ID.sea_lantern : ID.glowstone;
+    // 좌 기둥(이끼돌, 정면 덩굴)
+    B(-1, 0, 0, moss); B(-1, 1, 0, cob); B(-1, 2, 0, moss); B(-1, 3, 0, sb); B(-1, 4, 0, ch); B(-1, 5, 0, glow);
+    B(-1, 3, 1, leaf); B(-1, 2, 1, leaf); B(-1, 0, 1, moss); B(-1, 0, -1, cob);
+    // 우 기둥(살짝 높고 재질순 다름 — 비대칭)
+    B(2, 0, 0, cob); B(2, 1, 0, moss); B(2, 2, 0, sb); B(2, 3, 0, moss); B(2, 4, 0, ch); B(2, 5, 0, sb); B(2, 6, 0, glow);
+    B(2, 4, 1, leaf); B(2, 3, 1, leaf); B(2, 0, 1, moss); B(2, 0, -1, moss);
+    // 바닥 문지방 + 상단 인방
+    B(0, 0, 0, moss); B(1, 0, 0, cob); B(0, 4, 0, sb); B(1, 4, 0, ch);
+    // 아치(계단 물매) + 정상 초록 크리스탈
+    B(0, 5, 0, ID.stone_bricks_stairs_3 != null ? ID.stone_bricks_stairs_3 : sb); B(1, 5, 0, ID.stone_bricks_stairs_1 != null ? ID.stone_bricks_stairs_1 : sb);
+    B(0, 6, 0, seaL);
+    // 인방 덩굴 커튼
+    B(0, 4, 1, leaf); B(1, 4, 1, leaf); B(0, 3, 1, leaf);
+    // 기단 주변 손 배치 꽃·풀·이끼
+    B(-2, 0, 0, moss); B(3, 0, 0, moss); B(-1, 0, 2, ID.flower_yellow); B(2, 0, 2, ID.flower_red);
+    B(0, 0, 2, ID.tall_grass); B(1, 0, 2, ID.tall_grass); B(-2, 1, 0, ID.flower_red); B(3, 1, 0, ID.flower_yellow);
+  }
+  // 프라이빗 섬의 "허브(도시)행" 포탈 — 웅장한 황금·석영 아치(배너/랜턴)
+  function buildHomePortal() {
+    const cx = PORTALS.home.x, cz = PORTALS.home.z, gy = surfaceTop(cx, cz);
+    const B = (dx, dy, dz, id) => { if (id != null) setW(cx + dx, gy + dy, cz + dz, id); };
+    const q = ID.quartz_block, ch = ID.chiseled_stone_bricks, sb = ID.stone_bricks, gold = ID.gold_ore, glow = ID.glowstone;
+    const woolR = ID.wool_red != null ? ID.wool_red : q, woolY = ID.wool_yellow != null ? ID.wool_yellow : q;
+    // 좌 기둥(석영+금 장식)
+    B(-1, 0, 0, ch); B(-1, 1, 0, q); B(-1, 2, 0, q); B(-1, 3, 0, gold); B(-1, 4, 0, q); B(-1, 5, 0, glow);
+    B(-1, 0, 1, ch); B(-1, 0, -1, ch);
+    // 우 기둥
+    B(2, 0, 0, ch); B(2, 1, 0, q); B(2, 2, 0, q); B(2, 3, 0, gold); B(2, 4, 0, q); B(2, 5, 0, glow);
+    B(2, 0, 1, ch); B(2, 0, -1, ch);
+    // 문지방(금테) + 인방(석영)
+    B(0, 0, 0, gold); B(1, 0, 0, gold); B(0, 4, 0, q); B(1, 4, 0, q);
+    // 아치(석영 계단) + 금 첨탑 + 정상 발광
+    B(0, 5, 0, ID.quartz_block_stairs_3 != null ? ID.quartz_block_stairs_3 : q); B(1, 5, 0, ID.quartz_block_stairs_1 != null ? ID.quartz_block_stairs_1 : q);
+    B(0, 6, 0, gold); B(0, 7, 0, glow);
+    // 양옆 배너 + 랜턴 기둥
+    B(-2, 0, 0, ch); B(-2, 1, 0, woolR); B(-2, 2, 0, woolR); B(-2, 3, 0, woolR); B(-2, 4, 0, glow);
+    B(3, 0, 0, ch); B(3, 1, 0, woolY); B(3, 2, 0, woolY); B(3, 3, 0, woolY); B(3, 4, 0, glow);
+    // 레드카펫 진입로
+    B(0, -1, 1, woolR); B(1, -1, 1, woolR); B(0, -1, 2, woolR); B(1, -1, 2, woolR);
   }
   // V13-A: 실제 하이픽셀처럼 프라이빗 섬 = 작은 스폰섬 + 포탈섬 두 개를 나무 다리로 연결.
   //   수학함수 대칭 원뿔(역원뿔) 폐기 → 방향별 반경 변주 + 기복 있는 밑면의 유기적 비대칭 지형.
@@ -1071,7 +1111,7 @@
     }
     // 포탈섬: 조약돌 바닥(코블 생성기 자리) + 허브 포탈
     for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) { const y = surfaceTop(HOME_PISLE.x + 3 + dx, HOME_PISLE.z + dz); if (y > 2) setW(HOME_PISLE.x + 3 + dx, y, HOME_PISLE.z + dz, ID.cobblestone); }
-    buildPortalFrame(PORTALS.home.x, PORTALS.home.z);
+    buildHomePortal();
     // 저장된 블록 편집 적용(설치/파괴 영속)
     const edits = editsOverride || (econApi().getHomeEdits ? econApi().getHomeEdits() : {});
     for (const k in edits) {
@@ -4214,8 +4254,10 @@
     if (!p) { buildWarpMarkers(); return; }   // 테마 월드는 포털 대신 워프 패드 마커
     const y = surfaceTop(p.x, p.z);
     const g = new THREE.Group();
-    const fill = new THREE.Mesh(new THREE.PlaneGeometry(3, 3.6), new THREE.MeshBasicMaterial({ color: 0xb04ae8, transparent: true, opacity: 0.55, side: THREE.DoubleSide }));
-    fill.position.set(p.x + 0.5, y + 2.2, p.z + 0.5);
+    // V20-T: 포탈 이펙트를 프레임 개구부(가로2×세로3, y+1~y+4) 안에 정확히 배치. 목적지별 이펙트 색.
+    const fillCol = (p.fx != null) ? p.fx : 0xb04ae8;
+    const fill = new THREE.Mesh(new THREE.PlaneGeometry(1.86, 2.86), new THREE.MeshBasicMaterial({ color: fillCol, transparent: true, opacity: 0.62, side: THREE.DoubleSide }));
+    fill.position.set(p.x + 0.5, y + 2.5, p.z + 0.5);
     g.add(fill);
     const label = makeLabel(p.label); label.position.set(p.x + 0.5, y + 4.8, p.z + 0.5); g.add(label);
     buildWarpMarkers();
