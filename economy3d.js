@@ -511,6 +511,50 @@
     buildGrandFountain(); // V20-AQ: 손 배치 대형 3단 분수 — 허브 북서측
     buildCathedral();    // V20-AR: 손 배치 대성당(고딕 신전) — 허브 남측
     buildZiggurat();     // V20-AS: 손 배치 계단식 지구라트(공중정원) — 허브 남동측
+    buildMageTower();    // V20-AT: 손 배치 뒤틀린 마법사 탑(부유 룬 고리) — 허브 남서측
+  }
+  // V20-AT: 마법사 탑 — 좌표 한 칸씩 손 배치(대칭 함수 아님). 나선으로 뒤틀려 오르는 탑신 +
+  //   부유 자수정 룬 고리 + 정상 아케인 왕관. 직선 탑들과 다른 '뒤틀린' 실루엣. 허브 남서(150,264).
+  function buildMageTower() {
+    const cx = 150, cz = 264, gy = 19;
+    flattenSite(141, 255, 159, 273, gy);
+    const B = (dx, dy, dz, id) => { if (id != null) setW(cx + dx, gy + dy, cz + dz, id); };
+    const sb = ID.stone_bricks, pur = ID.purpur, glow = ID.glowstone, glass = ID.glass, book = ID.bookshelf != null ? ID.bookshelf : sb;
+    const st = (f) => (ID['purpur_stairs_' + f] != null ? ID['purpur_stairs_' + f] : pur);
+    // ── 팔각 기단(반경 5) + 4방 발광 룬석 ──
+    for (let dx = -5; dx <= 5; dx++) for (let dz = -5; dz <= 5; dz++) { if (dx * dx + dz * dz > 26) continue; B(dx, 0, dz, ((dx + dz) & 1) ? sb : pur); }
+    for (const [ox, oz] of [[-4, 0], [4, 0], [0, -4], [0, 4]]) { B(ox, 1, oz, pur); B(ox, 2, oz, glow); }
+    // ── 기부 서재방(반경 3, y1~4, 남문 + 유리창 + 책장 + 발광) ──
+    for (let dy = 1; dy <= 4; dy++) for (let dx = -3; dx <= 3; dx++) for (let dz = -3; dz <= 3; dz++) {
+      const r = dx * dx + dz * dz; if (!(r >= 6 && r <= 11)) continue;
+      const door = dz >= 2 && Math.abs(dx) <= 1 && dy <= 2;
+      const win = dy === 3 && ((Math.abs(dx) === 3 && dz === 0) || (Math.abs(dz) === 3 && dx === 0));
+      if (door) continue; B(dx, dy, dz, win ? glass : sb);
+    }
+    for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) if (dx * dx + dz * dz <= 8) B(dx, 5, dz, pur);   // 서재 천장
+    B(-2, 1, -2, book); B(-2, 2, -2, book); B(2, 1, -2, book); B(0, 2, 0, glow);   // 책장 + 조명
+    // ── 뒤틀린 탑신(y6~24): 3×3 심이 나선으로 중심 이동, 자수정 띠·룬 발광 ──
+    let topY = 6, topOx = 0, topOz = 0;
+    for (let y = 6; y <= 24; y++) {
+      const a = (y - 6) * 0.5, r = Math.min(1.7, (y - 6) * 0.28);
+      const ox = Math.round(Math.cos(a) * r), oz = Math.round(Math.sin(a) * r);
+      const band = ((y - 6) % 4 === 0);
+      for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) {
+        const edge = Math.abs(dx) === 1 || Math.abs(dz) === 1;
+        if (edge) B(ox + dx, y, oz + dz, band ? pur : sb);
+      }
+      if (y % 3 === 0) B(ox + 1, y, oz, glow);   // 외벽 룬 발광
+      topY = y; topOx = ox; topOz = oz;
+    }
+    // ── 정상 아케인 왕관(개방 고리 + 자수정 첨정 + 발광) ──
+    for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) B(topOx + dx, topY + 1, topOz + dz, ID.oak_fence);
+    for (let i = 1; i <= 3; i++) B(topOx, topY + i, topOz, pur); B(topOx, topY + 4, topOz, glow);   // 첨정 + 발광
+    // ── 부유 자수정 룬 고리(탑 주위 공중, 비대칭 3고리) — 손 배치 ──
+    const rings = [[6, 12], [-7, 15], [5, 18]];
+    rings.forEach(([rr, ry], k) => {
+      for (let a = 0; a < 8; a++) { const ang = a / 8 * Math.PI * 2; const x = Math.round(Math.cos(ang) * (k === 1 ? 6 : 5)), z = Math.round(Math.sin(ang) * (k === 1 ? 6 : 5)); B(x, ry, z, (a % 2) ? pur : 0); }   // 점선 고리
+      B(rr < 0 ? -6 : 6, ry, 0, glow);   // 고리 발광점
+    });
   }
   // V20-AS: 지구라트(공중정원) — 좌표 한 칸씩 손 배치(대칭 함수 아님). 5단 계단식 피라미드 +
   //   전면 대계단 + 층마다 매달린 녹지/꽃 + 물못 + 정상 신전. 탑/홀과 다른 '계단식' 실루엣.
