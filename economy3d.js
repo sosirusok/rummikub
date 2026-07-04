@@ -505,6 +505,38 @@
     setW(223, 32, 190, ID.glowstone); setW(225, 32, 190, ID.glowstone);
     buildGuildHall();   // V20-V: 손 배치 대형 랜드마크(모험가 길드 대회관)
     buildClocktower();  // V20-AL: 손 배치 수직 랜드마크(대시계탑) — 허브 동측 광장
+    buildMarketStalls(); // V20-AM: 손 배치 시장 노점 거리 — 허브 남측
+  }
+  // V20-AM: 시장 노점 거리 — 좌표 한 칸씩 손 배치(대칭 함수 아님). 5개 노점이 각각 다른 업종/차양색/진열.
+  //   허브 남측(광장 아래) z249~257 포장 거리 양옆에 배치. 하이픽셀 상점가 활기.
+  function buildMarketStalls() {
+    flattenSite(196, 248, 244, 258, 19);
+    for (let x = 197; x <= 243; x++) for (let z = 250; z <= 256; z++) setW(x, 19, z, ((x + z) % 5 === 0) ? ID.quartz_block : ID.stone_bricks);   // 포장 거리
+    const S = (x, y, z, id) => { if (id != null) setW(x, y, z, id); };
+    const log = ID.spruce_log, slab = ID.oak_planks_slab != null ? ID.oak_planks_slab : ID.oak_planks, glow = ID.glowstone, fence = ID.oak_fence;
+    const stair = (f) => (ID['oak_planks_stairs_' + f] != null ? ID['oak_planks_stairs_' + f] : ID.oak_planks);
+    // 노점 1개 헬퍼: (기준 x0, 차양색 awn, 카운터 진열 goods[3], 뒤 상자 crate) — 각 호출마다 다른 값
+    const stall = (x0, z0, faceS, awn, goods, crate) => {
+      const zc = z0, zb = faceS ? z0 - 2 : z0 + 2;   // 카운터/뒤편
+      for (let dx = 0; dx <= 2; dx++) { S(x0 + dx, 20, zc, slab); }                 // 카운터 상판(반블럭)
+      S(x0, 20, zc, log); S(x0 + 2, 20, zc, log);                                    // 카운터 양끝 기둥 밑동
+      for (let dy = 20; dy <= 22; dy++) { S(x0, dy, zb, log); S(x0 + 2, dy, zb, log); }   // 뒤 차양 기둥 2주
+      for (let dx = 0; dx <= 2; dx++) { S(x0 + dx, 23, zb, awn); S(x0 + dx, 23, zc, faceS ? stair(2) : stair(0)); }   // 차양(뒤 평지붕색+앞 경사)
+      for (let dx = 0; dx <= 2; dx++) S(x0 + dx, 23, (zc + zb) / 2 | 0, awn);         // 차양 중앙 채움
+      S(x0, 21, zc, goods[0]); S(x0 + 1, 21, zc, goods[1]); S(x0 + 2, 21, zc, goods[2]);   // 진열품(카운터 위)
+      S(x0 + 1, 20, zb, crate); S(x0 + 1, 21, zb, crate);                            // 뒤 재고 상자 더미
+      S(x0, 22, zc, glow);                                                            // 노점 등불
+    };
+    // 5개 노점 — 서로 다른 업종/차양/진열(남측 줄: z252 남향 / 북측 줄: z254 북향 교차)
+    stall(198, 252, true, ID.wool_red != null ? ID.wool_red : ID.bricks, [ID.pumpkin, ID.hay_block, ID.melon], ID.hay_block);           // 청과물(붉은 차양)
+    stall(210, 254, false, ID.wool_blue != null ? ID.wool_blue : ID.prismarine, [ID.prismarine, ID.sea_lantern != null ? ID.sea_lantern : ID.glowstone, ID.prismarine], ID.oak_planks);   // 생선(파란 차양)
+    stall(222, 252, true, ID.dark_oak_planks != null ? ID.dark_oak_planks : ID.bricks, [ID.iron_ore, ID.gold_ore, ID.iron_ore], ID.cobblestone);   // 도구·광물(갈색 차양)
+    stall(234, 254, false, ID.purpur, [ID.glass, ID.wool_purple != null ? ID.wool_purple : ID.purpur, ID.glass], ID.bookshelf != null ? ID.bookshelf : ID.oak_planks);   // 물약(보라 차양)
+    stall(210, 252, true, ID.wool_yellow != null ? ID.wool_yellow : ID.quartz_block, [ID.emerald_ore, ID.gold_ore, ID.emerald_ore], ID.chest != null ? ID.chest : ID.oak_planks);   // 장신구(노란 차양)
+    // 거리 가로등 + 화분(잎) + 벤치
+    for (const x of [200, 216, 232, 242]) { setW(x, 20, 249, fence); setW(x, 21, 249, glow); }
+    setW(205, 20, 257, stair(0)); setW(206, 20, 257, slab); setW(207, 20, 257, stair(0));   // 벤치
+    setW(228, 20, 249, ID.oak_leaves != null ? ID.oak_leaves : ID.oak_planks); setW(228, 21, 249, ID.oak_leaves != null ? ID.oak_leaves : ID.oak_planks);   // 화분
   }
   // V20-AL: 대시계탑 — 좌표 한 칸씩 손 배치(대칭 함수 아님). 저층 허브 건물과 다른 '수직' 실루엣.
   //   2단 포디움 → 석벽돌 탑신(석영 코너 퀀·아치창) → 4면 시계 다이얼 → 종루(아치+종) → 첨탑 스파이어.
