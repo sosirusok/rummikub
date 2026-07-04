@@ -2191,6 +2191,20 @@
     const list = Array.from(names); const cols = 8, rows = Math.ceil(list.length / cols);
     const cv = document.createElement('canvas'); cv.width = cols * 16; cv.height = rows * 16; const c = cv.getContext('2d'); c.imageSmoothingEnabled = false;
     list.forEach((nm, i) => { const cx = (i % cols) * 16, cy = ((i / cols) | 0) * 16; paintTile(c, cx, cy, nm); });
+    // V20-U: 전역 컬러 그레이드 — 유치원식 과밝음 탈피. 대비·채도↑, 밝기 소폭↓ → 모든 블럭 픽셀 색을 깊고 찬란하게.
+    try {
+      const img = c.getImageData(0, 0, cv.width, cv.height), d = img.data;
+      const contrast = 1.16, mid = 128, bright = 0.93, sat = 1.22;
+      for (let i = 0; i < d.length; i += 4) {
+        let r = d[i], g = d[i + 1], b = d[i + 2];
+        r = (r - mid) * contrast + mid; g = (g - mid) * contrast + mid; b = (b - mid) * contrast + mid;   // 대비
+        r *= bright; g *= bright; b *= bright;                                                             // 밝기 소폭↓
+        const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+        r = lum + (r - lum) * sat; g = lum + (g - lum) * sat; b = lum + (b - lum) * sat;                   // 채도↑
+        d[i] = r < 0 ? 0 : r > 255 ? 255 : r; d[i + 1] = g < 0 ? 0 : g > 255 ? 255 : g; d[i + 2] = b < 0 ? 0 : b > 255 ? 255 : b;
+      }
+      c.putImageData(img, 0, 0);
+    } catch (e) {}
     atlasUV = {};
     list.forEach((nm, i) => { const cx = (i % cols), cy = ((i / cols) | 0); const e = 0.01; atlasUV[nm] = { x0: (cx + e) / cols, x1: (cx + 1 - e) / cols, y0: (cy + e) / rows, y1: (cy + 1 - e) / rows }; });
     atlasTex = new THREE.CanvasTexture(cv); atlasTex.magFilter = THREE.NearestFilter; atlasTex.minFilter = THREE.NearestFilter; atlasTex.generateMipmaps = false;
@@ -4111,7 +4125,7 @@
     if (scene.fog) scene.fog.color.set(A.fog);
     const el = document.getElementById('econ3dSky');
     if (el) el.style.background = `linear-gradient(${A.sky[0]} 0%, ${A.sky[1]} 55%, ${A.sky[2]} 100%)`;
-    const nv = Math.max(0.85, A.light);   // 야간투시 패시브: 블록은 항상 밝게
+    const nv = Math.max(0.6, A.light);   // V20-U: 밝기 하한 완화 → 어두운 섬(딥/엔드/네더)이 실제로 무겁고 고유한 분위기
     if (blockMat) blockMat.color.setScalar(nv);
     if (waterMat) waterMat.color.setScalar(nv);
     if (plantMat) plantMat.color.setScalar(nv);
