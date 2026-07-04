@@ -472,11 +472,13 @@
     const w = equippedWeapon();
     const feroMul = 1 + st.ferocity / 100;
     const melee = flat * (1 + st.strength / 100) * additive * feroMul * mpStatMul();
-    // V19-B: 실제 하이픽셀 어빌리티(능력치) 데미지 채널 — 캐스터 무기 전용, 별도 공식(지력 스케일).
-    //   실제: 피해 = 기본어빌리티 × (1 + 지력/100 × 스케일) × 가산배수 × 곱연산 (힘/크리는 어빌리티에 영향 없음)
-    //   우리 클릭 전투에선 캐스터 무기의 타격을 근접 vs 어빌리티 중 큰 값으로 대체 → 엔드게임 수백만 딜 실현.
-    if (w && w.caster && w.abilityDmg) {
-      const ability = w.abilityDmg * (1 + st.intelligence / 100 * (w.abilityScaling || 0.5)) * additive * feroMul * mpStatMul();
+    // V19-D 밸런스: 아키타입별 어빌리티 데미지 — 캐스터=지력, 근접/원거리 버서크=힘 게이트.
+    //   ability = 기본어빌리티 × max(0, 주스탯/100 − 1) × 스케일 × 가산 × 광포 × 마력
+    //   주스탯 100 이하면 0(초반 무보정) → 오직 엔드게임(고스탯)에서만 수백만 딜. 세 계열 모두 각자 스탯으로 수렴.
+    if (w && w.abilityDmg) {
+      const primary = (w.abilityStat === 'str') ? st.strength : st.intelligence;
+      const factor = Math.max(0, primary / 100 - 1);
+      const ability = w.abilityDmg * factor * (w.abilityScaling || 0.6) * additive * feroMul * mpStatMul();
       return Math.max(melee, ability);
     }
     return melee;
