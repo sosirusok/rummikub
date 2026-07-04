@@ -2400,6 +2400,24 @@
       for (const [ox, oz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) setW(x + ox, y0 + hgt + 2, z + oz, ID.purpur);   // 뿔
       setW(x, y0 + hgt + 3, z, ID.purpur);
     }
+    // ── V20-AK: 손 사각 엔드 분위기 조형 — 부유 엔드석 소섬 + 코러스풍 자수정 군생 + 엔드로드 군집 ──
+    for (let n = 0; n < 12; n++) {   // 공중 부유 엔드석 소섬(비대칭, 높이·크기 차등)
+      const a = hash3(n, 400, 1) * Math.PI * 2, rr = 20 + hash3(n, 401, 2) * 26;
+      const x = Math.round(64 + Math.cos(a) * rr), z = Math.round(64 + Math.sin(a) * rr);
+      if (surfaceTop(x, z) < 4) continue;
+      const cy = surfaceTop(x, z) + 8 + Math.floor(hash3(n, 402, 3) * 8), rad = 2 + Math.floor(hash3(n, 403, 4) * 2);
+      for (let dx = -rad; dx <= rad; dx++) for (let dz = -rad; dz <= rad; dz++) { if (dx * dx + dz * dz > rad * rad) continue; setW(x + dx, cy, z + dz, ID.end_stone); if (dx * dx + dz * dz < rad) setW(x + dx, cy - 1, z + dz, ID.end_stone); }
+      // 소섬 위 코러스풍 자수정 줄기(1~3칸) + 정상 발광
+      const ch = 1 + Math.floor(hash3(n, 404, 5) * 3); for (let j = 1; j <= ch; j++) setW(x, cy + j, z, ID.purpur); setW(x, cy + ch + 1, z, ID.glowstone);
+    }
+    for (let n = 0; n < 8; n++) {   // 지면 코러스풍 자수정 군생(가지 뻗음)
+      const a = hash3(n, 410, 1) * Math.PI * 2, rr = 8 + hash3(n, 411, 2) * 30;
+      const x = Math.round(64 + Math.cos(a) * rr), z = Math.round(64 + Math.sin(a) * rr);
+      if (surfaceTop(x, z) < 4) continue; const y0 = surfaceTop(x, z);
+      const th = 2 + Math.floor(hash3(n, 412, 3) * 3);
+      for (let j = 1; j <= th; j++) setW(x, y0 + j, z, ID.purpur);
+      const bx = hash3(n, 413, 4) < 0.5 ? 1 : -1; setW(x + bx, y0 + th, z, ID.purpur); setW(x + bx, y0 + th + 1, z, ID.glowstone);   // 가지 + 발광 열매
+    }
     // 보이드 세펄처(남쪽 엔드 벽돌 첨탑)
     const vy = surfaceTop(64, 98);
     for (let y2 = vy; y2 < vy + 12; y2++) for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) {
