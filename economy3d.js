@@ -1063,7 +1063,40 @@
       a++; b++; c--; d--; ry++;
     }
     if (a <= c && b <= d) for (let x = a; x <= c; x++) for (let z = b; z <= d; z++) setW(x, ry, z, roofId);   // 용마루 마감
-    setW(dxc, base + wallH - 1, z0 + (dpt >> 1), ID.glowstone);   // 실내 조명
+    houseDecor(x0, z0, wdt, dpt, base, wallId, roofId);   // V20-N: 인테리어 + 외부 디테일
+  }
+  // V20-N: 집 내부/외부 장식 — 러그·책장·테이블·화분·벽랜턴 + 굴뚝·현관 화분(블럭 단위)
+  function houseDecor(x0, z0, wdt, dpt, base, wallId, roofId) {
+    const ix0 = x0 + 1, iz0 = z0 + 1, ix1 = x0 + wdt - 2, iz1 = z0 + dpt - 2;
+    const cx = (ix0 + ix1) >> 1, cz = (iz0 + iz1) >> 1;
+    // 항상 중앙 천장 조명
+    setW(cx, base + 2, cz, ID.glowstone);
+    if (ix1 - ix0 >= 2 && iz1 - iz0 >= 2) {   // 방이 충분히 클 때만 가구 배치
+      // 1) 따뜻한 러그(양털 바닥 체크무늬, 중앙 3×3)
+      const rugA = ID.wool_red != null ? ID.wool_red : ID.oak_planks;
+      const rugB = ID.wool_orange != null ? ID.wool_orange : (ID.wool_white != null ? ID.wool_white : ID.oak_planks);
+      for (let x = cx - 1; x <= cx + 1; x++) for (let z = cz - 1; z <= cz + 1; z++)
+        if (x >= ix0 && x <= ix1 && z >= iz0 && z <= iz1) setW(x, base - 1, z, ((x + z) & 1) ? rugA : rugB);
+      // 2) 책장 벽(뒷벽 안쪽 한 줄, 2단)
+      for (let x = ix0; x <= ix1; x++) { setW(x, base, iz0, ID.bookshelf); setW(x, base + 1, iz0, ID.bookshelf); }
+      // 3) 중앙 테이블(울타리 다리 + 반블럭 상판) + 양옆 의자(계단)
+      setW(cx, base, cz, ID.oak_fence);
+      const topSlab = ID.oak_planks_slab != null ? ID.oak_planks_slab : ID.oak_planks; setW(cx, base + 1, cz, topSlab);
+      const chair = f => ID['spruce_planks_stairs_' + f];
+      if (cx - 1 > iz0 && chair(1) != null) setW(cx - 1, base, cz, chair(1));
+      if (cx + 1 <= ix1 && chair(3) != null) setW(cx + 1, base, cz, chair(3));
+      // 4) 앞 모서리 화분(원목 + 꽃)
+      [[ix0, iz1], [ix1, iz1]].forEach(([px, pz]) => { setW(px, base, pz, ID.oak_log); setW(px, base + 1, pz, hash3(px, 5, pz) < 0.5 ? ID.flower_red : ID.flower_yellow); });
+      // 5) 측벽 랜턴
+      setW(ix0, base + 1, cz, ID.glowstone); setW(ix1, base + 1, cz, ID.glowstone);
+    }
+    // 외부: 굴뚝(뒤 모서리, 벽돌 + 발광 상단) + 현관 앞 화분 2개
+    const chY = base + 5;
+    setW(x0 + 1, chY, z0 + 1, ID.bricks); setW(x0 + 1, chY + 1, z0 + 1, ID.bricks); setW(x0 + 1, chY + 2, z0 + 1, ID.magma_block != null ? ID.magma_block : ID.glowstone);
+    const dxc2 = x0 + (wdt >> 1);
+    [[dxc2 - 2, z0 + dpt], [dxc2 + 2, z0 + dpt]].forEach(([px, pz]) => {
+      if (px > x0 && px < x0 + wdt - 1) { setW(px, base - 1, pz, ID.oak_log); setW(px, base, pz, hash3(px, 9, pz) < 0.5 ? ID.flower_yellow : ID.flower_red); }
+    });
   }
   // 블럭 → 계단/반블럭/나무종 매핑(형태 변형이 있으면 그 id, 없으면 null)
   function stairIdFor(blockId, f) { const b = BLOCKS[blockId]; if (!b) return null; const k = b.key.replace(/_stairs_\d$/, ''); const id = ID[k + '_stairs_' + f]; return id != null ? id : null; }
