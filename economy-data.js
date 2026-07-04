@@ -646,6 +646,21 @@
     { key: 'efficiency', name: '효율', target: 'tool', maxLvl: 7, fx: { mineSpeed: 12 }, desc: '채집 속도 +12%/레벨', bookBasePrice: 800 },
     { key: 'fortune', name: '행운', target: 'tool', maxLvl: 5, fx: { fortune: 20 }, desc: '추가 드롭 확률 +20%/레벨', bookBasePrice: 1400 },
     { key: 'area_mining', name: '광역 채집', target: 'tool', maxLvl: 5, fx: { area: 1 }, desc: '파괴 시 주변 블록 +1개/레벨 동시 파괴(혼돈으로 최대 10)', bookBasePrice: 2200 },
+    // ── V19: 얼티밋 인챈트(실제 스카이블럭) — 중복 인챈트북 합성으로 레벨업, 무기당 1종만 장착 가능(강력) ──
+    { key: 'one_for_all', name: '원 포 올', target: 'weapon', ultimate: true, maxLvl: 1, fx: { dmg: 100 }, desc: '최종 피해 +100% (단, 다른 무기 인챈트 무효 — 극단 특화)', bookBasePrice: 8000 },
+    { key: 'soul_eater', name: '소울 이터', target: 'weapon', ultimate: true, maxLvl: 5, fx: { first: 8 }, desc: '처치 후 다음 타격 강화 +8%/레벨(첫타 보정)', bookBasePrice: 5000 },
+    { key: 'combo_ult', name: '콤보', target: 'weapon', ultimate: true, maxLvl: 10, fx: { third: 8 }, desc: '연속 공격 누적 피해 +8%/레벨', bookBasePrice: 5500 },
+    { key: 'legion', name: '리전', target: 'weapon', ultimate: true, maxLvl: 7, fx: { dmg: 2 }, desc: '주변 협동 시 스탯 강화 +2%/레벨', bookBasePrice: 5200 },
+    { key: 'swarm', name: '스웜', target: 'weapon', ultimate: true, maxLvl: 5, fx: { dmgBig: 5 }, desc: '거대 적(체력 10만+)에게 +5%/레벨', bookBasePrice: 5800 },
+    { key: 'fatal_tempo', name: '페이탈 템포', target: 'weapon', ultimate: true, maxLvl: 5, fx: { dmg: 6 }, desc: '연타 유지 시 +6%/레벨(공속→피해)', bookBasePrice: 7000 },
+    { key: 'ultimate_jerry', name: '얼티밋 제리', target: 'weapon', ultimate: true, maxLvl: 5, fx: { first: 5 }, desc: '첫 타격 폭발 +5%/레벨', bookBasePrice: 6000 },
+    { key: 'inferno', name: '인페르노', target: 'weapon', ultimate: true, maxLvl: 5, fx: { dmg: 4 }, desc: '화염 중첩 최종 피해 +4%/레벨', bookBasePrice: 5400 },
+    { key: 'last_stand_ult', name: '라스트 스탠드(얼티밋)', target: 'armor', ultimate: true, maxLvl: 5, fx: { lastStand: 12 }, desc: 'HP 30% 이하 방어 +12/레벨', bookBasePrice: 5000 },
+    { key: 'wisdom', name: '위즈덤', target: 'weapon', ultimate: true, maxLvl: 5, fx: { xp: 12 }, desc: '전투 XP +12%/레벨', bookBasePrice: 4800 },
+    { key: 'bank', name: '뱅크', target: 'armor', ultimate: true, maxLvl: 5, fx: { coin: 8 }, desc: '전투 골드 +8%/레벨', bookBasePrice: 4600 },
+    // ── V19: 바닐라 마인크래프트 인챈트 명시(활 계열) — vanilla:true ──
+    { key: 'power', name: '힘(Power)', target: 'weapon', vanilla: true, maxLvl: 5, fx: { dmg: 5 }, desc: '바닐라: 원거리 피해 +5%/레벨(혼돈으로 초과 가능)', bookBasePrice: 600 },
+    { key: 'punch', name: '밀치기(Punch)', target: 'weapon', vanilla: true, maxLvl: 2, fx: { first: 6 }, desc: '바닐라: 넉백 + 첫타 +6%/레벨', bookBasePrice: 700 },
   ];
   // 인챈트북 부여 비용 = bookBasePrice × 현재 레벨(첫 부여는 무료)
   const CHAOS_ENCHANT = {
