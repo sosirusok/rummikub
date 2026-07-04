@@ -1936,7 +1936,7 @@
     } else if (mode === 'end') {
       // 🌌 공허 관문: 자수정 포장(흑요석 상감) + 엔드로드 기둥 4주 + 부유 아치
       pave(ID.purpur, ID.obsidian);
-      for (const [ox, oz] of [[-4, -4], [4, -4], [-4, 4], [4, 4]]) { for (let y = 1; y <= 3; y++) B(ox, y, oz, ID.purpur); B(ox, 4, oz, ID.oak_fence); B(ox, 5, oz, glow); }   // 엔드로드 기둥
+      for (const [ox, oz] of [[-4, -4], [4, -4], [-4, 4], [4, 4]]) { for (let y = 1; y <= 3; y++) B(ox, y, oz, ID.purpur); B(ox, 4, oz, ID.purpur); B(ox, 5, oz, glow); }   // 엔드로드 기둥(자수정 — 엔드엔 목재 없음)
       for (let y = 1; y <= 4; y++) { B(-3, y, -5, ID.purpur); B(3, y, -5, ID.purpur); } for (let dx = -3; dx <= 3; dx++) B(dx, 5, -5, ID.purpur); B(0, 6, -5, glow);   // 부유 아치
       B(0, 1, 0, ID.obsidian); B(0, 2, 0, ID.purpur); B(0, 3, 0, glow);   // 중앙 엔더 수정
     } else if (mode === 'spider') {
@@ -3016,7 +3016,8 @@
     for (let x = 0; x < W; x++) for (let z = 0; z < Dp; z++) {
       const y = surfaceTop(x, z) - 1;
       if (y < 5) continue;
-      if (getBlockLocal(x, y, z) !== ID.grass) continue;
+      const cur = getBlockLocal(x, y, z);
+      if (cur !== ID.grass && cur !== ID.dirt) continue;   // V20-BB: 노출 흙도 균사/모래로 덮어 이물 블럭 제거
       const desertT = (x - 72) / 20 + (hash3(x, 101, z) - 0.5) * 1.2;
       if (desertT > 0) { setW(x, y, z, ID.sand); if (hash3(x, 102, z) < 0.03) setW(x, y + 1, z, ID.tall_grass); }
       else setW(x, y, z, ID.mycelium);
