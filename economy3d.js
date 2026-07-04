@@ -493,8 +493,7 @@
     buildHouse(190, 206, 9, 7, 20, ID.oak_planks, ID.spruce_planks);       // 미니언 관리소
     buildHouse(244, 234, 9, 7, 20, ID.birch_planks, ID.oak_planks);        // 펫 상점(자작)
     buildHouse(206, 216, 7, 6, 20, ID.spruce_planks, ID.dark_oak_log);     // 경매장
-    buildHouse(232, 216, 8, 7, 20, ID.stone, ID.bricks);                   // 대장간(재련)
-    setW(243, 20, 222, ID.lava); setW(243, 20, 223, ID.lava);              // 대장간 용광로 연출
+    buildForge(232, 216, 8, 7, 20);                                        // 대장간(재련) — V20-P 하프팀버 박공+굴뚝+용광로 베이
     buildHouse(208, 244, 8, 6, 20, ID.oak_planks, ID.oak_planks);          // 제작소
     buildHouse(230, 244, 8, 6, 20, ID.quartz_block, ID.purpur);            // 스타포스 강화소(메이플 감성)
     // 인챈트 탑(2층 + 보라 지붕)
@@ -857,6 +856,57 @@
     for (let dx = -r + 1; dx <= r - 1; dx++) for (let dz = -r + 1; dz <= r - 1; dz++) if (dx * dx + dz * dz <= (r - 1) * (r - 1)) setW(cx + dx, base - 1, cz + dz, ((dx + dz) & 1) ? floor : accent);
     cols.forEach(([x, z]) => { const ix = cx + Math.round((x - cx) * 0.6), iz = cz + Math.round((z - cz) * 0.6); setW(ix, base + wallH - 1, iz, ID.glowstone); });   // 샹들리에
     if (typeof o.feature === 'function') o.feature(cx, cz, base, r);
+  }
+  // V20-P: 대장간 — 돔과 완전히 다른 골격. 하프팀버 벽 + A자 박공 지붕 + 높은 굴뚝 + 개방 용광로 베이 + 모루.
+  function buildForge(x0, z0, wdt, dpt, base) {
+    const x1 = x0 + wdt - 1, z1 = z0 + dpt - 1, cz = (z0 + z1) >> 1;
+    const timber = ID.dark_oak_log != null ? ID.dark_oak_log : ID.oak_log;
+    const plaster = ID.smooth_stone != null ? ID.smooth_stone : ID.stone;
+    const roof = ID.dark_oak_planks != null ? ID.dark_oak_planks : ID.spruce_planks;
+    flattenSite(x0 - 1, z0 - 1, x0 + wdt, z0 + dpt, base - 1);
+    for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) setW(x, base - 1, z, ID.stone_bricks);   // 석재 기초/바닥
+    const wallH = 4;
+    // 하프팀버 벽(모서리·격자 통나무 + 사이 회벽), 정면(z1) 우측 2칸은 개방 용광로 베이
+    for (let y = base; y < base + wallH; y++) for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) {
+      if (x !== x0 && x !== x1 && z !== z0 && z !== z1) continue;   // 벽만
+      if (z === z1 && x >= x1 - 2 && y < base + 3) continue;         // 개방 용광로 베이(정면 우측)
+      const post = ((x === x0 || x === x1) && ((z - z0) % 2 === 0)) || ((z === z0 || z === z1) && ((x - x0) % 2 === 0));
+      setW(x, y, z, (y === base + wallH - 1 || post) ? timber : plaster);   // 상단 띠·기둥 통나무, 나머지 회벽
+    }
+    // 유리창(측벽)
+    for (let z = z0 + 1; z < z1; z += 2) { setW(x0, base + 1, z, ID.glass); setW(x1, base + 1, z, ID.glass); }
+    // 정문(정면 좌측)
+    const dxDoor = x0 + 1, dId = ID.spruce_door_c_0;
+    if (dId != null) { setW(dxDoor, base, z1, dId); setW(dxDoor, base + 1, z1, dId); }
+    setW(dxDoor - 1, base + 2, z1, ID.glowstone);
+    // A자 박공 지붕(용마루 x축, z 경사) + 처마 1칸 돌출
+    const halfD = Math.floor(dpt / 2);
+    for (let x = x0 - 1; x <= x1 + 1; x++) for (let dz = -halfD - 1; dz <= halfD + 1; dz++) {
+      const z = cz + dz, h = (halfD + 1) - Math.abs(dz); if (h < 0) continue;
+      const ry = base + wallH + h;
+      if (dz === 0) setW(x, ry, z, roof);   // 용마루
+      else { const sid = stairIdFor(roof, dz > 0 ? 0 : 2); setW(x, ry, z, sid != null ? sid : roof); }
+    }
+    // 박공 삼각 벽(양 끝) — 통나무 뼈대 + 회벽
+    for (const gx of [x0, x1]) for (let dz = -halfD; dz <= halfD; dz++) {
+      const z = cz + dz, top = (halfD + 1) - Math.abs(dz);
+      for (let yy = 0; yy < top; yy++) setW(gx, base + wallH + yy, z, (yy === top - 1 || dz === 0) ? timber : plaster);
+    }
+    // 높은 굴뚝(뒤 좌측 모서리) — 벽돌 스택 + 마그마/발광 정상(불티)
+    const chx = x0, chz = z0, chTop = base + wallH + halfD + 4;
+    for (let y = base; y <= chTop; y++) setW(chx, y, chz, ID.bricks);
+    setW(chx, chTop, chz, ID.magma_block != null ? ID.magma_block : ID.glowstone);
+    setW(chx, chTop + 1, chz, ID.magma_block != null ? ID.magma_block : ID.glowstone);
+    // 개방 용광로 베이(정면 우측): 용암 화로 + 모루 + 담금질 물통 + 도구걸이
+    const fx = x1 - 1, fz = z1;
+    setW(fx, base - 1, fz, ID.magma_block != null ? ID.magma_block : ID.netherrack);
+    setW(fx, base, fz, ID.lava);                                   // 용암 화로
+    setW(fx - 1, base, fz - 1, ID.obsidian); setW(fx - 1, base + 1, fz - 1, ID.stone);   // 모루(어둠 받침 + 상단)
+    setW(fx, base, fz - 2, ID.water);                             // 담금질 물통
+    const fence = ID.oak_fence;
+    setW(x1, base, fz - 1, fence); setW(x1, base + 1, fz - 1, fence); setW(x1, base + 2, fz - 1, ID.glowstone);   // 도구걸이 기둥+등
+    // 실내 조명
+    setW(x0 + (wdt >> 1), base + wallH - 1, cz, ID.glowstone);
   }
   function buildRuinsZone() {
     // V18: 이끼 낀 고대 폐허 — 무너진 아치·기울어진 기둥·부서진 바닥 타일·덩굴
