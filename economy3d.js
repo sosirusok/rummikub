@@ -1481,7 +1481,7 @@
     if (mode === 'park' && ok(70, 100)) buildHouse(67, 97, 7, 6, base(70, 100), ID.spruce_planks, ID.oak_planks, ID.oak_log);   // 삼림 산장
     else if (mode === 'barn' && ok(58, 100)) { buildHouse(54, 96, 10, 8, base(58, 100), ID.bricks, ID.dark_oak_log, ID.dark_oak_log); const by = base(52, 98); for (const [hx, hz] of [[52, 98], [53, 98], [52, 99]]) { setW(hx, by, hz, ID.hay_block); setW(hx, by + 1, hz, ID.hay_block); } }   // 붉은 헛간 + 건초더미
     else if (mode === 'gold' && ok(50, 90)) buildGoldOutpost();   // V20-W: 손 배치 대형 광산 전초기지(헤드프레임+갱도+광차 데크+창고+감독관 오두막)
-    else if (mode === 'deep' && ok(46, 74)) { buildHouse(44, 72, 6, 6, base(46, 74), ID.stone_bricks, ID.stone_bricks, ID.stone_bricks); const gy = base(46, 74); setW(43, gy + 1, 71, ID.glowstone); setW(50, gy + 1, 78, ID.glowstone); }   // 지하 전초기지 + 발광석
+    else if (mode === 'deep' && ok(48, 80)) buildDeepDepot();   // V20-X: 손 배치 지하 크리스탈 채광 정거장
     else if (mode === 'spider' && ok(74, 88)) { buildHouse(72, 86, 6, 5, base(74, 88), ID.dark_oak_planks, ID.dark_oak_planks, ID.dark_oak_log); const wy = base(74, 88); for (let i = 0; i < 5; i++) setW(71 + (i % 4), wy + 3 + (i % 2), 85 + (i % 3), ID.wool_white); }   // 어두운 오두막 + 거미줄
     else if (mode === 'nether' && ok(62, 78)) { buildHouse(60, 76, 7, 6, base(62, 78), ID.nether_bricks, ID.nether_bricks, ID.nether_bricks); const ny = base(62, 78); setW(59, ny, 75, ID.magma_block); setW(67, ny, 82, ID.glowstone); }   // 네더 요새 + 마그마
     else if (mode === 'end' && ok(62, 84)) { buildHouse(60, 82, 6, 6, base(62, 84), ID.purpur, ID.purpur, ID.obsidian); const ey = base(62, 84); setW(59, ey, 81, ID.glowstone); setW(66, ey + 5, 88, ID.glowstone); }   // 엔드 성소 + 엔드로드
@@ -1535,6 +1535,44 @@
     B(-3, 0, 4, cob); B(-2, 0, 4, cob); B(-3, 1, 4, cob);                          // 바위 무더기
     B(6, 0, 4, fence); B(6, 1, 4, glow);                                           // 가로등
     B(-5, 0, 3, fence); B(-5, 1, 3, glow);                                         // 가로등2
+  }
+  // V20-X: 딥 캐번 지하 크리스탈 채광 정거장 — 좌표 한 칸씩 손 배치. 리프트 갱도 + 발광 크리스탈 + 지지 아치 + 보석 창고.
+  function buildDeepDepot() {
+    const cx = 48, cz = 80, gy = surfaceTop(cx, cz);
+    const B = (dx, dy, dz, id) => { if (id != null) setW(cx + dx, gy + dy, cz + dz, id); };
+    const sb = ID.stone_bricks, cob = ID.cobblestone, ch = ID.chiseled_stone_bricks, and_ = ID.polished_andesite != null ? ID.polished_andesite : ID.stone;
+    const glow = ID.glowstone, fence = ID.oak_fence, chest = ID.chest != null ? ID.chest : sb, log = ID.dark_oak_log != null ? ID.dark_oak_log : ID.oak_log;
+    const dia = ID.diamond_ore, eme = ID.emerald_ore, lap = ID.lapis_ore, red = ID.redstone_ore;
+    const seaL = ID.sea_lantern != null ? ID.sea_lantern : glow;
+    const st = (f) => (ID['stone_bricks_stairs_' + f] != null ? ID['stone_bricks_stairs_' + f] : sb);
+    const slab = ID.stone_bricks_slab != null ? ID.stone_bricks_slab : sb;
+    // ── 석재 정거장 데크(7×7) + 중앙 리프트 갱도(3×3) ──
+    for (let dx = -3; dx <= 3; dx++) for (let dz = -3; dz <= 3; dz++) B(dx, -1, dz, ((dx + dz) & 1) ? sb : and_);
+    for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) { for (let y = -1; y >= -8; y--) B(dx, y, dz, 0); B(dx, -9, dz, ch); }   // 리프트 수직굴
+    B(0, -9, 0, seaL);
+    // 리프트 케이지(울타리) + 도르래 밧줄
+    for (let y = 0; y <= 4; y++) { B(-1, y, -1, fence); B(1, y, -1, fence); B(-1, y, 1, fence); B(1, y, 1, fence); }
+    for (let d = -1; d <= 1; d++) { B(d, 4, -1, log); B(d, 4, 1, log); B(-1, 4, d, log); B(1, 4, d, log); }   // 상단 프레임
+    B(0, 5, 0, log); B(0, 6, 0, and_); for (let y = 4; y >= -3; y--) B(0, y, 0, fence);                       // 도르래 축/바퀴 + 밧줄
+    // ── 4모서리 지지 아치(기둥 + 계단 아치머리) + 랜턴 ──
+    for (const [px, pz] of [[-3, -3], [3, -3], [-3, 3], [3, 3]]) { for (let y = 0; y <= 3; y++) B(px, y, pz, cob); B(px, 4, pz, ch); B(px, 5, pz, glow); }
+    B(-2, 4, -3, st(2)); B(2, 4, -3, st(2)); B(-2, 4, 3, st(0)); B(2, 4, 3, st(0));   // 아치머리(정/후면)
+    B(-3, 4, -2, st(1)); B(-3, 4, 2, st(1)); B(3, 4, -2, st(3)); B(3, 4, 2, st(3));   // 아치머리(측면)
+    for (let x = -3; x <= 3; x++) { B(x, 5, -3, slab); B(x, 5, 3, slab); }             // 상단 처마 슬랩
+    // ── 발광 크리스탈 군집(층별 보석: 다이아/에메랄드/청금석/레드스톤) — 손 배치, 비대칭 ──
+    B(-3, 0, 0, dia); B(-3, 1, 0, dia); B(-4, 0, 0, glow); B(-3, 2, -1, dia);          // 다이아 정동
+    B(3, 0, 1, eme); B(3, 1, 1, eme); B(4, 0, 1, glow); B(3, 0, 2, eme);               // 에메랄드
+    B(0, 0, -3, lap); B(-1, 0, -3, lap); B(0, 1, -3, lap); B(0, 0, -4, glow);          // 청금석
+    B(1, 0, 3, red); B(2, 0, 3, red); B(1, 1, 3, red);                                 // 레드스톤
+    // ── 보석 창고(상자 + 보석 더미) + 감독 좌석 ──
+    B(-3, 0, 2, chest); B(-2, 0, 3, chest); B(-2, 0, 2, dia);                          // 창고
+    B(2, 0, -3, st(0)); B(2, 1, -3, slab);                                             // 감독 좌석(계단+슬랩)
+    // ── 레일(안산암 띠) + 광차 ──
+    for (let dz = -3; dz <= 3; dz++) B(2, -1, dz, and_);
+    B(2, 0, -2, slab); B(2, 1, -2, fence);                                             // 광차
+    // ── 천장 매달린 랜턴(어두운 지하 조명) 다수 ──
+    B(-2, 4, -2, seaL); B(2, 4, 2, seaL); B(-2, 4, 2, glow); B(2, 4, -2, glow); B(0, 4, 0, seaL);
+    B(-2, 0, -2, fence); B(-2, 3, -2, glow); B(2, 0, 2, fence); B(2, 3, 2, glow);      // 기둥 등불
   }
   function buildMushroomHouse(cx, cz, base) {
     // V18: 동화풍 버섯 오두막 — 버섯대 몸통 + 흰 점박이 붉은 갓 + 둥근 창 + 반블럭 처마 + 현관 랜턴
