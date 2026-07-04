@@ -535,49 +535,45 @@
   }
   // V20-L: 광장 미화 — 웅장한 중앙 분수 + 코너 정원(벤치·화단·화분) + 현수막. 블럭 단위 세밀 배치.
   function beautifyHub() {
-    const stair = (mat, f) => (ID[mat + '_stairs_' + f] != null ? ID[mat + '_stairs_' + f] : ID.stone_bricks);
-    const SBSLAB = ID.stone_bricks_slab != null ? ID.stone_bricks_slab : ID.stone_bricks;
-    const cx = 224, cz = 224, cy = 20;   // 광장 바닥 위(표면 y=20)
-    // 1) 웅장한 3단 원형 분수(프리즈마린 테두리 + 석영 기둥 + 물줄기 + 발광)
-    for (let dx = -5; dx <= 5; dx++) for (let dz = -5; dz <= 5; dz++) {
-      const d = Math.hypot(dx, dz); if (d > 5.5) continue;
-      if (d > 4.3) { setW(cx + dx, cy, cz + dz, ID.prismarine); if (((dx + dz) & 3) === 0) setW(cx + dx, cy + 1, cz + dz, SBSLAB); }   // 낮은 테두리 벽
-      else { setW(cx + dx, cy - 1, cz + dz, ID.stone_bricks); setW(cx + dx, cy, cz + dz, ID.water); }                                 // 물 basin
+    const cx = 224, cz = 224, fy = 19;   // 광장 바닥 y19 → 걷는 높이 y20
+    const CH = ID.chiseled_stone_bricks != null ? ID.chiseled_stone_bricks : ID.stone_bricks;
+    const AND = ID.polished_andesite != null ? ID.polished_andesite : ID.stone;
+    const SMOOTH = ID.smooth_stone != null ? ID.smooth_stone : ID.stone_bricks;
+    // 1) 광장 전체 재포장(반경16) — 다중 석재 동심원 패턴 + 십자 대로(석영). 위쪽 완전 클리어로 통행 보장
+    const R = 16;
+    for (let dx = -R; dx <= R; dx++) for (let dz = -R; dz <= R; dz++) {
+      const d = Math.hypot(dx, dz); if (d > R + 0.5) continue;
+      const x = cx + dx, z = cz + dz;
+      for (let yy = fy + 1; yy <= fy + 6; yy++) setW(x, yy, z, 0);   // 걸림돌 제거(통행 확보)
+      let mat;
+      if (Math.abs(dx) <= 1 || Math.abs(dz) <= 1) mat = ID.quartz_block;      // 십자 대로(석영)
+      else if (d > R - 1.3) mat = SMOOTH;                                     // 외곽 테두리
+      else if (Math.round(d) % 4 === 0) mat = CH;                            // 동심원 경계(치즐)
+      else mat = ((dx + dz) & 1) ? ID.stone_bricks : AND;                    // 격자 무늬
+      setW(x, fy, z, mat);
     }
-    setW(cx, cy, cz, ID.quartz_block); setW(cx, cy + 1, cz, ID.prismarine); setW(cx, cy + 2, cz, ID.quartz_block);
-    setW(cx, cy + 3, cz, ID.water); setW(cx, cy + 4, cz, ID.glowstone);
-    [[2, 0], [-2, 0], [0, 2], [0, -2]].forEach(([ax, az]) => { setW(cx + ax, cy + 1, cz + az, ID.quartz_block); setW(cx + ax, cy + 2, cz + az, ID.water); });   // 물줄기 기둥
-    // 2) 네 코너 정원(생울타리 테두리 + 색밭 + 벤치 + 화분 + 나무)
-    const corners = [[210, 210], [238, 210], [210, 238], [238, 238]];
-    corners.forEach(([gx, gz], ci) => {
-      for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) {
-        const x = gx + dx, z = gz + dz, y = surfaceTop(x, z);
-        if (getBlockLocal(x, y - 1, z) !== ID.grass || getBlockLocal(x, y, z) !== 0) continue;
-        const edge = Math.abs(dx) === 2 || Math.abs(dz) === 2;
-        if (edge) setW(x, y, z, ID.oak_leaves);                                            // 생울타리 테두리
-        else { const f = hash3(x, 55 + ci, z); setW(x, y, z, f < 0.4 ? ID.flower_red : f < 0.8 ? ID.flower_yellow : ID.tall_grass); }   // 색 화단
-      }
-      // 코너 화분(참나무 원목 링 + 발광 랜턴 없이 꽃)
-      const py = surfaceTop(gx, gz);
-      setW(gx, py, gz, ID.oak_leaves);
-    });
-    // 3) 광장 4변 벤치(계단 2개 마주보기) + 현수막 기둥
-    const benches = [[224, 212, 0, 1], [224, 236, 1, 0], [212, 224, 2, 3], [236, 224, 3, 2]];
-    benches.forEach(([bx, bz, fa, fb]) => {
-      const y = surfaceTop(bx, bz);
-      const base = getBlockLocal(bx, y - 1, bz);
-      if (base === ID.stone_bricks || base === ID.quartz_block || base === ID.grass) {
-        setW(bx, y, bz, stair('spruce_planks', fa));           // 벤치(등받이 계단)
-      }
-    });
-    // 4) 광장 입구 4방 현수막 기둥(울타리 + 색 양털 배너 + 발광)
-    const banners = [[224, 206, ID.wool_red], [224, 242, ID.wool_blue != null ? ID.wool_blue : ID.wool_red], [206, 224, ID.wool_yellow != null ? ID.wool_yellow : ID.wool_white], [242, 224, ID.wool_white]];
-    banners.forEach(([bx, bz, wool]) => {
-      const y = surfaceTop(bx, bz);
-      for (let i = 0; i < 4; i++) setW(bx, y + i, bz, ID.oak_fence);
-      setW(bx, y + 4, bz, ID.glowstone);
-      for (let i = 1; i <= 3; i++) setW(bx + 1, y + i, bz, wool);   // 옆에 걸린 배너 천
-    });
+    // 2) 걸어서 도는 2단 분수(반경2.6, 올려진 물받이 — 발밑엔 물 없음)
+    for (let dx = -3; dx <= 3; dx++) for (let dz = -3; dz <= 3; dz++) {
+      const d = Math.hypot(dx, dz); if (d > 2.7) continue;
+      setW(cx + dx, fy, cz + dz, CH);                          // 받침(포장 위 강조)
+      if (d > 1.5) setW(cx + dx, fy + 1, cz + dz, ID.stone_bricks);          // 물받이 벽(1높이, 발밑=이 벽에 막혀 못 들어감 → 돌아서 통행)
+      else if (d > 0.6) setW(cx + dx, fy + 1, cz + dz, ID.water);            // 아래 물받이(벽 안, 발밑 아님)
+    }
+    // 중앙 첨탑 + 상단 물받이 + 흘러내리는 물(다중 재질)
+    setW(cx, fy + 1, cz, CH); setW(cx, fy + 2, cz, ID.quartz_block); setW(cx, fy + 3, cz, ID.quartz_block);
+    for (const [ax, az] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { setW(cx + ax, fy + 3, cz + az, ID.prismarine); setW(cx + ax, fy + 4, cz + az, ID.water); }   // 상단 물받이 테두리+물
+    setW(cx, fy + 4, cz, ID.water); setW(cx, fy + 5, cz, ID.sea_lantern != null ? ID.sea_lantern : ID.glowstone);   // 정상 발광
+    // 3) 대로를 비껴 대각선에 가로등 + 올려진 화분(통행 방해 없음)
+    for (const [x, z] of [[214, 214], [234, 214], [214, 234], [234, 234]]) lampPost(x, z);
+    for (const [x, z] of [[219, 219], [229, 219], [219, 229], [229, 229]]) {
+      setW(x, fy + 1, z, ID.oak_log); setW(x, fy + 2, z, hash3(x, 7, z) < 0.5 ? ID.flower_red : ID.flower_yellow);   // 대각선 화분(대로 밖)
+    }
+    // 4) 광장 외곽(반경15~16) 대각선에 현수막 기둥(통로 밖)
+    for (const [x, z, wool] of [[213, 213, ID.wool_red], [235, 213, ID.wool_yellow != null ? ID.wool_yellow : ID.wool_white], [213, 235, ID.wool_blue != null ? ID.wool_blue : ID.wool_white], [235, 235, ID.wool_white]]) {
+      for (let i = 1; i <= 4; i++) setW(x, fy + i, z, ID.oak_fence);
+      setW(x, fy + 5, z, ID.glowstone);
+      for (let i = 2; i <= 4; i++) setW(x + 1, fy + i, z, wool != null ? wool : ID.wool_red);
+    }
   }
   function buildSnowMountain() {
     // 설산: 가문비 숲 + 얼음 연못 + 정상 전망대
