@@ -375,6 +375,15 @@
     const t = f * f * (3 - 2 * f);
     return t * h;
   }
+  // V20-M: 부드러운 값노이즈(구릉·지면 질감용) — 격자 hash3를 smoothstep 보간
+  function smoothNoise(x, z, s) {
+    const xi = Math.floor(x / s), zi = Math.floor(z / s);
+    const xf = x / s - xi, zf = z / s - zi;
+    const u = xf * xf * (3 - 2 * xf), v = zf * zf * (3 - 2 * zf);
+    const n = (a, b) => hash3(a, 900, b);
+    const a = n(xi, zi), b = n(xi + 1, zi), c = n(xi, zi + 1), d = n(xi + 1, zi + 1);
+    return (a * (1 - u) + b * u) * (1 - v) + (c * (1 - u) + d * u) * v;
+  }
   function columnSurface(x, z) {
     const f = hubField(x, z);
     if (f <= 0) return { y: 0, f: 0 };
@@ -384,6 +393,10 @@
     top += Math.round(bump(x, z, 140, 130, 44, 4));     // 숲 구릉
     top -= Math.round(bump(x, z, 152, 318, 40, 2));     // 묘지 저지대
     top -= Math.round(bump(x, z, 322, 322, 22, 3));     // 연못 분지
+    // V20-M: 완만한 구릉 — 마을 광장(중심 44칸)은 평탄 유지, 외곽 야생으로 갈수록 굴곡
+    const dc = Math.hypot(x - HUB_C, z - HUB_C);
+    const amp = 3 * Math.max(0, Math.min(1, (dc - 44) / 130));
+    top += Math.round((smoothNoise(x, z, 22) - 0.5) * 2 * amp) + Math.round((smoothNoise(x, z, 8) - 0.5) * amp * 0.6);
     return { y: Math.min(H - 6, top), f };
   }
   function zoneAt(x, z) {
@@ -405,9 +418,17 @@
         let id = ID.stone;
         if (y === top) {
           if (top >= 34) id = ID.snow_block;                                        // 설산 만년설
+          else if (top >= 30) id = hash3(x, 36, z) < 0.5 ? ID.stone : ID.snow_block;  // 설산 기슭(눈+바위 얼룩)
           else if (zn === 'graveyard') id = hash3(x >> 1, 31, z >> 1) < 0.4 ? ID.coarse_dirt : (hash3(x, 32, z) < 0.15 ? ID.gravel : ID.grass);
           else if (zn === 'coalmine') id = hash3(x >> 1, 33, z >> 1) < 0.35 ? ID.gravel : ID.grass;
-          else id = ID.grass;
+          else {
+            // V20-M: 지면 질감 변주 — 균일 초록 탈피(거친흙·자갈·이끼 패치, 노이즈로 자연 군집)
+            const gn = smoothNoise(x, z, 11);
+            if (gn > 0.85) id = ID.coarse_dirt;
+            else if (gn < 0.14) id = ID.gravel;
+            else if (hash3(x, 34, z) < 0.018) id = ID.mossy_cobblestone;
+            else id = ID.grass;
+          }
         } else if (y >= top - 3) id = top >= 34 ? ID.stone : ID.dirt;
         setW(x, y, z, id);
       }
@@ -432,20 +453,21 @@
     buildWarpPads();
     beautifyHub();   // V20-L: 광장 미화(분수·정원·벤치·현수막) — 마지막에 얹어 덮이지 않게
   }
-  // V20-L: 야생 지대를 풍성한 힐링 들판으로 — 색깔별로 군집한 꽃밭 + 풀 + 덤불 + 이끼바위 + 산발 수목
+  // V20-M: 섬 전역을 풍성한 힐링 들판으로 — 색밭·풀·덤불·이끼바위(길가 포함). 나무·덤불은 야생만, 광장 코어는 정갈.
   function decorateWilds() {
     for (let x = 12; x < W - 12; x += 2) for (let z = 12; z < Dp - 12; z += 2) {
       const y = surfaceTop(x, z);
       if (y < 6 || getBlockLocal(x, y - 1, z) !== ID.grass || getBlockLocal(x, y, z) !== 0) continue;
-      if (zoneAt(x, z) !== 'wild') continue;
+      if (Math.hypot(x - HUB_C, z - HUB_C) < 30) continue;              // 광장 코어는 정갈하게
+      const wild = zoneAt(x, z) === 'wild';
       const r = hash3(x, 111, z);
-      const field = hash3(x >> 3, 222, z >> 3);   // 저주파 노이즈 → 꽃 색이 지역별로 뭉쳐 예쁜 색밭
-      if (r < 0.012) plantOak(x, z);
-      else if (r < 0.017) plantBirch(x, z);
-      else if (r < 0.024 && field > 0.62) setW(x, y, z, ID.oak_leaves);                                   // 덤불
-      else if (r < 0.22) setW(x, y, z, ID.tall_grass);                                                    // 풍성한 잔디
-      else if (r < 0.27) setW(x, y, z, field < 0.34 ? ID.flower_yellow : field < 0.68 ? ID.flower_red : ID.tall_grass);   // 색 군집 꽃밭
-      else if (r < 0.274) { setW(x, y, z, ID.mossy_cobblestone); if (r < 0.272) setW(x, y + 1, z, ID.mossy_cobblestone); }  // 이끼 바위
+      const field = smoothNoise(x, z, 26);                              // 저주파 → 꽃 색이 지역별로 뭉쳐 예쁜 색밭
+      if (wild && r < 0.012) plantOak(x, z);
+      else if (wild && r < 0.017) plantBirch(x, z);
+      else if (wild && r < 0.024 && field > 0.6) setW(x, y, z, ID.oak_leaves);                            // 덤불(야생)
+      else if (r < 0.30) setW(x, y, z, ID.tall_grass);                                                    // 풍성한 잔디(전역)
+      else if (r < 0.42) setW(x, y, z, field < 0.34 ? ID.flower_yellow : field < 0.68 ? ID.flower_red : ID.tall_grass);   // 색 군집 꽃밭(전역)
+      else if (r < 0.423) { setW(x, y, z, ID.mossy_cobblestone); if (r < 0.421) setW(x, y + 1, z, ID.mossy_cobblestone); }  // 이끼 바위
     }
   }
 
