@@ -481,7 +481,15 @@
     for (let a = 0; a < 8; a++) { const x = 224 + Math.round(Math.cos(a / 8 * Math.PI * 2) * 14), z = 224 + Math.round(Math.sin(a / 8 * Math.PI * 2) * 14); lampPost(x, z); }
     // 역할별 고유 건물(문 앞에 NPC)
     buildHouse(200, 234, 10, 8, 20, ID.bricks, ID.spruce_planks);          // 상점(벽돌)
-    buildHouse(234, 196, 12, 9, 20, ID.sandstone, ID.quartz_block);        // 은행(사암+석영)
+    // 은행 → V20-O 대형 돔 보물전(사암+석영 돔, 중앙 금고). 정문 +z(광장 방향), NPC 위치 유지
+    buildDomedHall(240, 200, 5, 20, {
+      wall: ID.sandstone, accent: ID.quartz_block, dome: ID.quartz_block, floor: ID.polished_andesite, gdir: 1,
+      feature: (cx, cz, base) => {   // 중앙 금고: 금광석 + 울타리 창살 + 발광
+        setW(cx, base, cz, ID.gold_ore); setW(cx, base + 1, cz, ID.gold_ore);
+        for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { setW(cx + dx, base, cz + dz, ID.oak_fence); setW(cx + dx, base + 1, cz + dz, ID.oak_fence); }
+        setW(cx, base + 2, cz, ID.glowstone);
+      },
+    });
     buildHouse(190, 206, 9, 7, 20, ID.oak_planks, ID.spruce_planks);       // 미니언 관리소
     buildHouse(244, 234, 9, 7, 20, ID.birch_planks, ID.oak_planks);        // 펫 상점(자작)
     buildHouse(206, 216, 7, 6, 20, ID.spruce_planks, ID.dark_oak_log);     // 경매장
@@ -802,6 +810,53 @@
     for (let i = 0; i < 4; i++) setW(cx, ry + i, cz, i < 3 ? ID.purpur : ID.glowstone);
     // 떠다니는 룬 고리(자수정+발광 — 마력 연출)
     for (const [ox, oz] of [[R + 2, 0], [-(R + 2), 0], [0, R + 2], [0, -(R + 2)]]) setW(cx + ox, base + 10, cz + oz, ID.glowstone);
+  }
+  // V20-O: 재사용 돔형 대회당(랜드마크) — 원형 벽 + 8기둥 + 아치창 + 반구 돔 + 대아치 정문 + 실내.
+  // 판타지 실루엣(직육면체 탈피). 용도 있는 건물(은행/경매장 등)에 사용 — NPC는 정문 앞 고정 위치 유지.
+  function buildDomedHall(cx, cz, r, base, o) {
+    const wall = o.wall, dome = o.dome, accent = o.accent, floor = o.floor != null ? o.floor : ID.polished_andesite;
+    const wallH = 5;
+    flattenSite(cx - r - 3, cz - r - 3, cx + r + 3, cz + r + 3, base - 1);
+    const ring = (rad, y, id) => { const n = Math.max(8, Math.round(rad * 8)); for (let a = 0; a < n; a++) { const th = a / n * Math.PI * 2; setW(cx + Math.round(Math.cos(th) * rad), y, cz + Math.round(Math.sin(th) * rad), id); } };
+    // 2단 원형 기단
+    for (let dx = -r - 2; dx <= r + 2; dx++) for (let dz = -r - 2; dz <= r + 2; dz++) {
+      const d = Math.hypot(dx, dz);
+      if (d <= r + 2.3) setW(cx + dx, base - 1, cz + dz, floor);
+      if (d > r + 0.6 && d <= r + 2.3) setW(cx + dx, base - 2, cz + dz, ID.stone_bricks);
+    }
+    // 원형 벽(5단)
+    for (let y = base; y < base + wallH; y++) ring(r, y, wall);
+    // 8기둥(자수정/석영) + 기둥 캡
+    const cols = [];
+    for (let k = 0; k < 8; k++) { const th = k / 8 * Math.PI * 2; cols.push([cx + Math.round(Math.cos(th) * r), cz + Math.round(Math.sin(th) * r)]); }
+    cols.forEach(([x, z]) => { for (let y = base; y < base + wallH; y++) setW(x, y, z, accent); setW(x, base + wallH, z, ID.chiseled_stone_bricks); });
+    // 상인방(벽 위 자수정 띠) + 처마 슬랩
+    ring(r, base + wallH, accent);
+    // 아치창(4방 중간) — 유리 2단 + 계단 아치머리
+    for (const [ox, oz, f] of [[0, -r, 2], [0, r, 0], [-r, 0, 1], [r, 0, 3]]) {
+      setW(cx + ox, base + 1, cz + oz, ID.glass); setW(cx + ox, base + 2, cz + oz, ID.glass);
+      const sid = stairIdFor(wall, f); if (sid != null) setW(cx + ox, base + 3, cz + oz, sid);
+    }
+    // 반구 돔(셸) + 정상 첨탑
+    const domeBase = base + wallH;
+    for (let h = 0; h <= r; h++) {
+      const rr = Math.round(Math.sqrt(Math.max(0, r * r - h * h)));
+      ring(Math.max(1, rr), domeBase + h, dome);
+    }
+    setW(cx, domeBase + r, cz, dome); setW(cx, domeBase + r + 1, cz, accent); setW(cx, domeBase + r + 2, cz, ID.glowstone);
+    // 대아치 정문(남쪽 -z, 광장 방향): 벽 뚫고 문 + 계단 아치 + 배너 기둥 + 랜턴 + 진입 계단참
+    const gd = (o.gdir === 1 ? 1 : -1), gz = cz + r * gd;   // 정문 방향(광장 쪽): -1=−z, 1=+z
+    for (let y = base; y < base + 4; y++) { setW(cx, y, gz, 0); setW(cx - 1, y, gz, 0); setW(cx + 1, y, gz, 0); }   // 아치 개구부(폭3)
+    const doorId = ID['spruce_door_c_' + (gd === 1 ? 0 : 2)]; if (doorId != null) { setW(cx, base, gz, doorId); setW(cx, base + 1, gz, doorId); }
+    setW(cx - 1, base + 3, gz, stairIdFor(accent, 3) || accent); setW(cx + 1, base + 3, gz, stairIdFor(accent, 1) || accent); setW(cx, base + 4, gz, accent);   // 아치머리
+    for (const lx of [cx - 2, cx + 2]) { for (let y = base; y < base + 3; y++) setW(lx, y, gz, accent); setW(lx, base + 3, gz, ID.glowstone); }   // 배너 기둥+랜턴
+    // 진입 계단참 + 레드카펫
+    const slab = slabIdFor(ID.stone_bricks);
+    for (let dx = -1; dx <= 1; dx++) { if (slab != null) setW(cx + dx, base - 1, gz + gd, slab); setW(cx + dx, base - 1, gz + 2 * gd, ID.wool_red != null ? ID.wool_red : ID.stone_bricks); }
+    // 실내 바닥 무늬(체크) + 벽 샹들리에(발광) + 중앙 feature
+    for (let dx = -r + 1; dx <= r - 1; dx++) for (let dz = -r + 1; dz <= r - 1; dz++) if (dx * dx + dz * dz <= (r - 1) * (r - 1)) setW(cx + dx, base - 1, cz + dz, ((dx + dz) & 1) ? floor : accent);
+    cols.forEach(([x, z]) => { const ix = cx + Math.round((x - cx) * 0.6), iz = cz + Math.round((z - cz) * 0.6); setW(ix, base + wallH - 1, iz, ID.glowstone); });   // 샹들리에
+    if (typeof o.feature === 'function') o.feature(cx, cz, base, r);
   }
   function buildRuinsZone() {
     // V18: 이끼 낀 고대 폐허 — 무너진 아치·기울어진 기둥·부서진 바닥 타일·덩굴
