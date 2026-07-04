@@ -2300,6 +2300,15 @@
       if (desertT > 0) { setW(x, y, z, ID.sand); if (hash3(x, 102, z) < 0.03) setW(x, y + 1, z, ID.tall_grass); }
       else setW(x, y, z, ID.mycelium);
     }
+    // ── V20-AG: 동쪽 사막 모래언덕(칸 단위 완만 둔덕) — 평평 사막 탈피, 걷기 가능한 낮은 사구 ──
+    for (let x = 0; x < W; x++) for (let z = 0; z < Dp; z++) {
+      const fy = surfaceTop(x, z); if (fy < 6) continue;
+      if (getBlockLocal(x, fy, z) !== ID.sand) continue;
+      const east = Math.max(0, Math.min(1, (x - 74) / 24));   // 동쪽일수록 사구 높음
+      const dune = Math.round(smoothNoise(x, z, 18) * 3 * east);   // 연속 사구(임계값 없음→인접 단차 ≤1, 뾰족 기둥 없음)
+      for (let k = 1; k <= dune; k++) setW(x, fy + k, z, ID.sand);
+      if (dune >= 2 && hash3(x, 108, z) < 0.02) setW(x, fy + dune + 1, z, ID.dead_bush != null ? ID.dead_bush : ID.tall_grass);   // 사구 마른 덤불
+    }
     // 거대 버섯(빨강/갈색)
     for (let i = 0; i < 16; i++) {
       const x = 20 + Math.floor(hash3(i, 103, 1) * 50), z = 22 + Math.floor(hash3(i, 104, 2) * 96);
