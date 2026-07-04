@@ -512,7 +512,48 @@
     buildCathedral();    // V20-AR: 손 배치 대성당(고딕 신전) — 허브 남측
     buildZiggurat();     // V20-AS: 손 배치 계단식 지구라트(공중정원) — 허브 남동측
     buildMageTower();    // V20-AT: 손 배치 뒤틀린 마법사 탑(부유 룬 고리) — 허브 남서측
+    buildShopDetails();  // V20-AV(1차): 도시 중심 상점 인테리어/아웃테리어(업종별 가구·진열·차양)
     buildDowntown();     // V20-AU(1차): 도시 중심 다운타운 — 허허벌판 제거(포장 도로+가로등+화단+시장 소품+우물)
+  }
+  // V20-AV 1차: 도시 중심 상점 인테리어/아웃테리어 — 좌표 한 칸씩 손 배치. buildHouse 상점 5곳
+  //   (floor=base-1, 실내 base~base+2, 문=+z 중앙)을 업종별 가구·진열·차양으로 채운다.
+  function buildShopDetails() {
+    const S = (x, y, z, id) => { if (id != null) setW(x, y, z, id); };
+    const glow = ID.glowstone, book = ID.bookshelf != null ? ID.bookshelf : ID.oak_planks, plank = ID.oak_planks;
+    const slab = ID.oak_planks_slab != null ? ID.oak_planks_slab : plank, log = ID.oak_log, fence = ID.oak_fence, water = ID.water;
+    const shelf = (x0, x1, y, z, items) => { let i = 0; for (let x = x0; x <= x1; x++) S(x, y, z, items[i++ % items.length]); };
+    const counter = (x0, x1, y, z) => { for (let x = x0; x <= x1; x++) S(x, y, z, slab); };
+    const rug = (x0, x1, y, z, col) => { for (let x = x0; x <= x1; x++) S(x, y, z, col); };
+    const awning = (x0, x1, y, z, col) => { for (let x = x0; x <= x1; x++) S(x, y, z, col); };
+    // 1) 상점(200,234,10,8) — 잡화점: 뒷벽 진열장 + 카운터 + 농산물 코너 + 붉은 융단/차양
+    shelf(202, 206, 20, 235, [book, ID.hay_block, ID.pumpkin, ID.melon, book]);
+    shelf(202, 206, 21, 235, [book, book, ID.pumpkin, book, book]);
+    counter(202, 206, 20, 237); S(201, 20, 237, log); S(207, 20, 237, log);
+    S(207, 20, 236, ID.pumpkin); S(207, 20, 235, ID.melon); S(207, 21, 236, ID.hay_block);
+    rug(203, 205, 19, 239, ID.wool_red != null ? ID.wool_red : plank); S(204, 22, 238, glow);
+    awning(202, 207, 22, 242, ID.wool_red != null ? ID.wool_red : ID.bricks); S(201, 21, 242, plank); S(208, 21, 242, plank);
+    // 2) 미니언 관리소(190,206,9,7) — 공방: 부품 진열(철/레드스톤/금) + 작업대 + 미니언 상 + 갈색 차양
+    shelf(192, 196, 20, 207, [ID.iron_ore, ID.redstone_ore, ID.iron_ore, ID.gold_ore, ID.redstone_ore]);
+    counter(192, 196, 20, 209); S(193, 20, 210, plank); S(196, 20, 210, ID.chest != null ? ID.chest : plank);
+    S(195, 20, 208, ID.iron_ore); S(195, 21, 208, ID.pumpkin); S(194, 22, 209, glow);   // 미니언 상(몸+호박 머리)
+    awning(191, 197, 22, 213, ID.dark_oak_planks != null ? ID.dark_oak_planks : ID.bricks);
+    // 3) 펫 상점(244,234,9,7) — 반려: 건초 침대 + 물그릇 + 뼈 진열 + 울타리 우리 + 노란 차양
+    S(246, 20, 236, ID.hay_block); S(246, 20, 237, ID.wool_white); S(250, 20, 236, ID.hay_block);
+    S(250, 20, 238, log); S(250, 21, 238, slab);   // 물그릇대
+    S(249, 20, 235, ID.quartz_block); S(248, 20, 235, ID.quartz_block);   // 뼈 진열(석영)
+    S(247, 20, 238, fence); S(246, 20, 238, fence); S(247, 22, 237, glow);
+    awning(245, 251, 22, 241, ID.wool_yellow != null ? ID.wool_yellow : ID.quartz_block);
+    // 4) 제작소(208,244,8,6) — 작업장: 제작대 + 모루 + 도구걸이 + 카운터 + 차양
+    S(210, 20, 245, plank); S(211, 20, 245, plank); S(210, 21, 245, ID.oak_trapdoor != null ? ID.oak_trapdoor : plank);
+    S(213, 20, 245, ID.iron_ore); S(213, 21, 245, ID.iron_ore);   // 모루
+    S(209, 20, 246, fence); S(209, 21, 246, fence); S(209, 20, 247, ID.cobblestone);   // 도구걸이
+    counter(210, 213, 20, 247); S(211, 22, 246, glow);
+    awning(209, 214, 22, 250, ID.dark_oak_planks != null ? ID.dark_oak_planks : ID.bricks);
+    // 5) 스타포스 강화소(230,244,8,6) — 각성소: 흑요석 제단 + 책 + 별빛 발광 + 자수정 융단 + 보라 차양
+    S(232, 20, 246, ID.obsidian); S(232, 21, 246, book); S(233, 20, 246, ID.obsidian);
+    S(234, 21, 245, glow); S(235, 22, 246, ID.purpur); S(231, 22, 247, glow);   // 별빛
+    rug(232, 234, 19, 248, ID.purpur); S(233, 22, 246, glow);
+    awning(231, 236, 22, 250, ID.purpur);
   }
   // V20-AU 1차: 도시 중심 다운타운 채우기 — 좌표 한 칸씩 손 배치. 기존 건물/광장은 건드리지 않고
   //   (열린 잔디/흙 지면만 감지) 코어 거리의 허허벌판을 석재 포장 + 가로등·화단·시장 소품·우물로 메운다.
