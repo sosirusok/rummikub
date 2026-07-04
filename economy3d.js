@@ -506,6 +506,43 @@
     buildGuildHall();   // V20-V: 손 배치 대형 랜드마크(모험가 길드 대회관)
     buildClocktower();  // V20-AL: 손 배치 수직 랜드마크(대시계탑) — 허브 동측 광장
     buildMarketStalls(); // V20-AM: 손 배치 시장 노점 거리 — 허브 남측
+    buildHeroGarden();   // V20-AN: 손 배치 영웅 동상 정원 — 허브 서측
+  }
+  // V20-AN: 영웅 동상 정원 — 좌표 한 칸씩 손 배치(대칭 함수 아님). 잔디 정원 + 산울타리 + 꽃밭 +
+  //   중앙 블록 영웅 동상(검을 든). 허브 서측(160~176, 216~232) 개방 구역.
+  function buildHeroGarden() {
+    const cx = 168, cz = 224, gy = 19;
+    flattenSite(159, 215, 177, 233, gy);
+    const B = (dx, dy, dz, id) => { if (id != null) setW(cx + dx, gy + dy, cz + dz, id); };
+    const leaf = ID.oak_leaves != null ? ID.oak_leaves : ID.spruce_leaves, sb = ID.stone_bricks, q = ID.quartz_block;
+    const glow = ID.glowstone, fence = ID.oak_fence, iron = ID.iron_ore, log = ID.oak_log;
+    // ── 잔디밭(17×17) + 십자 석영/석재 산책로 ──
+    for (let dx = -8; dx <= 8; dx++) for (let dz = -8; dz <= 8; dz++) {
+      if (dx === 0 || dz === 0) B(dx, 0, dz, ((dx + dz) & 1) ? q : sb);   // 십자 산책로
+      else B(dx, 0, dz, ID.grass);
+    }
+    // ── 산울타리(잎) 테두리 — 산책로 진입구(dx/dz=0)는 열어둠 ──
+    for (let d = -8; d <= 8; d++) {
+      if (Math.abs(d) > 1) { B(d, 1, -8, leaf); B(d, 2, -8, leaf); B(d, 1, 8, leaf); B(d, 2, 8, leaf); B(-8, 1, d, leaf); B(-8, 2, d, leaf); B(8, 1, d, leaf); B(8, 2, d, leaf); }
+    }
+    // ── 4분면 꽃밭(밝은 양털 패치) — 서로 다른 색 ──
+    const beds = [[-5, -5, ID.wool_red], [5, -5, ID.wool_yellow != null ? ID.wool_yellow : ID.quartz_block], [-5, 5, ID.wool_blue != null ? ID.wool_blue : ID.lapis_ore], [5, 5, ID.wool_pink != null ? ID.wool_pink : ID.wool_red]];
+    for (const [bx, bz, col] of beds) { for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) { B(bx + dx, 0, bz + dz, ID.grass); if (col != null && (dx + dz) % 2 === 0) B(bx + dx, 1, bz + dz, col); } B(bx, 1, bz, col); }   // 꽃 패치(중앙 강조)
+    // ── 중앙 동상 대좌(3×3, 2단) ──
+    for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) { B(dx, 1, dz, sb); B(dx, 2, dz, ((dx + dz) & 1) ? q : sb); }
+    B(0, 1, 2, ID.stone_bricks_stairs_0 != null ? ID.stone_bricks_stairs_0 : sb);   // 대좌 계단
+    // ── 블록 영웅 동상(검을 든 기사) — 다리→몸통→팔→머리→검, 손 배치 ──
+    B(0, 3, 0, iron); B(0, 4, 0, iron);          // 하체(다리 합쳐 표현)
+    B(0, 5, 0, ID.stone_bricks); B(0, 6, 0, ID.stone_bricks);   // 몸통(갑옷)
+    B(-1, 6, 0, iron); B(1, 6, 0, iron);         // 어깨/팔
+    B(-1, 5, 0, iron);                            // 왼팔 아래(방패쪽)
+    B(0, 7, 0, q);                                // 머리(석영)
+    B(1, 7, 0, ID.iron_ore); B(1, 8, 0, ID.iron_ore); B(1, 9, 0, glow);   // 치켜든 검(칼날 + 발광 검광)
+    B(-1, 6, 1, ID.stone_bricks);                 // 방패(몸 옆)
+    // ── 정원 벤치(4방) + 가로등 + 모서리 관목 나무 ──
+    for (const [bx, bz, f] of [[0, -6, 0], [0, 6, 2], [-6, 0, 3], [6, 0, 1]]) { B(bx, 1, bz, ID['oak_planks_stairs_' + f] != null ? ID['oak_planks_stairs_' + f] : ID.oak_planks); }
+    for (const [lx, lz] of [[-7, -7], [7, -7], [-7, 7], [7, 7]]) { B(lx, 1, lz, fence); B(lx, 2, lz, fence); B(lx, 3, lz, glow); }   // 가로등
+    for (const [tx, tz] of [[-6, -6], [6, 6]]) { for (let y = 1; y <= 3; y++) B(tx, y, tz, log); for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) B(tx + dx, 4, tz + dz, leaf); B(tx, 5, tz, leaf); }   // 관목 나무
   }
   // V20-AM: 시장 노점 거리 — 좌표 한 칸씩 손 배치(대칭 함수 아님). 5개 노점이 각각 다른 업종/차양색/진열.
   //   허브 남측(광장 아래) z249~257 포장 거리 양옆에 배치. 하이픽셀 상점가 활기.
