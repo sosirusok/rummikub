@@ -3308,6 +3308,25 @@
     { name: '심연 리바이어던', kind: 'dragon', color: 0x123a5a, hp: 4200, dmg: 46, xp: 380, coins: 550, speed: 2.2, scale: 1.4, fixedLv: 60, equipSrc: 'deep_fishing', equipSrcChance: 0.5, books: ['giant_killer'], drops: [{ key: 'enchanted_iron', n: 1, chance: 0.4 }, { key: 'clay', n: 5 }], tierCap: 7 },
     { name: '바다 황제 포세돈', kind: 'tall', color: 0x1a5a7a, hp: 5600, dmg: 56, xp: 480, coins: 750, speed: 2.5, scale: 1.9, fixedLv: 80, equipSrc: 'deep_fishing', equipSrcChance: 0.55, books: ['last_stand'], drops: [{ key: 'pufferfish', n: 6 }, { key: 'hot_potato_book', n: 1, chance: 0.35 }], tierCap: 8 },
   ];
+  // V20-H: 얕은 바다 생물 로스터 — 실제 스카이블럭 바다생물(희귀도 가중·낚시레벨 게이팅). 심해(DEEP_SEA)보다 약함.
+  const SHALLOW_SEA = [
+    { name: '오징어', kind: 'quad', color: 0x5a4a6a, hp: 120, dmg: 8, xp: 30, coins: 25, speed: 2.6, scale: 0.9, weight: 30, minLv: 0, drops: [{ key: 'rawfish', n: 2, chance: 0.6 }] },
+    { name: '바다 방랑자', kind: 'tall', color: 0x2a6a8a, hp: 200, dmg: 12, xp: 45, coins: 40, speed: 2.8, scale: 1.0, weight: 24, minLv: 0, drops: [{ key: 'rawfish', n: 2 }] },
+    { name: '밤 오징어', kind: 'quad', color: 0x1a1a3a, hp: 260, dmg: 15, xp: 60, coins: 60, speed: 3.0, scale: 0.95, weight: 14, minLv: 5, drops: [{ key: 'salmon', n: 3, chance: 0.7 }, { key: 'clownfish', n: 1, chance: 0.15 }] },
+    { name: '바다 가디언', kind: 'quad', color: 0x3a8a7a, hp: 340, dmg: 18, xp: 80, coins: 75, speed: 2.4, scale: 1.1, weight: 12, minLv: 8, drops: [{ key: 'prismarine', n: 3 }] },
+    { name: '바다 마녀', kind: 'tall', color: 0x6a3a8a, hp: 400, dmg: 22, xp: 100, coins: 95, speed: 2.6, scale: 1.05, weight: 8, minLv: 12, books: ['luck'], drops: [{ key: 'potion_healing', n: 1, chance: 0.3 }, { key: 'spider_eye', n: 3 }] },
+    { name: '심연의 기수', kind: 'tall', color: 0x2a2a4a, hp: 560, dmg: 28, xp: 140, coins: 130, speed: 3.2, scale: 1.2, weight: 6, minLv: 15, drops: [{ key: 'bone', n: 4 }, { key: 'rotten_flesh', n: 4 }] },
+    { name: '가디언 수호병', kind: 'quad', color: 0x4aaa8a, hp: 760, dmg: 34, xp: 200, coins: 180, speed: 2.2, scale: 1.35, weight: 4, minLv: 18, equipSrc: 'fishing', equipSrcChance: 0.2, drops: [{ key: 'prismarine', n: 5 }, { key: 'sponge', n: 2, chance: 0.4 }] },
+    { name: '물의 히드라', kind: 'dragon', color: 0x1a7a9a, hp: 1500, dmg: 44, xp: 320, coins: 320, speed: 2.4, scale: 1.5, weight: 1.5, minLv: 20, equipSrc: 'fishing', equipSrcChance: 0.35, books: ['giant_killer'], drops: [{ key: 'pufferfish', n: 4 }, { key: 'enchanted_prismarine', n: 1, chance: 0.15 }] },
+  ];
+  function pickShallowSea(fishLv) {
+    const pool = SHALLOW_SEA.filter(c => (c.minLv || 0) <= fishLv);
+    const list = pool.length ? pool : [SHALLOW_SEA[0]];
+    const tot = list.reduce((a, c) => a + c.weight, 0);
+    let r = Math.random() * tot;
+    for (const c of list) { if (r < c.weight) return c; r -= c.weight; }
+    return list[0];
+  }
   function spawnSeaCreature(x, z, deep) {
     const area = { x, z, r: 3, world: worldMode };
     let mob;
@@ -3315,9 +3334,12 @@
       const def = DEEP_SEA[Math.floor(Math.random() * DEEP_SEA.length)];
       mob = spawnMob(area, 'sea_walker', def.fixedLv, def);
       if (mob && typeof toast === 'function') toast(`🌊🌊 심해가 요동친다... ${def.name}이(가) 낚였다!!`, false);
-    } else {
-      mob = spawnMob(area, 'sea_walker', 5 + Math.floor(Math.random() * 20));
-      if (mob && typeof toast === 'function') toast('🌊 바다 생물이 낚였다! 전투 준비!', false);
+    } else {   // V20-H: 얕은 바다 생물 — 낚시 레벨 기반 가중 선택
+      const api = econApi(); const fishLv = api.skillLv ? api.skillLv('fishing') : 10;
+      const def = pickShallowSea(fishLv);
+      const lv = Math.max(def.minLv || 5, 5 + Math.floor(Math.random() * (10 + fishLv)));
+      mob = spawnMob(area, 'sea_walker', lv, def);
+      if (mob && typeof toast === 'function') toast(`🌊 ${def.name}이(가) 낚였다! 전투 준비!`, false);
     }
     if (mob) { mob.state = 'chase'; }
   }
@@ -4196,6 +4218,7 @@
       travelVisit, updateNetAvatars, others: () => others, getVisitData: () => visitData,
       // V5: 테마 월드/인월드 게임플레이
       WORLD_DEFS, WARPS, MOB_TYPES, SPAWN_AREAS, gatherBlocks, regenQueue: () => regenQueue,
+      SHALLOW_SEA, DEEP_SEA, pickShallowSea,   // V20-H: 바다 생물 로스터(테스트용)
       loadWorldForTest: (key) => { const def = WORLD_DEFS[key]; W = def.size[0]; H = def.size[1]; Dp = def.size[2]; worldMode = key; if (key === 'hub') genWorld(); else if (key === 'home') genHome(); else def.gen(); return world; },
       getDims: () => ({ W, H, Dp }),
       spawnMobForTest: (area, type, lv) => spawnMob(area, type, lv),
