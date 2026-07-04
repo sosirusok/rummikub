@@ -1999,7 +1999,7 @@
     else if (mode === 'deep' && ok(48, 80)) buildDeepDepot();   // V20-X: 손 배치 지하 크리스탈 채광 정거장
     else if (mode === 'spider' && ok(74, 88)) { buildSpiderNest(); buildSpiderRegions(); buildMonsterDetail('spider'); }   // V20-AA 거미굴 + V20-BD(7차) 실제 6구역 + V20-AZ 디테일
     else if (mode === 'nether' && ok(62, 78)) { buildNetherKeep(); buildMonsterDetail('nether'); }   // V20-Y 네더 요새 + V20-AZ(5차) 디테일
-    else if (mode === 'end' && ok(62, 84)) { buildEndSanctum(); buildMonsterDetail('end'); }   // V20-Z 엔드 성소 + V20-AZ(5차) 디테일
+    else if (mode === 'end' && ok(62, 84)) { buildEndSanctum(); buildEndLandmarks(); buildMonsterDetail('end'); }   // V20-Z 성소 + V20-BE(7차) Dragon's Nest/View + V20-AZ 디테일
     else if (mode === 'mushroom' && ok(58, 100)) { buildMushroomColony(); buildOtherDetail('mushroom'); }   // V20-AC 거대버섯 군락 + V20-BA(6차) 디테일
   }
   // V20-W: 골드 광산 대형 전초기지 — 좌표 한 칸씩 손 배치(대칭 함수 아님).
@@ -2050,6 +2050,25 @@
     B(-3, 0, 4, cob); B(-2, 0, 4, cob); B(-3, 1, 4, cob);                          // 바위 무더기
     B(6, 0, 4, fence); B(6, 1, 4, glow);                                           // 가로등
     B(-5, 0, 3, fence); B(-5, 1, 3, glow);                                         // 가로등2
+  }
+  // V20-BE 7차: 엔드 시그니처 랜드마크(리서치 반영) — Dragon's Nest(소환 제단) + Dragon's View(사암/흑요석 탑).
+  function buildEndLandmarks() {
+    const obs = ID.obsidian, end = ID.end_stone != null ? ID.end_stone : ID.sandstone, pur = ID.purpur, glow = ID.glowstone, sand = ID.sandstone;
+    const S = (x, y, z, id) => { if (id != null) setW(x, y, z, id); };
+    // ── Dragon's Nest: 중앙 흑요석 제단 + 8개 소환틀(팔각 흑요석+자수정 '눈') — 8 Summoning Eyes로 드래곤 소환 ──
+    { const cx = 64, cz = 50, gy = surfaceTop(cx, cz);
+      for (let dx = -5; dx <= 5; dx++) for (let dz = -5; dz <= 5; dz++) { const r = dx * dx + dz * dz; if (r <= 28) S(cx + dx, gy, cz + dz, ((dx + dz) & 1) ? obs : end); }   // 원형 제단 바닥
+      for (let a = 0; a < 8; a++) { const th = a / 8 * Math.PI * 2; const x = Math.round(cx + Math.cos(th) * 4), z = Math.round(cz + Math.sin(th) * 4);
+        S(x, gy + 1, z, obs); S(x, gy + 2, z, pur); S(x, gy + 3, z, glow); }   // 8 소환틀(흑요석 기둥 + 자수정 눈 + 발광)
+      for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) S(cx + dx, gy + 1, cz + dz, obs);   // 중앙 소환대
+      S(cx, gy + 2, cz, pur); S(cx, gy + 3, cz, glow); }   // 드래곤 코어
+    // ── Dragon's View: 사암+흑요석 고탑 + 정상 텔레포트 패드(발광) + 전망대 ──
+    { const cx = 96, cz = 45, gy = surfaceTop(cx, cz);
+      for (let y = 0; y <= 15; y++) for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) { const edge = dx !== 0 || dz !== 0; if (edge) S(cx + dx, gy + y, cz + dz, (y % 3 === 0) ? obs : sand); }   // 탑신(사암+흑요석 띠)
+      for (let y = 1; y <= 14; y++) { S(cx, gy + y, cz, (y % 3 === 0) ? pur : obs); }   // 중심 기둥(흑요석+자수정 — 엔드엔 목재 없음)
+      for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) { if (Math.abs(dx) === 2 || Math.abs(dz) === 2) S(cx + dx, gy + 16, cz + dz, sand); }   // 전망대 난간
+      for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) S(cx + dx, gy + 16, cz + dz, obs);   // 전망대 바닥
+      S(cx, gy + 17, cz, pur); S(cx, gy + 18, cz, glow); }   // 정상 텔레포트 패드
   }
   // V20-BD 7차: 거미굴 실제 6구역 재건(리서치 반영) — Spider Mound(중앙 산=기존) + 5개 명명 구역.
   //   Grandma's House · Gravel Mines · Arachne's Burrow · Archaeologist's Camp · Arachne's Sanctuary(보스 제단).
