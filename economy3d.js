@@ -514,6 +514,34 @@
     buildMageTower();    // V20-AT: 손 배치 뒤틀린 마법사 탑(부유 룬 고리) — 허브 남서측
     buildShopDetails();  // V20-AV(1차): 도시 중심 상점 인테리어/아웃테리어(업종별 가구·진열·차양)
     buildDowntown();     // V20-AU(1차): 도시 중심 다운타운 — 허허벌판 제거(포장 도로+가로등+화단+시장 소품+우물)
+    buildHubWilds();     // V20-AW(2차): 허브 메인섬 야생 — 빈 잔디 허허벌판에 나무숲·바위·꽃 메도우·덤불 손 배치
+  }
+  // V20-AW 2차: 허브 메인섬 야생 — 좌표 한 칸씩 손 배치(해시 결정). 빈 잔디 허허벌판만 감지해
+  //   나무숲·바위 노두·꽃 메도우·덤불을 흩뿌린다. 코어·건물·포장·급경사는 자동 제외.
+  function buildHubWilds() {
+    const isGrass = (id) => id === ID.grass;
+    const clearAbove = (x, z, t, n) => { for (let y = t; y < t + n; y++) if (getBlockLocal(x, y, z) !== 0) return false; return true; };
+    const flowers = [ID.wool_red, ID.wool_yellow != null ? ID.wool_yellow : ID.wool_white, ID.wool_pink != null ? ID.wool_pink : ID.wool_red, ID.wool_blue != null ? ID.wool_blue : ID.wool_white];
+    const tg = ID.tall_grass, moss = ID.mossy_cobblestone, cob = ID.cobblestone, and_ = ID.polished_andesite != null ? ID.polished_andesite : ID.stone, leaf = ID.oak_leaves != null ? ID.oak_leaves : ID.spruce_leaves;
+    for (let x = 96; x <= 352; x += 7) for (let z = 96; z <= 352; z += 7) {
+      if (x >= 176 && x <= 272 && z >= 166 && z <= 264) continue;   // 도시 중심 제외
+      const t = surfaceTop(x, z), g = t - 1;
+      if (!isGrass(getBlockLocal(x, g, z))) continue;               // 빈 잔디만
+      if (getBlockLocal(x, t, z) !== 0) continue;
+      const h = hash3(x, 17, z);
+      // 저사양 배려 + 걷기 보장: 나무/바위/덤불(고체)은 희소하게, 대부분은 비고체·저비용 키큰풀(밟고 통과)
+      if (h < 0.03) {   // 나무(드묾) — 머리 위 6칸 열림 + 완경사에서만
+        if (!clearAbove(x, z, t, 6)) continue;
+        if (Math.abs(surfaceTop(x + 1, z) - t) > 1) continue;
+        const pk = hash3(x, 19, z); (pk < 0.5 ? plantOak : pk < 0.8 ? plantBirch : plantSpruce)(x, z);
+      } else if (h < 0.06) {   // 바위 노두(이끼/돌/안산암, 비대칭 — 드묾)
+        setW(x, t, z, moss); if (hash3(x, 21, z) < 0.6) { setW(x + 1, t, z, cob); setW(x, t + 1, z, ((x + z) & 1) ? moss : and_); }
+      } else if (h < 0.34) {   // 키큰 풀 메도우(비고체 — 밟고 통과, 저비용)
+        if (tg != null) { setW(x, t, z, tg); if (hash3(x, 24, z) < 0.45) setW(x + 1, t, z, tg); if (hash3(x, 27, z) < 0.3) setW(x, t, z + 1, tg); }
+      } else if (h < 0.38) {   // 덤불(잎 1칸 — 드묾)
+        setW(x, t, z, leaf);
+      }
+    }
   }
   // V20-AV 1차: 도시 중심 상점 인테리어/아웃테리어 — 좌표 한 칸씩 손 배치. buildHouse 상점 5곳
   //   (floor=base-1, 실내 base~base+2, 문=+z 중앙)을 업종별 가구·진열·차양으로 채운다.
