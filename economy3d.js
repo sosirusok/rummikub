@@ -1990,17 +1990,56 @@
   function genGoldMine() {
     world = new Uint8Array(W * H * Dp);
     genBlobIsland(56, 56, 48, 14, { surf: ID.stone, sub: ID.stone });
-    // 산(계단식 노천광)
-    for (let ring = 0; ring < 6; ring++) {
-      const rr = 34 - ring * 5;
-      for (let x = 56 - rr; x <= 56 + rr; x++) for (let z = 46 - rr; z <= 46 + rr; z++) {
-        if (Math.hypot(x - 56, z - 46) <= rr) for (let y = 15; y <= 15 + ring * 2; y++) setW(x, y, z, ID.stone);
+    // ── V20-AD: 손 사각(cell-by-cell) 자연 산괴 — 기하학 링 폐기. 여러 봉우리 중심 + 노이즈로
+    //   비대칭 능선을 쌓고, 노출 암벽에 광맥을 박고, 갱도 입구(아딧)·스위치백 등산로를 판다.
+    const and_ = ID.polished_andesite != null ? ID.polished_andesite : ID.stone, grav = ID.gravel != null ? ID.gravel : ID.cobblestone;
+    const peaks = [   // {x, z, 정점높이, 반경} — 3개의 개별 봉우리가 겹쳐 하나의 비대칭 산괴
+      { x: 52, z: 44, h: 40, r: 22 }, { x: 66, z: 52, h: 34, r: 17 }, { x: 46, z: 58, h: 30, r: 15 }, { x: 60, z: 38, h: 27, r: 13 },
+    ];
+    for (let x = 20; x <= 92; x++) for (let z = 20; z <= 80; z++) {
+      let h = 15;   // 기저 지면
+      for (const p of peaks) { const d = Math.hypot(x - p.x, z - p.z) / p.r; if (d < 1) { const t = 1 - d; h = Math.max(h, p.h * (t * t * (3 - 2 * t))); } }   // 봉우리 기여(스무스)
+      h += (smoothNoise(x, z, 9) - 0.5) * 7 + (smoothNoise(x, z, 3) - 0.5) * 3;   // 대/소 노이즈로 우툴두툴
+      h = Math.round(h); if (h <= 15) continue;
+      for (let y = 15; y <= h; y++) {
+        let id = ID.stone;
+        if (y === h) { const s = hash3(x, y, z); id = s < 0.10 ? and_ : s < 0.16 ? grav : ID.stone; }   // 정상면 잡석
+        // 노출 암벽 광맥: 가파른 면(주변보다 2칸+ 높은 곳)에 금/철/석탄 줄무늬
+        if (y >= h - 2) { const v = hash3(x * 3, y, z * 3); if (v < 0.05) id = ID.gold_ore; else if (v < 0.11) id = ID.iron_ore; else if (v < 0.18) id = ID.coal_ore; }
+        setW(x, y, z, id);
       }
     }
-    scatterOre(56, 46, 34, 14, 26, ID.gold_ore, 40, 61);
-    scatterOre(56, 46, 34, 14, 24, ID.iron_ore, 30, 62);
-    scatterOre(56, 46, 34, 14, 22, ID.coal_ore, 24, 63);
-    [[42, 40], [70, 52], [56, 30]].forEach(p2 => { const y = surfaceTop(p2[0], p2[1]); setW(p2[0], y, p2[1], ID.glowstone); });
+    // ── 갱도 입구(아딧): 남면 기슭에서 산 심장부로 3폭×4고 수평 굴 + 목재 지지 프레임 + 레일 + 랜턴 ──
+    const ax = 56, az0 = 72, ady = surfaceTop(ax, az0);   // 입구 지면
+    for (let z = az0; z >= 40; z--) {
+      const fy = Math.min(ady, surfaceTop(ax, z));
+      for (let dx = -1; dx <= 1; dx++) for (let dy = 0; dy <= 3; dy++) setW(ax + dx, fy + dy, z, 0);   // 굴 파기
+      setW(ax, fy - 1, z, ID.polished_andesite != null ? ID.polished_andesite : ID.stone_bricks);      // 굴 바닥
+      if ((az0 - z) % 4 === 0) {   // 4칸마다 목재 지지 프레임(문틀 A자)
+        for (let dy = 0; dy <= 3; dy++) { setW(ax - 2, fy + dy, z, ID.dark_oak_log); setW(ax + 2, fy + dy, z, ID.dark_oak_log); }
+        for (let dx = -2; dx <= 2; dx++) setW(ax + dx, fy + 4, z, ID.dark_oak_log);
+        setW(ax - 1, fy + 3, z, ID.glowstone);   // 프레임마다 랜턴
+      }
+      setW(ax + 1, fy, z, ID.polished_andesite != null ? ID.polished_andesite : ID.stone);   // 레일 침목(안산암 띠)
+    }
+    // 갱도 심장부 채굴장(아딧과 같은 높이로 연결, 금광 노출 벽 + 기둥 지지 + 조명)
+    const hy = ady;   // 갱도 바닥 높이와 일치 → 굴이 챔버로 이어짐
+    for (let x = 49; x <= 63; x++) for (let z = 34; z <= 45; z++) { for (let dy = 0; dy <= 5; dy++) setW(x, hy + dy, z, 0); setW(x, hy - 1, z, ID.polished_andesite != null ? ID.polished_andesite : ID.stone); }
+    for (const [px, pz] of [[52, 37], [60, 37], [52, 43], [60, 43]]) { for (let dy = 0; dy <= 5; dy++) setW(px, hy + dy, pz, ID.dark_oak_log); setW(px, hy + 5, pz, ID.glowstone); }   // 지지 기둥 + 조명
+    scatterOre(56, 39, 8, hy, hy + 4, ID.gold_ore, 34, 61);
+    scatterOre(56, 39, 8, hy, hy + 4, ID.iron_ore, 18, 64);
+    // ── 스위치백 등산로(남서 사면을 지그재그로 오르는 자갈길 + 가장자리 조약돌 난간) ──
+    const trail = [[40, 74], [44, 70], [48, 66], [52, 62], [50, 56], [46, 52], [50, 48], [54, 46]];
+    for (let i = 0; i < trail.length - 1; i++) {
+      const [x0, z0] = trail[i], [x1, z1] = trail[i + 1]; const steps = Math.max(Math.abs(x1 - x0), Math.abs(z1 - z0));
+      for (let s = 0; s <= steps; s++) { const tx = Math.round(x0 + (x1 - x0) * s / steps), tz = Math.round(z0 + (z1 - z0) * s / steps); const ty = surfaceTop(tx, tz); setW(tx, ty, tz, grav); setW(tx, ty + 1, tz, 0); setW(tx, ty + 2, tz, 0); }
+    }
+    // 내부 심층 광맥(기존 scatterOre 보강)
+    scatterOre(52, 48, 30, 16, 34, ID.gold_ore, 46, 61);
+    scatterOre(52, 48, 30, 16, 30, ID.iron_ore, 34, 62);
+    scatterOre(52, 48, 30, 16, 26, ID.coal_ore, 28, 63);
+    // 봉우리 정상 랜턴 표식(원경 인지)
+    for (const p of peaks) { const y = surfaceTop(p.x, p.z); setW(p.x, y + 1, p.z, ID.dark_oak_fence != null ? ID.dark_oak_fence : ID.oak_fence); setW(p.x, y + 2, p.z, ID.glowstone); }
     buildWarpPads();
   }
   // 💎 딥 캐번: 실제처럼 층별 광물(위→아래: 석탄/철/금·청금/레드스톤/에메랄드·슬라임/다이아/흑요석) + 리프트
