@@ -512,6 +512,55 @@
     buildCathedral();    // V20-AR: 손 배치 대성당(고딕 신전) — 허브 남측
     buildZiggurat();     // V20-AS: 손 배치 계단식 지구라트(공중정원) — 허브 남동측
     buildMageTower();    // V20-AT: 손 배치 뒤틀린 마법사 탑(부유 룬 고리) — 허브 남서측
+    buildDowntown();     // V20-AU(1차): 도시 중심 다운타운 — 허허벌판 제거(포장 도로+가로등+화단+시장 소품+우물)
+  }
+  // V20-AU 1차: 도시 중심 다운타운 채우기 — 좌표 한 칸씩 손 배치. 기존 건물/광장은 건드리지 않고
+  //   (열린 잔디/흙 지면만 감지) 코어 거리의 허허벌판을 석재 포장 + 가로등·화단·시장 소품·우물로 메운다.
+  function buildDowntown() {
+    const cob = ID.cobblestone, sb = ID.stone_bricks, and_ = ID.polished_andesite != null ? ID.polished_andesite : ID.stone;
+    const fence = ID.oak_fence, glow = ID.glowstone, leaf = ID.oak_leaves != null ? ID.oak_leaves : ID.spruce_leaves, log = ID.oak_log;
+    const slab = ID.oak_planks_slab != null ? ID.oak_planks_slab : ID.oak_planks, plank = ID.oak_planks, water = ID.water;
+    const flowers = [ID.wool_red, ID.wool_yellow != null ? ID.wool_yellow : ID.wool_white, ID.wool_pink != null ? ID.wool_pink : ID.wool_red, ID.wool_blue != null ? ID.wool_blue : ID.wool_white];
+    const isGround = (id) => id === ID.grass || id === ID.dirt;
+    const openStreet = (x, z) => { const t = surfaceTop(x, z); return isGround(getBlockLocal(x, t - 1, z)) && getBlockLocal(x, t, z) === 0 && getBlockLocal(x, t + 1, z) === 0 && getBlockLocal(x, t + 2, z) === 0; };
+    const X0 = 186, X1 = 258, Z0 = 182, Z1 = 256;
+    // ── 1) 도로 포장: 코어 내 '열린 지면'만 석재 포장(광장/건물/이미 포장은 자동 제외) ──
+    for (let x = X0; x <= X1; x++) for (let z = Z0; z <= Z1; z++) {
+      const t = surfaceTop(x, z), g = t - 1;
+      if (!isGround(getBlockLocal(x, g, z))) continue;      // 잔디/흙(빈 거리)만
+      if (getBlockLocal(x, t, z) !== 0) continue;           // 위 막힘(건물/나무) 스킵
+      const r = (x * 3 + z) % 13;
+      setW(x, g, z, r === 0 ? and_ : ((x + z) & 1) ? sb : cob);   // 3색 석재 포장 무늬
+    }
+    // ── 2) 가로등(8칸 그리드, 열린 거리에만) ──
+    for (let x = X0 + 6; x <= X1 - 6; x += 8) for (let z = Z0 + 6; z <= Z1 - 6; z += 8) {
+      if (!openStreet(x, z)) continue; const t = surfaceTop(x, z);
+      setW(x, t, z, fence); setW(x, t + 1, z, fence); setW(x, t + 2, z, glow);
+    }
+    // ── 3) 화단(12칸 오프셋 그리드): 통나무 테 + 잎 + 꽃 ──
+    for (let x = X0 + 10; x <= X1 - 10; x += 12) for (let z = Z0 + 12; z <= Z1 - 12; z += 12) {
+      if (!openStreet(x, z)) continue; const t = surfaceTop(x, z);
+      for (const [ox, oz] of [[0, 0], [1, 0], [0, 1], [1, 1]]) { if (openStreet(x + ox, z + oz)) { setW(x + ox, t, z + oz, leaf); setW(x + ox, t + 1, z + oz, flowers[(x + z + ox + oz) % 4]); } }
+    }
+    // ── 4) 시장 소품(통·궤짝)·벤치: 큐레이트 좌표, 열린 곳에만 ──
+    const props = [
+      { x: 206, z: 250, k: 'crate' }, { x: 244, z: 250, k: 'barrel' }, { x: 196, z: 218, k: 'bench' },
+      { x: 252, z: 214, k: 'crate' }, { x: 214, z: 200, k: 'barrel' }, { x: 234, z: 234, k: 'bench' },
+      { x: 200, z: 250, k: 'barrel' }, { x: 248, z: 240, k: 'crate' },
+    ];
+    for (const p of props) { if (!openStreet(p.x, p.z)) continue; const t = surfaceTop(p.x, p.z);
+      if (p.k === 'crate') { setW(p.x, t, p.z, plank); setW(p.x + 1, t, p.z, plank); setW(p.x, t + 1, p.z, plank); }
+      else if (p.k === 'barrel') { setW(p.x, t, p.z, log); setW(p.x, t + 1, p.z, slab); }
+      else { setW(p.x, t, p.z, slab); setW(p.x + 1, t, p.z, slab); }   // 벤치
+    }
+    // ── 5) 마을 우물(큐레이트, 열린 곳에만): 조약돌 테 + 물 + 도르래 지붕 ──
+    for (const [wx, wz] of [[198, 246], [250, 200]]) {
+      if (!openStreet(wx, wz)) continue; const t = surfaceTop(wx, wz);
+      for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) { const edge = dx !== 0 || dz !== 0; setW(wx + dx, t, wz + dz, edge ? cob : water); if (edge) setW(wx + dx, t + 1, wz + dz, dx === 0 || dz === 0 ? 0 : cob); }
+      setW(wx - 1, t + 1, wz - 1, fence); setW(wx + 1, t + 1, wz - 1, fence); setW(wx - 1, t + 2, wz - 1, fence); setW(wx + 1, t + 2, wz - 1, fence);   // 지붕 기둥
+      for (let dx = -1; dx <= 1; dx++) setW(wx + dx, t + 3, wz - 1, slab);   // 도르래 지붕
+      setW(wx, t + 2, wz - 1, glow);   // 우물 랜턴
+    }
   }
   // V20-AT: 마법사 탑 — 좌표 한 칸씩 손 배치(대칭 함수 아님). 나선으로 뒤틀려 오르는 탑신 +
   //   부유 자수정 룬 고리 + 정상 아케인 왕관. 직선 탑들과 다른 '뒤틀린' 실루엣. 허브 남서(150,264).
