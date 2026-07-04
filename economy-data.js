@@ -82,7 +82,7 @@
   // 피해 감소 = 방어/(방어+100), 이동속도 100 = 기준 속도
   const BASE_STATS = { hp: 100, defense: 0, strength: 0, speed: 100, critChance: 30, critDamage: 50, intelligence: 100 };
   // V20: 신규 스탯 기본치 — 매직파인드(희귀드롭%)·포춘(추가채집)·공격속도
-  const BASE_STATS2 = { magicFind: 0, miningFortune: 0, farmingFortune: 0, foragingFortune: 0, attackSpeed: 0 };
+  const BASE_STATS2 = { magicFind: 0, miningFortune: 0, farmingFortune: 0, foragingFortune: 0, attackSpeed: 0, miningSpeed: 0 };
   /* ---------------- V20: 젬스톤(장비 소켓) — 실제 스카이블럭 8종 × 5품질 ---------------- */
   const GEM_TYPES = [
     { key: 'ruby', name: '루비', stat: 'hp' }, { key: 'jasper', name: '재스퍼', stat: 'str' },
@@ -947,6 +947,36 @@
     feePct: 1,                      // 등록 수수료(낙찰가 기준 차감)
   };
 
+  // V20-G: 산의 심장(Heart of the Mountain) — 실제 스카이블럭 채광 퍼크 트리.
+  // 채광으로 미스릴/젬스톤 가루를 모아 노드를 강화 → 채광 포춘/속도/특수능력 획득.
+  const HEART_OF_MOUNTAIN = {
+    maxTier: 7,
+    // tier 해금에 필요한 누적 미스릴 가루(idx = 해금할 tier). tier1은 기본 개방.
+    tierUnlock: [0, 0, 5000, 25000, 100000, 300000, 800000, 2000000],
+    powderPerMine: 4,               // 채광 1회당 미스릴 가루 기대치(수량 비례)
+    gemstoneChance: 0.12,           // 채광 시 젬스톤 가루 획득 확률
+    gemstonePerMine: 2,
+    nodes: [
+      // tier 1
+      { key: 'mining_speed', name: '채광 속도', emoji: '⚡', tier: 1, max: 50, powder: 'mithril', base: 50, mul: 1.08, stat: 'miningSpeed', per: 20, desc: '채광 속도 +{v}' },
+      { key: 'mining_fortune', name: '채광 행운', emoji: '🍀', tier: 1, max: 50, powder: 'mithril', base: 50, mul: 1.08, stat: 'miningFortune', per: 5, desc: '채광 포춘 +{v}%' },
+      // tier 2
+      { key: 'quick_forge', name: '신속한 제련', emoji: '🔨', tier: 2, max: 20, powder: 'mithril', base: 200, mul: 1.15, stat: 'forgeSpeed', per: 1, desc: '제련 속도 +{v}%' },
+      { key: 'titanium_insanity', name: '티타늄 광기', emoji: '🔩', tier: 2, max: 10, powder: 'mithril', base: 300, mul: 1.2, stat: 'titanium', per: 2, desc: '티타늄 확률 +{v}%' },
+      { key: 'daily_powder', name: '일일 가루', emoji: '📅', tier: 2, max: 100, powder: 'mithril', base: 100, mul: 1.05, stat: 'dailyPowder', per: 200, desc: '채광 가루 획득 +{v}' },
+      // tier 3
+      { key: 'mining_madness', name: '채광 광란', emoji: '🌀', tier: 3, max: 1, powder: 'mithril', base: 50000, mul: 1, stat: 'madness', per: 50, desc: '채광 속도·포춘 +50' },
+      { key: 'pickobulus', name: '피코불로스', emoji: '💥', tier: 3, max: 3, powder: 'mithril', base: 40000, mul: 1.4, stat: 'pickobulus', per: 1, desc: '광역 채광 능력 Lv{v}' },
+      { key: 'seasoned_mineman', name: '노련한 광부', emoji: '📈', tier: 3, max: 100, powder: 'mithril', base: 100, mul: 1.06, stat: 'miningXp', per: 0.1, desc: '채광 경험치 +{v}%' },
+      // tier 4~ (gemstone)
+      { key: 'goblin_killer', name: '고블린 사냥꾼', emoji: '👺', tier: 4, max: 200, powder: 'gemstone', base: 250, mul: 1.06, stat: 'gemstoneFortune', per: 1, desc: '젬스톤 포춘 +{v}' },
+      { key: 'lonesome_miner', name: '고독한 광부', emoji: '🕳️', tier: 5, max: 45, powder: 'gemstone', base: 400, mul: 1.1, stat: 'combatMining', per: 5, desc: '채광 시 힘·크리 +{v}' },
+      { key: 'professional', name: '프로페셔널', emoji: '🎓', tier: 5, max: 140, powder: 'gemstone', base: 300, mul: 1.05, stat: 'miningSpeed', per: 5, desc: '채광 속도 +{v}' },
+      { key: 'mineshaft_mayhem', name: '광맥의 대혼란', emoji: '🌋', tier: 6, max: 1, powder: 'gemstone', base: 500000, mul: 1, stat: 'gemMadness', per: 100, desc: '젬스톤 포춘 +100' },
+      { key: 'titans_grip', name: '타이탄의 손아귀', emoji: '✊', tier: 7, max: 1, powder: 'gemstone', base: 2000000, mul: 1, stat: 'titanGrip', per: 250, desc: '채광 포춘 +250' },
+    ],
+  };
+
   // 실제 스카이블럭 방식: 상시 직업은 없음. 클래스는 카타콤 던전 전용(입장 시 선택) — 실제 5클래스 라인업.
   const DUNGEON_CLASSES = [
     { key: 'berserk', name: '버서크', emoji: '🗡️', perk: '던전 공격 +25%', dmgMul: 1.25 },
@@ -1268,7 +1298,7 @@
   window.ECON_DATA = {
     ITEM_TIERS, COLLECTIONS, SKILLS, GATHER_TABLE, TOOLS, MINIONS, MINION_STORAGE_BASE, MINION_STORAGE_UPGRADED,
     MINION_STORAGE_UPGRADE_COST, MINION_OFFLINE_CAP_HOURS, MINION_SLOT_MAX, MINION_SLOT_COST_BASE, MINION_SLOT_COST_MUL,
-    MINION_FUEL, MINION_FUEL2, SLAYERS, DUNGEON, DUNGEON_ROOM_SCORE, ESSENCE_SHOP, SHOP, BAZAAR, AUCTION_HOUSE, DAILY_SELL_LIMIT_PER_STACK,
+    MINION_FUEL, MINION_FUEL2, SLAYERS, DUNGEON, DUNGEON_ROOM_SCORE, ESSENCE_SHOP, SHOP, BAZAAR, AUCTION_HOUSE, HEART_OF_MOUNTAIN, DAILY_SELL_LIMIT_PER_STACK,
     EQUIPMENT, STARFORCE, REFORGES, ITEM_ROLL,
     TRAITS, EQUIP_SETS, FIELD_DIFF, ARENA, ACHIEVEMENTS, DAILY_QUESTS, SALVAGE, WEEKLY, HPB, QUESTS, QUEST_NPCS, BUILDER_SHOP, DYES,
     TALISMANS, MAGICAL_POWER, PETS, PET_ITEMS, PET_ABILITIES, PET_XP_BASE, PET_XP_EXP, PET_MAX_LEVEL,

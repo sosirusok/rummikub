@@ -50,6 +50,8 @@
       // --- V20-F 필드 ---
       ahListings: [],                        // 경매장 내 등록 매물([{id,key,qty,kind,price,bid,bidder,endsAt,settled,sold,rolls,ench,hpb,star}])
       ahSeq: 0,                              // 매물 고유 id 시퀀스
+      // --- V20-G 필드 ---
+      hotm: { tier: 1, mithril: 0, gemstone: 0, nodes: {} },   // 산의 심장(채광 퍼크 트리)
     };
   }
   // 구버전 세이브 마이그레이션: 누락 필드를 기본값으로 채움(중첩 객체 포함)
@@ -85,6 +87,11 @@
     if (!p.quests.active) p.quests.active = {}; if (!p.quests.done) p.quests.done = {}; if (!p.quests.seen) p.quests.seen = {};
     if (!Array.isArray(p.ahListings)) p.ahListings = [];   // V20-F 경매장
     if (typeof p.ahSeq !== 'number') p.ahSeq = 0;
+    if (!p.hotm || typeof p.hotm !== 'object') p.hotm = { tier: 1, mithril: 0, gemstone: 0, nodes: {} };   // V20-G 산의 심장
+    if (typeof p.hotm.mithril !== 'number') p.hotm.mithril = 0;
+    if (typeof p.hotm.gemstone !== 'number') p.hotm.gemstone = 0;
+    if (typeof p.hotm.tier !== 'number') p.hotm.tier = 1;
+    if (!p.hotm.nodes || typeof p.hotm.nodes !== 'object') p.hotm.nodes = {};
     return p;
   }
   function todayStr() { return new Date().toISOString().slice(0, 10); }
@@ -520,7 +527,8 @@
       intelligence: B.intelligence + skillLevel('enchanting') * 4 + traitSum('mana_well') + setStat('intelligence') + weaponStat('intelligence') + Math.round(magicalPower() * 0.6) + (gs.intelligence || 0) + (ps.intelligence || 0),
       // V20: 신규 스탯 — 매직파인드/포춘/공격속도
       magicFind: B2.magicFind + setStat('magicFind') + traitSum('lucky') + Math.floor(skillLevel('combat') / 5) + (ps.magicFind || 0),
-      miningFortune: B2.miningFortune + skillLevel('mining') * 4 + (gs.miningFortune || 0) + setStat('miningFortune') + (ps.miningFortune || 0),
+      miningFortune: B2.miningFortune + skillLevel('mining') * 4 + (gs.miningFortune || 0) + setStat('miningFortune') + (ps.miningFortune || 0) + hotmMiningFortune(),   // V20-G HotM
+      miningSpeed: (B2.miningSpeed || 0) + hotmMiningSpeed(),   // V20-G HotM 채광 속도
       farmingFortune: B2.farmingFortune + skillLevel('farming') * 4 + (gs.farmingFortune || 0) + setStat('farmingFortune'),
       foragingFortune: B2.foragingFortune + skillLevel('foraging') * 4 + setStat('foragingFortune'),
       attackSpeed: B2.attackSpeed + setStat('attackSpeed') + traitSum('swiftness'),
@@ -664,6 +672,12 @@
     qty = Math.max(1, Math.round(qty * bestToolMul(table.toolFamily)));
     const dbl = talismanStats().doublePct[zoneKey] || 0;
     if (dbl > 0 && Math.random() * 100 < dbl) { qty *= 2; }
+    // V20-G: 채광 포춘 — 광산에서 추가 드롭(포춘 100 = +1개 확정 + 나머지 % 확률)
+    if (zoneKey === 'mine') {
+      const mf = playerStats().miningFortune || 0;
+      qty += Math.floor(mf / 100); if (Math.random() * 100 < (mf % 100)) qty += 1;
+      hotmAwardPowder(qty);
+    }
     addItem(pick.key, qty); addCollection(pick.key, qty);
     addSkillXp(table.skill, 3 + Math.floor(Math.random() * 4));
     // 이스터에그: 채굴 시 극저확률 다이아몬드 스티브 미니언 스킨
@@ -851,6 +865,65 @@
     addItem(L.key, L.qty); arr.splice(i, 1);
     toastFn(`취소됨 — ${ahItemName(L)} 반환`, false);
     saveNow(); renderZone();
+  }
+
+  /* ---------------- 산의 심장(Heart of the Mountain) — 채광 퍼크 트리 V20-G ---------------- */
+  function hotmState() { if (!P.hotm) P.hotm = { tier: 1, mithril: 0, gemstone: 0, nodes: {} }; return P.hotm; }
+  function hotmNodeDef(key) { return D().HEART_OF_MOUNTAIN.nodes.find(n => n.key === key); }
+  function hotmNodeLevel(key) { return (hotmState().nodes || {})[key] || 0; }
+  // 노드 다음 레벨 비용(base × mul^현재레벨)
+  function hotmNodeCost(key) {
+    const nd = hotmNodeDef(key); if (!nd) return null;
+    const lv = hotmNodeLevel(key); if (lv >= nd.max) return null;
+    return { powder: nd.powder, amount: Math.round(nd.base * Math.pow(nd.mul || 1, lv)) };
+  }
+  // 특정 스탯을 부여하는 모든 노드의 합(레벨×per). madness/titanGrip 등 플랫 노드 포함.
+  function hotmStat(statKey) {
+    let sum = 0;
+    for (const nd of D().HEART_OF_MOUNTAIN.nodes) {
+      const lv = hotmNodeLevel(nd.key); if (lv <= 0) continue;
+      if (nd.stat === statKey) sum += lv * nd.per;
+      // 복합 노드: 광란 = 채광속도+포춘 동시, 광맥혼란/타이탄 = 포춘
+      if (statKey === 'miningFortune' && nd.stat === 'madness') sum += lv * nd.per;
+      if (statKey === 'miningSpeed' && nd.stat === 'madness') sum += lv * nd.per;
+      if (statKey === 'miningFortune' && nd.stat === 'gemMadness') sum += lv * nd.per;
+      if (statKey === 'miningFortune' && nd.stat === 'titanGrip') sum += lv * nd.per;
+      if (statKey === 'miningFortune' && nd.stat === 'gemstoneFortune') sum += lv * nd.per;
+    }
+    return sum;
+  }
+  function hotmMiningFortune() { return hotmStat('miningFortune'); }
+  function hotmMiningSpeed() { return hotmStat('miningSpeed'); }
+  // tier 해금
+  function hotmUnlockTier() {
+    const H = D().HEART_OF_MOUNTAIN; const st = hotmState();
+    if (st.tier >= H.maxTier) { toastFn('이미 최고 티어(산의 심장 MAX)예요', false); return; }
+    const cost = H.tierUnlock[st.tier + 1] || Infinity;
+    if (st.mithril < cost) { toastFn(`미스릴 가루가 부족해요 (${fmtNum(cost)} 필요)`, false); return; }
+    st.mithril -= cost; st.tier += 1;
+    toastFn(`⛰️ 산의 심장 티어 ${st.tier} 개방!`, true);
+    saveNow(); renderZone();
+  }
+  // 노드 강화
+  function hotmUpgrade(key) {
+    const nd = hotmNodeDef(key); if (!nd) return;
+    const st = hotmState();
+    if (st.tier < nd.tier) { toastFn(`티어 ${nd.tier} 개방이 필요해요`, false); return; }
+    const lv = hotmNodeLevel(key); if (lv >= nd.max) { toastFn('이미 최대 레벨이에요', false); return; }
+    const cost = hotmNodeCost(key); if (!cost) return;
+    const have = cost.powder === 'gemstone' ? st.gemstone : st.mithril;
+    if (have < cost.amount) { toastFn(`${cost.powder === 'gemstone' ? '젬스톤' : '미스릴'} 가루가 부족해요 (${fmtNum(cost.amount)} 필요)`, false); return; }
+    if (cost.powder === 'gemstone') st.gemstone -= cost.amount; else st.mithril -= cost.amount;
+    st.nodes[key] = lv + 1;
+    toastFn(`${nd.emoji} ${nd.name} Lv${lv + 1}!`, true);
+    saveNow(); renderZone();
+  }
+  // 채광 시 가루 적립(gather/3d 채광에서 호출)
+  function hotmAwardPowder(qty) {
+    const H = D().HEART_OF_MOUNTAIN; const st = hotmState();
+    const daily = hotmStat('dailyPowder');   // 일일 가루 노드 → 획득량 가산(플랫)
+    st.mithril += Math.max(1, Math.round(H.powderPerMine * Math.max(1, qty) * (1 + hotmStat('miningXp') / 100))) + Math.round(daily / 100);
+    if (Math.random() < H.gemstoneChance) st.gemstone += Math.max(1, Math.round(H.gemstonePerMine * Math.max(1, qty)));
   }
 
   // 일일 특가(날짜 시드 고정 3종, 각 1회 구매)
@@ -1318,6 +1391,12 @@
     if (dbl > 0 && Math.random() * 100 < dbl) n *= 2;
     const fortune = enchantLvl('tool', 'fortune') * 20;
     if (fortune > 0 && Math.random() * 100 < fortune) n += Math.max(1, Math.floor(n * 0.5));   // 행운: 추가 드롭
+    // V20-G: 채광 계열이면 채광 포춘 추가 드롭 + 산의 심장 가루 적립
+    if (sk === 'mining') {
+      const mf = playerStats().miningFortune || 0;
+      n += Math.floor(mf / 100); if (Math.random() * 100 < (mf % 100)) n += 1;
+      hotmAwardPowder(n);
+    }
     addItem(resKey, n); addCollection(resKey, n);
     addSkillXp(sk === 'combat' ? 'combat' : sk, RES_XP[resKey] || 2);
     stat('blocksMined');   // V11 카운터(전 채집 공통) + 계열별
@@ -1926,7 +2005,7 @@
   /* ---- 허브(서브탭: 상점/은행/미니언/펫/장신구/인챈트/리포지/특가/컬렉션/스탯) ---- */
   const HUB_TABS = [
     ['shop', '🛒 상점'], ['bank', '🏦 은행'], ['minions', '⚙️ 미니언'], ['pets', '🐾 펫'],
-    ['talismans', '📿 장신구'], ['enchant', '✨ 인챈트'], ['star', '⭐ 강화'], ['reforge', '🔨 리포지'],
+    ['talismans', '📿 장신구'], ['enchant', '✨ 인챈트'], ['star', '⭐ 강화'], ['reforge', '🔨 리포지'], ['hotm', '⛰️ 산의 심장'],
     ['craft', '⚒️ 제작'], ['bazaar', '🏪 바자회'], ['auction', '🏛️ 경매장'], ['deals', '🎪 특가'], ['collections', '📚 컬렉션'], ['stats', '📊 스탯'],
     ['multi', '🌐 멀티'],
   ];
@@ -1998,6 +2077,7 @@
       case 'craft': return craftHTML();
       case 'bazaar': return bazaarHTML();
       case 'auction': return auctionHTML();
+      case 'hotm': return hotmHTML();
       case 'deals': return dealsHTML();
       case 'collections': return collectionsHTML();
       case 'stats': return statsHTML();
@@ -2519,6 +2599,38 @@
       <div class="econ-tierbtns" style="margin:6px 0">거래 수량: ${qtyNav}</div>
       <div class="econ-shopgrid">${rows}</div>`;
   }
+  function hotmHTML() {
+    const H = D().HEART_OF_MOUNTAIN; const st = hotmState();
+    const nextTier = st.tier + 1;
+    const tierCost = st.tier < H.maxTier ? H.tierUnlock[nextTier] : null;
+    const byTier = {};
+    for (const nd of H.nodes) { (byTier[nd.tier] = byTier[nd.tier] || []).push(nd); }
+    const tierBlocks = [];
+    for (let t = 1; t <= H.maxTier; t++) {
+      const nodes = byTier[t] || []; if (!nodes.length) continue;
+      const unlocked = st.tier >= t;
+      const rows = nodes.map(nd => {
+        const lv = hotmNodeLevel(nd.key), cost = hotmNodeCost(nd.key);
+        const val = lv * nd.per;
+        const affordable = cost && (cost.powder === 'gemstone' ? st.gemstone : st.mithril) >= cost.amount;
+        const maxed = lv >= nd.max;
+        return `<div class="econ-shopitem">
+          <span>${nd.emoji} ${nd.name} <b>Lv${lv}/${nd.max}</b></span>
+          <span class="muted econ-idesc">${nd.desc.replace('{v}', lv > 0 ? val : nd.per)} ${maxed ? '· ✅ MAX' : cost ? `· 다음 ${cost.powder === 'gemstone' ? '💎' : '🔹'}${fmtNum(cost.amount)}` : ''}</span>
+          <button class="btn btn--sm ${affordable && !maxed ? '' : 'btn--ghost'}" data-act="econ_hotm_up" data-key="${nd.key}" ${unlocked && !maxed && affordable ? '' : 'disabled'}>${maxed ? 'MAX' : '강화'}</button>
+        </div>`;
+      }).join('');
+      tierBlocks.push(`<h4 style="margin-top:10px">${unlocked ? '🔓' : '🔒'} 티어 ${t}${!unlocked ? ' <span class="muted" style="font-weight:400">(잠김)</span>' : ''}</h4><div class="econ-shopgrid">${rows}</div>`);
+    }
+    return `<h4>⛰️ 산의 심장 (Heart of the Mountain)</h4>
+      <p class="econ-note">광산에서 채광하면 <b>🔹미스릴 가루</b>(가끔 <b>💎젬스톤 가루</b>)를 모아요. 노드를 강화해 채광 포춘·속도를 올리세요. 현재 티어 <b>${st.tier}/${H.maxTier}</b>.</p>
+      <div class="econ-colgrid">
+        <div class="econ-colrow"><span>🔹 미스릴 가루</span><span><b>${fmtNum(st.mithril)}</b></span><span class="muted">채광 포춘 +${hotmMiningFortune()} · 속도 +${hotmMiningSpeed()}</span></div>
+        <div class="econ-colrow"><span>💎 젬스톤 가루</span><span><b>${fmtNum(st.gemstone)}</b></span><span class="muted">고티어 노드 전용</span></div>
+      </div>
+      ${tierCost != null ? `<button class="btn btn--sm ${st.mithril >= tierCost ? '' : 'btn--ghost'}" data-act="econ_hotm_tier" ${st.mithril >= tierCost ? '' : 'disabled'} style="margin-top:8px">⬆️ 티어 ${nextTier} 개방 (🔹${fmtNum(tierCost)})</button>` : '<p class="muted" style="margin-top:8px">✅ 최고 티어 달성!</p>'}
+      ${tierBlocks.join('')}`;
+  }
   function ahFmtDur(ms) {
     if (ms <= 0) return '종료';
     const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000);
@@ -2863,6 +2975,8 @@
       case 'ah_list': ahList(el.dataset.key, el.dataset.kind, Number(el.dataset.price), ahDur); break;
       case 'ah_claim': ahClaim(Number(el.dataset.id)); break;
       case 'ah_cancel': ahCancel(Number(el.dataset.id)); break;
+      case 'hotm_tier': hotmUnlockTier(); break;
+      case 'hotm_up': hotmUpgrade(el.dataset.key); break;
       case 'dungeon_attack': dungeonAttack(); break;
       case 'dungeon_loot': dungeonLootTreasure(); break;
       case 'bank_deposit': bankDeposit(el.dataset.amt === 'all' ? 'all' : Number(el.dataset.amt)); break;
@@ -3041,7 +3155,7 @@
       placeMinion, upgradeMinion, upgradeMinionStorage, collectMinion, tickMinions, minionStorageCap, minionSpeedMul, useMinionFuel,
       startSlayer, combatAttack, combatFlee, getActiveCombat: () => activeCombat,
       startDungeon, dungeonAdvance, dungeonSecretClick, getDungeonRun: () => dungeonRun, dungeonGrade, canEnterFloor,
-      reforge, reforgeSlot, reforgePremium, reforgeApex, bazaarPrice, bazaarInstantBuy, bazaarInstantSell, ahList, ahClaim, ahCancel, ahSettle, ahFairValue, ahCurrentBid, playerAttackPower, playerDefensePct, playerMaxHp, playerStr, playerStats, playerCritRoll, skillXpProgress, minionUnlocked, recordMinionCraft,
+      reforge, reforgeSlot, reforgePremium, reforgeApex, bazaarPrice, bazaarInstantBuy, bazaarInstantSell, ahList, ahClaim, ahCancel, ahSettle, ahFairValue, ahCurrentBid, hotmUpgrade, hotmUnlockTier, hotmNodeLevel, hotmNodeCost, hotmStat, hotmAwardPowder, playerAttackPower, playerDefensePct, playerMaxHp, playerStr, playerStats, playerCritRoll, skillXpProgress, minionUnlocked, recordMinionCraft,
       gemStats, socketGem, applyRecomb, gemSlotsOf, recombMul,
       equippedWeapon, dungeonClassDef,
       hatchPet, activatePet, petLevel, petStats, petDef, equipPetItem,
