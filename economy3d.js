@@ -2155,7 +2155,40 @@
         if (st % 8 === 0) { setW(bx, 16, bz, ID.oak_log); setW(bx, 17, bz, ID.glowstone); }
       }
     }
+    buildParkCenter();   // V20-AO: 손 배치 중앙 정자(팔각 파빌리온) + 꽃밭 + 방사 산책로
     buildWarpPads();
+  }
+  // V20-AO: 파크 중앙 정자 — 좌표 한 칸씩 손 배치(대칭 함수 아님). 팔각 파빌리온 + 방사 꽃밭 +
+  //   8방 산책로가 부속섬 다리로 이어진다. 평평 광장에 볼거리.
+  function buildParkCenter() {
+    const cx = 72, cz = 72, gy = surfaceTop(cx, cz);
+    const B = (dx, dy, dz, id) => { if (id != null) setW(cx + dx, gy + dy, cz + dz, id); };
+    const grass = ID.grass, path = ID.polished_andesite != null ? ID.polished_andesite : ID.stone, log = ID.oak_log;
+    const plank = ID.oak_planks, slab = ID.oak_planks_slab != null ? ID.oak_planks_slab : ID.oak_planks, glow = ID.glowstone, leaf = ID.oak_leaves != null ? ID.oak_leaves : ID.spruce_leaves;
+    const st = (f) => (ID['oak_planks_stairs_' + f] != null ? ID['oak_planks_stairs_' + f] : plank);
+    // ── 잔디 광장 재포장(반경 12) + 방사 8방 산책로(다리 방향과 정렬) ──
+    for (let dx = -12; dx <= 12; dx++) for (let dz = -12; dz <= 12; dz++) { if (dx * dx + dz * dz > 144) continue; B(dx, 0, dz, grass); }
+    for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; for (let r = 3; r <= 12; r++) { const px = Math.round(Math.cos(a) * r), pz = Math.round(Math.sin(a) * r); B(px, 0, pz, path); } }
+    for (let a = 0; a < 32; a++) { const px = Math.round(Math.cos(a / 32 * Math.PI * 2) * 3), pz = Math.round(Math.sin(a / 32 * Math.PI * 2) * 3); B(px, 0, pz, path); }   // 정자 둘레 링 포장
+    // ── 팔각 파빌리온: 8기둥(반경 3) + 상단 보 + 수렴 계단 지붕 + 매달린 랜턴 ──
+    const cols = [];
+    for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; cols.push([Math.round(Math.cos(a) * 3), Math.round(Math.sin(a) * 3)]); }
+    for (const [ox, oz] of cols) { for (let y = 1; y <= 4; y++) B(ox, y, oz, log); B(ox, 5, oz, plank); }   // 기둥 + 주두
+    for (const [ox, oz] of cols) { B(ox, 5, oz, plank); }   // 상단 보 링(기둥 위)
+    // 지붕: 처마(반경3 계단) → 중단(반경2) → 정점
+    for (let dx = -3; dx <= 3; dx++) for (let dz = -3; dz <= 3; dz++) { const r = dx * dx + dz * dz; if (r > 6 && r <= 11) B(dx, 5, dz, st(dx < 0 ? 1 : dx > 0 ? 3 : dz < 0 ? 0 : 2)); }
+    for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) { const r = dx * dx + dz * dz; if (r >= 2 && r <= 5) B(dx, 6, dz, st(dx < 0 ? 1 : dx > 0 ? 3 : dz < 0 ? 0 : 2)); }
+    for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) B(dx, 7, dz, plank);
+    B(0, 8, 0, log); B(0, 9, 0, glow);   // 지붕 정점 + 발광
+    for (const [ox, oz] of [[-2, 0], [2, 0], [0, -2], [0, 2]]) { B(ox, 4, oz, ID.oak_fence); B(ox, 3, oz, glow); }   // 매달린 랜턴
+    // 정자 중앙 조형: 화분 기둥 + 발광
+    B(0, 1, 0, plank); B(0, 2, 0, leaf); B(0, 3, 0, glow);
+    // ── 방사 꽃밭(기둥 사이 대각선 4곳, 밝은 양털) + 벤치 ──
+    const flowers = [ID.wool_red, ID.wool_yellow != null ? ID.wool_yellow : ID.wool_white, ID.wool_pink != null ? ID.wool_pink : ID.wool_red, ID.wool_blue != null ? ID.wool_blue : ID.wool_white];
+    const diag = [[6, 6], [-6, 6], [6, -6], [-6, -6]];
+    diag.forEach(([bx, bz], k) => { for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) { B(bx + dx, 0, bz + dz, grass); if ((dx + dz) % 2 === 0) B(bx + dx, 1, bz + dz, flowers[k]); } B(bx, 1, bz, flowers[k]); });
+    for (const [bx, bz, f] of [[0, -8, 0], [0, 8, 2], [-8, 0, 3], [8, 0, 1]]) B(bx, 1, bz, st(f));   // 4방 벤치
+    for (const [lx, lz] of [[-9, -9], [9, -9], [-9, 9], [9, 9]]) { B(lx, 1, lz, ID.oak_fence); B(lx, 2, lz, ID.oak_fence); B(lx, 3, lz, glow); }   // 가로등
   }
   // 🌾 더 반: 대형 농장(밀/당근/감자/호박/수박/사탕수수 대구획)
   function genBarn() {
