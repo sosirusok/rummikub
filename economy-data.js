@@ -291,7 +291,7 @@
       { floor: 9, hell: true, mobList: ['심연 포식자', '공허 사도'], bossName: '심연의 폭군 벨페고르', bossHp: 25000000, bossDmg: 950, lootTable: ['fuming_potato_book', 'terminator_bow', 'necron_blade', 'pet_egg_ender_dragon'], essenceReward: 180 },
       { floor: 10, hell: true, mobList: ['태초의 파편', '시간 포식자'], bossName: '태초의 지배자 아이온', bossHp: 120000000, bossDmg: 1400, lootTable: ['fuming_potato_book', 'hot_potato_book', 'essence_cosmetic_cape'], essenceReward: 300 },
       // V19-B/D: 종말층 F11 — 스블 최강(보이드글룸 T4 2.1억)을 능가하는 최종 아포칼립스 보스(10억 HP, 실제×4.8, 게임 최강)
-      { floor: 11, hell: true, apex: true, mobList: ['공허의 사도', '무한의 그림자'], bossName: '무한의 종언 아포클립스', bossHp: 1000000000, bossDmg: 2200, lootTable: ['fuming_potato_book', 'hyperion', 'astraea', 'enchant_book_one_for_all', 'enchant_book_soul_eater', 'recombobulator', 'gem_ruby_perfect'], essenceReward: 600 },
+      { floor: 11, hell: true, apex: true, mobList: ['공허의 사도', '무한의 그림자'], bossName: '무한의 종언 아포클립스', bossHp: 1000000000, bossDmg: 2200, lootTable: ['fuming_potato_book', 'hyperion', 'astraea', 'enchant_book_one_for_all', 'enchant_book_soul_eater', 'recombobulator', 'gem_ruby_perfect', 'reforge_stone_apex'], essenceReward: 600 },
     ],
     scoreThresholds: [ ['F', -Infinity], ['D', 0], ['C', 100], ['B', 160], ['A', 230], ['S', 270], ['S+', 300] ],
     roomTypes: ['전투방', '퍼즐방', '함정방', '미니보스방', '보물방'],
@@ -314,6 +314,7 @@
     { key: 'petitem_gold_claws', name: '🐾 황금 발톱(힘+30)', cost: 90, kind: 'item' },
     { key: 'petitem_bigger_teeth', name: '🐾 큰 이빨(치명피해+40)', cost: 90, kind: 'item' },
     { key: 'petitem_textbook', name: '🐾 교과서(지력+50)', cost: 90, kind: 'item' },
+    { key: 'reforge_stone_apex', name: '🌌 아포클립스 스톤(초월 리포지)', cost: 400, kind: 'item' },   // V20-D: 정수 교환(드롭이 주 획득처)
   ];
 
   /* ---------------- 등급별 장비(무기 3계열: 검/활/지팡이 × 7티어) + 던전 전용 장비 ---------------- */
@@ -407,6 +408,8 @@
       { key: 'withered', name: '시든(Withered)', dmgPct: 18, str: 25, critDamage: 20, stone: true },
       { key: 'fabled', name: '전설의(Fabled)', dmgPct: 16, critChance: 4, critDamage: 12, str: 10, stone: true },
       { key: 'gilded', name: '금빛의(Gilded)', dmgPct: 10, str: 20, ferocity: 12, stone: true },
+      // V20-D: +α 커스텀 초월 리포지(스블 미존재) — 아포클립스 스톤 전용, 최상급
+      { key: 'transcendent', name: '초월적인(Transcendent)', dmgPct: 22, str: 35, critDamage: 25, ferocity: 10, stone: true },
     ],
     armor: [
       { key: 'wise', name: '현명한', def: 4, hp: 15 }, { key: 'pure', name: '순수한', def: 6, hp: 6 },
@@ -417,9 +420,13 @@
       { key: 'renowned', name: '명성의(Renowned)', def: 8, hp: 40, str: 28, critDamage: 8, stone: true },
       { key: 'ancient_r', name: '고대의(Ancient)', def: 14, hp: 20, str: 12, ferocity: 4, stone: true },
       { key: 'necron_r', name: '지배자의(Necron)', def: 12, hp: 25, str: 22, critDamage: 6, stone: true },
+      // V20-D: +α 커스텀 초월 리포지(스블 미존재)
+      { key: 'apocalyptic', name: '종말의(Apocalyptic)', def: 12, hp: 45, str: 45, critDamage: 12, ferocity: 6, stone: true },
     ],
     // 리포지 스톤 전용(확정 최상급): reforge_stone_rare 소모
     premium: { weapon: { key: 'withered', name: '시든(Withered)', dmgPct: 18, str: 25, critDamage: 20 }, armor: { key: 'necrotic', name: '괴사의(Necrotic)', def: 10, hp: 30, str: 42 } },
+    // V20-D: 아포클립스 스톤(reforge_stone_apex, F11 드롭) 전용 — +α 초월 리포지
+    premiumApex: { weapon: { key: 'transcendent', name: '초월적인(Transcendent)', dmgPct: 22, str: 35, critDamage: 25, ferocity: 10 }, armor: { key: 'apocalyptic', name: '종말의(Apocalyptic)', def: 12, hp: 45, str: 45, critDamage: 12, ferocity: 6 } },
   };
 
 
@@ -865,6 +872,7 @@
     { key: 'fuming_potato_book', name: '퓨밍 포테이토 북', category: '강화재료', buyPrice: 0, sellPrice: 4000, stackSize: 64 },   // V11: 11~15권째 확장(희귀)
     { key: 'reforge_stone_common', name: '리포지 스톤(일반)', category: '강화재료', buyPrice: 0, sellPrice: 50, stackSize: 64 },
     { key: 'reforge_stone_rare', name: '리포지 스톤(희귀)', category: '강화재료', buyPrice: 0, sellPrice: 200, stackSize: 64 },
+    { key: 'reforge_stone_apex', name: '🌌 아포클립스 스톤(초월 리포지)', category: '강화재료', buyPrice: 0, sellPrice: 12000, stackSize: 64 },   // V20-D: F11 종언층 드롭 — 스블 미존재 +α 최상급
     { key: 'essence_reforge_stone', name: '던전 정수 리포지 스톤', category: '강화재료', buyPrice: 0, sellPrice: 400, stackSize: 64 },
     { key: 'essence_cosmetic_cape', name: '지배자의 망토(장식)', category: '장식', buyPrice: 0, sellPrice: 5000, stackSize: 1 },
     { key: 'dungeon_essence', name: '던전 정수', category: '재료', buyPrice: 0, sellPrice: 120, stackSize: 64 },
