@@ -1479,7 +1479,7 @@
     const ok = (x, z) => surfaceTop(x, z) > 3;
     const base = (x, z) => surfaceTop(x, z) + 1;
     if (mode === 'park' && ok(70, 100)) buildHouse(67, 97, 7, 6, base(70, 100), ID.spruce_planks, ID.oak_planks, ID.oak_log);   // 삼림 산장
-    else if (mode === 'barn' && ok(58, 100)) { buildHouse(54, 96, 10, 8, base(58, 100), ID.bricks, ID.dark_oak_log, ID.dark_oak_log); const by = base(52, 98); for (const [hx, hz] of [[52, 98], [53, 98], [52, 99]]) { setW(hx, by, hz, ID.hay_block); setW(hx, by + 1, hz, ID.hay_block); } }   // 붉은 헛간 + 건초더미
+    else if (mode === 'barn' && ok(58, 100)) buildBarnEstate();   // V20-AB: 손 배치 대형 농장(박공 붉은 헛간+원통 사일로+풍차+건초 야적+가축 우리+밀밭)
     else if (mode === 'gold' && ok(50, 90)) buildGoldOutpost();   // V20-W: 손 배치 대형 광산 전초기지(헤드프레임+갱도+광차 데크+창고+감독관 오두막)
     else if (mode === 'deep' && ok(48, 80)) buildDeepDepot();   // V20-X: 손 배치 지하 크리스탈 채광 정거장
     else if (mode === 'spider' && ok(74, 88)) buildSpiderNest();   // V20-AA: 손 배치 대형 거미굴(이끼 바위 둥지+뒤틀린 나무탑+거미줄 장막+알집+브루드 제단)
@@ -1712,6 +1712,82 @@
     B(0, 4, 5, web); B(-1, 4, 5, web); B(1, 4, 5, web);   // 캐노피 그물
     // ── 진입 계단(둥지 남면 오르막) + 마른 덤불 대신 이끼 바위 잔해 ──
     B(0, 0, 7, st(0)); B(0, 1, 6, st(0)); B(-3, 1, 5, moss); B(3, 1, -4, moss); B(-4, 1, -3, cob); B(4, 1, 4, cob);
+  }
+  // V20-AB: 대형 농장 — 좌표 한 칸씩 손 배치(대칭 함수 아님). 박공(감브렐) 붉은 헛간 + 원통 사일로
+  //   + 풍차 + 건초 야적장 + 가축 우리 + 밀밭. 하이픽셀 The Barn 느낌.
+  function buildBarnEstate() {
+    const cx = 58, cz = 100, gy = surfaceTop(cx, cz);
+    const B = (dx, dy, dz, id) => { if (id != null) setW(cx + dx, gy + dy, cz + dz, id); };
+    const red = ID.wool_red != null ? ID.wool_red : ID.bricks, trim = ID.quartz_block, log = ID.dark_oak_log != null ? ID.dark_oak_log : ID.oak_log;
+    const plank = ID.dark_oak_planks != null ? ID.dark_oak_planks : ID.oak_planks, hay = ID.hay_block != null ? ID.hay_block : ID.wool_yellow;
+    const glow = ID.glowstone, fence = ID.oak_fence, farm = ID.farmland, wheat = ID.wheat != null ? ID.wheat : ID.hay_block, water = ID.water, cob = ID.cobblestone, dirt = ID.dirt;
+    const st = (f) => (ID['dark_oak_planks_stairs_' + f] != null ? ID['dark_oak_planks_stairs_' + f] : plank);
+    const dslab = ID.dark_oak_planks_slab != null ? ID.dark_oak_planks_slab : plank;
+    // ── 헛간 기단(넓은 흙바닥 + 자갈 진입로) ──
+    for (let dx = -6; dx <= 6; dx++) for (let dz = -5; dz <= 7; dz++) B(dx, -1, dz, dirt);
+    for (let dx = -1; dx <= 1; dx++) for (let dz = 7; dz <= 11; dz++) B(dx, -1, dz, cob);   // 진입로
+    // ── 붉은 헛간 본체(dx -5..5, dz -4..6, 벽 높이 5, 모서리 통나무 기둥) ──
+    for (let y = 0; y <= 4; y++) for (let dx = -5; dx <= 5; dx++) for (let dz = -4; dz <= 6; dz++) {
+      const edge = dx === -5 || dx === 5 || dz === -4 || dz === 6;
+      if (!edge) continue;
+      const corner = (Math.abs(dx) === 5) && (dz === -4 || dz === 6);
+      const bigDoor = dz === 6 && Math.abs(dx) <= 1 && y <= 3;                 // 정면 대형 헛간문
+      const win = (y === 2) && ((Math.abs(dx) === 5 && (dz === 0 || dz === 2)) || (dz === -4 && Math.abs(dx) <= 2 && dx % 2 === 0));
+      if (bigDoor) continue;
+      if (corner) B(dx, y, dz, log);
+      else if (win) B(dx, y, dz, trim);                                        // 흰 창틀
+      else B(dx, y, dz, ((dx + dz + y) % 5 === 0) ? trim : red);              // 붉은 벽(흰 널판 띠)
+    }
+    // 헛간문 X자 트림(다크오크) + 상단 아치
+    B(-1, 0, 6, log); B(0, 1, 6, plank); B(1, 2, 6, log); B(1, 0, 6, log); B(0, 3, 6, plank); B(-1, 2, 6, log);   // X자
+    B(-1, 4, 6, trim); B(0, 4, 6, trim); B(1, 4, 6, trim);                    // 문 상인방
+    // ── 감브렐(박공) 지붕: 아래 급경사 + 위 완경사, 다크오크 계단으로 물매 ──
+    for (let dz = -4; dz <= 6; dz++) {
+      B(-5, 5, dz, st(3)); B(5, 5, dz, st(1));                                // 처마 급경사
+      B(-4, 6, dz, st(3)); B(4, 6, dz, st(1));
+      B(-3, 6, dz, red); B(3, 6, dz, red);                                    // 어깨
+      B(-3, 7, dz, st(3)); B(3, 7, dz, st(1));                                // 완경사
+      B(-2, 7, dz, red); B(2, 7, dz, red);
+      B(-1, 8, dz, st(3)); B(1, 8, dz, st(1)); B(0, 8, dz, plank);            // 용마루
+    }
+    for (let dx = -3; dx <= 3; dx += 3) B(dx, 8, 1, glow);                     // 고미다락 조명
+    // 박공면 채움(전/후면 삼각)
+    for (const dz of [-4, 6]) { for (let dx = -4; dx <= 4; dx++) { const h = 6 - Math.abs(dx); for (let y = 5; y <= h + (Math.abs(dx) <= 2 ? 2 : 0); y++) if (y <= 8) B(dx, y, dz, red); } }
+    B(0, 6, -4, trim); B(0, 7, -4, glow);                                     // 후면 박공 환기창
+    // 헛간 내부: 마초 시렁 + 건초더미 + 소여물통(트로프)
+    for (let dx = -4; dx <= -2; dx++) for (let dz = -3; dz <= -1; dz++) { B(dx, 0, dz, hay); if (dx === -3 && dz === -2) B(dx, 1, dz, hay); }   // 건초 더미
+    B(3, 0, -3, dslab); B(4, 0, -3, dslab); B(3, 0, -2, dslab);               // 여물통
+    // ── 원통 사일로(헛간 좌측, 반경 2 quartz 원통 + 돔 지붕 + 건초 충전) ──
+    const sx = -8, sz = 0;
+    for (let y = 0; y <= 8; y++) for (const [ox, oz] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]]) B(sx + ox, y, sz + oz, ((ox + oz + y) & 1) ? trim : ID.smooth_stone != null ? ID.smooth_stone : trim);
+    for (let dy = 0; dy <= 7; dy++) B(sx, dy, sz, hay);                        // 사일로 내부 건초
+    for (const [ox, oz] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) B(sx + ox, 9, sz + oz, st(ox < 0 ? 1 : ox > 0 ? 3 : oz < 0 ? 0 : 2));   // 돔 처마
+    B(sx, 9, sz, red); B(sx, 10, sz, glow);                                   // 사일로 정상 캡
+    // ── 풍차 탑(헛간 우측, 스프루스 탑 + 4엽 날개) ──
+    const wx = 8, wz = 2;
+    for (let y = 0; y <= 6; y++) B(wx, y, wz, log);
+    for (let y = 1; y <= 5; y++) { B(wx - 1, y, wz, plank); B(wx + 1, y, wz, plank); B(wx, y, wz - 1, plank); B(wx, y, wz + 1, plank); }   // 몸통 4면
+    B(wx, 6, wz, plank); B(wx, 7, wz, dslab);                                 // 지붕
+    // 4엽 풍차 날개(수직면, fence + 계단으로 표현)
+    for (let i = 1; i <= 3; i++) { B(wx, 5 + i, wz - 0, null); }
+    B(wx, 5, wz, log);
+    for (let i = 1; i <= 3; i++) { B(wx, 5, wz - i, fence); B(wx, 5, wz + i, fence); }   // 좌우 날개
+    for (let i = 1; i <= 3; i++) { B(wx, 5 + i, wz, i < 3 ? fence : null); }             // 위 날개(간이)
+    B(wx, 2, wz - 3, plank); B(wx, 2, wz + 3, plank); B(wx, 8, wz, plank);               // 날개깃 끝
+    // ── 가축 우리(헛간 앞뜰, 울타리 펜스 + 문 + 여물 + 물통) ──
+    for (let dx = -5; dx <= 0; dx++) { B(dx, 0, 9, fence); B(dx, 0, 13, fence); }
+    for (let dz = 9; dz <= 13; dz++) { B(-5, 0, dz, fence); B(0, 0, dz, fence); }
+    B(-2, 0, 9, 0); B(-2, 0, 9, ID.oak_fence);                                // (문 자리 — 열린 틈 유지 위해 하나 비움)
+    B(-3, 0, 9, 0);                                                           // 우리 출입 틈
+    B(-4, 0, 11, hay); B(-1, 0, 12, hay);                                     // 여물
+    B(-2, -1, 11, water); B(-2, 0, 11, 0);                                    // 물통(파인 물)
+    // ── 밀밭(헛간 우측 뒤, 4×6 farmland + 물 관개 + 밀) ──
+    for (let dx = 3; dx <= 8; dx++) for (let dz = -5; dz <= -2; dz++) { B(dx, 0, dz, farm); B(dx, 1, dz, wheat); }
+    for (let dz = -5; dz <= -2; dz++) { B(5, 0, dz, water); B(5, 1, dz, 0); }             // 중앙 관개수로
+    // ── 건초 야적장(외부 더미 3개) + 허수아비 + 가로등 ──
+    B(6, 0, 4, hay); B(7, 0, 4, hay); B(6, 1, 4, hay); B(6, 0, 5, hay);                   // 건초 더미
+    B(2, 0, 8, fence); B(2, 1, 8, plank); B(2, 2, 8, hay); B(1, 1, 8, dslab); B(3, 1, 8, dslab);   // 허수아비(십자)
+    B(-6, 0, 8, fence); B(-6, 1, 8, glow); B(9, 0, -1, fence); B(9, 1, -1, glow);         // 가로등
   }
   function buildMushroomHouse(cx, cz, base) {
     // V18: 동화풍 버섯 오두막 — 버섯대 몸통 + 흰 점박이 붉은 갓 + 둥근 창 + 반블럭 처마 + 현관 랜턴
