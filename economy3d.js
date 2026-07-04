@@ -2149,6 +2149,27 @@
       [[30, 34], [64, 60], [48, 30], [36, 62]].forEach((p2, i) => setW(p2[0], ly - 2, p2[1] + i, ID.glowstone));
     });
     layers.forEach((L, i) => { scatterOre(48, 48, 34, L.y - 2, L.y + 1, L.ore, L.n, 71 + i); });
+    // ── V20-AI: 손 사각 자연 동굴 조형 — 층별 챔버에 종유석/석순 기둥 + 발광 정동(지오드) ──
+    layers.forEach((L, li) => {
+      const ly = L.y;
+      // 석순(바닥에서 솟음)/종유석(천장에서 매달림) — 챔버 내 흩뿌림(해시 위치, 층마다 다른 시드)
+      for (let n = 0; n < 26; n++) {
+        const a = hash3(n, 200 + li, 1) * Math.PI * 2, rr = 6 + hash3(n, 201 + li, 2) * 24;
+        const x = Math.round(48 + Math.cos(a) * rr), z = Math.round(48 + Math.sin(a) * rr);
+        if (Math.hypot(x - 48, z - 48) > 32) continue;
+        if (getBlockLocal(x, ly - 2, z) !== 0) continue;   // 챔버 내부만
+        const stal = ID.polished_andesite != null ? ID.polished_andesite : ID.stone;
+        if (hash3(n, 202 + li, 3) < 0.5) { setW(x, ly - 2, z, stal); if (hash3(n, 203, 4) < 0.5) setW(x, ly - 1, z, stal); }   // 석순 1~2칸
+        else { setW(x, ly + 1, z, stal); if (hash3(n, 204, 5) < 0.5) setW(x, ly, z, stal); }                                   // 종유석 1~2칸
+      }
+      // 발광 정동(지오드): 층 광물색 정동 3군데 — 벽면에 보석+발광 코어
+      for (let g = 0; g < 3; g++) {
+        const a = hash3(g, 210 + li, 1) * Math.PI * 2;
+        const x = Math.round(48 + Math.cos(a) * 30), z = Math.round(48 + Math.sin(a) * 30);
+        for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) if (Math.abs(dx) + Math.abs(dz) <= 1) setW(x + dx, ly - 1, z + dz, L.ore);
+        setW(x, ly - 1, z, ID.glowstone);   // 정동 발광 코어
+      }
+    });
     // 중앙 리프트 수직 통로 + 층별 착지대(계단식)
     for (let y = 3; y <= 40; y++) for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) setW(48 + dx, y, 48 + dz, 0);
     let py = 40;
