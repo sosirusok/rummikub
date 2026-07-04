@@ -1997,9 +1997,9 @@
     else if (mode === 'barn' && ok(58, 100)) buildBarnEstate();   // V20-AB: 손 배치 대형 농장(박공 붉은 헛간+원통 사일로+풍차+건초 야적+가축 우리+밀밭)
     else if (mode === 'gold' && ok(50, 90)) { buildGoldOutpost(); buildGoldDetail(); }   // V20-W 전초기지 + V20-AX(3차) 채광 디테일
     else if (mode === 'deep' && ok(48, 80)) buildDeepDepot();   // V20-X: 손 배치 지하 크리스탈 채광 정거장
-    else if (mode === 'spider' && ok(74, 88)) buildSpiderNest();   // V20-AA: 손 배치 대형 거미굴(이끼 바위 둥지+뒤틀린 나무탑+거미줄 장막+알집+브루드 제단)
-    else if (mode === 'nether' && ok(62, 78)) buildNetherKeep();   // V20-Y: 손 배치 대형 네더 요새(용암 해자+뾰족아치 다리+블레이즈 제단탑+성첩 망루)
-    else if (mode === 'end' && ok(62, 84)) buildEndSanctum();   // V20-Z: 손 배치 대형 엔드 성소(흑요석 첨탑+자수정 나선탑+엔드로드 회랑+공허 다리)
+    else if (mode === 'spider' && ok(74, 88)) { buildSpiderNest(); buildMonsterDetail('spider'); }   // V20-AA 거미굴 + V20-AZ(5차) 디테일
+    else if (mode === 'nether' && ok(62, 78)) { buildNetherKeep(); buildMonsterDetail('nether'); }   // V20-Y 네더 요새 + V20-AZ(5차) 디테일
+    else if (mode === 'end' && ok(62, 84)) { buildEndSanctum(); buildMonsterDetail('end'); }   // V20-Z 엔드 성소 + V20-AZ(5차) 디테일
     else if (mode === 'mushroom' && ok(58, 100)) buildMushroomColony();   // V20-AC: 손 배치 대형 거대버섯 군락(높이 차등 갓·버섯대 로지·오아시스·균사 지면)
   }
   // V20-W: 골드 광산 대형 전초기지 — 좌표 한 칸씩 손 배치(대칭 함수 아님).
@@ -2050,6 +2050,45 @@
     B(-3, 0, 4, cob); B(-2, 0, 4, cob); B(-3, 1, 4, cob);                          // 바위 무더기
     B(6, 0, 4, fence); B(6, 1, 4, glow);                                           // 가로등
     B(-5, 0, 3, fence); B(-5, 1, 3, glow);                                         // 가로등2
+  }
+  // V20-AZ 5차: 몬스터 섬 디테일 — 좌표 한 칸씩 손 배치(해시). 섬별(거미/네더/엔드) 테마 소품으로
+  //   표면 허허벌판을 채운다. 랜드마크·스폰 근처는 비움. 저사양 위해 대부분 작은 고체.
+  function buildMonsterDetail(mode) {
+    const web = ID.wool_white, q = ID.quartz_block, moss = ID.mossy_cobblestone, cob = ID.cobblestone, glow = ID.glowstone;
+    const soul = ID.soul_sand, mag = ID.magma_block, obs = ID.obsidian, pur = ID.purpur, end = ID.end_stone, nr = ID.netherrack;
+    const groundOk = (id) => {
+      if (mode === 'spider') return id === moss || id === cob || id === ID.stone || id === ID.dirt || id === ID.grass;
+      if (mode === 'nether') return id === nr;
+      if (mode === 'end') return id === end;
+      return false;
+    };
+    const skip = (x, z) => {
+      if (mode === 'spider') return x >= 66 && x <= 84 && z >= 80 && z <= 104;   // 둥지+광장
+      if (mode === 'nether') return x >= 54 && x <= 72 && z >= 70 && z <= 100;   // 요새+광장
+      return x >= 54 && x <= 72 && z >= 76 && z <= 104;                          // 엔드 성소+광장
+    };
+    for (let x = 16; x <= 112; x += 5) for (let z = 16; z <= 112; z += 5) {
+      if (skip(x, z)) continue;
+      const t = surfaceTop(x, z), g = t - 1; if (g < 4) continue;
+      if (!groundOk(getBlockLocal(x, g, z))) continue;
+      if (getBlockLocal(x, t, z) !== 0) continue;
+      const h = hash3(x, 60, z);
+      if (mode === 'spider') {
+        if (h < 0.06) { setW(x, t, z, web); if (hash3(x, 61, z) < 0.5) setW(x, t + 1, z, web); }         // 거미줄 기둥
+        else if (h < 0.10) { setW(x, t, z, web); setW(x + 1, t, z, web); setW(x, t + 1, z, glow); }        // 알집(발광 알)
+        else if (h < 0.16) { setW(x, t, z, q); if (hash3(x, 62, z) < 0.4) setW(x + 1, t, z, q); }          // 뼈 무더기
+        else if (h < 0.30) { setW(x, t, z, ((x + z) & 1) ? moss : cob); }                                  // 이끼 바위
+      } else if (mode === 'nether') {
+        if (h < 0.10) { setW(x, g, z, soul); }                                                             // 소울샌드 패치
+        else if (h < 0.15) { setW(x, t, z, mag); setW(x, t + 1, z, glow); }                                // 화염 노두
+        else if (h < 0.22) { setW(x, t, z, obs); }                                                         // 현무암 조각
+        else if (h < 0.30) { setW(x, g, z, ((x + z) & 1) ? mag : nr); }                                    // 마그마 균열
+      } else {   // end
+        if (h < 0.08) { setW(x, t, z, pur); if (hash3(x, 63, z) < 0.5) setW(x, t + 1, z, pur); }           // 코러스 순
+        else if (h < 0.12) { setW(x, t, z, obs); }                                                         // 흑요석 파편
+        else if (h < 0.18) { setW(x, t, z, pur); setW(x, t + 1, z, glow); }                                // 엔드로드 조형
+      }
+    }
   }
   // V20-AX 3차: 골드 광산 섬 채광 디테일 — 좌표 한 칸씩 손 배치(해시). 노출 바위 슬로프에
   //   광석 노두·목재 갱목·랜턴·광차 조각·자갈 무더기를 흩뿌려 돌산 허허벌판을 채운다.
