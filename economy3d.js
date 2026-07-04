@@ -1483,7 +1483,7 @@
     else if (mode === 'gold' && ok(50, 90)) buildGoldOutpost();   // V20-W: 손 배치 대형 광산 전초기지(헤드프레임+갱도+광차 데크+창고+감독관 오두막)
     else if (mode === 'deep' && ok(48, 80)) buildDeepDepot();   // V20-X: 손 배치 지하 크리스탈 채광 정거장
     else if (mode === 'spider' && ok(74, 88)) { buildHouse(72, 86, 6, 5, base(74, 88), ID.dark_oak_planks, ID.dark_oak_planks, ID.dark_oak_log); const wy = base(74, 88); for (let i = 0; i < 5; i++) setW(71 + (i % 4), wy + 3 + (i % 2), 85 + (i % 3), ID.wool_white); }   // 어두운 오두막 + 거미줄
-    else if (mode === 'nether' && ok(62, 78)) { buildHouse(60, 76, 7, 6, base(62, 78), ID.nether_bricks, ID.nether_bricks, ID.nether_bricks); const ny = base(62, 78); setW(59, ny, 75, ID.magma_block); setW(67, ny, 82, ID.glowstone); }   // 네더 요새 + 마그마
+    else if (mode === 'nether' && ok(62, 78)) buildNetherKeep();   // V20-Y: 손 배치 대형 네더 요새(용암 해자+뾰족아치 다리+블레이즈 제단탑+성첩 망루)
     else if (mode === 'end' && ok(62, 84)) { buildHouse(60, 82, 6, 6, base(62, 84), ID.purpur, ID.purpur, ID.obsidian); const ey = base(62, 84); setW(59, ey, 81, ID.glowstone); setW(66, ey + 5, 88, ID.glowstone); }   // 엔드 성소 + 엔드로드
     else if (mode === 'mushroom' && ok(58, 100)) buildMushroomHouse(58, 100, base(58, 100));   // 거대 버섯 집
   }
@@ -1573,6 +1573,64 @@
     // ── 천장 매달린 랜턴(어두운 지하 조명) 다수 ──
     B(-2, 4, -2, seaL); B(2, 4, 2, seaL); B(-2, 4, 2, glow); B(2, 4, -2, glow); B(0, 4, 0, seaL);
     B(-2, 0, -2, fence); B(-2, 3, -2, glow); B(2, 0, 2, fence); B(2, 3, 2, glow);      // 기둥 등불
+  }
+  // V20-Y: 대형 네더 요새 — 좌표 한 칸씩 손 배치(대칭 함수 아님). 네더는 계단/울타리 벽돌이 없어
+  //   모서리 코벨링(전블럭 계단식)으로 뾰족아치를 세우고 마그마/발광석/용암으로 조명한다.
+  //   구성: 용암 해자 → 뾰족아치 진입 다리 → 관문 → 안뜰 → 3층 중앙 성채(블레이즈 제단) → 쌍둥이 망루.
+  function buildNetherKeep() {
+    const cx = 62, cz = 78, gy = surfaceTop(cx, cz);
+    const B = (dx, dy, dz, id) => { if (id != null) setW(cx + dx, gy + dy, cz + dz, id); };
+    const nb = ID.nether_bricks, mag = ID.magma_block, glow = ID.glowstone, soul = ID.soul_sand, lava = ID.lava, obs = ID.obsidian;
+    // ── 기단 + 용암 해자(요새 앞 dz 8~13을 두른 용암 못, 다리로 건넌다) ──
+    for (let dx = -7; dx <= 7; dx++) for (let dz = -6; dz <= 6; dz++) B(dx, -1, dz, ((dx + dz) & 1) ? nb : obs);   // 안뜰 기단(체크 무늬)
+    for (let dx = -7; dx <= 7; dx++) for (let dz = 7; dz <= 13; dz++) { B(dx, -2, dz, nb); B(dx, -1, dz, lava); }   // 용암 해자
+    // ── 진입 다리(중앙 3폭) + 좌우 뾰족아치 2쌍(코벨링) + 난간 성첩 ──
+    for (let dz = 7; dz <= 14; dz++) { B(-1, -1, dz, nb); B(0, -1, dz, nb); B(1, -1, dz, nb); }                    // 다리 상판
+    for (let dz = 7; dz <= 14; dz++) { B(-2, -1, dz, nb); B(2, -1, dz, nb); if (dz % 2 === 0) { B(-2, 0, dz, nb); B(2, 0, dz, nb); } }   // 다리 난간+성첩
+    for (const az of [9, 12]) {   // 뾰족아치 2개: 다리를 가로지르는 관문형 아치
+      for (let y = 0; y <= 2; y++) { B(-2, y, az, nb); B(2, y, az, nb); }                                          // 아치 기둥
+      B(-2, 3, az, nb); B(2, 3, az, nb); B(-1, 4, az, nb); B(1, 4, az, nb); B(0, 5, az, mag);                      // 코벨 뾰족머리 + 마그마 키스톤
+      B(-2, 3, az, nb); B(-2, 1, az - (az === 9 ? -1 : 1), glow);                                                  // 아치 벽감 발광
+    }
+    B(-1, 0, 14, glow); B(1, 0, 14, glow);                                                                        // 다리 입구 화톳불
+    // ── 관문(정면 벽 dz 6, 아치형 대문 + 성첩) ──
+    for (let dx = -5; dx <= 5; dx++) for (let y = 0; y <= 3; y++) { const gate = Math.abs(dx) <= 1 && y <= 2; if (!gate) B(dx, y, 6, nb); }
+    B(-2, 3, 6, nb); B(2, 3, 6, nb); B(-1, 3, 6, nb); B(1, 3, 6, nb); B(0, 4, 6, mag);                            // 대문 뾰족 아치머리
+    for (let dx = -5; dx <= 5; dx += 2) B(dx, 4, 6, nb);                                                          // 관문 성첩(총안)
+    B(-3, 2, 6, glow); B(3, 2, 6, glow);                                                                          // 관문 발광
+    // ── 쌍둥이 망루(관문 양끝, dx ±5, 5층 원형 느낌 사각탑 + 성첩 + 화로) ──
+    for (const tx of [-5, 5]) {
+      for (let y = 0; y <= 6; y++) for (const [ox, oz] of [[0, 5], [1, 5], [0, 4], [1, 4]]) { const px = tx + (tx < 0 ? ox : -ox); B(px, y, oz, ((px + oz + y) & 1) ? nb : obs); }   // 탑 벽(무늬)
+      const ix = tx < 0 ? tx + 0 : tx - 0;
+      for (let y = 1; y <= 5; y++) B(tx, y, 5, tx < 0 ? nb : nb);                                                 // 탑 심(안정)
+      for (const [ox, oz] of [[0, 5], [1, 5], [0, 4], [1, 4]]) { const px = tx + (tx < 0 ? ox : -ox); if (((px + oz) & 1) === 0) B(px, 7, oz, nb); }   // 탑 성첩
+      B(tx < 0 ? tx : tx, 6, 5, glow); B(tx < 0 ? tx + 1 : tx - 1, 3, 4, glow);                                   // 탑 창 발광
+    }
+    // ── 중앙 성채(3층 keep: dx -3..3, dz -3..3, 벽 hollow, 높이 11, 블레이즈 제단) ──
+    for (let y = 0; y <= 10; y++) for (let dx = -3; dx <= 3; dx++) for (let dz = -3; dz <= 3; dz++) {
+      const edge = dx === -3 || dx === 3 || dz === -3 || dz === 3;
+      if (!edge) continue;
+      const door = dz === 3 && Math.abs(dx) <= 1 && y <= 2;                                                       // 남면 출입 아치
+      const win = (y === 4 || y === 7) && ((Math.abs(dx) === 3 && dz === 0) || (Math.abs(dz) === 3 && dx === 0)); // 십자 창
+      if (door || win) continue;
+      B(dx, y, dz, ((dx + dz + y) & 1) ? nb : obs);
+    }
+    B(-1, 3, 3, nb); B(1, 3, 3, nb); B(0, 4, 3, mag);                                                             // 성채 출입 아치머리
+    for (let dx = -3; dx <= 3; dx += 2) { B(dx, 11, 3, nb); B(dx, 11, -3, nb); }                                  // 성채 성첩(전면/후면)
+    for (let dz = -3; dz <= 3; dz += 2) { B(-3, 11, dz, nb); B(3, 11, dz, nb); }                                  // 성채 성첩(측면)
+    for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) { B(dx, 3, dz, nb); B(dx, 7, dz, nb); }     // 2·3층 바닥
+    for (let dx = -2; dx <= 2; dx += 2) B(dx, 3, 2, glow);                                                        // 1층 천장 조명
+    // 내부 계단(코벨 나선) — 1→2층, 2→3층 (전블럭 층단)
+    B(2, 1, -2, nb); B(2, 2, -1, nb); B(2, 3, 0, nb); B(-2, 5, -2, nb); B(-2, 6, -1, nb); B(-2, 7, 0, nb);
+    // ── 블레이즈 제단(최상층 옥상, 소울샌드 제단 + 마그마 화심 + 발광 기둥) ──
+    for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) B(dx, 11, dz, soul);                        // 소울샌드 제단대
+    B(0, 12, 0, mag); B(0, 13, 0, glow);                                                                          // 화심 + 성화
+    for (const [ox, oz] of [[-2, -2], [2, -2], [-2, 2], [2, 2]]) { B(ox, 11, oz, nb); B(ox, 12, oz, glow); }      // 제단 4모서리 성화 기둥
+    // ── 안뜰 디테일: 소울샌드 화원, 용암 화로, 코블 잔해, 발광 노두 ──
+    B(-5, 0, 2, soul); B(-4, 0, 2, soul); B(-5, 0, 3, soul); B(-5, 1, 2, mag);                                    // 소울 화원
+    B(5, 0, 2, mag); B(5, 0, 3, lava); B(4, 0, 3, nb);                                                            // 용암 화로(테두리)
+    B(-5, 0, -3, obs); B(-4, 0, -3, obs); B(-5, 1, -3, glow);                                                     // 흑요석 잔해 + 등불
+    B(4, 0, -4, soul); B(5, 0, -4, mag); B(4, 1, -4, glow);                                                       // 뒤뜰 화로
   }
   function buildMushroomHouse(cx, cz, base) {
     // V18: 동화풍 버섯 오두막 — 버섯대 몸통 + 흰 점박이 붉은 갓 + 둥근 창 + 반블럭 처마 + 현관 랜턴
