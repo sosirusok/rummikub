@@ -492,7 +492,7 @@
     });
     buildHouse(190, 206, 9, 7, 20, ID.oak_planks, ID.spruce_planks);       // 미니언 관리소
     buildHouse(244, 234, 9, 7, 20, ID.birch_planks, ID.oak_planks);        // 펫 상점(자작)
-    buildHouse(206, 216, 7, 6, 20, ID.spruce_planks, ID.dark_oak_log);     // 경매장
+    buildRotunda(208, 218, 4, 20, { col: ID.quartz_block, band: ID.purpur, gdir: 1 });   // 경매장 — V20-Q 개방형 원형 로툰다(경매 NPC)
     buildForge(232, 216, 8, 7, 20);                                        // 대장간(재련) — V20-P 하프팀버 박공+굴뚝+용광로 베이
     buildHouse(208, 244, 8, 6, 20, ID.oak_planks, ID.oak_planks);          // 제작소
     buildHouse(230, 244, 8, 6, 20, ID.quartz_block, ID.purpur);            // 스타포스 강화소(메이플 감성)
@@ -907,6 +907,38 @@
     setW(x1, base, fz - 1, fence); setW(x1, base + 1, fz - 1, fence); setW(x1, base + 2, fz - 1, ID.glowstone);   // 도구걸이 기둥+등
     // 실내 조명
     setW(x0 + (wdt >> 1), base + wallH - 1, cz, ID.glowstone);
+  }
+  // V20-Q: 경매장 — 돔/박공과 또 다른 틀. 개방형 원형 로툰다(하늘 개방) + 원주 기둥 + 링 지붕 + 계단식 관중석 + 중앙 경매 단상.
+  function buildRotunda(cx, cz, r, base, o) {
+    const col = o.col != null ? o.col : ID.quartz_block, band = o.band != null ? o.band : ID.purpur;
+    const floor = o.floor != null ? o.floor : ID.polished_andesite;
+    flattenSite(cx - r - 2, cz - r - 2, cx + r + 2, cz + r + 2, base - 1);
+    const ring = (rad, y, id, gapAng) => { const n = Math.max(8, Math.round(rad * 8)); for (let a = 0; a < n; a++) { const th = a / n * Math.PI * 2; if (gapAng != null && Math.abs(((th - gapAng + Math.PI) % (Math.PI * 2)) - Math.PI) < 0.35) continue; setW(cx + Math.round(Math.cos(th) * rad), y, cz + Math.round(Math.sin(th) * rad), id); } };
+    // 원형 바닥(체크) + 계단식 관중석(2단, 바깥으로 상승)
+    for (let dx = -r; dx <= r; dx++) for (let dz = -r; dz <= r; dz++) { const d = Math.hypot(dx, dz); if (d <= r + 0.4) setW(cx + dx, base - 1, cz + dz, ((dx + dz) & 1) ? floor : ID.stone_bricks); }
+    for (let t = 1; t <= 2; t++) { const rad = r - t + 1; const n = Math.max(8, Math.round(rad * 8)); for (let a = 0; a < n; a++) { const th = a / n * Math.PI * 2; const x = cx + Math.round(Math.cos(th) * rad), z = cz + Math.round(Math.sin(th) * rad); const f = Math.abs(Math.cos(th)) > Math.abs(Math.sin(th)) ? (Math.cos(th) > 0 ? 3 : 1) : (Math.sin(th) > 0 ? 2 : 0); const sid = stairIdFor(ID.stone_bricks, f); setW(x, base - 1 + t, z, sid != null ? sid : ID.stone_bricks); } }
+    // 낮은 외벽(1단) — 관중석 뒤
+    ring(r + 1, base + 1, ID.stone_bricks);
+    // 8 원주 기둥(5단) + 상단 밴드(자수정) + 등불
+    const gd = (o.gdir === 1 ? 1 : -1), gapTh = gd === 1 ? Math.PI / 2 : -Math.PI / 2;
+    for (let k = 0; k < 8; k++) {
+      const th = k / 8 * Math.PI * 2;
+      if (Math.abs(((th - gapTh + Math.PI) % (Math.PI * 2)) - Math.PI) < 0.4) continue;   // 정문 방향은 기둥 생략(개방)
+      const x = cx + Math.round(Math.cos(th) * r), z = cz + Math.round(Math.sin(th) * r);
+      for (let y = base; y < base + 5; y++) setW(x, y, z, col);
+      setW(x, base + 5, z, band); setW(x, base + 6, z, ID.glowstone);
+    }
+    // 링 지붕(기둥 위, 중앙은 하늘 개방) — 자수정 밴드 + 처마 슬랩
+    ring(r, base + 5, band, gapTh);
+    const slab = slabIdFor(band); if (slab != null) ring(r + 1, base + 5, slab, gapTh);
+    // 중앙 경매 단상: 2단 + 슬랩 상판 + 울타리 강대 + 배너 + 발광
+    setW(cx, base, cz, ID.stone_bricks); setW(cx, base + 1, cz, band);
+    const topSlab = slabIdFor(band); if (topSlab != null) setW(cx, base + 2, cz, topSlab);
+    setW(cx, base + 3, cz, ID.oak_fence); setW(cx, base + 4, cz, ID.wool_red != null ? ID.wool_red : ID.glowstone);
+    // 정문 계단참 + 레드카펫(광장 쪽)
+    const gz = cz + (r + 1) * gd;
+    for (let dx = -1; dx <= 1; dx++) { if (slab != null) setW(cx + dx, base - 1, gz, slab); setW(cx + dx, base - 1, gz + gd, ID.wool_red != null ? ID.wool_red : ID.stone_bricks); }
+    for (const lx of [cx - 2, cx + 2]) { for (let y = base; y < base + 3; y++) setW(lx, y, gz - gd, band); setW(lx, base + 3, gz - gd, ID.glowstone); }
   }
   function buildRuinsZone() {
     // V18: 이끼 낀 고대 폐허 — 무너진 아치·기울어진 기둥·부서진 바닥 타일·덩굴
