@@ -6,7 +6,7 @@
 (function () {
   const D = () => window.ECON_DATA;
   const SAVE_KEY = 'econ_save_v1';
-  let running = false, tickTimer = null, zone = 'hub', hubTab = 'shop', invFilter = 'all', invDetailKey = null, craftSel = null, bazaarCat = 'farming', bazaarQty = 16;
+  let running = false, tickTimer = null, zone = 'hub', hubTab = 'shop', invFilter = 'all', invDetailKey = null, craftSel = null, bazaarCat = 'farming', bazaarQty = 16, ahDur = 6;
   let P = null;   // 플레이어 상태(로드 후 채워짐)
   let activeCombat = null;   // { kind:'slayer'|'dungeonBoss', hp,maxHp,dmg,playerHp,maxPlayerHp,_hits, onWin, onLose }
   let dungeonRun = null;     // { floor, roomIdx, rooms:[...], score, secretStep }
@@ -47,6 +47,9 @@
       hotbar: [null, null, null, null, null, null, null, null],   // 핫바 1~8 지정(9번=스카이블럭 메뉴 고정)
       // --- V13-B 필드 ---
       quests: { active: {}, done: {}, seen: {} },   // 위치기반 퀘스트({active:{key:{base}}, done:{key:1}, seen:{key:1}})
+      // --- V20-F 필드 ---
+      ahListings: [],                        // 경매장 내 등록 매물([{id,key,qty,kind,price,bid,bidder,endsAt,settled,sold,rolls,ench,hpb,star}])
+      ahSeq: 0,                              // 매물 고유 id 시퀀스
     };
   }
   // 구버전 세이브 마이그레이션: 누락 필드를 기본값으로 채움(중첩 객체 포함)
@@ -80,6 +83,8 @@
     if (!Array.isArray(p.hotbar) || p.hotbar.length !== 8) p.hotbar = [null, null, null, null, null, null, null, null];   // V12
     if (!p.quests || typeof p.quests !== 'object') p.quests = { active: {}, done: {}, seen: {} };   // V13-B
     if (!p.quests.active) p.quests.active = {}; if (!p.quests.done) p.quests.done = {}; if (!p.quests.seen) p.quests.seen = {};
+    if (!Array.isArray(p.ahListings)) p.ahListings = [];   // V20-F 경매장
+    if (typeof p.ahSeq !== 'number') p.ahSeq = 0;
     return p;
   }
   function todayStr() { return new Date().toISOString().slice(0, 10); }
@@ -753,6 +758,98 @@
     removeItem(key, qty); const gain = p.sell * qty; addGold(gain);
     P.bazaarSold = (P.bazaarSold || 0) + qty;
     toastFn(`🏪 즉시판매: ${p.name} ×${qty} (+${fmtGold(gain)})`, true);
+    saveNow(); renderZone();
+  }
+
+  /* ---------------- 경매장(Auction House) — 경매/즉구(BIN) 판매 창구 V20-F ---------------- */
+  const AH_BUYERS = ['수집가 에드먼드', '상인 셀레스트', '남작 볼프강', '길드장 미라', '탐험가 로안', '연금술사 바네사', '기사 갈라드', '음유시인 핀'];
+  function ahAH() { return D().AUCTION_HOUSE; }
+  function ahListingsArr() { if (!Array.isArray(P.ahListings)) P.ahListings = []; return P.ahListings; }
+  function ahItemName(L) { const sd = shopDef(L.key); return sd ? sd.name : L.key; }
+  function ahBuyerName(L) { return AH_BUYERS[Math.floor(bzHash('buyer' + L.id + L.key) * AH_BUYERS.length)]; }
+  // 물품 공정가치(시세) — 낙찰가 산정 기준. 등록 id로 시드해 세이브 무관 재현.
+  function ahFairValue(L) {
+    const sd = shopDef(L.key); const base = sd && sd.sellPrice > 0 ? sd.sellPrice : 100;
+    const A = ahAH(); const r = bzHash('val' + L.id + L.key);
+    return base * (A.auctionValueMin + r * (A.auctionValueMax - A.auctionValueMin));
+  }
+  // 경매 현재 입찰가(표시용): 시간 경과에 따라 시작가→공정가치로 상승(공정가치 ≥ 시작가일 때)
+  function ahCurrentBid(L) {
+    if (L.kind !== 'auction') return L.price;
+    if (L.settled) return L.finalPrice || L.price;
+    const val = ahFairValue(L); if (val < L.price) return L.price;   // 유찰 예정 → 입찰 없음
+    const total = Math.max(1, L.endsAt - L.created);
+    const prog = Math.min(1, Math.max(0, (Date.now() - L.created) / total));
+    // 초반 완만·후반 급등(입찰 경쟁 곡선)
+    const eased = prog * prog;
+    return Math.round(L.price + (val - L.price) * eased);
+  }
+  function ahTimeLeft(L) { return Math.max(0, L.endsAt - Date.now()); }
+  // 만료/판매 정산: 매 렌더/열람 시 호출. 결정적(시드 기반).
+  function ahSettle() {
+    const A = ahAH(); const now = Date.now(); let changed = false;
+    for (const L of ahListingsArr()) {
+      if (L.settled) continue;
+      if (L.kind === 'auction') {
+        if (now >= L.endsAt) {
+          const val = ahFairValue(L);
+          if (val >= L.price) { L.sold = true; L.finalPrice = Math.max(L.price, Math.round(val)); L.buyer = ahBuyerName(L); }
+          else { L.sold = false; }
+          L.settled = true; changed = true;
+        }
+      } else {   // BIN(즉시구매) — 시세×배수 이하일 때 시드 확률로 조기 판매, 기간 만료 시 유찰
+        const val = ahFairValue(L) * A.binSellValueMul;
+        const durH = Math.max(0.01, (L.endsAt - L.created) / 3600000);
+        const cheapEdge = Math.max(0, Math.min(1, (val - L.price) / Math.max(1, val)));
+        const willSell = L.price <= val && bzHash('binw' + L.id) < Math.min(0.97, 0.35 + cheapEdge);
+        const soldDelayH = bzHash('bint' + L.id) * durH;
+        if (willSell && (now - L.created) / 3600000 >= soldDelayH) {
+          L.sold = true; L.finalPrice = L.price; L.buyer = ahBuyerName(L); L.settled = true; changed = true;
+        } else if (now >= L.endsAt) { L.sold = false; L.settled = true; changed = true; }
+      }
+    }
+    if (changed) saveNow();
+    return changed;
+  }
+  function ahActiveCount() { return ahListingsArr().filter(L => !L.settled).length; }
+  // 경매/BIN 등록: 보유 아이템 1개를 에스크로(인벤에서 제거)하고 매물 생성
+  function ahList(itemKey, kind, price, durationH) {
+    const A = ahAH();
+    if (ahListingsArr().length >= A.maxListings) { toastFn(`경매 슬롯이 가득 찼어요 (최대 ${A.maxListings}) — 낙찰 수령/취소 후 다시`, false); return false; }
+    if (!hasItem(itemKey)) { toastFn('보유하지 않은 아이템이에요', false); return false; }
+    if ((P.locked || {})[itemKey]) { toastFn('🔒 잠긴 아이템은 등록할 수 없어요', false); return false; }
+    price = Math.max(1, Math.round(price || 0));
+    kind = kind === 'bin' ? 'bin' : 'auction';
+    durationH = A.durations.includes(durationH) ? durationH : A.durations[0];
+    if (!removeItem(itemKey, 1)) return false;
+    const now = Date.now();
+    const L = { id: ++P.ahSeq, key: itemKey, qty: 1, kind, price, created: now, endsAt: now + durationH * 3600000, settled: false, sold: false, buyer: null, finalPrice: 0 };
+    ahListingsArr().push(L);
+    toastFn(`📜 경매장 등록: ${ahItemName(L)} — ${kind === 'bin' ? '즉시구매' : '경매'} ${fmtGold(price)}`, true);
+    saveNow(); renderZone(); return true;
+  }
+  // 낙찰/유찰 수령: 판매 시 골드(수수료 차감), 유찰 시 아이템 반환
+  function ahClaim(id) {
+    ahSettle();
+    const arr = ahListingsArr(); const i = arr.findIndex(L => L.id === id); if (i < 0) return;
+    const L = arr[i]; if (!L.settled) { toastFn('아직 진행 중인 매물이에요', false); return; }
+    if (L.sold) {
+      const fee = Math.round(L.finalPrice * ahAH().feePct / 100);
+      const net = Math.max(0, L.finalPrice - fee); addGold(net);
+      stat('ahSold', 1);
+      toastFn(`💰 낙찰! ${ahItemName(L)} → ${L.buyer} (+${fmtGold(net)}${fee ? `, 수수료 ${fmtGold(fee)}` : ''})`, true);
+    } else {
+      addItem(L.key, L.qty);
+      toastFn(`↩ 유찰 — ${ahItemName(L)} 반환됨`, false);
+    }
+    arr.splice(i, 1); saveNow(); renderZone();
+  }
+  // 진행 중 매물 취소(아이템 반환) — 정산 전만 가능
+  function ahCancel(id) {
+    const arr = ahListingsArr(); const i = arr.findIndex(L => L.id === id); if (i < 0) return;
+    const L = arr[i]; if (L.settled) { ahClaim(id); return; }
+    addItem(L.key, L.qty); arr.splice(i, 1);
+    toastFn(`취소됨 — ${ahItemName(L)} 반환`, false);
     saveNow(); renderZone();
   }
 
@@ -1830,7 +1927,7 @@
   const HUB_TABS = [
     ['shop', '🛒 상점'], ['bank', '🏦 은행'], ['minions', '⚙️ 미니언'], ['pets', '🐾 펫'],
     ['talismans', '📿 장신구'], ['enchant', '✨ 인챈트'], ['star', '⭐ 강화'], ['reforge', '🔨 리포지'],
-    ['craft', '⚒️ 제작'], ['bazaar', '🏪 바자회'], ['deals', '🎪 특가'], ['collections', '📚 컬렉션'], ['stats', '📊 스탯'],
+    ['craft', '⚒️ 제작'], ['bazaar', '🏪 바자회'], ['auction', '🏛️ 경매장'], ['deals', '🎪 특가'], ['collections', '📚 컬렉션'], ['stats', '📊 스탯'],
     ['multi', '🌐 멀티'],
   ];
   function iconImg(key) { return (typeof window.econIcon === 'function') ? `<img class="econ-icon" src="${window.econIcon(key)}" alt="">` : ''; }
@@ -1900,6 +1997,7 @@
       case 'reforge': return reforgeHTML();
       case 'craft': return craftHTML();
       case 'bazaar': return bazaarHTML();
+      case 'auction': return auctionHTML();
       case 'deals': return dealsHTML();
       case 'collections': return collectionsHTML();
       case 'stats': return statsHTML();
@@ -2421,6 +2519,65 @@
       <div class="econ-tierbtns" style="margin:6px 0">거래 수량: ${qtyNav}</div>
       <div class="econ-shopgrid">${rows}</div>`;
   }
+  function ahFmtDur(ms) {
+    if (ms <= 0) return '종료';
+    const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000);
+    return h > 0 ? `${h}시간 ${m}분` : `${m}분`;
+  }
+  function auctionHTML() {
+    ahSettle();
+    const A = D().AUCTION_HOUSE;
+    const arr = ahListingsArr();
+    // 1) 내 매물
+    const mine = arr.slice().sort((a, b) => (a.settled === b.settled ? a.endsAt - b.endsAt : (a.settled ? -1 : 1)));
+    const listRows = mine.length ? mine.map(L => {
+      const nm = ahItemName(L);
+      let status, action;
+      if (L.settled && L.sold) {
+        status = `<span style="color:#4ade80">✅ 낙찰 ${fmtGold(L.finalPrice)}</span> <span class="muted">→ ${L.buyer}</span>`;
+        action = `<button class="btn btn--sm" data-act="econ_ah_claim" data-id="${L.id}">💰 수령</button>`;
+      } else if (L.settled && !L.sold) {
+        status = `<span class="muted">↩ 유찰(구매자 없음)</span>`;
+        action = `<button class="btn btn--sm btn--ghost" data-act="econ_ah_claim" data-id="${L.id}">회수</button>`;
+      } else if (L.kind === 'auction') {
+        status = `⏳ 경매 · 현재 입찰 <b>${fmtGold(ahCurrentBid(L))}</b> · 남은 ${ahFmtDur(ahTimeLeft(L))}`;
+        action = `<button class="btn btn--sm btn--ghost" data-act="econ_ah_cancel" data-id="${L.id}">취소</button>`;
+      } else {
+        status = `🏷️ 즉시구매 · <b>${fmtGold(L.price)}</b> · 남은 ${ahFmtDur(ahTimeLeft(L))}`;
+        action = `<button class="btn btn--sm btn--ghost" data-act="econ_ah_cancel" data-id="${L.id}">취소</button>`;
+      }
+      return `<div class="econ-shopitem econ-tt"${ttAttr(shopDef(L.key))}>
+        ${iconImg(L.key)}<span>${nm}</span>
+        <span class="muted econ-idesc">${status}</span>
+        <span>${action}</span>
+      </div>`;
+    }).join('') : '<p class="muted">등록한 매물이 없어요. 아래에서 잉여 아이템을 경매에 올려보세요!</p>';
+    // 2) 등록 — 판매 가능한 보유 아이템(가치순 상위 40)
+    const durNav = A.durations.map(h => `<button class="btn btn--sm ${h === ahDur ? '' : 'btn--ghost'}" data-act="econ_ah_dur" data-h="${h}">${h}시간</button>`).join('');
+    const sellable = Object.keys(P.inv || {})
+      .map(k => ({ k, sd: shopDef(k), n: P.inv[k] }))
+      .filter(x => x.sd && x.sd.sellPrice > 0 && !(P.locked || {})[x.k])
+      .sort((a, b) => b.sd.sellPrice - a.sd.sellPrice).slice(0, 40);
+    const slotFull = arr.length >= A.maxListings;
+    const listForms = sellable.length ? sellable.map(x => {
+      const base = x.sd.sellPrice;
+      const binPrice = Math.round(base * 2);
+      return `<div class="econ-shopitem econ-tt"${ttAttr(x.sd)}>
+        ${iconImg(x.k)}<span>${x.sd.name} <b>×${fmtNum(x.n)}</b></span>
+        <span class="muted econ-idesc">시세 ${fmtGold(base)} · 경매 예상 낙찰 ${fmtGold(Math.round(base * A.auctionValueMin))}~${fmtGold(Math.round(base * A.auctionValueMax))}</span>
+        <span style="display:flex;gap:4px">
+          <button class="btn btn--sm" data-act="econ_ah_list" data-key="${x.k}" data-kind="auction" data-price="${base}" ${slotFull ? 'disabled' : ''}>경매(${ahDur}h)</button>
+          <button class="btn btn--sm btn--ghost" data-act="econ_ah_list" data-key="${x.k}" data-kind="bin" data-price="${binPrice}" ${slotFull ? 'disabled' : ''}>즉구 ${fmtGold(binPrice)}</button>
+        </span>
+      </div>`;
+    }).join('') : '<p class="muted">등록할 수 있는 아이템이 없어요(채집·드롭·조합으로 획득한 잉여분을 올릴 수 있어요).</p>';
+    return `<h4>🏛️ 경매장 — 잉여 아이템 판매(경매/즉시구매)</h4>
+      <p class="econ-note">보유 아이템을 경매(시간 경과로 입찰 상승, 인내의 보상)나 즉시구매(BIN)로 등록하세요. NPC 수집가가 사들입니다. 장비는 골드로 살 수 없어요 — 경매장은 <b>판매 창구</b>예요. 슬롯 ${arr.length}/${A.maxListings} · 수수료 ${A.feePct}%.</p>
+      <h4 style="margin-top:10px">📜 내 매물</h4>
+      <div class="econ-shopgrid">${listRows}</div>
+      <h4 style="margin-top:14px">➕ 등록 &nbsp;<span class="muted" style="font-weight:400">경매 기간: ${durNav}</span></h4>
+      <div class="econ-shopgrid">${listForms}</div>`;
+  }
   function collectionsHTML() {
     return D().COLLECTIONS.map(cat => `<h4>${cat.category}</h4><div class="econ-colgrid">${cat.resources.map(r => {
       const tier = collectionTierIdx(r.key), maxT = r.tierThresholds.length;
@@ -2702,6 +2859,10 @@
       case 'bz_qty': bazaarQty = Number(el.dataset.q) || 1; renderZone(); break;
       case 'bz_buy': bazaarInstantBuy(el.dataset.key, bazaarQty); break;
       case 'bz_sell': bazaarInstantSell(el.dataset.key, bazaarQty); break;
+      case 'ah_dur': ahDur = Number(el.dataset.h) || 6; renderZone(); break;
+      case 'ah_list': ahList(el.dataset.key, el.dataset.kind, Number(el.dataset.price), ahDur); break;
+      case 'ah_claim': ahClaim(Number(el.dataset.id)); break;
+      case 'ah_cancel': ahCancel(Number(el.dataset.id)); break;
       case 'dungeon_attack': dungeonAttack(); break;
       case 'dungeon_loot': dungeonLootTreasure(); break;
       case 'bank_deposit': bankDeposit(el.dataset.amt === 'all' ? 'all' : Number(el.dataset.amt)); break;
@@ -2880,7 +3041,7 @@
       placeMinion, upgradeMinion, upgradeMinionStorage, collectMinion, tickMinions, minionStorageCap, minionSpeedMul, useMinionFuel,
       startSlayer, combatAttack, combatFlee, getActiveCombat: () => activeCombat,
       startDungeon, dungeonAdvance, dungeonSecretClick, getDungeonRun: () => dungeonRun, dungeonGrade, canEnterFloor,
-      reforge, reforgeSlot, reforgePremium, reforgeApex, bazaarPrice, bazaarInstantBuy, bazaarInstantSell, playerAttackPower, playerDefensePct, playerMaxHp, playerStr, playerStats, playerCritRoll, skillXpProgress, minionUnlocked, recordMinionCraft,
+      reforge, reforgeSlot, reforgePremium, reforgeApex, bazaarPrice, bazaarInstantBuy, bazaarInstantSell, ahList, ahClaim, ahCancel, ahSettle, ahFairValue, ahCurrentBid, playerAttackPower, playerDefensePct, playerMaxHp, playerStr, playerStats, playerCritRoll, skillXpProgress, minionUnlocked, recordMinionCraft,
       gemStats, socketGem, applyRecomb, gemSlotsOf, recombMul,
       equippedWeapon, dungeonClassDef,
       hatchPet, activatePet, petLevel, petStats, petDef, equipPetItem,
