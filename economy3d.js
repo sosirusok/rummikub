@@ -1993,14 +1993,14 @@
     const ok = (x, z) => surfaceTop(x, z) > 3;
     const base = (x, z) => surfaceTop(x, z) + 1;
     buildArrivalPlaza(mode);   // V20-AH: 섬마다 고유 컨셉 포탈 도착 광장(손 배치)
-    if (mode === 'park' && ok(70, 100)) buildHouse(67, 97, 7, 6, base(70, 100), ID.spruce_planks, ID.oak_planks, ID.oak_log);   // 삼림 산장
-    else if (mode === 'barn' && ok(58, 100)) buildBarnEstate();   // V20-AB: 손 배치 대형 농장(박공 붉은 헛간+원통 사일로+풍차+건초 야적+가축 우리+밀밭)
+    if (mode === 'park' && ok(70, 100)) { buildHouse(67, 97, 7, 6, base(70, 100), ID.spruce_planks, ID.oak_planks, ID.oak_log); buildOtherDetail('park'); }   // 삼림 산장 + V20-BA(6차) 디테일
+    else if (mode === 'barn' && ok(58, 100)) { buildBarnEstate(); buildOtherDetail('barn'); }   // V20-AB 대형 농장 + V20-BA(6차) 디테일
     else if (mode === 'gold' && ok(50, 90)) { buildGoldOutpost(); buildGoldDetail(); }   // V20-W 전초기지 + V20-AX(3차) 채광 디테일
     else if (mode === 'deep' && ok(48, 80)) buildDeepDepot();   // V20-X: 손 배치 지하 크리스탈 채광 정거장
     else if (mode === 'spider' && ok(74, 88)) { buildSpiderNest(); buildMonsterDetail('spider'); }   // V20-AA 거미굴 + V20-AZ(5차) 디테일
     else if (mode === 'nether' && ok(62, 78)) { buildNetherKeep(); buildMonsterDetail('nether'); }   // V20-Y 네더 요새 + V20-AZ(5차) 디테일
     else if (mode === 'end' && ok(62, 84)) { buildEndSanctum(); buildMonsterDetail('end'); }   // V20-Z 엔드 성소 + V20-AZ(5차) 디테일
-    else if (mode === 'mushroom' && ok(58, 100)) buildMushroomColony();   // V20-AC: 손 배치 대형 거대버섯 군락(높이 차등 갓·버섯대 로지·오아시스·균사 지면)
+    else if (mode === 'mushroom' && ok(58, 100)) { buildMushroomColony(); buildOtherDetail('mushroom'); }   // V20-AC 거대버섯 군락 + V20-BA(6차) 디테일
   }
   // V20-W: 골드 광산 대형 전초기지 — 좌표 한 칸씩 손 배치(대칭 함수 아님).
   //   중심(50,90): 갱도 + 목재 헤드프레임 타워 + 도르래 + 광차 데크 + 광석 창고 + 감독관 오두막.
@@ -2050,6 +2050,45 @@
     B(-3, 0, 4, cob); B(-2, 0, 4, cob); B(-3, 1, 4, cob);                          // 바위 무더기
     B(6, 0, 4, fence); B(6, 1, 4, glow);                                           // 가로등
     B(-5, 0, 3, fence); B(-5, 1, 3, glow);                                         // 가로등2
+  }
+  // V20-BA 6차: 기타 섬(농장/파크/버섯) 디테일 — 좌표 한 칸씩 손 배치(해시). 빈 지면을 섬별 지피로.
+  //   저사양·걷기 보장: 대부분 비고체 키큰풀, 고체(건초/버섯/바위)는 희소. 건물·작물·랜드마크 근처 비움.
+  function buildOtherDetail(mode) {
+    const tg = ID.tall_grass, leaf = ID.oak_leaves != null ? ID.oak_leaves : ID.spruce_leaves, log = ID.oak_log;
+    const hay = ID.hay_block != null ? ID.hay_block : ID.wool_yellow, fence = ID.oak_fence, stem = ID.mushroom_stem;
+    const rcap = ID.mushroom_red_block, bcap = ID.mushroom_brown_block != null ? ID.mushroom_brown_block : ID.mushroom_red_block;
+    const myc = ID.mycelium, sand = ID.sand, dead = ID.dead_bush != null ? ID.dead_bush : tg, moss = ID.mossy_cobblestone, cob = ID.cobblestone;
+    const clearAbove = (x, z, t, n) => { for (let y = t; y < t + n; y++) if (getBlockLocal(x, y, z) !== 0) return false; return true; };
+    const gOk = (id) => {
+      if (mode === 'mushroom') return id === myc || id === sand;
+      return id === ID.grass || id === ID.dirt;   // 농장/파크
+    };
+    const skip = (x, z) => {
+      if (mode === 'barn') return x >= 40 && x <= 78 && z >= 20 && z <= 118;    // 밭+헛간 구역
+      if (mode === 'park') return x >= 60 && x <= 84 && z >= 60 && z <= 84;     // 중앙 정자
+      return x >= 50 && x <= 84 && z >= 88 && z <= 116;                          // 버섯 군락+오아시스
+    };
+    for (let x = 14; x <= 130; x += 5) for (let z = 14; z <= 130; z += 5) {
+      if (skip(x, z)) continue;
+      const t = surfaceTop(x, z), g = t - 1; if (g < 4) continue;
+      if (!gOk(getBlockLocal(x, g, z))) continue;
+      if (getBlockLocal(x, t, z) !== 0) continue;
+      const h = hash3(x, 70, z);
+      if (mode === 'barn') {
+        if (h < 0.03) { setW(x, t, z, hay); if (hash3(x, 71, z) < 0.5) setW(x, t + 1, z, hay); }           // 건초 더미(드묾)
+        else if (h < 0.06) { setW(x, t, z, fence); setW(x + 1, t, z, fence); }                              // 울타리 조각
+        else if (h < 0.40) { if (tg != null) { setW(x, t, z, tg); if (hash3(x, 72, z) < 0.4) setW(x + 1, t, z, tg); } }   // 목초
+      } else if (mode === 'park') {
+        if (h < 0.04) { if (clearAbove(x, z, t, 4) && Math.abs(surfaceTop(x + 1, z) - t) <= 1) { setW(x, t, z, log); setW(x, t + 1, z, log); setW(x - 1, t + 1, z, leaf); setW(x + 1, t + 1, z, leaf); setW(x, t + 2, z, leaf); } }   // 통나무+잎 그루터기
+        else if (h < 0.09) { setW(x, t, z, stem); setW(x, t + 1, z, hash3(x, 73, z) < 0.5 ? rcap : bcap); }  // 작은 버섯
+        else if (h < 0.40) { if (tg != null) { setW(x, t, z, tg); if (hash3(x, 74, z) < 0.35) setW(x, t, z + 1, tg); } }   // 하층 풀
+      } else {   // mushroom
+        const onSand = getBlockLocal(x, g, z) === sand;
+        if (onSand) { if (h < 0.10) setW(x, t, z, dead); else if (h < 0.16) { setW(x, t, z, ((x + z) & 1) ? cob : moss); } }   // 사막: 마른덤불·바위
+        else { if (h < 0.08) { setW(x, t, z, stem); setW(x, t + 1, z, hash3(x, 75, z) < 0.55 ? rcap : bcap); }   // 균사: 작은 버섯
+        else if (h < 0.40) { if (tg != null) setW(x, t, z, tg); } }
+      }
+    }
   }
   // V20-AZ 5차: 몬스터 섬 디테일 — 좌표 한 칸씩 손 배치(해시). 섬별(거미/네더/엔드) 테마 소품으로
   //   표면 허허벌판을 채운다. 랜드마크·스폰 근처는 비움. 저사양 위해 대부분 작은 고체.
