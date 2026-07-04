@@ -1482,7 +1482,7 @@
     else if (mode === 'barn' && ok(58, 100)) { buildHouse(54, 96, 10, 8, base(58, 100), ID.bricks, ID.dark_oak_log, ID.dark_oak_log); const by = base(52, 98); for (const [hx, hz] of [[52, 98], [53, 98], [52, 99]]) { setW(hx, by, hz, ID.hay_block); setW(hx, by + 1, hz, ID.hay_block); } }   // 붉은 헛간 + 건초더미
     else if (mode === 'gold' && ok(50, 90)) buildGoldOutpost();   // V20-W: 손 배치 대형 광산 전초기지(헤드프레임+갱도+광차 데크+창고+감독관 오두막)
     else if (mode === 'deep' && ok(48, 80)) buildDeepDepot();   // V20-X: 손 배치 지하 크리스탈 채광 정거장
-    else if (mode === 'spider' && ok(74, 88)) { buildHouse(72, 86, 6, 5, base(74, 88), ID.dark_oak_planks, ID.dark_oak_planks, ID.dark_oak_log); const wy = base(74, 88); for (let i = 0; i < 5; i++) setW(71 + (i % 4), wy + 3 + (i % 2), 85 + (i % 3), ID.wool_white); }   // 어두운 오두막 + 거미줄
+    else if (mode === 'spider' && ok(74, 88)) buildSpiderNest();   // V20-AA: 손 배치 대형 거미굴(이끼 바위 둥지+뒤틀린 나무탑+거미줄 장막+알집+브루드 제단)
     else if (mode === 'nether' && ok(62, 78)) buildNetherKeep();   // V20-Y: 손 배치 대형 네더 요새(용암 해자+뾰족아치 다리+블레이즈 제단탑+성첩 망루)
     else if (mode === 'end' && ok(62, 84)) buildEndSanctum();   // V20-Z: 손 배치 대형 엔드 성소(흑요석 첨탑+자수정 나선탑+엔드로드 회랑+공허 다리)
     else if (mode === 'mushroom' && ok(58, 100)) buildMushroomHouse(58, 100, base(58, 100));   // 거대 버섯 집
@@ -1672,6 +1672,46 @@
     for (const [ox, oz] of [[-2, 3], [2, 3], [-2, 5], [2, 5]]) { B(ox, 0, oz, obs); B(ox, 1, oz, glow); }   // 제단 4모서리 성화
     // ── 부유 자수정 파편(섬 주위 공중, 손 배치 비대칭) ──
     B(-7, 3, 0, pur); B(-8, 4, 1, glow); B(7, 5, -2, pur); B(6, 6, -3, glow); B(0, 6, -8, pur); B(1, 7, -8, glow); B(-6, 8, 6, pur);
+  }
+  // V20-AA: 대형 거미굴 — 좌표 한 칸씩 손 배치(대칭 함수 아님). 이끼 낀 바위 둥지 위에 뒤틀린
+  //   검은 나무탑이 솟고 거미줄(흰 양털) 장막이 드리운다. 알집 군락 + 브루드(여왕) 제단.
+  function buildSpiderNest() {
+    const cx = 74, cz = 88, gy = surfaceTop(cx, cz);
+    const B = (dx, dy, dz, id) => { if (id != null) setW(cx + dx, gy + dy, cz + dz, id); };
+    const moss = ID.mossy_cobblestone, cob = ID.cobblestone, log = ID.dark_oak_log != null ? ID.dark_oak_log : ID.oak_log;
+    const plank = ID.dark_oak_planks != null ? ID.dark_oak_planks : ID.spruce_planks, web = ID.wool_white, glow = ID.glowstone;
+    const stone = ID.stone, egg = ID.wool_white, dirt = ID.dirt, fence = ID.dark_oak_fence != null ? ID.dark_oak_fence : ID.spruce_fence;
+    const st = (f) => (ID['cobblestone_stairs_' + f] != null ? ID['cobblestone_stairs_' + f] : cob);
+    // ── 이끼 낀 바위 둥지(원형 언덕, 비대칭 노두) ──
+    for (let dx = -7; dx <= 7; dx++) for (let dz = -7; dz <= 7; dz++) { const r = dx * dx + dz * dz; if (r <= 42) B(dx, -1, dz, ((dx * 3 + dz) % 4 === 0) ? moss : cob); if (r <= 22) B(dx, 0, dz, ((dx + dz * 3) % 5 === 0) ? moss : stone); if (r <= 8) B(dx, 1, dz, moss); }
+    B(0, 2, 0, 0); B(0, 1, 0, 0);   // 둥지 중앙 구덩이(브루드 소굴 입구)
+    for (let y = -1; y >= -5; y--) for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) B(dx, y, dz, 0);   // 수직 소굴
+    B(0, -6, 0, glow);   // 소굴 바닥 발광(눈알처럼)
+    for (let y = -2; y >= -5; y--) { B(-2, y, 0, moss); B(2, y, 0, moss); B(0, y, -2, moss); B(0, y, 2, moss); }   // 소굴 벽
+    // ── 뒤틀린 검은 나무탑(중앙 옆, 비대칭 기둥 3개가 꼬여 오름) ──
+    const twist = [[2, -2], [3, -1], [3, 0], [2, 1], [1, 2], [0, 2]];   // 나선 궤적
+    for (let y = 2; y <= 9; y++) { const [tx, tz] = twist[Math.min(y - 2, twist.length - 1)]; B(tx, y, tz, log); B(tx - 1, y, tz, y % 2 ? plank : log); }
+    B(2, 10, 1, log); B(1, 11, 1, log); B(1, 12, 0, glow);   // 탑 정상 + 발광 눈
+    // 두 번째 뒤틀린 기둥(반대 방향)
+    const twist2 = [[-2, 2], [-3, 1], [-3, 0], [-2, -1], [-1, -2]];
+    for (let y = 2; y <= 8; y++) { const [tx, tz] = twist2[Math.min(y - 2, twist2.length - 1)]; B(tx, y, tz, log); }
+    B(-2, 9, -2, log); B(-2, 10, -2, glow);
+    // ── 거미줄 장막(흰 양털) — 탑↔바위 사이 공중에 손 배치(비대칭 그물) ──
+    const webs = [[0, 6, 0], [1, 5, -1], [-1, 5, 1], [2, 7, -1], [-2, 6, 2], [1, 8, 1], [-1, 7, -1], [0, 4, 3], [3, 4, 1], [-3, 4, -1], [0, 9, 2], [2, 3, -3], [-2, 3, 3], [3, 6, 2], [-3, 5, -2]];
+    for (const [wx, wy, wz] of webs) B(wx, wy, wz, web);
+    // 지면 거미줄 카펫(둥지 위 산발)
+    for (const [wx, wz] of [[-4, 2], [4, -3], [-3, -4], [5, 2], [2, 5], [-5, -1], [1, -5]]) B(wx, 2, wz, web);
+    // ── 알집 군락(흰 양털 덩어리 3~4개 뭉치, 발광 알) ──
+    for (const [ex, ez, ey] of [[-4, 4, 1], [5, -4, 1], [-5, -3, 2], [4, 5, 0]]) {
+      B(ex, ey, ez, egg); B(ex, ey + 1, ez, egg); B(ex + 1, ey, ez, egg); B(ex, ey, ez + 1, egg); B(ex, ey + 1, ez + 1, glow);   // 알 뭉치 + 발광 알
+    }
+    // ── 브루드(여왕) 제단(둥지 앞뜰, 뼈대 느낌 이끼 제단 + 거미줄 캐노피) ──
+    for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) B(dx, 1, dz + 5, moss);
+    B(0, 2, 5, cob); B(0, 3, 5, glow);   // 제단 심 + 발광
+    for (const [ox, oz] of [[-2, 4], [2, 4], [-2, 6], [2, 6]]) { B(ox, 1, oz, fence); B(ox, 2, oz, fence); B(ox, 3, oz, web); }   // 캐노피 기둥 + 거미줄 지붕
+    B(0, 4, 5, web); B(-1, 4, 5, web); B(1, 4, 5, web);   // 캐노피 그물
+    // ── 진입 계단(둥지 남면 오르막) + 마른 덤불 대신 이끼 바위 잔해 ──
+    B(0, 0, 7, st(0)); B(0, 1, 6, st(0)); B(-3, 1, 5, moss); B(3, 1, -4, moss); B(-4, 1, -3, cob); B(4, 1, 4, cob);
   }
   function buildMushroomHouse(cx, cz, base) {
     // V18: 동화풍 버섯 오두막 — 버섯대 몸통 + 흰 점박이 붉은 갓 + 둥근 창 + 반블럭 처마 + 현관 랜턴
