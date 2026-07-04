@@ -508,6 +508,34 @@
     buildMarketStalls(); // V20-AM: 손 배치 시장 노점 거리 — 허브 남측
     buildHeroGarden();   // V20-AN: 손 배치 영웅 동상 정원 — 허브 서측
     buildObservatory();  // V20-AP: 손 배치 원형 천문 관측탑 — 허브 북동측
+    buildGrandFountain(); // V20-AQ: 손 배치 대형 3단 분수 — 허브 북서측
+  }
+  // V20-AQ: 대형 분수 — 좌표 한 칸씩 손 배치(대칭 함수 아님). 물이 담긴 벽 있는 다단 수반(넘침 없음).
+  //   하단 수반 → 중앙 대좌 상단 수반 → 석영 분출 기둥 + 프리즈마린 토수구 4기. 허브 북서(168,190).
+  function buildGrandFountain() {
+    const cx = 168, cz = 190, gy = 19;
+    flattenSite(160, 182, 176, 198, gy);
+    const B = (dx, dy, dz, id) => { if (id != null) setW(cx + dx, gy + dy, cz + dz, id); };
+    const sb = ID.stone_bricks, q = ID.quartz_block, water = ID.water, glow = ID.glowstone;
+    const prism = ID.prismarine != null ? ID.prismarine : q, seaL = ID.sea_lantern != null ? ID.sea_lantern : glow, fence = ID.oak_fence;
+    // ── 광장 포장(반경 8, 방사 무늬) ──
+    for (let dx = -8; dx <= 8; dx++) for (let dz = -8; dz <= 8; dz++) { const r = dx * dx + dz * dz; if (r > 64) continue; B(dx, 0, dz, ((dx + dz) & 1) ? sb : q); }
+    // ── 하단 수반(반경 6): 바닥 y0 + 테두리 벽 y1(반경6 링) + 물 y0(벽 아래 = 넘침 없음) ──
+    for (let dx = -6; dx <= 6; dx++) for (let dz = -6; dz <= 6; dz++) { const rr = Math.round(Math.hypot(dx, dz)); if (rr <= 5) { B(dx, 0, dz, prism); B(dx, 1, dz, water); } if (rr === 6) { B(dx, 1, dz, sb); B(dx, 2, dz, ((dx + dz) & 1) ? q : sb); } }   // 물반+테두리 난간
+    // 하단 수반 테두리 4방 발광 기둥
+    for (const [ox, oz] of [[-6, 0], [6, 0], [0, -6], [0, 6]]) { B(ox, 2, oz, seaL); }
+    // ── 중앙 대좌(반경 3, y1~3 솔리드) + 상단 수반(반경 3, 물 y4, 테두리 y4) ──
+    for (let dx = -3; dx <= 3; dx++) for (let dz = -3; dz <= 3; dz++) { const rr = Math.round(Math.hypot(dx, dz)); if (rr <= 3) for (let dy = 1; dy <= 3; dy++) B(dx, dy, dz, ((dx + dz + dy) & 1) ? q : sb); }
+    for (let dx = -3; dx <= 3; dx++) for (let dz = -3; dz <= 3; dz++) { const rr = Math.round(Math.hypot(dx, dz)); if (rr <= 2) B(dx, 4, dz, water); else if (rr === 3) B(dx, 4, dz, q); }   // 상단 물반 + 테두리
+    // ── 석영 분출 기둥(중앙, y4~7) + 정상 물 + 발광 ──
+    for (let dy = 4; dy <= 7; dy++) B(0, dy, 0, q); B(0, 8, 0, water); B(0, 9, 0, seaL);
+    // ── 프리즈마린 토수구 4기(하단 수반 가장자리, 물을 뿜는 조형) ──
+    for (const [ox, oz] of [[-4, -4], [4, -4], [-4, 4], [4, 4]]) { B(ox, 1, oz, prism); B(ox, 2, oz, prism); B(ox, 3, oz, water); B(ox + (ox < 0 ? 1 : -1), 2, oz + (oz < 0 ? 1 : -1), water); }   // 토수구 + 뿜는 물(수반 안쪽으로)
+    // ── 주변 꽃 화분 + 벤치 + 가로등 ──
+    const flowers = [ID.wool_red, ID.wool_yellow != null ? ID.wool_yellow : ID.wool_white, ID.wool_pink != null ? ID.wool_pink : ID.wool_red, ID.wool_blue != null ? ID.wool_blue : ID.wool_white];
+    [[7, 7], [-7, 7], [7, -7], [-7, -7]].forEach(([bx, bz], k) => { B(bx, 1, bz, flowers[k]); B(bx, 0, bz, ID.grass); });   // 꽃 화분
+    for (const [bx, bz, f] of [[0, -7, 0], [0, 7, 2], [-7, 0, 3], [7, 0, 1]]) B(bx, 1, bz, ID['stone_bricks_stairs_' + f] != null ? ID['stone_bricks_stairs_' + f] : sb);   // 벤치
+    for (const [lx, lz] of [[-8, -3], [8, -3], [-8, 3], [8, 3]]) { B(lx, 1, lz, fence); B(lx, 2, lz, fence); B(lx, 3, lz, glow); }   // 가로등
   }
   // V20-AP: 천문 관측탑 — 좌표 한 칸씩 손 배치(대칭 함수 아님). 각진 시계탑과 대비되는 '원통+돔'.
   //   원통 탑신 + 석영 띠 + 아치문/창 → 돔 지붕(개폐 슬릿) + 망원경. 허브 북동(264,200) 개방 구역.
