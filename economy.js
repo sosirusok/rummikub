@@ -550,7 +550,7 @@
   // 구간별 누적 스탯(1~5성/6~10성/11~15성 폭이 다름)
   function starBandSum(stars, bands) {
     let sum = 0;
-    for (let i = 1; i <= stars; i++) sum += bands[i <= 5 ? 0 : i <= 10 ? 1 : 2];
+    for (let i = 1; i <= stars; i++) sum += bands[i <= 5 ? 0 : i <= 10 ? 1 : i <= 15 ? 2 : 3];   // V20-B: 16~25 초월 밴드
     return sum;
   }
   function starAtkPct() {   // 무기 100% + 활 30%(보조)
@@ -565,7 +565,7 @@
     if (!P.starChance) P.starChance = {};
     if (P.starChance[slot] === undefined) P.starChance[slot] = 0;
     const cur = P.starForce[slot];
-    if (cur >= SF.maxStars) { toastFn('이미 최대 성 강화예요 (★15)', false); return 'max'; }
+    if (cur >= SF.maxStars) { toastFn(`이미 최대 성 강화예요 (★${SF.maxStars})`, false); return 'max'; }
     const cost = starCost(slot);
     if (P.gold < cost) { toastFn('골드가 부족해요', false); return 'poor'; }
     addGold(-cost);
@@ -589,8 +589,8 @@
       toastFn(`💥 강화 실패... 성이 하락했어요 (★${cur - 1})${starChanceTime(slot) ? ' — 🌟 다음 강화는 찬스 타임(100%)!' : ''}`, false);
       saveNow(); renderZone(); return 'drop';
     }
-    // 파괴: 장비는 남고 12성으로 리셋(메이플식)
-    P.starForce[slot] = Math.min(cur, SF.boomResetTo);
+    // 파괴: 장비는 남고 리셋(메이플식). 초월 구간(16성+)은 20성으로, 그 외 12성으로
+    P.starForce[slot] = Math.min(cur, cur >= 16 ? (SF.boomResetToHigh || SF.boomResetTo) : SF.boomResetTo);
     P.starChance[slot] = 0;
     toastFn(`💣 강화 파괴!! ★${P.starForce[slot]}(으)로 리셋됐어요...`, false);
     saveNow(); renderZone(); return 'boom';
@@ -2210,13 +2210,13 @@
       const cur = P.starForce[slot];
       const row = starRow(slot);
       const chance = starChanceTime(slot);
-      const bandNow = cur < 5 ? 0 : cur < 10 ? 1 : 2;
+      const bandNow = cur < 5 ? 0 : cur < 10 ? 1 : cur < 15 ? 2 : 3;   // V20-B: 초월 밴드
       const isW = slot === 'weapon' || slot === 'bow';
       const gain = isW ? `공격 +${SF.weaponAtkPctByBand[bandNow]}%${slot === 'bow' ? '(활은 30% 반영)' : ''}` : `방어 +${SF.armorDefByBand[bandNow]} · 체력 +${SF.armorHpByBand[bandNow]}`;
       return `<div class="econ-starcard">
         <h4>${SLOT_EMOJI[slot]} ${SLOT_NAMES[slot]} ★${cur}${chance ? ' <span style="color:#f6c945">🌟 찬스 타임(100%)</span>' : ''}</h4>
         <p class="muted">${eq ? eq.name : '장착 장비 없음'} · 전 슬롯 누적: 공격 +${starAtkPct()}% · 방어 +${starDefFlat()} · 체력 +${starHpFlat()}</p>
-        ${cur >= SF.maxStars ? '<p><b>★15 최대 강화 달성!</b></p>' : `
+        ${cur >= SF.maxStars ? `<p><b>★${SF.maxStars} 초월 최대 강화 달성!</b></p>` : `
         <div class="econ-colgrid">
           <div class="econ-colrow"><span>성공 ${Math.round((chance ? 1 : row[0]) * 100)}%</span><span>유지 ${Math.round((chance ? 0 : row[1]) * 100)}%</span><span>하락 ${Math.round((chance ? 0 : row[2]) * 100)}%</span><span>${row[3] > 0 ? `💣 파괴 ${Math.round((chance ? 0 : row[3]) * 100)}% (★${SF.boomResetTo} 리셋)` : '파괴 없음'}</span></div>
           <div class="econ-colrow"><span>성공 시 ${gain}</span><span class="muted">구간: 1~5성 소폭 · 6~10성 중폭 · 11~15성 대폭</span></div>
