@@ -211,10 +211,10 @@
   };
   // NPC(존 + 허브 서브탭 연결)
   const NPCS = [
-    { key: 'shopkeeper', name: '상점 주인', zone: 'hub', tab: 'shop', x: 207, z: 243, color: 0x3a6ee0 },
+    { key: 'shopkeeper', name: '상점 주인', zone: 'hub', tab: 'shop', x: 204, z: 244, color: 0x3a6ee0 },
     { key: 'bankTeller', name: '은행원', zone: 'hub', tab: 'bank', x: 241, z: 209, color: 0xf2d75c },
     { key: 'minionManager', name: '미니언 관리소장', zone: 'hub', tab: 'minions', x: 199, z: 215, color: 0x6aa84f },
-    { key: 'petKeeper', name: '펫 상인', zone: 'hub', tab: 'pets', x: 250, z: 241, color: 0xe048c4 },
+    { key: 'petKeeper', name: '펫 상인', zone: 'hub', tab: 'pets', x: 250, z: 243, color: 0xe048c4 },
     { key: 'enchanter', name: '마법부여사', zone: 'hub', tab: 'enchant', x: 224, z: 201, color: 0x9365b8 },
     { key: 'auctioneer', name: '경매인', zone: 'hub', tab: 'deals', x: 212, z: 226, color: 0xc0392b },
     { key: 'gladiator', name: '검투사 마스터', zone: 'hub', tab: 'arena', x: 224, z: 346, color: 0xb8860b },   // V11: 콜로세움 아레나
@@ -387,16 +387,15 @@
   function columnSurface(x, z) {
     const f = hubField(x, z);
     if (f <= 0) return { y: 0, f: 0 };
-    let top = 20 + Math.round(Math.min(1, f * 3) * 2);
-    top += Math.round(bump(x, z, 224, 86, 68, 34));     // 북쪽 설산
-    top += Math.round(bump(x, z, 96, 208, 46, 12));     // 서쪽 광산 언덕
-    top += Math.round(bump(x, z, 140, 130, 44, 4));     // 숲 구릉
-    top -= Math.round(bump(x, z, 152, 318, 40, 2));     // 묘지 저지대
-    top -= Math.round(bump(x, z, 322, 322, 22, 3));     // 연못 분지
-    // V20-M: 완만한 구릉 — 마을 광장(중심 44칸)은 평탄 유지, 외곽 야생으로 갈수록 굴곡
+    // V20-S: 핵심부를 플라자 높이(y19)와 동일하게 → 마을 가장자리 3칸 절벽/못 나가는 버그 제거
+    let top = 19;
+    top += Math.round(bump(x, z, 224, 86, 68, 31));     // 북쪽 설산(먼 곳, 정상 y≥48)
+    top += Math.round(bump(x, z, 96, 208, 46, 8));      // 서쪽 광산 언덕
+    top -= Math.round(bump(x, z, 322, 322, 22, 2));     // 연못 분지
+    // 완만한 구릉 — 마을(중심 70칸)은 평탄 유지, 외곽만 굴곡. 진폭 소·스케일 대 → 계단은 1칸 이하(통행 보장)
     const dc = Math.hypot(x - HUB_C, z - HUB_C);
-    const amp = 3 * Math.max(0, Math.min(1, (dc - 44) / 130));
-    top += Math.round((smoothNoise(x, z, 22) - 0.5) * 2 * amp) + Math.round((smoothNoise(x, z, 8) - 0.5) * amp * 0.6);
+    const amp = 2.2 * Math.max(0, Math.min(1, (dc - 70) / 150));
+    top += Math.round((smoothNoise(x, z, 34) - 0.5) * 2 * amp);
     return { y: Math.min(H - 6, top), f };
   }
   function zoneAt(x, z) {
