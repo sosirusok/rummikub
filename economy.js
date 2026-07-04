@@ -1727,6 +1727,18 @@
     toastFn(`💎 스톤 리포지! [${pick.name}] 확정 부여!`, true);
     saveNow(); renderZone();
   }
+  // V20-D: +α 초월 리포지 — 아포클립스 스톤(F11 드롭) 소모, 스블 미존재 커스텀 최상급
+  function reforgeApex(slot) {
+    if (!hasItem('reforge_stone_apex')) { toastFn('아포클립스 스톤이 필요해요 (종말층 F11 드롭)', false); return; }
+    const cost = reforgeSlotCost(slot);
+    if (cost == null) { toastFn('장착 중인 장비가 없어요', false); return; }
+    if (P.gold < cost * 3) { toastFn(`초월 리포지는 ${fmtGold(cost * 3)}이 필요해요`, false); return; }
+    removeItem('reforge_stone_apex', 1); addGold(-cost * 3);
+    const pick = D().REFORGES.premiumApex[reforgePoolType(slot)];
+    P.reforgeSlots[slot] = Object.assign({}, pick);
+    toastFn(`🌌 초월 리포지! [${pick.name}] 확정 부여!`, true);
+    saveNow(); renderZone();
+  }
   // (구버전 API 호환 — 기존 테스트/세이브의 개별 아이템 리포지 보너스도 계속 동작)
   function reforge(key) {
     const shopE = shopDef(key); if (!shopE || !hasItem(key)) return;
@@ -2256,6 +2268,7 @@
         <p class="muted">${cur ? `현재 보너스: ${cur.dmgPct ? `공격 +${cur.dmgPct}% ` : ''}${cur.def ? `방어 +${cur.def} ` : ''}${cur.hp ? `체력 +${cur.hp} ` : ''}${cur.sellBonus ? `판매가 +${cur.sellBonus}%` : ''}` : '리포지 없음 — 무작위 접두어를 부여해보세요'}</p>
         <button class="btn btn--sm" data-act="econ_reforge_slot" data-slot="${slot}" ${eq ? '' : 'disabled'}>🎲 무작위 리포지 ${cost != null ? `(${fmtGold(cost)})` : ''}</button>
         <button class="btn btn--sm btn--ghost" data-act="econ_reforge_premium" data-slot="${slot}" ${eq && hasItem('reforge_stone_rare') ? '' : 'disabled'}>💎 스톤 확정 [${D().REFORGES.premium[reforgePoolType(slot)].name}] (스톤 1 + ${cost != null ? fmtGold(cost * 2) : '-'})</button>
+        <button class="btn btn--sm btn--ghost" data-act="econ_reforge_apex" data-slot="${slot}" ${eq && hasItem('reforge_stone_apex') ? '' : 'disabled'}>🌌 초월 확정 [${D().REFORGES.premiumApex[reforgePoolType(slot)].name}] (아포클립스 1 + ${cost != null ? fmtGold(cost * 3) : '-'})</button>
       </div>`;
     };
     const HB = D().HPB;
@@ -2624,6 +2637,7 @@
       case 'craft': craft(el.dataset.key); break;
       case 'reforge_slot': reforgeSlot(el.dataset.slot); break;
       case 'reforge_premium': reforgePremium(el.dataset.slot); break;
+      case 'reforge_apex': reforgeApex(el.dataset.slot); break;
       case 'dungeon_attack': dungeonAttack(); break;
       case 'dungeon_loot': dungeonLootTreasure(); break;
       case 'bank_deposit': bankDeposit(el.dataset.amt === 'all' ? 'all' : Number(el.dataset.amt)); break;
@@ -2802,7 +2816,7 @@
       placeMinion, upgradeMinion, upgradeMinionStorage, collectMinion, tickMinions, minionStorageCap, minionSpeedMul, useMinionFuel,
       startSlayer, combatAttack, combatFlee, getActiveCombat: () => activeCombat,
       startDungeon, dungeonAdvance, dungeonSecretClick, getDungeonRun: () => dungeonRun, dungeonGrade, canEnterFloor,
-      reforge, reforgeSlot, reforgePremium, playerAttackPower, playerDefensePct, playerMaxHp, playerStr, playerStats, playerCritRoll, skillXpProgress, minionUnlocked, recordMinionCraft,
+      reforge, reforgeSlot, reforgePremium, reforgeApex, playerAttackPower, playerDefensePct, playerMaxHp, playerStr, playerStats, playerCritRoll, skillXpProgress, minionUnlocked, recordMinionCraft,
       gemStats, socketGem, applyRecomb, gemSlotsOf, recombMul,
       equippedWeapon, dungeonClassDef,
       hatchPet, activatePet, petLevel, petStats, petDef, equipPetItem,
