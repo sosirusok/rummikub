@@ -81,6 +81,25 @@
   // 피해 = (5+무기공격)×(1+힘/100)×(스킬/인챈트/리포지/스타포스 배율)×크리티컬
   // 피해 감소 = 방어/(방어+100), 이동속도 100 = 기준 속도
   const BASE_STATS = { hp: 100, defense: 0, strength: 0, speed: 100, critChance: 30, critDamage: 50, intelligence: 100 };
+  // V20: 신규 스탯 기본치 — 매직파인드(희귀드롭%)·포춘(추가채집)·공격속도
+  const BASE_STATS2 = { magicFind: 0, miningFortune: 0, farmingFortune: 0, foragingFortune: 0, attackSpeed: 0 };
+  /* ---------------- V20: 젬스톤(장비 소켓) — 실제 스카이블럭 8종 × 5품질 ---------------- */
+  const GEM_TYPES = [
+    { key: 'ruby', name: '루비', stat: 'hp' }, { key: 'jasper', name: '재스퍼', stat: 'str' },
+    { key: 'sapphire', name: '사파이어', stat: 'intelligence' }, { key: 'amethyst_gem', name: '자수정 젬', stat: 'defense' },
+    { key: 'jade', name: '제이드', stat: 'miningFortune' }, { key: 'amber', name: '앰버', stat: 'farmingFortune' },
+    { key: 'topaz', name: '토파즈', stat: 'critChance' }, { key: 'opal', name: '오팔', stat: 'critDamage' },
+  ];
+  // 품질별 배율(러프→완벽). 스탯별 기본값 × 배율
+  const GEM_QUALITY = [
+    { key: 'rough', name: '러프', mul: 1 }, { key: 'flawed', name: '플로드', mul: 2 },
+    { key: 'fine', name: '파인', mul: 4 }, { key: 'flawless', name: '플로리스', mul: 8 }, { key: 'perfect', name: '퍼펙트', mul: 15 },
+  ];
+  const GEM_BASE = { hp: 12, str: 3, intelligence: 6, defense: 4, miningFortune: 5, farmingFortune: 5, critChance: 0.6, critDamage: 4 };
+  // 아이템 등급별 젬 소켓 수
+  const GEM_SLOTS_BY_TIER = { common: 0, uncommon: 0, rare: 1, epic: 1, legendary: 2, mythic: 2, ancient: 3, divine: 3, primal: 4 };
+  // 리컴보뷸레이터 3000: 아이템 등급 1단계 상승(수치 +18%) — 실제 스블 상징 아이템
+  const RECOMB = { statBoostPct: 18 };
 
   /* ---------------- 채집(4개 존: 광산/농장/숲/부둣가) ---------------- */
   const GATHER_TABLE = {
@@ -272,7 +291,7 @@
       { floor: 9, hell: true, mobList: ['심연 포식자', '공허 사도'], bossName: '심연의 폭군 벨페고르', bossHp: 25000000, bossDmg: 950, lootTable: ['fuming_potato_book', 'terminator_bow', 'necron_blade', 'pet_egg_ender_dragon'], essenceReward: 180 },
       { floor: 10, hell: true, mobList: ['태초의 파편', '시간 포식자'], bossName: '태초의 지배자 아이온', bossHp: 120000000, bossDmg: 1400, lootTable: ['fuming_potato_book', 'hot_potato_book', 'essence_cosmetic_cape'], essenceReward: 300 },
       // V19-B/D: 종말층 F11 — 스블 최강(보이드글룸 T4 2.1억)을 능가하는 최종 아포칼립스 보스(10억 HP, 실제×4.8, 게임 최강)
-      { floor: 11, hell: true, apex: true, mobList: ['공허의 사도', '무한의 그림자'], bossName: '무한의 종언 아포클립스', bossHp: 1000000000, bossDmg: 2200, lootTable: ['fuming_potato_book', 'hyperion', 'astraea', 'enchant_book_one_for_all', 'enchant_book_soul_eater'], essenceReward: 600 },
+      { floor: 11, hell: true, apex: true, mobList: ['공허의 사도', '무한의 그림자'], bossName: '무한의 종언 아포클립스', bossHp: 1000000000, bossDmg: 2200, lootTable: ['fuming_potato_book', 'hyperion', 'astraea', 'enchant_book_one_for_all', 'enchant_book_soul_eater', 'recombobulator', 'gem_ruby_perfect'], essenceReward: 600 },
     ],
     scoreThresholds: [ ['F', -Infinity], ['D', 0], ['C', 100], ['B', 160], ['A', 230], ['S', 270], ['S+', 300] ],
     roomTypes: ['전투방', '퍼즐방', '함정방', '미니보스방', '보물방'],
@@ -284,6 +303,12 @@
     { key: 'essence_cosmetic_cape', name: '지배자의 망토(장식)', cost: 60, kind: 'item' },
     { key: 'enchant_book_sharpness', name: '인챈트북: 예리함', cost: 25, kind: 'item' },
     { key: 'pet_egg_griffin', name: '펫 알: 그리핀', cost: 200, kind: 'item' },
+    // V20: 젬스톤/리컴 — 정수로 교환(고급은 던전/슬레이어 드롭이 더 저렴)
+    { key: 'recombobulator', name: '💠 리컴보뷸레이터 3000(등급↑ +18%)', cost: 300, kind: 'item' },
+    { key: 'gem_jasper_perfect', name: '💎 퍼펙트 재스퍼(힘+45)', cost: 120, kind: 'item' },
+    { key: 'gem_ruby_perfect', name: '💎 퍼펙트 루비(체력+180)', cost: 120, kind: 'item' },
+    { key: 'gem_sapphire_perfect', name: '💎 퍼펙트 사파이어(지력+90)', cost: 120, kind: 'item' },
+    { key: 'gem_amethyst_gem_perfect', name: '💎 퍼펙트 자수정(방어+60)', cost: 120, kind: 'item' },
   ];
 
   /* ---------------- 등급별 장비(무기 3계열: 검/활/지팡이 × 7티어) + 던전 전용 장비 ---------------- */
@@ -1181,6 +1206,6 @@
     TALISMANS, MAGICAL_POWER, PETS, PET_XP_BASE, PET_XP_EXP, PET_MAX_LEVEL,
     ENCHANTS, CHAOS_ENCHANT, RECIPES, MASTER_MODE,
     FAIRY_SOULS, BANK, DAILY_DEALS, DUNGEON_CLASSES, ZONES, EASTER_EGGS,
-    SKILL_XP_TABLE, SKILL_MAX_LEVEL, SKILL_MAX_BY, BASE_STATS, ENCHANTED_RES, ENCHANTED_BLOCK_RES, SLAYER_XP_LEVELS, SLAYER_QUEST,
+    SKILL_XP_TABLE, SKILL_MAX_LEVEL, SKILL_MAX_BY, BASE_STATS, BASE_STATS2, GEM_TYPES, GEM_QUALITY, GEM_BASE, GEM_SLOTS_BY_TIER, RECOMB, ENCHANTED_RES, ENCHANTED_BLOCK_RES, SLAYER_XP_LEVELS, SLAYER_QUEST,
   };
 })();

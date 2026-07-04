@@ -382,9 +382,9 @@
   function hpbOf(key) { return (P.hpb || {})[key] || 0; }
   function equippedWeaponDmg() {
     const w = equippedWeapon(); if (!w) return 0;
-    let d = rolledStat(w.key, w.dmg) + (P.reforgeBonus[w.key] || 0) + hpbOf(w.key) * D().HPB.weaponDmgPerBook;
+    let d = (rolledStat(w.key, w.dmg) + (P.reforgeBonus[w.key] || 0) + hpbOf(w.key) * D().HPB.weaponDmgPerBook) * recombMul(w.key);   // V20: 리컴 +18%
     const b = equippedBow();
-    if (b) d += Math.round((rolledStat(b.key, b.dmg) + hpbOf(b.key) * D().HPB.weaponDmgPerBook) * 0.3);   // 활 보조 기여 30%
+    if (b) d += Math.round((rolledStat(b.key, b.dmg) + hpbOf(b.key) * D().HPB.weaponDmgPerBook) * recombMul(b.key) * 0.3);   // 활 보조 기여 30%
     return d;
   }
   // V17: 무기 부가 스탯(힘/치명피해/광포/지력) — 주무기 기준 + 활 보조 30%
@@ -429,6 +429,43 @@
   }
   function guardPct() { return Math.min(60, traitSum('guard')) / 100; }
   function reforgeOf(slot) { return P.reforgeSlots[slot] || {}; }
+  // V20: 젬스톤 — 착용 장비 소켓에 박힌 보석 합산
+  function gemSlotsOf(item) { return item ? (D().GEM_SLOTS_BY_TIER[item.tierKey] || 0) : 0; }
+  function gemStats() {
+    const out = {};
+    const items = [equippedWeapon(), equippedBow()].concat(ARMOR_SLOTS.map(equippedPiece)).filter(Boolean);
+    for (const it of items) {
+      const gems = (P.gems || {})[it.key]; if (!gems) continue;
+      gems.slice(0, gemSlotsOf(it)).forEach(g => {
+        const gt = D().GEM_TYPES.find(x => x.key === g.t), gq = D().GEM_QUALITY.find(x => x.key === g.q);
+        if (!gt || !gq) return;
+        out[gt.stat] = (out[gt.stat] || 0) + (D().GEM_BASE[gt.stat] || 0) * gq.mul;
+      });
+    }
+    return out;
+  }
+  // V20: 리컴보뷸레이터 — 적용된 아이템 주스탯 +18%
+  function recombMul(itemKey) { return (P.recomb || {})[itemKey] ? (1 + D().RECOMB.statBoostPct / 100) : 1; }
+  function equipItemDef(itemKey) { return D().EQUIPMENT.weapons.find(x => x.key === itemKey) || D().EQUIPMENT.armor.find(x => x.key === itemKey); }
+  function socketGem(itemKey, gemType, quality) {
+    const it = equipItemDef(itemKey); if (!it) { toastFn('장비가 아니에요', false); return false; }
+    const slots = D().GEM_SLOTS_BY_TIER[it.tierKey] || 0;
+    if (slots <= 0) { toastFn('이 등급은 젬 소켓이 없어요(레어+부터)', false); return false; }
+    const gemKey = `gem_${gemType}_${quality}`;
+    if (!hasItem(gemKey)) { toastFn('해당 품질의 젬이 없어요', false); return false; }
+    if (!P.gems) P.gems = {};
+    const cur = P.gems[itemKey] || [];
+    if (cur.length >= slots) { toastFn(`소켓이 가득 찼어요 (${slots}개)`, false); return false; }
+    removeItem(gemKey, 1); cur.push({ t: gemType, q: quality }); P.gems[itemKey] = cur;
+    toastFn('💎 젬 장착 완료!', true); saveNow(); renderZone(); return true;
+  }
+  function applyRecomb(itemKey) {
+    if (!P.recomb) P.recomb = {};
+    if (P.recomb[itemKey]) { toastFn('이미 리컴이 적용된 장비예요', false); return false; }
+    if (!hasItem('recombobulator')) { toastFn('리컴보뷸레이터 3000이 필요해요(던전/슬레이어 드롭)', false); return false; }
+    removeItem('recombobulator', 1); P.recomb[itemKey] = true;
+    toastFn('✨ 리컴보뷸레이터 적용! 등급 상승 — 수치 +18%', true); saveNow(); renderZone(); return true;
+  }
   // ── 실제 스카이블럭 스탯 시트: 기본 HP100/방어0/힘0/속도100/크리확률30/크리피해50/지능100 ──
   function playerStats() {
     const B = D().BASE_STATS, HB = D().HPB;
@@ -437,24 +474,31 @@
     let armorDef = 0, armorHp = 0, armorRfDef = 0, armorRfHp = 0, armorRfStr = 0, armorRfCd = 0, armorRfFero = 0;
     for (const sl of ARMOR_SLOTS) {
       const p = equippedPiece(sl);
-      if (p) { armorDef += rolledStat(p.key, p.defense) + hpbOf(p.key) * HB.armorDefPerBook; armorHp += (p.hp || 0) + hpbOf(p.key) * HB.armorHpPerBook; }
+      if (p) { const rm = recombMul(p.key); armorDef += (rolledStat(p.key, p.defense) + hpbOf(p.key) * HB.armorDefPerBook) * rm; armorHp += ((p.hp || 0) + hpbOf(p.key) * HB.armorHpPerBook) * rm; }
       const rf = reforgeOf(sl); armorRfDef += rf.def || 0; armorRfHp += rf.hp || 0; armorRfStr += rf.str || 0; armorRfCd += rf.critDamage || 0; armorRfFero += rf.ferocity || 0;
     }
     const rw = reforgeOf('weapon');
+    const B2 = D().BASE_STATS2, gs = gemStats();
     const st = {
       hp: B.hp + skillLevel('farming') * 2 + skillLevel('fishing') + enchSum('hp') + ts.hp + ps.hp + fb.hp
         + (rw.hp || 0) + armorRfHp + starHpFlat() + buffBonus('hp')
-        + armorHp + traitSum('vitality') + setStat('hp') + weaponStat('hp'),
+        + armorHp + traitSum('vitality') + setStat('hp') + weaponStat('hp') + (gs.hp || 0),
       defense: B.defense + skillLevel('mining') + ts.def + ps.def + enchSum('def')
-        + armorRfDef + starDefFlat() + armorDef + traitSum('bulwark') + setStat('def') + weaponStat('defense'),
+        + armorRfDef + starDefFlat() + armorDef + traitSum('bulwark') + setStat('def') + weaponStat('defense') + (gs.defense || 0),
       strength: B.strength + skillLevel('foraging') + ts.str + ps.str + fb.str + buffBonus('strength') + setStat('str')
-        + weaponStat('str') + (rw.str || 0) + armorRfStr,
+        + weaponStat('str') + (rw.str || 0) + armorRfStr + (gs.str || 0),
       speed: B.speed + enchSum('speed') + buffBonus('speed') + traitSum('swift') + traitSum('swiftness') + setStat('speed'),
-      critChance: Math.min(100, B.critChance + skillLevel('combat') * 0.5 + traitSum('crit_eye') + setStat('critChance') + weaponStat('critChance')),
-      critDamage: B.critDamage + skillLevel('combat') + traitSum('brutality') + setStat('critDamage') + weaponStat('critDamage') + (rw.critDamage || 0) + armorRfCd,
+      critChance: Math.min(100, B.critChance + skillLevel('combat') * 0.5 + traitSum('crit_eye') + setStat('critChance') + weaponStat('critChance') + (gs.critChance || 0)),
+      critDamage: B.critDamage + skillLevel('combat') + traitSum('brutality') + setStat('critDamage') + weaponStat('critDamage') + (rw.critDamage || 0) + armorRfCd + (gs.critDamage || 0),
       // V17: 광포(추가타) — 무기/리포지/특성/세트. 실제: floor(광포/100) 확정 추가타 + 나머지% 확률(기댓값 1+광포/100배)
       ferocity: weaponStat('ferocity') + (rw.ferocity || 0) + armorRfFero + traitSum('ferocity') + setStat('ferocity'),
-      intelligence: B.intelligence + skillLevel('enchanting') * 4 + traitSum('mana_well') + setStat('intelligence') + weaponStat('intelligence') + Math.round(magicalPower() * 0.6),
+      intelligence: B.intelligence + skillLevel('enchanting') * 4 + traitSum('mana_well') + setStat('intelligence') + weaponStat('intelligence') + Math.round(magicalPower() * 0.6) + (gs.intelligence || 0),
+      // V20: 신규 스탯 — 매직파인드/포춘/공격속도
+      magicFind: B2.magicFind + setStat('magicFind') + traitSum('lucky') + Math.floor(skillLevel('combat') / 5),
+      miningFortune: B2.miningFortune + skillLevel('mining') * 4 + (gs.miningFortune || 0) + setStat('miningFortune'),
+      farmingFortune: B2.farmingFortune + skillLevel('farming') * 4 + (gs.farmingFortune || 0) + setStat('farmingFortune'),
+      foragingFortune: B2.foragingFortune + skillLevel('foraging') * 4 + setStat('foragingFortune'),
+      attackSpeed: B2.attackSpeed + setStat('attackSpeed') + traitSum('swiftness'),
     };
     st.defense = Math.round(st.defense * mpStatMul());
     st.hp = Math.round(st.hp);
@@ -478,7 +522,7 @@
     if (w && w.abilityDmg) {
       const primary = (w.abilityStat === 'str') ? st.strength : st.intelligence;
       const factor = Math.max(0, primary / 100 - 1);
-      const ability = w.abilityDmg * factor * (w.abilityScaling || 0.6) * additive * feroMul * mpStatMul();
+      const ability = w.abilityDmg * recombMul(w.key) * factor * (w.abilityScaling || 0.6) * additive * feroMul * mpStatMul();   // V20: 리컴 +18%
       return Math.max(melee, ability);
     }
     return melee;
@@ -2310,7 +2354,10 @@
         <div class="econ-colrow"><span>☠ 크리 확률</span><span>${st.critChance.toFixed(1)}%</span><span class="muted">크리 피해 +${st.critDamage.toFixed(0)}%</span></div>
         <div class="econ-colrow"><span>⚡ 광포(추가타)</span><span>${st.ferocity}</span><span class="muted">100당 확정 추가타 · 피해 ×(1+광포/100)</span></div>
         <div class="econ-colrow"><span>✦ 이동속도</span><span>${st.speed}</span><span class="muted">100 = 기준(슈가 러시로 증가)</span></div>
-        <div class="econ-colrow"><span>✎ 지능(마나)</span><span>${st.intelligence}</span><span class="muted">마법부여 레벨당 +2</span></div>
+        <div class="econ-colrow"><span>✎ 지능(마나)</span><span>${st.intelligence}</span><span class="muted">마법부여 레벨당 +4 · 캐스터 어빌리티 스케일</span></div>
+        <div class="econ-colrow"><span>🍀 매직파인드</span><span>${st.magicFind}</span><span class="muted">희귀 드롭 확률 +${st.magicFind}%</span></div>
+        <div class="econ-colrow"><span>⛏ 채광 포춘</span><span>${st.miningFortune}</span><span class="muted">광물 추가 드롭 +${st.miningFortune}%</span></div>
+        <div class="econ-colrow"><span>🌾 농사 포춘</span><span>${st.farmingFortune}</span><span class="muted">작물 추가 드롭 +${st.farmingFortune}%</span></div>
         <div class="econ-colrow"><span>🛡 방어구</span><span>${a ? a.name : '없음'}</span><span class="muted">마력 ${magicalPower()}</span></div>
       </div>
       <h4>스킬</h4>
@@ -2736,6 +2783,7 @@
       startSlayer, combatAttack, combatFlee, getActiveCombat: () => activeCombat,
       startDungeon, dungeonAdvance, dungeonSecretClick, getDungeonRun: () => dungeonRun, dungeonGrade, canEnterFloor,
       reforge, reforgeSlot, reforgePremium, playerAttackPower, playerDefensePct, playerMaxHp, playerStr, playerStats, playerCritRoll, skillXpProgress, minionUnlocked, recordMinionCraft,
+      gemStats, socketGem, applyRecomb, gemSlotsOf, recombMul,
       equippedWeapon, dungeonClassDef,
       hatchPet, activatePet, petLevel, petStats, petDef,
       talismanStats, magicalPower, mpStatMul, fairyBonus, collectFairySoul,
