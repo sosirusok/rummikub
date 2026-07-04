@@ -1485,7 +1485,7 @@
     else if (mode === 'spider' && ok(74, 88)) buildSpiderNest();   // V20-AA: 손 배치 대형 거미굴(이끼 바위 둥지+뒤틀린 나무탑+거미줄 장막+알집+브루드 제단)
     else if (mode === 'nether' && ok(62, 78)) buildNetherKeep();   // V20-Y: 손 배치 대형 네더 요새(용암 해자+뾰족아치 다리+블레이즈 제단탑+성첩 망루)
     else if (mode === 'end' && ok(62, 84)) buildEndSanctum();   // V20-Z: 손 배치 대형 엔드 성소(흑요석 첨탑+자수정 나선탑+엔드로드 회랑+공허 다리)
-    else if (mode === 'mushroom' && ok(58, 100)) buildMushroomHouse(58, 100, base(58, 100));   // 거대 버섯 집
+    else if (mode === 'mushroom' && ok(58, 100)) buildMushroomColony();   // V20-AC: 손 배치 대형 거대버섯 군락(높이 차등 갓·버섯대 로지·오아시스·균사 지면)
   }
   // V20-W: 골드 광산 대형 전초기지 — 좌표 한 칸씩 손 배치(대칭 함수 아님).
   //   중심(50,90): 갱도 + 목재 헤드프레임 타워 + 도르래 + 광차 데크 + 광석 창고 + 감독관 오두막.
@@ -1788,6 +1788,59 @@
     B(6, 0, 4, hay); B(7, 0, 4, hay); B(6, 1, 4, hay); B(6, 0, 5, hay);                   // 건초 더미
     B(2, 0, 8, fence); B(2, 1, 8, plank); B(2, 2, 8, hay); B(1, 1, 8, dslab); B(3, 1, 8, dslab);   // 허수아비(십자)
     B(-6, 0, 8, fence); B(-6, 1, 8, glow); B(9, 0, -1, fence); B(9, 1, -1, glow);         // 가로등
+  }
+  // V20-AC: 대형 거대버섯 군락 — 좌표 한 칸씩 손 배치(대칭 함수 아님). 균사 언덕 위에 높이 차등
+  //   거대버섯 5주(붉은/갈색 갓, 흰 점박이) + 가장 큰 갓 아래 버섯대 로지 + 오아시스 못.
+  function buildMushroomColony() {
+    const cx = 58, cz = 100, gy = surfaceTop(cx, cz);
+    const B = (dx, dy, dz, id) => { if (id != null) setW(cx + dx, gy + dy, cz + dz, id); };
+    const stem = ID.mushroom_stem, redcap = ID.mushroom_red_block, browncap = ID.mushroom_brown_block != null ? ID.mushroom_brown_block : redcap;
+    const spot = ID.quartz_block, myc = ID.mycelium, glow = ID.glowstone, water = ID.water, sand = ID.sand, dirt = ID.dirt;
+    const door = ID.spruce_door_c_2 != null ? ID.spruce_door_c_2 : null, glass = ID.glass;
+    // ── 균사 언덕(원형, 비대칭 노두 — 균사/모래/흙 혼합, 사막 경계) ──
+    for (let dx = -10; dx <= 10; dx++) for (let dz = -10; dz <= 10; dz++) {
+      const r = dx * dx + dz * dz; if (r > 90) continue;
+      let g = myc; if (r > 60) g = ((dx + dz) & 1) ? sand : myc; if ((dx * 5 + dz * 3) % 11 === 0 && r > 30) g = dirt;
+      B(dx, -1, dz, g); if (r <= 30) B(dx, 0, dz, myc);   // 중앙 살짝 융기
+    }
+    // 거대버섯 한 주 생성기(로컬 헬퍼: 대 높이 h, 갓 반경 rad, 붉은/갈색)
+    const bigShroom = (ox, oz, h, rad, cap) => {
+      for (let y = 0; y < h; y++) { B(ox, y, oz, stem); if (rad >= 3) { B(ox + 1, y, oz, y < h - 1 ? stem : null); if (y < 2) { B(ox - 1, y, oz, stem); B(ox, y, oz + 1, stem); } } }   // 두꺼운 대
+      // 갓: 상단 평평 + 가장자리 한 칸 처짐, 흰 점박이(해시 산발)
+      for (let dx = -rad; dx <= rad; dx++) for (let dz = -rad; dz <= rad; dz++) {
+        const rr = dx * dx + dz * dz; if (rr > rad * rad) continue;
+        const edge = rr > (rad - 1) * (rad - 1);
+        let id = ((dx * 7 + dz * 13 + ox) % 6 === 0) ? spot : cap;   // 흰 점박이
+        B(ox + dx, h, oz + dz, id);
+        if (edge) B(ox + dx, h - 1, oz + dz, cap);   // 처진 갓 가장자리
+      }
+      B(ox, h - 1, oz, glow);   // 갓 아래 발광(포자 조명)
+    };
+    // ── 거대버섯 5주(높이·반경·색 차등, 비대칭 배치) ──
+    bigShroom(0, 0, 8, 5, redcap);      // 중앙 대형(로지 갓)
+    bigShroom(-6, 4, 5, 3, browncap);   // 갈색 소형
+    bigShroom(6, -3, 6, 4, redcap);     // 붉은 중형
+    bigShroom(-5, -6, 4, 3, browncap);  // 갈색 소형2
+    bigShroom(5, 6, 7, 4, redcap);      // 붉은 대형2
+    bigShroom(-8, -1, 3, 2, browncap);  // 미니 버섯
+    // ── 중앙 대형 갓 아래 로지(버섯대 벽 오두막, 대 주변을 감싸는 원형 방) ──
+    for (let y = 1; y <= 4; y++) for (let dx = -3; dx <= 3; dx++) for (let dz = -3; dz <= 3; dz++) {
+      const r = dx * dx + dz * dz; const wall = r >= 6 && r <= 11;
+      const d = dz === 3 && Math.abs(dx) <= 1 && y <= 2;                        // 남면 문
+      const w = (y === 2) && ((Math.abs(dx) === 3 && dz === 0) || (Math.abs(dz) === 3 && dx === 0));
+      if (wall && !d && !w) B(dx, y, dz, ((dx + dz + y) & 1) ? stem : redcap);   // 대/갓 혼합 벽
+      if (w) B(dx, y, dz, glass);                                                // 둥근 창
+    }
+    if (door) { B(0, 1, 3, door); B(0, 2, 3, door); }                           // 로지 여닫이 문
+    B(-1, 4, 0, glow); B(1, 4, 0, glow);                                        // 로지 실내 조명
+    B(2, 1, -2, browncap); B(2, 2, -2, glow);                                   // 실내 탁자(버섯 의자+등)
+    // ── 오아시스 못(군락 남동, 모래 테두리 + 물 + 수련 대신 버섯 부표) ──
+    for (let dx = 6; dx <= 10; dx++) for (let dz = 3; dz <= 8; dz++) { const r = (dx - 8) * (dx - 8) + (dz - 5) * (dz - 5); if (r <= 6) { B(dx, -2, dz, sand); B(dx, -1, dz, water); } else if (r <= 10) B(dx, -1, dz, sand); }
+    B(8, 0, 5, browncap); B(9, 0, 4, redcap); B(7, 0, 6, browncap);            // 못가 작은 버섯
+    B(8, 0, 3, myc); B(8, 1, 3, glow);                                          // 오아시스 등불(버섯 위)
+    // ── 지면 디테일: 작은 버섯 산발 + 발광 포자 무더기(손 배치 비대칭) ──
+    for (const [mx, mz, c] of [[-3, 7, redcap], [4, -7, browncap], [-9, 3, redcap], [3, 8, browncap], [-7, 6, redcap], [9, -6, browncap], [-4, -8, redcap]]) { B(mx, 0, mz, stem); B(mx, 1, mz, c); }
+    B(-2, 0, -8, glow); B(7, 0, 8, glow); B(-9, 0, -4, glow);                   // 포자 발광
   }
   function buildMushroomHouse(cx, cz, base) {
     // V18: 동화풍 버섯 오두막 — 버섯대 몸통 + 흰 점박이 붉은 갓 + 둥근 창 + 반블럭 처마 + 현관 랜턴
