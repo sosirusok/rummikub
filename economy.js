@@ -6,7 +6,7 @@
 (function () {
   const D = () => window.ECON_DATA;
   const SAVE_KEY = 'econ_save_v1';
-  let running = false, tickTimer = null, zone = 'hub', hubTab = 'shop', invFilter = 'all', invDetailKey = null, craftSel = null;
+  let running = false, tickTimer = null, zone = 'hub', hubTab = 'shop', invFilter = 'all', invDetailKey = null, craftSel = null, bazaarCat = 'farming', bazaarQty = 16;
   let P = null;   // 플레이어 상태(로드 후 채워짐)
   let activeCombat = null;   // { kind:'slayer'|'dungeonBoss', hp,maxHp,dmg,playerHp,maxPlayerHp,_hits, onWin, onLose }
   let dungeonRun = null;     // { floor, roomIdx, rooms:[...], score, secretStep }
@@ -723,6 +723,39 @@
     stat('itemsSold', sellN);
     saveNow(); renderZone();
   }
+  /* ---------------- 바자회(Bazaar) — 대량 자원 시장(즉시구매/즉시판매 + 실시간 시세) V20-E ---------------- */
+  function bzHash(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967295; }
+  // 상품 시세: 기준가(SHOP sellPrice)에 1시간 시드 변동(±fluxPct) 적용 → 세이브 무관 재현. 즉시판매/즉시구매(스프레드).
+  function bazaarPrice(key) {
+    const bz = D().BAZAAR; const sd = shopDef(key); if (!sd || !(sd.sellPrice > 0)) return null;
+    const period = Math.floor(Date.now() / bz.fluxPeriodMs);
+    const r = bzHash(key + '@' + period);               // 0~1 결정적 난수(상품·시간별)
+    const flux = 1 + (r * 2 - 1) * (bz.fluxPct / 100);   // 1±fluxPct
+    const sell = Math.max(1, Math.round(sd.sellPrice * flux));
+    const buy = Math.max(sell + 1, Math.round(sell * (1 + bz.spreadPct / 100)));
+    const prev = bzHash(key + '@' + (period - 1)) * 2 - 1;   // 직전 시간 대비 등락 방향
+    return { key, name: sd.name, buy, sell, trend: (r * 2 - 1) - prev };
+  }
+  function bazaarInstantBuy(key, qty) {
+    qty = Math.max(1, qty | 0); const p = bazaarPrice(key); if (!p) { toastFn('바자에서 취급하지 않는 상품이에요', false); return; }
+    const cost = p.buy * qty;
+    if (P.gold < cost) { toastFn(`골드가 부족해요 (${fmtGold(cost)} 필요)`, false); return; }
+    addGold(-cost); addItem(key, qty);
+    P.bazaarBought = (P.bazaarBought || 0) + qty;
+    toastFn(`🏪 즉시구매: ${p.name} ×${qty} (${fmtGold(cost)})`, true);
+    saveNow(); renderZone();
+  }
+  function bazaarInstantSell(key, qty) {
+    const p = bazaarPrice(key); if (!p) { toastFn('바자에서 취급하지 않는 상품이에요', false); return; }
+    if ((P.locked || {})[key]) { toastFn('🔒 잠긴 아이템이에요', false); return; }
+    const have = P.inv[key] || 0; qty = Math.min(Math.max(1, qty | 0), have);
+    if (qty <= 0) { toastFn('보유 수량이 부족해요', false); return; }
+    removeItem(key, qty); const gain = p.sell * qty; addGold(gain);
+    P.bazaarSold = (P.bazaarSold || 0) + qty;
+    toastFn(`🏪 즉시판매: ${p.name} ×${qty} (+${fmtGold(gain)})`, true);
+    saveNow(); renderZone();
+  }
+
   // 일일 특가(날짜 시드 고정 3종, 각 1회 구매)
   function seededRand(seedStr) { let h = 2166136261; for (let i = 0; i < seedStr.length; i++) { h ^= seedStr.charCodeAt(i); h = Math.imul(h, 16777619); } return () => { h ^= h << 13; h ^= h >>> 17; h ^= h << 5; return ((h >>> 0) % 100000) / 100000; }; }
   function dealsForToday() {
@@ -1797,7 +1830,7 @@
   const HUB_TABS = [
     ['shop', '🛒 상점'], ['bank', '🏦 은행'], ['minions', '⚙️ 미니언'], ['pets', '🐾 펫'],
     ['talismans', '📿 장신구'], ['enchant', '✨ 인챈트'], ['star', '⭐ 강화'], ['reforge', '🔨 리포지'],
-    ['craft', '⚒️ 제작'], ['deals', '🎪 특가'], ['collections', '📚 컬렉션'], ['stats', '📊 스탯'],
+    ['craft', '⚒️ 제작'], ['bazaar', '🏪 바자회'], ['deals', '🎪 특가'], ['collections', '📚 컬렉션'], ['stats', '📊 스탯'],
     ['multi', '🌐 멀티'],
   ];
   function iconImg(key) { return (typeof window.econIcon === 'function') ? `<img class="econ-icon" src="${window.econIcon(key)}" alt="">` : ''; }
@@ -1866,6 +1899,7 @@
       case 'star': return starForceHTML();
       case 'reforge': return reforgeHTML();
       case 'craft': return craftHTML();
+      case 'bazaar': return bazaarHTML();
       case 'deals': return dealsHTML();
       case 'collections': return collectionsHTML();
       case 'stats': return statsHTML();
@@ -2361,6 +2395,32 @@
         </div>`;
       }).join('')}</div>`;
   }
+  function bazaarHTML() {
+    const bz = D().BAZAAR;
+    const cat = bz.cats.find(c => c.key === bazaarCat) || bz.cats[0];
+    const qtys = [1, 16, 64, 640];
+    const catNav = bz.cats.map(c => `<button class="econ-zonebtn ${c.key === cat.key ? 'is-active' : ''}" data-act="econ_bz_cat" data-key="${c.key}">${c.name}</button>`).join('');
+    const qtyNav = qtys.map(q => `<button class="btn btn--sm ${q === bazaarQty ? '' : 'btn--ghost'}" data-act="econ_bz_qty" data-q="${q}">×${q}</button>`).join('');
+    const rows = cat.keys.map(k => {
+      const p = bazaarPrice(k); if (!p) return '';
+      const owned = P.inv[k] || 0;
+      const arrow = p.trend > 0.02 ? '<span style="color:#4ade80">▲</span>' : p.trend < -0.02 ? '<span style="color:#f87171">▼</span>' : '<span class="muted">—</span>';
+      const canBuy = P.gold >= p.buy * bazaarQty;
+      return `<div class="econ-shopitem econ-tt"${ttAttr(shopDef(k))}>
+        ${iconImg(k)}<span>${p.name} <b>×${fmtNum(owned)}</b> ${arrow}</span>
+        <span class="muted econ-idesc">즉시구매 ${fmtGold(p.buy)} · 즉시판매 ${fmtGold(p.sell)} <span class="muted">(개당)</span></span>
+        <span style="display:flex;gap:4px">
+          <button class="btn btn--sm" data-act="econ_bz_buy" data-key="${k}" ${canBuy ? '' : 'disabled'}>구매 ×${bazaarQty} (${fmtGold(p.buy * bazaarQty)})</button>
+          <button class="btn btn--sm btn--ghost" data-act="econ_bz_sell" data-key="${k}" ${owned > 0 ? '' : 'disabled'}>판매 ×${Math.min(bazaarQty, owned) || bazaarQty}</button>
+        </span>
+      </div>`;
+    }).join('');
+    return `<h4>🏪 바자회 — 대량 자원 시장</h4>
+      <p class="econ-note">시세는 1시간마다 ±${bz.fluxPct}% 변동해요. 즉시구매가는 즉시판매가보다 ${bz.spreadPct}% 높습니다(스프레드). 장비는 거래하지 않아요 — 원자재/인챈티드 자원 전용.</p>
+      <div class="econ-zonenav">${catNav}</div>
+      <div class="econ-tierbtns" style="margin:6px 0">거래 수량: ${qtyNav}</div>
+      <div class="econ-shopgrid">${rows}</div>`;
+  }
   function collectionsHTML() {
     return D().COLLECTIONS.map(cat => `<h4>${cat.category}</h4><div class="econ-colgrid">${cat.resources.map(r => {
       const tier = collectionTierIdx(r.key), maxT = r.tierThresholds.length;
@@ -2638,6 +2698,10 @@
       case 'reforge_slot': reforgeSlot(el.dataset.slot); break;
       case 'reforge_premium': reforgePremium(el.dataset.slot); break;
       case 'reforge_apex': reforgeApex(el.dataset.slot); break;
+      case 'bz_cat': bazaarCat = el.dataset.key; renderZone(); break;
+      case 'bz_qty': bazaarQty = Number(el.dataset.q) || 1; renderZone(); break;
+      case 'bz_buy': bazaarInstantBuy(el.dataset.key, bazaarQty); break;
+      case 'bz_sell': bazaarInstantSell(el.dataset.key, bazaarQty); break;
       case 'dungeon_attack': dungeonAttack(); break;
       case 'dungeon_loot': dungeonLootTreasure(); break;
       case 'bank_deposit': bankDeposit(el.dataset.amt === 'all' ? 'all' : Number(el.dataset.amt)); break;
@@ -2816,7 +2880,7 @@
       placeMinion, upgradeMinion, upgradeMinionStorage, collectMinion, tickMinions, minionStorageCap, minionSpeedMul, useMinionFuel,
       startSlayer, combatAttack, combatFlee, getActiveCombat: () => activeCombat,
       startDungeon, dungeonAdvance, dungeonSecretClick, getDungeonRun: () => dungeonRun, dungeonGrade, canEnterFloor,
-      reforge, reforgeSlot, reforgePremium, reforgeApex, playerAttackPower, playerDefensePct, playerMaxHp, playerStr, playerStats, playerCritRoll, skillXpProgress, minionUnlocked, recordMinionCraft,
+      reforge, reforgeSlot, reforgePremium, reforgeApex, bazaarPrice, bazaarInstantBuy, bazaarInstantSell, playerAttackPower, playerDefensePct, playerMaxHp, playerStr, playerStats, playerCritRoll, skillXpProgress, minionUnlocked, recordMinionCraft,
       gemStats, socketGem, applyRecomb, gemSlotsOf, recombMul,
       equippedWeapon, dungeonClassDef,
       hatchPet, activatePet, petLevel, petStats, petDef, equipPetItem,
