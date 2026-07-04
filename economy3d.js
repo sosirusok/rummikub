@@ -2079,27 +2079,37 @@
   function genSpiderDen() {
     world = new Uint8Array(W * H * Dp);
     genBlobIsland(64, 64, 56, 14, { surf: ID.dirt });
-    // 거대한 산(중앙, 정상 y≈42) — 4단 테라스 + 나선 등산로
-    for (let x = 24; x <= 104; x++) for (let z = 24; z <= 104; z++) {
-      const d = Math.hypot(x - 64, z - 64);
-      if (d > 36) continue;
-      const t = 1 - d / 36;
-      const h = Math.round(t * t * (3 - 2 * t) * 28);
+    // ── V20-AE: 손 사각 비대칭 거미산(단일 원뿔 폐기). 여러 봉우리 + 노이즈로 울퉁불퉁한
+    //   바위산을 쌓고 이끼/거미줄(흰 양털) 줄무늬를 박는다. 정상 y≈45.
+    const mossC = ID.mossy_cobblestone, cob = ID.cobblestone, stn = ID.stone, webv = ID.wool_white;
+    const speaks = [
+      { x: 64, z: 64, h: 30, r: 24 }, { x: 54, z: 72, h: 24, r: 16 }, { x: 76, z: 58, h: 22, r: 15 }, { x: 60, z: 52, h: 20, r: 13 },
+    ];
+    for (let x = 22; x <= 106; x++) for (let z = 22; z <= 106; z++) {
+      let h = 0;
+      for (const p of speaks) { const d = Math.hypot(x - p.x, z - p.z) / p.r; if (d < 1) { const t = 1 - d; h = Math.max(h, p.h * (t * t * (3 - 2 * t))); } }
+      h += (smoothNoise(x, z, 8) - 0.5) * 6 + (smoothNoise(x, z, 3) - 0.5) * 3;
+      h = Math.round(h); if (h <= 0) continue;
       const y0 = surfaceTop(x, z);
-      for (let y = 0; y < h; y++) setW(x, y0 + y, z, hash3(x, 86, z) < 0.18 ? ID.wool_white : (hash3(x, 87, z) < 0.5 ? ID.stone : ID.cobblestone));
+      for (let y = 0; y < h; y++) {
+        const s = hash3(x, y0 + y, z);
+        let id = s < 0.14 ? webv : s < 0.34 ? mossC : s < 0.62 ? stn : cob;   // 거미줄/이끼/돌/조약돌 혼합
+        setW(x, y0 + y, z, id);
+      }
     }
-    // 나선 등산로(2블록 폭, 완만하게 깎기)
+    // ── 나선 등산로: 완만한 등반 등급(want)으로 감으며, 노면 아래 지지 둑을 채워 절대 공중부양/추락 없게 ──
     let ang = 0;
-    for (let rr = 36; rr >= 4; rr -= 0.5) {
+    for (let rr = 34; rr >= 4; rr -= 0.5) {
       ang += 0.16;
       const x = Math.round(64 + Math.cos(ang) * rr), z = Math.round(64 + Math.sin(ang) * rr);
-      const want = 15 + Math.round((36 - rr) / 32 * 27);
+      const want = 15 + Math.round((34 - rr) / 30 * 30);   // 완만 등급(정상부까지)
       for (let o = -1; o <= 1; o++) for (let o2 = -1; o2 <= 1; o2++) {
         const px2 = x + o, pz2 = z + o2;
-        for (let y = want + 1; y < want + 5; y++) setW(px2, y, pz2, 0);   // 머리 위 클리어
-        if (getBlockLocal(px2, want, pz2) !== 0 || true) setW(px2, want, pz2, ID.cobblestone);
+        for (let y = want + 1; y <= want + 4; y++) setW(px2, y, pz2, 0);           // 머리 위 클리어
+        setW(px2, want, pz2, ID.cobblestone);                                       // 노면
+        for (let y = want - 1; y >= want - 3; y--) if (getBlockLocal(px2, y, pz2) === 0) setW(px2, y, pz2, ID.mossy_cobblestone);   // 지지 둑(추락 방지)
       }
-      if (Math.round(rr * 2) % 10 === 0) setW(x, want + 1, z, ID.glowstone);
+      if (Math.round(rr * 2) % 10 === 0) { setW(x, want + 1, z, ID.dark_oak_fence != null ? ID.dark_oak_fence : ID.oak_fence); setW(x, want + 2, z, ID.glowstone); }   // 등산로 랜턴
     }
     // V18: 정상 브루드마더 둥지 — 거미줄 플랫폼 + 거미줄 천막(4기둥→돔) + 알집 + 중앙 옥좌
     const ty = surfaceTop(64, 64);
