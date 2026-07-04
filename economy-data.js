@@ -932,6 +932,21 @@
     ],
   };
 
+  // V20-F: 경매장(Auction House) — 실제 스카이블럭식 경매/즉구(BIN) 판매 시스템.
+  // ‘판매 창구’로 구현: 보유 아이템을 경매/BIN 등록 → NPC 수집가가 입찰 → 낙찰 골드 수령.
+  // 장비는 여전히 골드로 살 수 없음(드롭·조합 전용) — 경매장은 잉여분을 더 비싸게 파는 골드 창구.
+  const AUCTION_HOUSE = {
+    maxListings: 7,                 // 동시 등록 슬롯(무료 3 + 클레임/취소로 순환)
+    durations: [1, 6, 24],          // 경매 기간(시간)
+    minStartMul: 0.6,               // 시작가 하한(시세 대비) — 너무 싸게 던지는 것 방지 안내용
+    binMaxMul: 5,                   // BIN 상한(시세 대비) — 안 팔릴 뿐, 등록은 허용
+    // 낙찰가 산정: 물품 가치(시세)의 배수 범위에서 시드 결정 → 경매는 시간에 따라 입찰 상승.
+    auctionValueMin: 1.5, auctionValueMax: 2.6,   // 경매 낙찰 배수(시세 대비) — 인내의 보상
+    binSellValueMul: 1.3,           // BIN은 시세×1.3 이하일 때만 팔림(그 이상은 대기)
+    binHalfLifeH: 6,                // BIN 판매 확률 반감기(시간)
+    feePct: 1,                      // 등록 수수료(낙찰가 기준 차감)
+  };
+
   // 실제 스카이블럭 방식: 상시 직업은 없음. 클래스는 카타콤 던전 전용(입장 시 선택) — 실제 5클래스 라인업.
   const DUNGEON_CLASSES = [
     { key: 'berserk', name: '버서크', emoji: '🗡️', perk: '던전 공격 +25%', dmgMul: 1.25 },
@@ -1253,7 +1268,7 @@
   window.ECON_DATA = {
     ITEM_TIERS, COLLECTIONS, SKILLS, GATHER_TABLE, TOOLS, MINIONS, MINION_STORAGE_BASE, MINION_STORAGE_UPGRADED,
     MINION_STORAGE_UPGRADE_COST, MINION_OFFLINE_CAP_HOURS, MINION_SLOT_MAX, MINION_SLOT_COST_BASE, MINION_SLOT_COST_MUL,
-    MINION_FUEL, MINION_FUEL2, SLAYERS, DUNGEON, DUNGEON_ROOM_SCORE, ESSENCE_SHOP, SHOP, BAZAAR, DAILY_SELL_LIMIT_PER_STACK,
+    MINION_FUEL, MINION_FUEL2, SLAYERS, DUNGEON, DUNGEON_ROOM_SCORE, ESSENCE_SHOP, SHOP, BAZAAR, AUCTION_HOUSE, DAILY_SELL_LIMIT_PER_STACK,
     EQUIPMENT, STARFORCE, REFORGES, ITEM_ROLL,
     TRAITS, EQUIP_SETS, FIELD_DIFF, ARENA, ACHIEVEMENTS, DAILY_QUESTS, SALVAGE, WEEKLY, HPB, QUESTS, QUEST_NPCS, BUILDER_SHOP, DYES,
     TALISMANS, MAGICAL_POWER, PETS, PET_ITEMS, PET_ABILITIES, PET_XP_BASE, PET_XP_EXP, PET_MAX_LEVEL,
