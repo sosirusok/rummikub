@@ -915,6 +915,23 @@
   ];
   const DAILY_SELL_LIMIT_PER_STACK = 10;   // dailySellLimit = 10 * stackSize
 
+  // V20-E: 바자회(Bazaar) — 실제 스카이블럭 대량 자원 시장. 즉시구매/즉시판매 + 실시간 시세 변동(스프레드).
+  // 장비는 취급하지 않음(무화폐 장비 경제 유지) — 원자재/인챈티드 자원만 거래해 골드↔자원 순환을 담당.
+  // 각 상품의 기준가는 SHOP sellPrice에서 런타임 해석. enchanted_ 변형이 SHOP에 있으면 자동 포함.
+  const _bzEnch = (k) => ENCHANTED_RES.includes(k) ? [k, `enchanted_${k}`] : [k];
+  const BAZAAR = {
+    spreadPct: 30,          // 즉시구매가 = 즉시판매가 × (1 + 30%) — 실제 바자 스프레드 반영
+    fluxPct: 15,            // 시세 변동폭 ±15%(1시간 단위 시드 — 세이브 무관 재현)
+    fluxPeriodMs: 3600000,  // 시세 갱신 주기(1시간)
+    cats: [
+      { key: 'farming', name: '🌾 농사', keys: ['wheat', 'carrot', 'potato', 'pumpkin', 'melon', 'sugarcane'].flatMap(_bzEnch) },
+      { key: 'mining', name: '⛏️ 광물', keys: ['stone', 'coal', 'iron', 'gold', 'lapis', 'redstone', 'diamond', 'emerald', 'obsidian'].flatMap(_bzEnch) },
+      { key: 'combat', name: '⚔️ 전투', keys: ['rotten_flesh', 'bone', 'string', 'spider_eye', 'slime_ball', 'gunpowder', 'ender_pearl', 'blaze_rod', 'magma_cream', 'ghast_tear', 'ender_shard'].flatMap(_bzEnch) },
+      { key: 'woods_fish', name: '🌲 목재·어획', keys: ['oaklog', 'birchlog', 'sprucelog', 'apple', 'rawfish', 'salmon', 'clownfish', 'pufferfish', 'prismarine', 'sponge', 'clay'].flatMap(_bzEnch) },
+      { key: 'odds', name: '🎁 기타', keys: ['feather', 'leather'].flatMap(_bzEnch) },
+    ],
+  };
+
   // 실제 스카이블럭 방식: 상시 직업은 없음. 클래스는 카타콤 던전 전용(입장 시 선택) — 실제 5클래스 라인업.
   const DUNGEON_CLASSES = [
     { key: 'berserk', name: '버서크', emoji: '🗡️', perk: '던전 공격 +25%', dmgMul: 1.25 },
@@ -1236,7 +1253,7 @@
   window.ECON_DATA = {
     ITEM_TIERS, COLLECTIONS, SKILLS, GATHER_TABLE, TOOLS, MINIONS, MINION_STORAGE_BASE, MINION_STORAGE_UPGRADED,
     MINION_STORAGE_UPGRADE_COST, MINION_OFFLINE_CAP_HOURS, MINION_SLOT_MAX, MINION_SLOT_COST_BASE, MINION_SLOT_COST_MUL,
-    MINION_FUEL, MINION_FUEL2, SLAYERS, DUNGEON, DUNGEON_ROOM_SCORE, ESSENCE_SHOP, SHOP, DAILY_SELL_LIMIT_PER_STACK,
+    MINION_FUEL, MINION_FUEL2, SLAYERS, DUNGEON, DUNGEON_ROOM_SCORE, ESSENCE_SHOP, SHOP, BAZAAR, DAILY_SELL_LIMIT_PER_STACK,
     EQUIPMENT, STARFORCE, REFORGES, ITEM_ROLL,
     TRAITS, EQUIP_SETS, FIELD_DIFF, ARENA, ACHIEVEMENTS, DAILY_QUESTS, SALVAGE, WEEKLY, HPB, QUESTS, QUEST_NPCS, BUILDER_SHOP, DYES,
     TALISMANS, MAGICAL_POWER, PETS, PET_ITEMS, PET_ABILITIES, PET_XP_BASE, PET_XP_EXP, PET_MAX_LEVEL,
