@@ -1995,7 +1995,7 @@
     buildArrivalPlaza(mode);   // V20-AH: 섬마다 고유 컨셉 포탈 도착 광장(손 배치)
     if (mode === 'park' && ok(70, 100)) buildHouse(67, 97, 7, 6, base(70, 100), ID.spruce_planks, ID.oak_planks, ID.oak_log);   // 삼림 산장
     else if (mode === 'barn' && ok(58, 100)) buildBarnEstate();   // V20-AB: 손 배치 대형 농장(박공 붉은 헛간+원통 사일로+풍차+건초 야적+가축 우리+밀밭)
-    else if (mode === 'gold' && ok(50, 90)) buildGoldOutpost();   // V20-W: 손 배치 대형 광산 전초기지(헤드프레임+갱도+광차 데크+창고+감독관 오두막)
+    else if (mode === 'gold' && ok(50, 90)) { buildGoldOutpost(); buildGoldDetail(); }   // V20-W 전초기지 + V20-AX(3차) 채광 디테일
     else if (mode === 'deep' && ok(48, 80)) buildDeepDepot();   // V20-X: 손 배치 지하 크리스탈 채광 정거장
     else if (mode === 'spider' && ok(74, 88)) buildSpiderNest();   // V20-AA: 손 배치 대형 거미굴(이끼 바위 둥지+뒤틀린 나무탑+거미줄 장막+알집+브루드 제단)
     else if (mode === 'nether' && ok(62, 78)) buildNetherKeep();   // V20-Y: 손 배치 대형 네더 요새(용암 해자+뾰족아치 다리+블레이즈 제단탑+성첩 망루)
@@ -2050,6 +2050,36 @@
     B(-3, 0, 4, cob); B(-2, 0, 4, cob); B(-3, 1, 4, cob);                          // 바위 무더기
     B(6, 0, 4, fence); B(6, 1, 4, glow);                                           // 가로등
     B(-5, 0, 3, fence); B(-5, 1, 3, glow);                                         // 가로등2
+  }
+  // V20-AX 3차: 골드 광산 섬 채광 디테일 — 좌표 한 칸씩 손 배치(해시). 노출 바위 슬로프에
+  //   광석 노두·목재 갱목·랜턴·광차 조각·자갈 무더기를 흩뿌려 돌산 허허벌판을 채운다.
+  function buildGoldDetail() {
+    const stoneish = (id) => id === ID.stone || id === ID.polished_andesite || id === ID.gravel || id === ID.cobblestone;
+    const clearAbove = (x, z, t, n) => { for (let y = t; y < t + n; y++) if (getBlockLocal(x, y, z) !== 0) return false; return true; };
+    const log = ID.dark_oak_log != null ? ID.dark_oak_log : ID.oak_log, plank = ID.oak_planks, fence = ID.oak_fence, glow = ID.glowstone;
+    const cob = ID.cobblestone, moss = ID.mossy_cobblestone, and_ = ID.polished_andesite != null ? ID.polished_andesite : ID.stone, slab = ID.oak_planks_slab != null ? ID.oak_planks_slab : plank;
+    const gold = ID.gold_ore, iron = ID.iron_ore, coal = ID.coal_ore;
+    for (let x = 14; x <= 100; x += 4) for (let z = 14; z <= 100; z += 4) {
+      // 전초기지(48~62, 82~98) 근처는 비움
+      if (x >= 44 && x <= 64 && z >= 80 && z <= 100) continue;
+      const t = surfaceTop(x, z), g = t - 1; if (g < 4) continue;
+      if (!stoneish(getBlockLocal(x, g, z))) continue;
+      if (getBlockLocal(x, t, z) !== 0) continue;
+      const h = hash3(x, 41, z);
+      if (h < 0.04) {   // 목재 갱목(지지대) — 완경사 + 머리 위 열림
+        if (!clearAbove(x, z, t, 4) || Math.abs(surfaceTop(x + 1, z) - t) > 1) continue;
+        setW(x, t, z, log); setW(x, t + 1, z, log); setW(x, t + 2, z, log); setW(x, t + 3, z, slab); setW(x - 1, t + 3, z, slab); setW(x + 1, t + 3, z, slab);
+      } else if (h < 0.07) {   // 광차 조각(레일 띠 + 슬랩 + 울타리)
+        setW(x, g, z, and_); setW(x, t, z, slab); setW(x, t + 1, z, fence);
+      } else if (h < 0.10) {   // 갱목 랜턴
+        setW(x, t, z, fence); setW(x, t + 1, z, glow);
+      } else if (h < 0.30) {   // 노출 광맥(표면 광석 노두) — 채광 분위기 + 채집 가능
+        const o = hash3(x, 42, z); setW(x, g, z, o < 0.12 ? gold : o < 0.4 ? iron : coal);
+        if (hash3(x, 43, z) < 0.4) setW(x, t, z, ((x + z) & 1) ? cob : moss);   // 위에 자갈 부스러기
+      } else if (h < 0.40) {   // 자갈/이끼 바위 무더기
+        setW(x, t, z, ((x + z) & 1) ? cob : moss); if (hash3(x, 44, z) < 0.35) setW(x + 1, t, z, cob);
+      }
+    }
   }
   // V20-X: 딥 캐번 지하 크리스탈 채광 정거장 — 좌표 한 칸씩 손 배치. 리프트 갱도 + 발광 크리스탈 + 지지 아치 + 보석 창고.
   function buildDeepDepot() {
