@@ -509,6 +509,64 @@
     buildHeroGarden();   // V20-AN: 손 배치 영웅 동상 정원 — 허브 서측
     buildObservatory();  // V20-AP: 손 배치 원형 천문 관측탑 — 허브 북동측
     buildGrandFountain(); // V20-AQ: 손 배치 대형 3단 분수 — 허브 북서측
+    buildCathedral();    // V20-AR: 손 배치 대성당(고딕 신전) — 허브 남측
+  }
+  // V20-AR: 대성당 — 좌표 한 칸씩 손 배치(대칭 함수 아님). 고딕 신전: 긴 본당 + 버트레스 +
+  //   뾰족 아치창 + 장미창 + 쌍둥이 전면탑 + 실내 기둥열·제단·신도석. 허브 남측(224,300) 개방 구역.
+  function buildCathedral() {
+    const cx = 224, cz = 300, gy = 19;
+    flattenSite(214, 289, 234, 311, gy);
+    const B = (dx, dy, dz, id) => { if (id != null) setW(cx + dx, gy + dy, cz + dz, id); };
+    const sb = ID.stone_bricks, q = ID.quartz_block, glass = ID.glass, glow = ID.glowstone, pur = ID.purpur;
+    const st = (f) => (ID['stone_bricks_stairs_' + f] != null ? ID['stone_bricks_stairs_' + f] : sb);
+    const rose = [ID.wool_red, ID.wool_blue != null ? ID.wool_blue : ID.lapis_ore, ID.wool_yellow != null ? ID.wool_yellow : q];
+    // ── 바닥 포장(15×19) + 중앙 통로 융단 ──
+    for (let dx = -7; dx <= 7; dx++) for (let dz = -9; dz <= 9; dz++) B(dx, 0, dz, ((dx + dz) & 1) ? sb : q);
+    for (let dz = -9; dz <= 9; dz++) B(0, 0, dz, pur);
+    // ── 본당 벽(dx ±6, dz ±8, 높이 8) — 모서리 석영 ──
+    for (let dy = 1; dy <= 8; dy++) for (let dx = -6; dx <= 6; dx++) for (let dz = -8; dz <= 8; dz++) {
+      if (!(Math.abs(dx) === 6 || Math.abs(dz) === 8)) continue;
+      const corner = Math.abs(dx) === 6 && Math.abs(dz) === 8;
+      B(dx, dy, dz, corner ? q : sb);
+    }
+    // ── 정면 대문(북, dz=-8): 뾰족 아치 포탈 ──
+    for (let dy = 1; dy <= 4; dy++) for (let dx = -1; dx <= 1; dx++) B(dx, dy, -8, 0);
+    B(-1, 5, -8, q); B(1, 5, -8, q); B(0, 6, -8, q);
+    // ── 장미창(정면 상부, 반경2 원, 색유리) ──
+    for (let dx = -2; dx <= 2; dx++) for (let dy = 5; dy <= 9; dy++) { const rr = Math.round(Math.hypot(dx, dy - 7)); if (rr === 2) B(dx, dy, -8, rose[(dx + dy + 3) % 3]); else if (rr < 2) B(dx, dy, -8, glass); }
+    B(0, 7, -8, glow);
+    // ── 측벽 뾰족 아치창(dx ±6, 버트레스 사이) ──
+    for (const dz of [-5, -1, 3, 7]) for (const sx of [-6, 6]) { for (let dy = 3; dy <= 5; dy++) B(sx, dy, dz, glass); B(sx, 6, dz, q); B(sx, 2, dz, glass); }
+    // ── 버트레스(x ±7 돌출, 경사 어깨) ──
+    for (const dz of [-6, -3, 0, 3, 6]) for (const sx of [-7, 7]) { for (let dy = 1; dy <= 6; dy++) B(sx, dy, dz, sb); B(sx, 7, dz, st(sx < 0 ? 3 : 1)); }
+    // ── 지붕(박공, 계단식 수렴, 용마루 석영) ──
+    for (let dz = -8; dz <= 8; dz++) {
+      B(-6, 9, dz, st(3)); B(6, 9, dz, st(1));
+      B(-5, 10, dz, st(3)); B(5, 10, dz, st(1)); B(-4, 10, dz, sb); B(4, 10, dz, sb);
+      B(-3, 11, dz, st(3)); B(3, 11, dz, st(1)); B(-2, 11, dz, sb); B(2, 11, dz, sb);
+      B(-1, 12, dz, st(3)); B(1, 12, dz, st(1)); B(0, 12, dz, q);
+    }
+    for (let dz = -6; dz <= 6; dz += 4) B(0, 13, dz, glow);
+    // ── 후면 앱스(dz=+8): 채광창 ──
+    for (let dy = 3; dy <= 6; dy++) B(0, dy, 8, glass); B(0, 7, 8, q); B(0, 8, 8, glow);
+    // ── 쌍둥이 전면탑(정면 양 모서리, 4각 탑 → 뾰족 첨탑) ──
+    for (const sx of [-6, 6]) {
+      const ix = sx < 0 ? 1 : -1;
+      for (let dy = 1; dy <= 14; dy++) for (const [ox, oz] of [[0, 0], [ix, 0], [0, 1], [ix, 1]]) B(sx + ox, dy, -8 + oz, ((sx + ox + oz + dy) & 1) ? q : sb);
+      for (const [ox, oz] of [[0, 0], [ix, 0], [0, 1], [ix, 1]]) B(sx + ox, 15, -8 + oz, (ox === 0 && oz === 0) ? sb : 0);
+      B(sx, 15, -8, st(0)); B(sx, 16, -7, q); B(sx, 17, -7, q); B(sx, 18, -7, glow);
+    }
+    // ── 실내: 기둥열(dx ±3) + 익랑 보 + 제단 + 신도석 + 샹들리에 ──
+    for (const dz of [-4, 0, 4]) for (const sx of [-3, 3]) { for (let dy = 1; dy <= 6; dy++) B(sx, dy, dz, q); B(sx, 7, dz, st(sx < 0 ? 3 : 1)); }
+    for (let dx = -3; dx <= 3; dx++) B(dx, 8, 0, dx % 3 === 0 ? q : sb);
+    for (let dx = -2; dx <= 2; dx++) for (let dz = 5; dz <= 7; dz++) B(dx, 1, dz, q);
+    B(0, 2, 6, pur); B(0, 3, 6, glow); B(-1, 2, 6, q); B(1, 2, 6, q);
+    for (const [ox, oz] of [[-2, 5], [2, 5], [-2, 7], [2, 7]]) { B(ox, 2, oz, ID.oak_fence); B(ox, 3, oz, glow); }
+    for (let dz = -6; dz <= 2; dz += 2) { B(-2, 1, dz, st(2)); B(-1, 1, dz, st(2)); B(1, 1, dz, st(2)); B(2, 1, dz, st(2)); }
+    for (const dz of [-4, 0, 4]) { B(0, 7, dz, ID.oak_fence); B(0, 6, dz, glow); }
+    // ── 전면 진입 계단 + 안뜰 가로등 ──
+    for (let dx = -2; dx <= 2; dx++) B(dx, 0, -9, st(0));
+    for (const [lx, lz] of [[-8, -9], [8, -9]]) { B(lx, 1, lz, ID.oak_fence); B(lx, 2, lz, ID.oak_fence); B(lx, 3, lz, glow); }
   }
   // V20-AQ: 대형 분수 — 좌표 한 칸씩 손 배치(대칭 함수 아님). 물이 담긴 벽 있는 다단 수반(넘침 없음).
   //   하단 수반 → 중앙 대좌 상단 수반 → 석영 분출 기둥 + 프리즈마린 토수구 4기. 허브 북서(168,190).
