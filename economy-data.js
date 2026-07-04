@@ -309,6 +309,11 @@
     { key: 'gem_ruby_perfect', name: '💎 퍼펙트 루비(체력+180)', cost: 120, kind: 'item' },
     { key: 'gem_sapphire_perfect', name: '💎 퍼펙트 사파이어(지력+90)', cost: 120, kind: 'item' },
     { key: 'gem_amethyst_gem_perfect', name: '💎 퍼펙트 자수정(방어+60)', cost: 120, kind: 'item' },
+    // V20-C: 펫 아이템(정수 교환)
+    { key: 'petitem_tier_boost', name: '🐾 티어 부스트(펫 +10%)', cost: 250, kind: 'item' },
+    { key: 'petitem_gold_claws', name: '🐾 황금 발톱(힘+30)', cost: 90, kind: 'item' },
+    { key: 'petitem_bigger_teeth', name: '🐾 큰 이빨(치명피해+40)', cost: 90, kind: 'item' },
+    { key: 'petitem_textbook', name: '🐾 교과서(지력+50)', cost: 90, kind: 'item' },
   ];
 
   /* ---------------- 등급별 장비(무기 3계열: 검/활/지팡이 × 7티어) + 던전 전용 장비 ---------------- */
@@ -629,6 +634,25 @@
     { key: 'blaze', name: '블레이즈 펫', tierKey: 'epic', skill: 'combat', eggPrice: 0, statsPerLv: { str: 0.5, hp: 0.5 }, bonusText: '레벨당 힘 +0.5, 체력 +0.5' },
     { key: 'enderman', name: '엔더맨 펫', tierKey: 'legendary', skill: 'combat', eggPrice: 0, statsPerLv: { str: 0.7 }, bonusText: '레벨당 힘 +0.7' },
   ];
+  // V20-C: 펫 아이템(활성 펫 1개 장착) — 실제 스카이블럭. mul=펫 기본 능력치 배율, stat=고정 스탯
+  const PET_ITEMS = [
+    { key: 'petitem_tier_boost', name: '펫: 티어 부스트', desc: '펫 기본 능력치 +10%', mul: 1.1 },
+    { key: 'petitem_gold_claws', name: '펫: 황금 발톱', desc: '힘 +30', stat: { str: 30 } },
+    { key: 'petitem_bigger_teeth', name: '펫: 큰 이빨', desc: '치명 피해 +40%', stat: { critDamage: 40 } },
+    { key: 'petitem_hardened_scales', name: '펫: 단단한 비늘', desc: '방어 +25', stat: { def: 25 } },
+    { key: 'petitem_textbook', name: '펫: 교과서', desc: '지력 +50', stat: { intelligence: 50 } },
+    { key: 'petitem_lucky_clover', name: '펫: 행운의 클로버', desc: '매직파인드 +7', stat: { magicFind: 7 } },
+    { key: 'petitem_titanium', name: '펫: 티타늄 부적', desc: '힘 +15, 방어 +15', stat: { str: 15, def: 15 } },
+    { key: 'petitem_crystallized_heart', name: '펫: 결정화된 심장', desc: '채광 포춘 +40', stat: { miningFortune: 40 } },
+  ];
+  // V20-C: 펫 시그니처 능력(레벨 마일스톤 해금) — 계열별 고유 패시브
+  const PET_ABILITIES = {
+    griffin: [{ lv: 50, name: '하늘의 왕', stat: { str: 60 } }, { lv: 100, name: '전설의 체질', stat: { str: 60, critDamage: 30 } }],
+    ender_dragon: [{ lv: 50, name: '용의 분노', stat: { str: 50 } }, { lv: 100, name: '종말의 숨결', stat: { str: 60, intelligence: 100 } }],
+    enderman: [{ lv: 50, name: '공허 보행', stat: { str: 40 } }, { lv: 100, name: '엔더 지배', stat: { str: 50 } }],
+    wolf: [{ lv: 50, name: '무리의 힘', stat: { str: 25 } }],
+    blue_whale: [{ lv: 50, name: '거대한 심장', stat: { hp: 100 } }, { lv: 100, name: '심해의 생명력', stat: { hp: 200 } }],
+  };
   const PET_XP_BASE = 60, PET_XP_EXP = 1.7, PET_MAX_LEVEL = 100;   // xpToLevel(n) = base * n^exp
 
   /* ---------------- 인챈트 12종(위키 실측 상한) + 혼돈의 마법부여(상한 돌파) ---------------- */
@@ -1207,7 +1231,7 @@
     MINION_FUEL, MINION_FUEL2, SLAYERS, DUNGEON, DUNGEON_ROOM_SCORE, ESSENCE_SHOP, SHOP, DAILY_SELL_LIMIT_PER_STACK,
     EQUIPMENT, STARFORCE, REFORGES, ITEM_ROLL,
     TRAITS, EQUIP_SETS, FIELD_DIFF, ARENA, ACHIEVEMENTS, DAILY_QUESTS, SALVAGE, WEEKLY, HPB, QUESTS, QUEST_NPCS, BUILDER_SHOP, DYES,
-    TALISMANS, MAGICAL_POWER, PETS, PET_XP_BASE, PET_XP_EXP, PET_MAX_LEVEL,
+    TALISMANS, MAGICAL_POWER, PETS, PET_ITEMS, PET_ABILITIES, PET_XP_BASE, PET_XP_EXP, PET_MAX_LEVEL,
     ENCHANTS, CHAOS_ENCHANT, RECIPES, MASTER_MODE,
     FAIRY_SOULS, BANK, DAILY_DEALS, DUNGEON_CLASSES, ZONES, EASTER_EGGS,
     SKILL_XP_TABLE, SKILL_MAX_LEVEL, SKILL_MAX_BY, BASE_STATS, BASE_STATS2, GEM_TYPES, GEM_QUALITY, GEM_BASE, GEM_SLOTS_BY_TIER, RECOMB, ENCHANTED_RES, ENCHANTED_BLOCK_RES, SLAYER_XP_LEVELS, SLAYER_QUEST,
