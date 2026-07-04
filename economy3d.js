@@ -504,6 +504,52 @@
     for (let x = 221; x < 227; x++) for (let z = 188; z < 193; z++) setW(x, 31, z, ID.purpur);
     setW(223, 32, 190, ID.glowstone); setW(225, 32, 190, ID.glowstone);
     buildGuildHall();   // V20-V: 손 배치 대형 랜드마크(모험가 길드 대회관)
+    buildClocktower();  // V20-AL: 손 배치 수직 랜드마크(대시계탑) — 허브 동측 광장
+  }
+  // V20-AL: 대시계탑 — 좌표 한 칸씩 손 배치(대칭 함수 아님). 저층 허브 건물과 다른 '수직' 실루엣.
+  //   2단 포디움 → 석벽돌 탑신(석영 코너 퀀·아치창) → 4면 시계 다이얼 → 종루(아치+종) → 첨탑 스파이어.
+  function buildClocktower() {
+    const cx = 300, cz = 232, gy = surfaceTop(cx, cz);
+    const B = (dx, dy, dz, id) => { if (id != null) setW(cx + dx, gy + dy, cz + dz, id); };
+    const sb = ID.stone_bricks, q = ID.quartz_block, and_ = ID.polished_andesite != null ? ID.polished_andesite : ID.stone;
+    const glow = ID.glowstone, dark = ID.wool_black != null ? ID.wool_black : ID.obsidian, fence = ID.oak_fence;
+    const bell = ID.gold_ore, pur = ID.purpur;
+    const st = (f) => (ID['stone_bricks_stairs_' + f] != null ? ID['stone_bricks_stairs_' + f] : sb);
+    // ── 2단 포디움 ──
+    for (let dx = -5; dx <= 5; dx++) for (let dz = -5; dz <= 5; dz++) B(dx, 0, dz, ((dx + dz) & 1) ? sb : and_);   // 하단 11×11
+    for (let dx = -4; dx <= 4; dx++) for (let dz = -4; dz <= 4; dz++) B(dx, 1, dz, ((dx + dz) & 1) ? and_ : sb);   // 상단 9×9
+    for (let dx = -5; dx <= 5; dx++) B(dx, 1, 5, st(0));   // +z 진입 계단 띠
+    for (const [ox, oz] of [[-5, -5], [5, -5], [-5, 5], [5, 5]]) { B(ox, 1, oz, fence); B(ox, 2, oz, glow); }   // 포디움 4모서리 가로등
+    // ── 탑신(5×5, y2~16, hollow, 석영 코너 퀀 + 아치창) ──
+    for (let dy = 2; dy <= 16; dy++) for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) {
+      const edge = Math.abs(dx) === 2 || Math.abs(dz) === 2; if (!edge) continue;
+      const corner = Math.abs(dx) === 2 && Math.abs(dz) === 2;
+      // 아치창: 각 면 중앙 세로 슬릿(dy 4~6, 10~12)
+      const win = (dx === 0 || dz === 0) && ((dy >= 4 && dy <= 6) || (dy >= 10 && dy <= 12)) && (Math.abs(dx) === 2 || Math.abs(dz) === 2);
+      if (win) continue;
+      B(dx, dy, dz, corner ? q : sb);
+    }
+    for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) { B(dx, 2, dz, and_); B(dx, 8, dz, sb); B(dx, 13, dz, sb); }   // 바닥/중간층
+    B(0, 3, 2, glow); B(0, 9, 2, glow); B(0, 14, -2, glow);   // 내부 조명
+    // 아치창 상단 곡선(석영 인방)
+    for (const [ax, az] of [[0, -2], [0, 2], [-2, 0], [2, 0]]) { B(ax, 7, az, q); B(ax, 13, az, q); }
+    // ── 탑신 상단 코니스(1칸 돌출 처마) ──
+    for (let dx = -3; dx <= 3; dx++) { B(dx, 16, -3, st(2)); B(dx, 16, 3, st(0)); } for (let dz = -3; dz <= 3; dz++) { B(-3, 16, dz, st(3)); B(3, 16, dz, st(1)); }
+    // ── 4면 시계 다이얼(y17~19, 3×3 석영 링 + 검은 중심/바늘) ──
+    for (const [nx, nz] of [[0, -3], [0, 3], [-3, 0], [3, 0]]) {
+      for (let a = -1; a <= 1; a++) for (let dy = 17; dy <= 19; dy++) { const gx = nz === 0 ? nx : nx + a, gz = nz === 0 ? nz + a : nz; B(gx, dy, gz, q); }
+    }
+    // 다이얼 중심 + 바늘(검은색) — 각 면
+    for (const [nx, nz] of [[0, -3], [0, 3], [-3, 0], [3, 0]]) { B(nx, 18, nz, dark); if (nz === 0) { B(nx, 19, nz, dark); } else { B(nx === 0 ? 1 : nx, 18, nz, dark); } }
+    // ── 종루(y20~22): 4모서리 석영 기둥 + 인방 + 매달린 종 ──
+    for (const [ox, oz] of [[-2, -2], [2, -2], [-2, 2], [2, 2]]) for (let dy = 20; dy <= 22; dy++) B(ox, dy, oz, q);
+    for (let dx = -2; dx <= 2; dx++) { B(dx, 22, -2, q); B(dx, 22, 2, q); } for (let dz = -2; dz <= 2; dz++) { B(-2, 22, dz, q); B(2, 22, dz, q); }
+    for (let dx = -2; dx <= 2; dx++) { B(dx, 20, -2, dx % 2 ? 0 : sb); B(dx, 20, 2, dx % 2 ? 0 : sb); }   // 종루 난간(총안)
+    B(0, 22, 0, fence); B(0, 21, 0, bell); B(0, 20, 0, glow);   // 매달린 종 + 아래 발광
+    // ── 첨탑 스파이어(y23~26 수렴 계단 + 자수정 첨두 + 발광 피니얼) ──
+    for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) { if (Math.abs(dx) === 2 || Math.abs(dz) === 2) B(dx, 23, dz, st(dx === -2 ? 1 : dx === 2 ? 3 : dz === -2 ? 2 : 0)); }
+    for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) { if (Math.abs(dx) === 1 || Math.abs(dz) === 1) B(dx, 24, dz, st(dx === -1 ? 1 : dx === 1 ? 3 : dz === -1 ? 2 : 0)); }
+    B(0, 24, 0, pur); B(0, 25, 0, pur); B(0, 26, 0, glow);   // 첨두 자수정 + 발광 피니얼
   }
   // V20-V: 모험가 길드 대회관 — 좌표 한 칸씩 손 배치(대칭 함수 아님). 하프팀버 2층 + 코너 타워 + 박공/도머 지붕 + 실내.
   //   허브 북동 빈 구역(280~294, 158~169). 정면(+z)이 광장 방향.
