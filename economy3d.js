@@ -503,6 +503,80 @@
     }
     for (let x = 221; x < 227; x++) for (let z = 188; z < 193; z++) setW(x, 31, z, ID.purpur);
     setW(223, 32, 190, ID.glowstone); setW(225, 32, 190, ID.glowstone);
+    buildGuildHall();   // V20-V: 손 배치 대형 랜드마크(모험가 길드 대회관)
+  }
+  // V20-V: 모험가 길드 대회관 — 좌표 한 칸씩 손 배치(대칭 함수 아님). 하프팀버 2층 + 코너 타워 + 박공/도머 지붕 + 실내.
+  //   허브 북동 빈 구역(280~294, 158~169). 정면(+z)이 광장 방향.
+  function buildGuildHall() {
+    const bx = 280, bz = 158, W = 15, D = 12;
+    const gy = surfaceTop(bx + 7, bz + 6);
+    const B = (dx, dy, dz, id) => { if (id != null) setW(bx + dx, gy + dy, bz + dz, id); };
+    const sb = ID.stone_bricks, cob = ID.cobblestone, moss = ID.mossy_cobblestone, ch = ID.chiseled_stone_bricks;
+    const and_ = ID.polished_andesite != null ? ID.polished_andesite : ID.stone, smooth = ID.smooth_stone != null ? ID.smooth_stone : ID.stone;
+    const log = ID.dark_oak_log != null ? ID.dark_oak_log : ID.oak_log, plank = ID.dark_oak_planks != null ? ID.dark_oak_planks : ID.spruce_planks;
+    const sprk = ID.spruce_planks, glass = ID.glass, glow = ID.glowstone, book = ID.bookshelf != null ? ID.bookshelf : plank;
+    const woolR = ID.wool_red != null ? ID.wool_red : sb, woolBlue = ID.wool_blue != null ? ID.wool_blue : sb, q = ID.quartz_block;
+    const seaL = ID.sea_lantern != null ? ID.sea_lantern : glow;
+    const st = (mat, f) => (ID[mat + '_stairs_' + f] != null ? ID[mat + '_stairs_' + f] : mat === 'dark_oak_planks' ? plank : sb);
+    const slab = ID.stone_bricks_slab != null ? ID.stone_bricks_slab : sb;
+    flattenSite(bx - 1, bz - 1, bx + W, bz + D, gy - 1);
+    // ── 기단(2단) + 판자 바닥 ──
+    for (let x = -1; x <= W; x++) for (let z = -1; z <= D; z++) { const edge = x === -1 || x === W || z === -1 || z === D; B(x, -1, z, edge ? ch : ((x + z) & 1 ? and_ : smooth)); }
+    for (let x = 0; x < W; x++) for (let z = 0; z < D; z++) B(x, -2, z, sb);
+    // ── 1층 벽(dy0..3): 하프팀버 — 모서리·격자 통나무 기둥 + 사이 석재/회벽 ──
+    // 통나무 기둥(특정 x=0,4,7,10,14 / z=0,5,11)
+    for (const px of [0, 4, 7, 10, 14]) for (const pz of [0, 5, 11]) for (let y = 0; y <= 4; y++) B(px, y, pz, log);
+    // 벽면 채움(기둥 사이) — 하단 석재벽돌 2단, 상단 회벽(매끈), 군데군데 이끼
+    for (let x = 0; x <= 14; x++) for (const z of [0, 11]) { if ([0, 4, 7, 10, 14].includes(x)) continue; B(x, 0, z, sb); B(x, 1, z, ((x * 3) % 5 === 0) ? moss : sb); B(x, 2, z, smooth); B(x, 3, z, smooth); }
+    for (let z = 1; z <= 10; z++) for (const x of [0, 14]) { if ([0, 5, 11].includes(z)) continue; B(x, 0, z, sb); B(x, 1, z, ((z * 3) % 5 === 0) ? moss : sb); B(x, 2, z, smooth); B(x, 3, z, smooth); }
+    // 벽 상단 인방(통나무 띠)
+    for (let x = 0; x <= 14; x++) { B(x, 4, 0, log); B(x, 4, 11, log); }
+    for (let z = 0; z <= 11; z++) { B(0, 4, z, log); B(14, 4, z, log); }
+    // ── 아치창(정면·측면, 유리 2단 + 석재 계단 아치머리) ──
+    for (const [wx, wz] of [[2, 11], [12, 11], [2, 0], [12, 0]]) { B(wx, 1, wz, glass); B(wx, 2, wz, glass); B(wx, 3, wz, st('stone_bricks', 0)); }
+    for (const wz of [2, 3, 8, 9]) { B(0, 1, wz, glass); B(0, 2, wz, glass); B(14, 1, wz, glass); B(14, 2, wz, glass); }
+    // ── 정면(+z, dz=11) 대형 현관: 3칸 아치 개구부 + 이중 문 + 계단 + 기둥 + 랜턴 + 배너 ──
+    for (let dxo = 6; dxo <= 8; dxo++) for (let y = 0; y <= 3; y++) B(dxo, y, 11, 0);   // 개구부 뚫기
+    B(7, 0, 11, ID.dark_oak_door_c_0 != null ? ID.dark_oak_door_c_0 : ID.spruce_door_c_0); B(7, 1, 11, ID.dark_oak_door_c_0 != null ? ID.dark_oak_door_c_0 : ID.spruce_door_c_0);
+    B(6, 3, 11, st('stone_bricks', 1)); B(8, 3, 11, st('stone_bricks', 3)); B(7, 4, 11, ch);   // 아치머리
+    B(5, 0, 12, q); B(5, 1, 12, q); B(5, 2, 12, ch); B(5, 3, 12, seaL);   // 좌 현관 기둥+등
+    B(9, 0, 12, q); B(9, 1, 12, q); B(9, 2, 12, ch); B(9, 3, 12, seaL);   // 우 현관 기둥+등
+    B(6, -1, 12, slab); B(7, -1, 12, slab); B(8, -1, 12, slab);           // 진입 계단참
+    B(6, -1, 13, woolR); B(7, -1, 13, woolR); B(8, -1, 13, woolR);        // 레드카펫
+    B(4, 1, 12, woolBlue); B(4, 2, 12, woolBlue); B(4, 3, 12, woolBlue);  // 좌 배너
+    B(10, 1, 12, woolR); B(10, 2, 12, woolR); B(10, 3, 12, woolR);        // 우 배너
+    // ── 코너 타워(4모서리 dy0..6) + 석영 캡 + 발광 첨두 ──
+    for (const [tx, tz] of [[0, 0], [14, 0], [0, 11], [14, 11]]) { B(tx, 5, tz, ch); B(tx, 6, tz, q); B(tx, 7, tz, q); B(tx, 8, tz, glow); }
+    // ── 2층 벽(dy5..7) 살짝 안쪽(도머 느낌) 정면만 ──
+    for (let x = 3; x <= 11; x++) { B(x, 5, 11, sb); B(x, 6, 11, ((x) % 3 === 0) ? glass : sb); B(x, 7, 11, log); }
+    // ── 박공 지붕(용마루 x축, z로 경사) — 어두운 판자 + 가문비 계단 물매 ──
+    const halfD = 6;
+    for (let x = -1; x <= W; x++) for (let dz = -halfD; dz <= halfD; dz++) {
+      const z = 6 + dz, h = 5 + (halfD - Math.abs(dz)); if (h < 5) continue;
+      if (dz === 0) B(x, h, z, plank);                                    // 용마루
+      else B(x, h, z, st('spruce_planks', dz > 0 ? 0 : 2));               // 경사
+    }
+    // 박공 삼각벽(양 끝 x=-1,15) — 통나무 뼈대+판자
+    for (const gx of [-1, W]) for (let dz = -halfD; dz <= halfD; dz++) { const z = 6 + dz, top = (halfD - Math.abs(dz)); for (let yy = 0; yy < top; yy++) B(gx, 5 + yy, z, (yy === top - 1 || dz === 0) ? log : plank); }
+    // 지붕 도머(정면 튀어나온 창) — 손 배치
+    B(5, 8, 12, plank); B(6, 8, 12, glass); B(7, 8, 12, glass); B(8, 8, 12, glass); B(9, 8, 12, plank);
+    B(6, 9, 12, st('spruce_planks', 0)); B(7, 9, 12, st('spruce_planks', 0)); B(8, 9, 12, st('spruce_planks', 0));
+    // 용마루 장식(랜턴 + 깃대)
+    B(2, 12, 6, seaL); B(7, 13, 6, log); B(7, 14, 6, woolR); B(12, 12, 6, seaL);
+    // ── 실내: 카펫 러너 + 접수 카운터 + 책장 벽 + 샹들리에 + 테이블 ──
+    for (let z = 1; z <= 10; z++) { B(7, -1, z, woolR); }                 // 중앙 레드카펫 러너
+    for (let x = 3; x <= 11; x++) B(x, 0, 2, book), B(x, 1, 2, book);     // 뒷벽 책장(2단)
+    for (let x = 4; x <= 10; x++) B(x, 0, 4, st('spruce_planks', 0));     // 접수 카운터(계단)
+    B(4, 1, 4, log); B(10, 1, 4, log);                                    // 카운터 양끝 기둥
+    for (const [cx2, cz2] of [[4, 4], [10, 4], [4, 8], [10, 8]]) B(cx2, 3, cz2, glow);   // 샹들리에(천장 발광)
+    B(5, 0, 8, log); B(5, 1, 8, slab); B(4, 0, 8, st('spruce_planks', 3)); B(6, 0, 8, st('spruce_planks', 1));   // 테이블+의자
+    B(9, 0, 8, log); B(9, 1, 8, slab); B(8, 0, 8, st('spruce_planks', 3)); B(10, 0, 8, st('spruce_planks', 1));  // 테이블2+의자
+    B(2, 1, 6, book); B(2, 2, 6, book); B(12, 1, 6, book); B(12, 2, 6, book);   // 측벽 책장
+    // 벽 걸이 등불(측벽)
+    B(0, 3, 3, glow); B(0, 3, 8, glow); B(14, 3, 3, glow); B(14, 3, 8, glow);
+    // 앞마당 화분·가로등(손 배치)
+    B(-2, 0, 12, log); B(-2, 1, 12, ID.flower_yellow); B(16, 0, 12, log); B(16, 1, 12, ID.flower_red);
+    lampPost(bx + 3, bz + 14); lampPost(bx + 11, bz + 14);
   }
   function buildVillageDetail() {
     // 바자 골목(광장 서쪽): 노점 4개(차양 + 판매대)
