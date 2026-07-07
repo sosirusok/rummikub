@@ -95,7 +95,7 @@
    ['hay_block', { top: 'hay_top', side: 'hay_side', bottom: 'hay_top' }]].forEach(([k, tex]) => BLOCKS.push({ key: k, tex }));
   [['crafting_table', { top: 'crafting_table_top', side: 'crafting_table_side', bottom: 'planks' }],
    ['furnace', { top: 'furnace_top', side: 'furnace_side', bottom: 'stone' }],
-   ['chest', { top: 'chest_top', side: 'chest_side', bottom: 'planks' }]].forEach(([k, tex]) => BLOCKS.push({ key: k, tex, interact: true }));
+   ['chest', { top: 'chest_top', side: 'chest_side', bottom: 'planks' }]].forEach(([k, tex]) => BLOCKS.push({ key: k, tex, interact: true, shape: k === 'chest' ? 'chest' : null, opaque: k !== 'chest' }));
   PORTAL_DESTS.forEach(k => BLOCKS.push({ key: 'portal_' + k, tex: 'portal_' + k, interact: true, opaque: false }));
   // V17: 모든 나무 판자(다크오크/정글/아카시아 신규) + 계단/반블럭 형태 블럭(모든 나무 + 돌 계열)
   ['dark_oak_planks', 'jungle_planks', 'acacia_planks'].forEach(k => BLOCKS.push({ key: k, tex: k }));
@@ -3741,6 +3741,7 @@
       return;
     }
     if (b.shape === 'trapdoor') { emitBox(T, b, x, y, z, 0, 0, 0, 1, 0.1875, 1); return; }   // 닫힘: 바닥 얇은 판
+    if (b.shape === 'chest') { emitBox(T, b, x, y, z, 0.0625, 0, 0.0625, 0.9375, 0.875, 0.9375); return; }
     if (b.shape === 'door') {   // 얇은 세로 판(한 칸 높이) — 열림은 90° 회전
       const f = b.open ? (b.facing + 1) % 4 : b.facing;
       const D = [[0, 0, 0, 1, 1, 0.1875], [0.8125, 0, 0, 1, 1, 1], [0, 0, 0.8125, 1, 1, 1], [0, 0, 0, 0.1875, 1, 1]][f];
@@ -4079,7 +4080,7 @@
       mark.position.set(0, 2.85, 0); mark.userData.qbob = 1; h.group.add(mark);
       npcGroup.add(h.group);
     });
-    if (worldMode === 'home') buildHomeStarterChest();
+    // Private island starts empty except natural starter terrain.
   }
   // 포탈섬 스타터 상자(프롭) — 시작 안내 겸 장식
   function buildHomeStarterChest() {
@@ -4233,6 +4234,47 @@
   function blockAtFeet() { return getBlockLocal(Math.floor(P.x), Math.floor(P.y + 0.2), Math.floor(P.z)); }
   function feetInWater() { return blockAtFeet() === ID.water; }
   function feetInLava() { return blockAtFeet() === ID.lava; }
+  function blockLocalBoxes(b, x, y, z, forRay) {
+    if (!b) return [];
+    const boxes = [];
+    const add = (x0, y0, z0, x1, y1, z1) => boxes.push({ x0: x + x0, y0: y + y0, z0: z + z0, x1: x + x1, y1: y + y1, z1: z + z1 });
+    if (b.cross) {
+      if (forRay) {
+        add(0.45, 0, 0, 0.55, 0.9, 1);
+        add(0, 0, 0.45, 1, 0.9, 0.55);
+      }
+      return boxes;
+    }
+    if (b.shape === 'slab') { add(0, 0, 0, 1, 0.5, 1); return boxes; }
+    if (b.shape === 'stairs') {
+      add(0, 0, 0, 1, 0.5, 1);
+      const f = b.facing || 0;
+      if (f === 0) add(0, 0.5, 0, 1, 1, 0.5);
+      else if (f === 1) add(0.5, 0.5, 0, 1, 1, 1);
+      else if (f === 2) add(0, 0.5, 0.5, 1, 1, 1);
+      else add(0, 0.5, 0, 0.5, 1, 1);
+      return boxes;
+    }
+    if (b.shape === 'fence') {
+      add(0.375, 0, 0.375, 0.625, 1, 0.625);
+      const conn = (dx, dz) => { const nb = BLOCKS[getBlockLocal(x + dx, y, z + dz)]; return !!(nb && (nb.opaque || nb.shape === 'fence')); };
+      if (conn(1, 0)) { add(0.625, 0.3, 0.44, 1, 0.5, 0.56); add(0.625, 0.66, 0.44, 1, 0.86, 0.56); }
+      if (conn(-1, 0)) { add(0, 0.3, 0.44, 0.375, 0.5, 0.56); add(0, 0.66, 0.44, 0.375, 0.86, 0.56); }
+      if (conn(0, 1)) { add(0.44, 0.3, 0.625, 0.56, 0.5, 1); add(0.44, 0.66, 0.625, 0.56, 0.86, 1); }
+      if (conn(0, -1)) { add(0.44, 0.3, 0, 0.56, 0.5, 0.375); add(0.44, 0.66, 0, 0.56, 0.86, 0.375); }
+      return boxes;
+    }
+    if (b.shape === 'trapdoor') { add(0, 0, 0, 1, 0.1875, 1); return boxes; }
+    if (b.shape === 'door') {
+      const f = b.open ? (b.facing + 1) % 4 : b.facing;
+      const D = [[0, 0, 0, 1, 1, 0.1875], [0.8125, 0, 0, 1, 1, 1], [0, 0, 0.8125, 1, 1, 1], [0, 0, 0, 0.1875, 1, 1]][f];
+      add(D[0], D[1], D[2], D[3], D[4], D[5]);
+      return boxes;
+    }
+    if (b.shape === 'chest') { add(0.0625, 0, 0.0625, 0.9375, 0.875, 0.9375); return boxes; }
+    add(0, 0, 0, 1, b.collTop != null ? b.collTop : 1, 1);
+    return boxes;
+  }
   // V12 Sneak: 슬금 중 지상에서 발밑 지면이 사라지는 이동이면 그 축을 취소(가장자리 낙하 방지, MC식)
   function wouldFallOffEdge() {
     const fy = Math.floor(P.y - 0.05);   // 발밑 한 칸
@@ -4248,11 +4290,13 @@
     const minX = P.x - P.w / 2, maxX = P.x + P.w / 2, minZ = P.z - P.w / 2, maxZ = P.z + P.w / 2, minY = P.y, maxY = P.y + P.h;
     for (let x = Math.floor(minX); x <= Math.floor(maxX); x++) for (let z = Math.floor(minZ); z <= Math.floor(maxZ); z++) for (let y = Math.floor(minY); y <= Math.floor(maxY); y++) {
       const bb = BLOCKS[getBlockLocal(x, y, z)]; if (!bb || !bb.solid) continue;
-      const hi = y + (bb.collTop != null ? bb.collTop : (bb.shape === 'slab' ? 0.5 : 1));   // V17: 형태별 충돌 상단(반블럭0.5/트랩도어0.1875)
-      if (minY >= hi || maxY <= y) continue;             // 플레이어가 이 블럭 세로 범위 밖 → 통과
-      if (ax === 'y') { if (amt > 0) { P.y = y - P.h - 0.0001; P.vy = 0; } else { P.y = hi + 0.0001; P.vy = 0; P.onGround = true; } return; }
-      if (ax === 'x') { if (amt > 0) P.x = x - P.w / 2 - 0.0001; else P.x = x + 1 + P.w / 2 + 0.0001; P.vx = 0; return; }
-      if (ax === 'z') { if (amt > 0) P.z = z - P.w / 2 - 0.0001; else P.z = z + 1 + P.w / 2 + 0.0001; P.vz = 0; return; }
+      const boxes = blockLocalBoxes(bb, x, y, z, false);
+      for (const box of boxes) {
+        if (minX >= box.x1 || maxX <= box.x0 || minY >= box.y1 || maxY <= box.y0 || minZ >= box.z1 || maxZ <= box.z0) continue;
+        if (ax === 'y') { if (amt > 0) { P.y = box.y0 - P.h - 0.0001; P.vy = 0; } else { P.y = box.y1 + 0.0001; P.vy = 0; P.onGround = true; } return; }
+        if (ax === 'x') { if (amt > 0) P.x = box.x0 - P.w / 2 - 0.0001; else P.x = box.x1 + P.w / 2 + 0.0001; P.vx = 0; return; }
+        if (ax === 'z') { if (amt > 0) P.z = box.z0 - P.w / 2 - 0.0001; else P.z = box.z1 + P.w / 2 + 0.0001; P.vz = 0; return; }
+      }
     }
     if ((ax === 'x' || ax === 'z') && P._sneaking && P.onGround && wouldFallOffEdge()) { P[ax] = before; P['v' + ax] = 0; }
   }
@@ -4279,7 +4323,7 @@
     let dx = (-sin * mf + cos * ms), dz = (-cos * mf - sin * ms);
     const len = Math.hypot(dx, dz); if (len > 0) { dx /= len; dz /= len; }
     P.vx = dx * speed; P.vz = dz * speed;
-    // 오토 점프: 진행 방향 1블록 턱은 자동으로 올라간다(조작감)
+    // 수동 점프: Space를 새로 눌렀을 때만 점프한다.
     const wantJump = !!keys.Space;
     const jumpEdge = wantJump && !P._prevJump;
     P._prevJump = wantJump;
@@ -4329,7 +4373,7 @@
     if (panelOpen()) return;
     const p = relPos(e); const cw = canvas.clientWidth;
     if (!isTouch) {
-      if (!lookS.locked) { canvas.requestPointerLock && canvas.requestPointerLock(); return; }
+      if (!lookS.locked && canvas.requestPointerLock) canvas.requestPointerLock();
       if (e.button === 2) {
         const t = currentAim();
         if (t) { doInteract(t); return; }
@@ -4396,6 +4440,39 @@
 
   /* ---------------- 복셀 DDA 레이캐스트(프라이빗 섬 블록 설치/파괴용) ---------------- */
   const REACH_EDIT = 5;
+  function rayBoxHit(o, d, box, maxDist) {
+    let tMin = 0, tMax = maxDist, face = [0, 0, 0];
+    const axes = [['x', 'x0', 'x1'], ['y', 'y0', 'y1'], ['z', 'z0', 'z1']];
+    for (const [a, lo, hi] of axes) {
+      const ov = o[a], dv = d[a];
+      if (Math.abs(dv) < 1e-9) {
+        if (ov < box[lo] || ov > box[hi]) return null;
+        continue;
+      }
+      let t1 = (box[lo] - ov) / dv, t2 = (box[hi] - ov) / dv;
+      let f1 = a === 'x' ? [-Math.sign(dv) || -1, 0, 0] : a === 'y' ? [0, -Math.sign(dv) || -1, 0] : [0, 0, -Math.sign(dv) || -1];
+      if (t1 > t2) {
+        const t = t1; t1 = t2; t2 = t;
+        f1 = a === 'x' ? [-Math.sign(dv) || 1, 0, 0] : a === 'y' ? [0, -Math.sign(dv) || 1, 0] : [0, 0, -Math.sign(dv) || 1];
+      }
+      if (t1 > tMin) { tMin = t1; face = f1; }
+      tMax = Math.min(tMax, t2);
+      if (tMin > tMax) return null;
+    }
+    if (tMax < 0 || tMin > maxDist) return null;
+    return { t: Math.max(0, tMin), face };
+  }
+  function rayHitBlockBoxes(o, d, x, y, z, id) {
+    const b = BLOCKS[id];
+    if (!b || b.liquid) return null;
+    const boxes = blockLocalBoxes(b, x, y, z, true);
+    let best = null;
+    for (const box of boxes) {
+      const hit = rayBoxHit(o, d, box, REACH_EDIT);
+      if (hit && (!best || hit.t < best.t)) best = hit;
+    }
+    return best;
+  }
   function raycastBlock() {
     const o = { x: P.x, y: P.y + P.eye, z: P.z }; const d = lookDir();
     let x = Math.floor(o.x), y = Math.floor(o.y), z = Math.floor(o.z);
@@ -4407,7 +4484,10 @@
     let face = [0, 0, 0];
     for (let i = 0; i < REACH_EDIT * 3; i++) {
       const id = getBlockLocal(x, y, z);
-      if (id !== 0) { const b = BLOCKS[id]; if (!b || !b.liquid) return { x, y, z, face, id }; }
+      if (id !== 0) {
+        const hit = rayHitBlockBoxes(o, d, x, y, z, id);
+        if (hit) return { x, y, z, face: hit.face, id };
+      }
       if (tMX < tMY && tMX < tMZ) { x += stepX; tMX += tDX; face = [-stepX, 0, 0]; }
       else if (tMY < tMZ) { y += stepY; tMY += tDY; face = [0, -stepY, 0]; }
       else { z += stepZ; tMZ += tDZ; face = [0, 0, -stepZ]; }
@@ -5793,7 +5873,7 @@
       <div class="econ3d-buildbar" id="econ3dBuildBar" style="display:none"></div>
       <div class="econ3d-questhud" id="econ3dQuestHud" style="display:none"></div>
       <div class="econ3d-questbanner" id="econ3dQuestBanner" style="display:none"></div>
-      ${isTouch ? '<div class="econ3d-joy" id="econ3dJoy"><div class="econ3d-joy__knob" id="econ3dJoyKnob"></div></div><div class="econ3d-jump" data-act="econ3d_jump">⤒</div><div class="econ3d-touchhint" id="econ3dTouchHint">◀ 왼쪽 드래그 이동 · 오른쪽 드래그 시점 · 탭 공격/상호작용 · ⤒ 점프</div>' : '<div class="econ3d-controlhint">WASD 이동 · W 더블탭 달리기 · 좌클릭 공격/꾹 눌러 채집 · 우클릭 낚시(물) · E/클릭 NPC · M 지도</div>'}
+      ${isTouch ? '<div class="econ3d-joy" id="econ3dJoy"><div class="econ3d-joy__knob" id="econ3dJoyKnob"></div></div><div class="econ3d-jump" data-act="econ3d_jump">⤒</div><div class="econ3d-touchhint" id="econ3dTouchHint">◀ 왼쪽 드래그 이동 · 오른쪽 드래그 시점 · 탭 공격/상호작용 · ⤒ 점프</div>' : '<div class="econ3d-controlhint">WASD 이동 · Space 점프 · W 더블탭 달리기 · 좌클릭 공격/꾹 눌러 채집 · 우클릭 설치/상호작용/낚시 · E 인벤토리 · M 지도</div>'}
       <div class="econ3d-panelwrap" id="econ3dPanelWrap" style="display:none">
         <div class="econ3d-panelbar"><span id="econ3dPanelGold"></span><button class="btn btn--ghost btn--sm" data-act="econ3d_panel_close">✕ 닫기</button></div>
         <div id="econBody" class="econ-body econ3d-body"></div>

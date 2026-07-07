@@ -889,6 +889,23 @@
     { key: 'portal_mushroom', needs: { sugarcane: 32, melon: 24, pumpkin: 16 }, gives: 1, unlock: { resource: 'melon', tier: 2 } },
   ];
 
+  const _recipeKeys = new Set(RECIPES.map(r => r.key));
+  function addRecipe(r) {
+    if (_recipeKeys.has(r.key)) return;
+    RECIPES.push(r);
+    _recipeKeys.add(r.key);
+  }
+  [
+    ['stone', null], ['quartz_block', null], ['sandstone', null], ['bricks', null], ['purpur', null],
+    ['smooth_stone', null], ['prismarine', null], ['mossy_cobblestone', null], ['polished_andesite', null],
+    ['chiseled_stone_bricks', null],
+  ].forEach(([mat, unlock]) => {
+    addRecipe({ key: mat + '_slab', needs: { [mat]: 3 }, gives: 6, unlock });
+    addRecipe({ key: mat + '_stairs', needs: { [mat]: 6 }, gives: 4, unlock });
+  });
+  addRecipe({ key: 'sandstone', needs: { sand: 4 }, gives: 1, unlock: null });
+  addRecipe({ key: 'hay_block', needs: { wheat: 9 }, gives: 1, unlock: null });
+
   /* ---------------- 페어리 소울(3D 월드 12개 은닉) ---------------- */
   const FAIRY_SOULS = { total: 24, goldPerSoul: 200, mpPerSoul: 2, per5Bonus: { hp: 10, str: 2 } };   // V9: 테마 월드 12개 추가
 

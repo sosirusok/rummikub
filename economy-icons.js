@@ -172,6 +172,77 @@
     c.fillStyle = left; c.beginPath(); c.moveTo(8, 15); c.lineTo(20, 22); c.lineTo(20, 34); c.lineTo(8, 27); c.fill();
     c.fillStyle = right; c.beginPath(); c.moveTo(32, 15); c.lineTo(20, 22); c.lineTo(20, 34); c.lineTo(32, 27); c.fill();
   }
+  function drawIsoLine(c, pts, col) {
+    c.strokeStyle = col; c.lineWidth = 1; c.beginPath();
+    c.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) c.lineTo(pts[i][0], pts[i][1]);
+    c.stroke();
+  }
+  function drawBlock(c, key, col) {
+    drawCube(c, col);
+    const dark = shade(col, 0.45), light = shade(col, 1.45);
+    if (/log$|log_/.test(key) || /^(oaklog|birchlog|sprucelog)$/.test(key)) {
+      c.strokeStyle = dark; c.lineWidth = 1;
+      c.beginPath(); c.ellipse(20, 15, 6, 3.4, 0, 0, Math.PI * 2); c.stroke();
+      c.beginPath(); c.ellipse(20, 15, 3, 1.7, 0, 0, Math.PI * 2); c.stroke();
+      [12, 16, 24, 28].forEach(x => drawIsoLine(c, [[x, 18], [x - 1, 28]], dark));
+      return;
+    }
+    if (/planks|trapdoor|door|fence/.test(key)) {
+      [[11, 17], [15, 19], [24, 19], [29, 17]].forEach(p => c.fillRect(p[0], p[1], 5, 1));
+      drawIsoLine(c, [[10, 22], [19, 27]], dark);
+      drawIsoLine(c, [[22, 24], [30, 19]], dark);
+      drawIsoLine(c, [[20, 23], [20, 33]], dark);
+      return;
+    }
+    if (/ore|coal|iron|gold|lapis|redstone|diamond|emerald/.test(key)) {
+      const ore = key.indexOf('coal') >= 0 ? '#1c1c1f' : key.indexOf('iron') >= 0 ? '#e0b08a' : key.indexOf('gold') >= 0 ? '#ffd84d' : key.indexOf('lapis') >= 0 ? '#234ec8' : key.indexOf('redstone') >= 0 ? '#e63232' : key.indexOf('diamond') >= 0 ? '#78fff2' : key.indexOf('emerald') >= 0 ? '#35e36f' : light;
+      [[18, 12], [12, 20], [25, 18], [15, 27], [27, 26]].forEach(p => { c.fillStyle = ore; c.fillRect(p[0], p[1], 3, 3); });
+      return;
+    }
+    if (key === 'crafting_table') {
+      c.strokeStyle = dark; c.lineWidth = 1; c.strokeRect(15.5, 12.5, 9, 6);
+      c.fillStyle = '#d0aa58'; c.fillRect(18, 14, 4, 3);
+      drawIsoLine(c, [[10, 23], [19, 28]], dark); drawIsoLine(c, [[23, 23], [30, 18]], dark);
+      return;
+    }
+    if (key === 'furnace') {
+      c.fillStyle = '#202020'; c.fillRect(15, 15, 10, 6);
+      c.fillStyle = '#e8632a'; c.fillRect(17, 21, 6, 2);
+      return;
+    }
+    if (key === 'chest') {
+      c.strokeStyle = '#5a3416'; c.lineWidth = 1; c.strokeRect(13.5, 15.5, 13, 9);
+      c.fillStyle = '#d9b64a'; c.fillRect(19, 19, 3, 4);
+      return;
+    }
+    if (/glass/.test(key)) {
+      drawIsoLine(c, [[14, 13], [20, 10], [26, 13]], '#eaffff');
+      drawIsoLine(c, [[11, 21], [18, 25]], '#eaffff');
+      drawIsoLine(c, [[23, 25], [30, 21]], '#eaffff');
+      return;
+    }
+    if (/wool_/.test(key)) {
+      drawIsoLine(c, [[12, 16], [17, 14], [22, 16], [27, 14]], dark);
+      drawIsoLine(c, [[11, 24], [16, 26], [20, 24]], dark);
+      drawIsoLine(c, [[23, 24], [28, 22], [31, 24]], dark);
+      return;
+    }
+    if (/brick/.test(key)) {
+      drawIsoLine(c, [[12, 16], [28, 16]], dark);
+      drawIsoLine(c, [[10, 23], [20, 28]], dark);
+      drawIsoLine(c, [[21, 27], [31, 22]], dark);
+      [15, 23, 27].forEach(x => drawIsoLine(c, [[x, 13], [x + 3, 15]], dark));
+      return;
+    }
+    if (/sandstone|quartz|purpur|smooth_stone|prismarine|concrete_|terracotta_|stone|cobblestone|obsidian|dirt|sand|gravel|hay_block|bookshelf/.test(key)) {
+      drawIsoLine(c, [[11, 17], [20, 22], [29, 17]], dark);
+      c.fillStyle = light; c.globalAlpha = 0.5; c.fillRect(14, 12, 3, 2); c.fillRect(24, 21, 3, 2); c.globalAlpha = 1;
+    }
+  }
+  function isBlockLike(key) {
+    return /(_planks|_log|log$|_ore|stone|cobblestone|dirt|grass|sand|sandstone|brick|glass|obsidian|wool_|concrete_|terracotta_|leaves|crafting_table|furnace|chest|torch|slab|stairs|fence|trapdoor|door|hay_block|bookshelf|prismarine|quartz|purpur|mossy|andesite|gravel)/.test(key);
+  }
   function drawGear(c, col) {
     c.fillStyle = col;
     for (let i = 0; i < 8; i++) { c.save(); c.translate(20, 20); c.rotate(i * Math.PI / 4); c.fillRect(-2.5, -14, 5, 7); c.restore(); }
@@ -207,6 +278,14 @@
     c.fillStyle = '#e8632a'; c.beginPath(); c.moveTo(20, 6); c.quadraticCurveTo(31, 16, 26, 27); c.quadraticCurveTo(24, 33, 20, 34); c.quadraticCurveTo(16, 33, 14, 27); c.quadraticCurveTo(9, 16, 20, 6); c.fill();
     c.fillStyle = '#f7a02a'; c.beginPath(); c.moveTo(20, 14); c.quadraticCurveTo(26, 21, 22, 29); c.quadraticCurveTo(20, 31, 18, 29); c.quadraticCurveTo(14, 21, 20, 14); c.fill();
     c.fillStyle = '#ffe28a'; c.beginPath(); c.arc(20, 27, 3, 0, Math.PI * 2); c.fill();
+  }
+  function drawTorch(c) {
+    c.save(); c.translate(20, 22); c.rotate(Math.PI / 7);
+    px(c, -2, -1, 4, 15, '#7a4a22');
+    px(c, -3, -5, 6, 5, '#3b2412');
+    c.restore();
+    c.fillStyle = '#e8632a'; c.beginPath(); c.moveTo(20, 5); c.quadraticCurveTo(28, 13, 23, 21); c.quadraticCurveTo(20, 24, 17, 21); c.quadraticCurveTo(12, 13, 20, 5); c.fill();
+    c.fillStyle = '#ffd85a'; c.beginPath(); c.moveTo(20, 10); c.quadraticCurveTo(24, 15, 21, 20); c.quadraticCurveTo(19, 21, 18, 19); c.quadraticCurveTo(16, 15, 20, 10); c.fill();
   }
   function drawCape(c, col) {
     c.fillStyle = col; c.beginPath(); c.moveTo(12, 8); c.lineTo(28, 8); c.lineTo(30, 32); c.lineTo(24, 28); c.lineTo(20, 33); c.lineTo(16, 28); c.lineTo(10, 32); c.fill();
@@ -247,9 +326,11 @@
     if (/^minion_fuel/.test(key)) return 'flame';
     if (/^(minion_slot_expander|auto_shipping_module|diamond_spreading)$/.test(key)) return 'gear';
     if (/^portal_/.test(key)) return 'portal';
+    if (key === 'torch') return 'torch';
     if (/cape/.test(key)) return 'cape';
     if (/^(rawfish|salmon|clownfish|pufferfish|fish_insomnia)$/.test(key)) return 'fish';
     if (/^skin_/.test(key)) return 'skin';
+    if (isBlockLike(key)) return 'block';
     if (/^enchanted_/.test(key)) return 'cube';
     return 'cube';
   }
@@ -323,11 +404,13 @@
       case 'rod': drawRod(c, col); break;
       case 'stone': drawStone(c, col); break;
       case 'flame': drawFlame(c); break;
+      case 'torch': drawTorch(c); break;
       case 'gear': drawGear(c, col); break;
       case 'portal': drawPortal(c, col); break;
       case 'cape': drawCape(c, '#9365b8'); break;
       case 'fish': drawFish(c, col); break;
       case 'skin': drawSkin(c); break;
+      case 'block': drawBlock(c, key, col); break;
       default: drawCube(c, col); break;
     }
     // 인챈티드 자원은 보라 반짝이 오버레이

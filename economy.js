@@ -701,7 +701,7 @@
     if (shapedBlock) {
       const mat = shapedBlock[1];
       if (shapedBlock[2] === 'slab') return { rows: ['MMM'], spec: { M: mat } };
-      return { rows: ['M  ', 'MM ', 'MMM'], spec: { M: mat } };
+      return { rows: ['M  ', 'MM ', 'MMM'], spec: { M: mat }, mirror: true };
     }
     switch (key) {
       case 'stick': return { rows: ['P', 'P'], spec: { P: 'planks' } };
@@ -710,20 +710,20 @@
       case 'furnace': return { rows: ['CCC', 'C C', 'CCC'], spec: { C: 'cobblestone' } };
       case 'torch': return { rows: ['C', 'S'], spec: { C: 'coal', S: 'stick' } };
       case 'wooden_pickaxe': return { rows: ['PPP', ' S ', ' S '], spec: { P: 'planks', S: 'stick' } };
-      case 'wooden_axe': return { rows: ['PP', 'PS', ' S'], spec: { P: 'planks', S: 'stick' } };
-      case 'wooden_hoe': return { rows: ['PP', ' S', ' S'], spec: { P: 'planks', S: 'stick' } };
+      case 'wooden_axe': return { rows: ['PP', 'PS', ' S'], spec: { P: 'planks', S: 'stick' }, mirror: true };
+      case 'wooden_hoe': return { rows: ['PP', ' S', ' S'], spec: { P: 'planks', S: 'stick' }, mirror: true };
       case 'wooden_sword': return { rows: ['P', 'P', 'S'], spec: { P: 'planks', S: 'stick' } };
       case 'stone_pickaxe': return { rows: ['CCC', ' S ', ' S '], spec: { C: 'cobblestone', S: 'stick' } };
-      case 'stone_axe': return { rows: ['CC', 'CS', ' S'], spec: { C: 'cobblestone', S: 'stick' } };
-      case 'stone_hoe': return { rows: ['CC', ' S', ' S'], spec: { C: 'cobblestone', S: 'stick' } };
+      case 'stone_axe': return { rows: ['CC', 'CS', ' S'], spec: { C: 'cobblestone', S: 'stick' }, mirror: true };
+      case 'stone_hoe': return { rows: ['CC', ' S', ' S'], spec: { C: 'cobblestone', S: 'stick' }, mirror: true };
       case 'stone_sword': return { rows: ['C', 'C', 'S'], spec: { C: 'cobblestone', S: 'stick' } };
       case 'iron_pickaxe': return { rows: ['III', ' S ', ' S '], spec: { I: 'iron', S: 'stick' } };
-      case 'iron_axe': return { rows: ['II', 'IS', ' S'], spec: { I: 'iron', S: 'stick' } };
-      case 'iron_hoe': return { rows: ['II', ' S', ' S'], spec: { I: 'iron', S: 'stick' } };
+      case 'iron_axe': return { rows: ['II', 'IS', ' S'], spec: { I: 'iron', S: 'stick' }, mirror: true };
+      case 'iron_hoe': return { rows: ['II', ' S', ' S'], spec: { I: 'iron', S: 'stick' }, mirror: true };
       case 'iron_sword': return { rows: ['I', 'I', 'S'], spec: { I: 'iron', S: 'stick' } };
       case 'diamond_pickaxe': return { rows: ['DDD', ' S ', ' S '], spec: { D: 'diamond', S: 'stick' } };
-      case 'diamond_axe': return { rows: ['DD', 'DS', ' S'], spec: { D: 'diamond', S: 'stick' } };
-      case 'diamond_hoe': return { rows: ['DD', ' S', ' S'], spec: { D: 'diamond', S: 'stick' } };
+      case 'diamond_axe': return { rows: ['DD', 'DS', ' S'], spec: { D: 'diamond', S: 'stick' }, mirror: true };
+      case 'diamond_hoe': return { rows: ['DD', ' S', ' S'], spec: { D: 'diamond', S: 'stick' }, mirror: true };
       case 'diamond_sword': return { rows: ['D', 'D', 'S'], spec: { D: 'diamond', S: 'stick' } };
       case 'fishing_rod': return { rows: ['  S', ' SF', 'S F'], spec: { S: 'stick', F: 'string' } };
       default: return null;
@@ -737,29 +737,35 @@
     return item === want;
   }
   function normalizedCraftGrid() {
-    const filled = [];
-    for (let i = 0; i < 9; i++) if (craftGrid[i]) filled.push({ r: Math.floor(i / 3), c: i % 3, k: craftGrid[i] });
-    if (!filled.length) return null;
-    const minR = Math.min(...filled.map(x => x.r)), maxR = Math.max(...filled.map(x => x.r));
-    const minC = Math.min(...filled.map(x => x.c)), maxC = Math.max(...filled.map(x => x.c));
     const rows = [];
-    for (let r = minR; r <= maxR; r++) {
+    let any = false;
+    for (let r = 0; r < 3; r++) {
       const row = [];
-      for (let c = minC; c <= maxC; c++) row.push(craftGrid[r * 3 + c] || null);
+      for (let c = 0; c < 3; c++) {
+        const k = craftGrid[r * 3 + c] || null;
+        if (k) any = true;
+        row.push(k);
+      }
       rows.push(row);
     }
-    return rows;
+    return any ? rows : null;
+  }
+  function patternRowsMatchGrid(rows, spec, grid) {
+    const h = rows.length, w = Math.max(...rows.map(r => r.length));
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
+      const token = (r < h && c < w) ? (rows[r][c] || ' ') : ' ';
+      if (!craftSlotMatches(grid[r][c], token, spec || {})) return false;
+    }
+    return true;
+  }
+  function mirrorRows(rows) {
+    const w = Math.max(...rows.map(r => r.length));
+    return rows.map(row => row.padEnd(w, ' ').split('').reverse().join(''));
   }
   function patternMatchesGrid(pattern) {
     const grid = normalizedCraftGrid(); if (!grid) return false;
-    const rows = pattern.rows;
-    const h = rows.length, w = Math.max(...rows.map(r => r.length));
-    if (grid.length !== h || grid[0].length !== w) return false;
-    for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) {
-      const token = (rows[r][c] || ' ');
-      if (!craftSlotMatches(grid[r][c], token, pattern.spec || {})) return false;
-    }
-    return true;
+    if (patternRowsMatchGrid(pattern.rows, pattern.spec || {}, grid)) return true;
+    return !!pattern.mirror && patternRowsMatchGrid(mirrorRows(pattern.rows), pattern.spec || {}, grid);
   }
   function shapelessMatchesGrid(r) {
     const used = {};
@@ -2201,6 +2207,8 @@
         lines.push(`장착 중(${eq.name}) 대비: ${d >= 0 ? '▲ +' : '▼ '}${d} ${sdef.dmg != null ? '공격' : '방어'}`);
       } else if (eq && eq.key === sdef.key) lines.push('✔ 장착 중');
     }
+    const canUseHotbar = sdef.key && isPlaceableOrTool(sdef.key);
+    if (canUseHotbar) lines.push('핫바 배정/프라이빗 섬 사용 가능');
     const d = shopItemDesc(sdef); if (d) lines.push(d);
     if (sdef.reqCombat) lines.push(`⚔ 요구 전투 레벨: ${sdef.reqCombat}`);
     for (const fam in D().TOOLS) {
@@ -2214,12 +2222,14 @@
     }
     if (sdef.sellPrice > 0) lines.push(`판매가: ${fmtGold(sdef.sellPrice)}`);
     if (sdef.tierKey) { const t = D().ITEM_TIERS.find(x => x.key === sdef.tierKey); if (t) lines.push(`◆ ${t.name.toUpperCase()}`); }
+    else if (canUseHotbar) lines.push('◆ COMMON');
     return lines.join('\n');
   }
   function ttAttr(keyOrDef) {
     const sdef = typeof keyOrDef === 'string' ? shopDef(keyOrDef) : keyOrDef;
     if (!sdef) return '';
-    return ` data-tt="${escHtml(itemLore(sdef))}"`;
+    const lore = escHtml(itemLore(sdef));
+    return ` data-tt="${lore}" title="${lore}"`;
   }
   function hubHTML() {
     return `<div class="econ-panel">
@@ -2320,10 +2330,18 @@
     const sd = shopDef(k);
     return !!(sd && (sd.category === '건축' || sd.category === '제작품' || sd.category === '무기' || sd.category === '방어구' || sd.category === '도구')) || (window.__econ3dPlaceable ? window.__econ3dPlaceable(k) : false);
   }
-  function assignHotbar(key) {
+  function assignHotbar(key, slot) {
     if (!Array.isArray(P.hotbar)) P.hotbar = [];
     P.hotbar = P.hotbar.slice(0, 9);
     while (P.hotbar.length < 9) P.hotbar.push(null);
+    if (slot != null && slot >= 0 && slot < 9) {
+      const old = P.hotbar.indexOf(key);
+      if (old >= 0) P.hotbar[old] = null;
+      P.hotbar[slot] = key;
+      saveNow(); renderZone();
+      if (typeof window.economy3dRefreshHotbar === 'function') window.economy3dRefreshHotbar();
+      return;
+    }
     const at = P.hotbar.indexOf(key);
     if (at >= 0) { P.hotbar[at] = null; }        // 이미 있으면 해제(토글)
     else { let i = P.hotbar.indexOf(null); if (i < 0) i = 0; P.hotbar[i] = key; }
@@ -2355,7 +2373,7 @@
     const hot = (P.hotbar || [null, null, null, null, null, null, null, null, null]);
     const hotRow = Array.from({ length: 9 }, (_, i) => {
       const k = hot[i];
-      return `<div class="mc-slot mc-hot ${k ? '' : 'mc-empty'}" data-act="${k ? 'econ_assign_hotbar' : ''}" data-key="${k || ''}" title="핫바 ${i + 1}">${k ? `${iconImg(k)}${(P.inv[k] || 0) > 1 ? `<span class="mc-cnt">${P.inv[k]}</span>` : ''}` : `<span class="mc-slotnum">${i + 1}</span>`}</div>`;
+      return `<div class="mc-slot mc-hot ${k ? '' : 'mc-empty'}" data-act="${k ? 'econ_assign_hotbar' : (invDetailKey ? 'econ_assign_hotbar_slot' : '')}" data-key="${k || invDetailKey || ''}" data-slot="${i}" title="핫바 ${i + 1}">${k ? `${iconImg(k)}${(P.inv[k] || 0) > 1 ? `<span class="mc-cnt">${P.inv[k]}</span>` : ''}` : `<span class="mc-slotnum">${i + 1}</span>`}</div>`;
     }).join('');
     return `<h4>🎒 인벤토리</h4>
       <div class="mc-invtop">
@@ -2574,16 +2592,20 @@
   }
   function petsHTML() {
     const eggs = D().SHOP.filter(s => s.category === '펫' && hasItem(s.key));
+    const ownedPets = (D().PETS || []).filter(p => !!P.pets[p.key]);
     return `<h4>🐾 펫 (활성 1마리의 보너스가 적용돼요)</h4>
       ${eggs.length ? `<h4 class="muted">보유한 알</h4><div class="econ-tierbtns">${eggs.map(e => `<button class="btn btn--sm" data-act="econ_pet_hatch" data-key="${e.key.replace('pet_egg_', '')}">${e.name} 부화 (보유 ${P.inv[e.key]})</button>`).join('')}</div>` : ''}
-      <div class="econ-shopgrid">${D().PETS.map(p => {
-        const owned = !!P.pets[p.key]; const lvl = owned ? petLevel(p.key) : 0;
-        return `<div class="econ-shopitem">
+      ${ownedPets.length ? `<h4 class="muted">보유한 펫</h4><div class="econ-shopgrid">${ownedPets.map(p => {
+        const lvl = petLevel(p.key);
+        return `<div class="econ-shopitem econ-tt"${ttAttr({ key: `pet_egg_${p.key}`, name: p.name, tierKey: p.tierKey, flavor: p.perkText })}>
           ${iconImg(`pet_egg_${p.key}`)}<span style="color:${tierColorByKey(p.tierKey)}">${p.name} [${tierNameByKey(p.tierKey)}]</span>
-          <span class="muted">${owned ? `Lv.${lvl} — ${p.perkText}` : (p.eggPrice > 0 ? '상점에서 알 구매' : '보스 드롭 전용')}</span>
-          ${owned ? (P.activePet === p.key ? '<span style="color:#4ade80">✔ 활성</span>' : `<button class="btn btn--sm" data-act="econ_pet_activate" data-key="${p.key}">활성화</button>`) : ''}
+          <span class="muted">Lv.${lvl} — ${p.perkText}</span>
+          ${P.activePet === p.key ? '<span style="color:#4ade80">✔ 활성</span>' : `<button class="btn btn--sm" data-act="econ_pet_activate" data-key="${p.key}">활성화</button>`}
         </div>`;
-      }).join('')}</div>`;
+      }).join('')}</div>` : '<p class="muted">보유한 펫이 없어요. 보유한 알을 부화시키면 여기에서 바로 선택할 수 있어요.</p>'}
+      <details class="econ-ownedonly"><summary>미보유 펫 획득처 보기</summary>
+        <div class="econ-shopgrid">${(D().PETS || []).filter(p => !P.pets[p.key]).map(p => `<div class="econ-shopitem is-locked">${iconImg(`pet_egg_${p.key}`)}<span style="color:${tierColorByKey(p.tierKey)}">${p.name}</span><span class="muted">${p.eggPrice > 0 ? '상점 알 구매' : '보스 드롭 전용'}</span></div>`).join('')}</div>
+      </details>`;
   }
   function talismansHTML() {
     const ts = talismanStats();
@@ -2822,7 +2844,7 @@
       ${craftGridHTML(sel)}
       ${craftInventoryHTML()}
       ${recHTML}
-      <h4 class="muted">전체 레시피</h4>
+      <details class="econ-ownedonly"><summary>전체 레시피 목록</summary>
       <div class="econ-shopgrid">${D().RECIPES.map(r => {
         const unlocked = recipeUnlocked(r);
         const needsTxt = Object.keys(r.needs).map(k => `${itemName(k)} x${r.needs[k]} (${P.inv[k] || 0})`).join(', ');
@@ -2837,7 +2859,7 @@
           <button class="btn btn--sm btn--ghost" data-act="econ_craft_sel" data-key="${r.key}">레시피 보기</button>
           ${manualCraftCapable(r) ? '' : `<button class="btn btn--sm" data-act="econ_craft" data-key="${r.key}" ${canCraft(r) ? '' : 'disabled'}>대량 제작</button>`}
         </div>`;
-      }).join('')}</div>`;
+      }).join('')}</div></details>`;
   }
 
   function dealsHTML() {
@@ -3233,6 +3255,7 @@
       case 'inv_filter': invFilter = el.dataset.key; renderZone(); break;
       case 'invcell': invDetailKey = (invDetailKey === el.dataset.key ? null : el.dataset.key); renderZone(); break;
       case 'assign_hotbar': assignHotbar(el.dataset.key); break;
+      case 'assign_hotbar_slot': assignHotbar(el.dataset.key, Number(el.dataset.slot)); break;
       case 'craft_sel': craftSel = el.dataset.key; renderZone(); break;
       case 'craft_put': putCraftItem(el.dataset.key); break;
       case 'craft_grid_clear': clearCraftSlot(Number(el.dataset.i)); break;
