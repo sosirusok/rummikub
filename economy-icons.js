@@ -8,6 +8,7 @@
   if (typeof window === 'undefined' || typeof document === 'undefined') return;
   const cache = {};
   const S = 40;
+  const USE_SPRITE_SHEET = false;
 
   function D() { return window.ECON_DATA || {}; }
   function tierColor(tierKey) {
@@ -19,7 +20,9 @@
     stone: '#8c8c8c', coal: '#26262a', iron: '#d8a282', gold: '#fbdb4b', lapis: '#1f4fc0', redstone: '#c81f28',
     diamond: '#5decd5', emerald: '#1fbf5c', obsidian: '#2a2040',
     wheat: '#e8c24a', carrot: '#e07b1f', potato: '#c8a25a', pumpkin: '#d6791f', melon: '#4c8f46', sugarcane: '#8fc36a',
-    oaklog: '#8a6a3a', birchlog: '#d7d3c8', sprucelog: '#4a3722', apple: '#d23b32',
+    oaklog: '#8a6a3a', birchlog: '#d7d3c8', sprucelog: '#4a3722', dark_oak_log: '#3d2517', jungle_log: '#7b5b2c', acacia_log: '#b06a36', apple: '#d23b32',
+    oak_planks: '#b8874b', birch_planks: '#d8c88a', spruce_planks: '#6b4a2a', dark_oak_planks: '#4b2f1d', jungle_planks: '#a98245', acacia_planks: '#b86c38',
+    crafting_table: '#9c6b35', furnace: '#777777', chest: '#a66a2c', torch: '#f0b040',
     rawfish: '#7aa5c8', salmon: '#e0806a', clownfish: '#f0983a', pufferfish: '#e8d24a', prismarine: '#66c2b4',
     sponge: '#d8cf62', clay: '#a4a8b6',
     rotten_flesh: '#8a5a3a', bone: '#e8e4d4', string: '#e4e4e4', ender_pearl: '#1f8a7a', blaze_rod: '#f0a03a',
@@ -175,6 +178,26 @@
     c.beginPath(); c.arc(20, 20, 9, 0, Math.PI * 2); c.fill();
     c.fillStyle = '#20242c'; c.beginPath(); c.arc(20, 20, 4, 0, Math.PI * 2); c.fill();
   }
+  function drawPortal(c, col) {
+    c.save();
+    c.translate(20, 20);
+    c.strokeStyle = '#2a2040';
+    c.lineWidth = 6;
+    c.beginPath();
+    c.ellipse(0, 0, 11, 15, 0, 0, Math.PI * 2);
+    c.stroke();
+    const g = c.createRadialGradient(0, 0, 2, 0, 0, 15);
+    g.addColorStop(0, shade(col, 1.45));
+    g.addColorStop(0.55, col);
+    g.addColorStop(1, '#201030');
+    c.fillStyle = g;
+    c.beginPath();
+    c.ellipse(0, 0, 8, 12, 0, 0, Math.PI * 2);
+    c.fill();
+    c.restore();
+    c.fillStyle = '#d8c8ff';
+    [[14, 10], [26, 13], [12, 28], [29, 26]].forEach(p => c.fillRect(p[0], p[1], 2, 2));
+  }
   function drawStone(c, col) {
     c.fillStyle = col; c.beginPath();
     c.moveTo(12, 28); c.lineTo(10, 18); c.lineTo(18, 10); c.lineTo(28, 13); c.lineTo(30, 24); c.lineTo(22, 31); c.fill();
@@ -223,6 +246,7 @@
     if (/^reforge_stone|essence_reforge_stone/.test(key)) return 'stone';
     if (/^minion_fuel/.test(key)) return 'flame';
     if (/^(minion_slot_expander|auto_shipping_module|diamond_spreading)$/.test(key)) return 'gear';
+    if (/^portal_/.test(key)) return 'portal';
     if (/cape/.test(key)) return 'cape';
     if (/^(rawfish|salmon|clownfish|pufferfish|fish_insomnia)$/.test(key)) return 'fish';
     if (/^skin_/.test(key)) return 'skin';
@@ -246,6 +270,7 @@
     if (cat === 'book') return '#9365b8';
     if (cat === 'stone') return '#c9a227';
     if (cat === 'gear') return '#8c98a8';
+    if (cat === 'portal') return '#8f63ff';
     if (/^(wooden)/.test(key)) return '#9c7a44';
     if (/^stone_/.test(key)) return '#8c8c8c';
     if (/^iron_/.test(key)) return '#d8d8d4';
@@ -262,7 +287,7 @@
     if (!c) return '';
     // 외부 시트 우선(8×6 그리드에서 해당 셀을 잘라 사용 — 셀 크기는 이미지 실제 크기에서 자동 계산)
     const cell = spriteCellFor(key);
-    if (sheetReady && cell) {
+    if (USE_SPRITE_SHEET && sheetReady && cell) {
       const cw = sheet.width / SPRITE_COLS, ch = sheet.height / SPRITE_ROWS;
       const pad = Math.round(Math.min(cw, ch) * 0.04);   // 셀 가장자리 여백(이웃 셀 침범 방지)
       c.imageSmoothingEnabled = true;
@@ -299,6 +324,7 @@
       case 'stone': drawStone(c, col); break;
       case 'flame': drawFlame(c); break;
       case 'gear': drawGear(c, col); break;
+      case 'portal': drawPortal(c, col); break;
       case 'cape': drawCape(c, '#9365b8'); break;
       case 'fish': drawFish(c, col); break;
       case 'skin': drawSkin(c); break;

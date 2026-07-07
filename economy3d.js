@@ -15,6 +15,7 @@
   const SEA = 10;                        // 수면 y(9~10 물, 7~8 모래 바닥)
   const REACH = 4.5, DOT_MIN = 0.86;
   const DAY_LEN = 1200;                  // 낮밤 주기(초) — 모험 탭과 동일
+  const PORTAL_DESTS = ['park', 'barn', 'gold', 'deep', 'spider', 'nether', 'end', 'mushroom'];
 
   /* ---------------- 블록 정의 ---------------- */
   const BLOCKS = [
@@ -92,6 +93,10 @@
   [['smooth_stone', 'smooth_stone'], ['chiseled_stone_bricks', 'chiseled_stone_bricks'], ['mossy_cobblestone', 'mossy_cobble'],
    ['polished_andesite', 'polished_andesite'], ['prismarine', 'prismarine'], ['bookshelf', 'bookshelf'],
    ['hay_block', { top: 'hay_top', side: 'hay_side', bottom: 'hay_top' }]].forEach(([k, tex]) => BLOCKS.push({ key: k, tex }));
+  [['crafting_table', { top: 'crafting_table_top', side: 'crafting_table_side', bottom: 'planks' }],
+   ['furnace', { top: 'furnace_top', side: 'furnace_side', bottom: 'stone' }],
+   ['chest', { top: 'chest_top', side: 'chest_side', bottom: 'planks' }]].forEach(([k, tex]) => BLOCKS.push({ key: k, tex, interact: true }));
+  PORTAL_DESTS.forEach(k => BLOCKS.push({ key: 'portal_' + k, tex: 'portal_' + k, interact: true, opaque: false }));
   // V17: 모든 나무 판자(다크오크/정글/아카시아 신규) + 계단/반블럭 형태 블럭(모든 나무 + 돌 계열)
   ['dark_oak_planks', 'jungle_planks', 'acacia_planks'].forEach(k => BLOCKS.push({ key: k, tex: k }));
   const SHAPE_MATS = [
@@ -126,6 +131,7 @@
     stone: 'cobblestone', coal_ore: 'coal', iron_ore: 'iron', gold_ore: 'gold', lapis_ore: 'lapis',
     redstone_ore: 'redstone', diamond_ore: 'diamond', emerald_ore: 'emerald',
     oak_log: 'oaklog', birch_log: 'birchlog', spruce_log: 'sprucelog',
+    dark_oak_log: 'dark_oak_log', jungle_log: 'jungle_log', acacia_log: 'acacia_log',
     oak_leaves: null, spruce_leaves: null, dark_oak_leaves: null, jungle_leaves: null, acacia_leaves: null,
     tall_grass: null, flower_red: null, flower_yellow: null, sugar_cane: 'sugarcane',
     wheat_ripe: 'wheat', carrot_ripe: 'carrot', potato_ripe: 'potato',
@@ -140,6 +146,7 @@
   const PLACE_BLOCK = {};
   BLOCKS.forEach(b => { if (b.key !== 'air' && b.key !== 'bedrock' && !b.liquid && !/_stairs_\d$/.test(b.key) && !/_door_[co]_\d$/.test(b.key)) PLACE_BLOCK[b.key] = b.id; });   // 계단/문 변형은 아이템 아님
   PLACE_BLOCK.oaklog = ID.oak_log; PLACE_BLOCK.birchlog = ID.birch_log; PLACE_BLOCK.sprucelog = ID.spruce_log;
+  PLACE_BLOCK.dark_oak_log = ID.dark_oak_log; PLACE_BLOCK.jungle_log = ID.jungle_log; PLACE_BLOCK.acacia_log = ID.acacia_log;
   PLACE_BLOCK.sugarcane = ID.sugar_cane;
   // V17: 계단 제네릭 아이템 → 설치 시 방향 재계산(기본 남향), 방향변형은 파괴 시 제네릭 아이템 드롭
   SHAPE_MATS.forEach(m => {
@@ -273,8 +280,8 @@
   let selectedPlaceKey = null;            // V12: 현재 설치용으로 고른 블럭 아이템 키(보유한 것만 — 서바이벌, 무한 아님)
   const PORTALS = {
     hub: { x: 210, z: 224, target: 'home', label: '🏝️ 내 섬으로', fx: 0x3fd977 },   // 내 섬행 = 초록 자연빛
-    home: { x: 96, z: 76, target: 'hub', label: '🏘️ 허브로', fx: 0xffcf4d },        // 허브(도시)행 = 황금빛
-    visit: { x: 96, z: 76, target: 'hub', label: '🏘️ 허브로', fx: 0xffcf4d },
+    home: { x: 96, z: 96, target: 'hub', label: '🏘️ 허브로', fx: 0xffcf4d },        // 허브(도시)행 = 황금빛
+    visit: { x: 96, z: 96, target: 'hub', label: '🏘️ 허브로', fx: 0xffcf4d },
   };
   // 멀티: 다른 플레이어 아바타 + 섬 방문 상태
   let others = {};                          // peerId -> {mesh, tx,ty,tz,tyaw, walkT, walkAmp, legL, legR}
@@ -1607,9 +1614,10 @@
   function genHome(editsOverride) {
     world = new Uint8Array(W * H * Dp);   // 공허 하늘 — 진짜 스카이블럭 프라이빗 섬
     genHomeBlob(HOME_SPAWN.x, HOME_SPAWN.z, HOME_SPAWN.r, 31);
-    genHomeBlob(HOME_PISLE.x, HOME_PISLE.z, HOME_PISLE.r, 57);
+    // No separate portal island on the starter private island.
+    // genHomeBlob(HOME_PISLE.x, HOME_PISLE.z, HOME_PISLE.r, 57);
     // 두 섬을 잇는 나무 다리(길)
-    for (let z = HOME_PISLE.z + HOME_PISLE.r - 1; z <= HOME_SPAWN.z - HOME_SPAWN.r + 1; z++) {
+    for (let z = 1; z <= 0; z++) {
       for (let dx = -1; dx <= 1; dx++) { if (!getBlockLocal(96 + dx, HOME_TOP, z)) setW(96 + dx, HOME_TOP, z, ID.oak_planks); }
       if (z % 3 === 0) { setW(95, HOME_TOP, z, ID.oak_planks); setW(97, HOME_TOP, z, ID.oak_planks); setW(94, HOME_TOP + 1, z, ID.oak_fence !== undefined ? ID.oak_fence : ID.oak_log); }
     }
@@ -1624,7 +1632,7 @@
       }
     }
     // V18-B: 스폰섬 스타터 통나무 오두막(문/유리창/계단 지붕/현관 난간 — 아늑한 시작 집)
-    buildHouse(HOME_SPAWN.x - 2, HOME_SPAWN.z - 6, 6, 5, HOME_TOP + 1, ID.oak_planks, ID.spruce_planks, ID.oak_log);
+    // Starter house removed: Hypixel-style private island starts as open terrain.
     // 스폰섬 꽃/풀 장식
     for (let i = 0; i < 8; i++) {
       const x = HOME_SPAWN.x + Math.round((hash3(i, 81, 3) - 0.5) * HOME_SPAWN.r * 1.3);
@@ -2692,37 +2700,66 @@
     }
     setW(x, y0 + th, z, ID.spruce_leaves);
   }
-  // 🌲 더 파크 V6: 중앙 광장섬 + "수종별 부속섬 8개"(참나무/자작/가문비/다크오크/정글/아카시아/메가가문비/설원가문비) + 다리
+  // The Park follows Hypixel's gated wood-island rhythm: hub forest, oak,
+  // birch, spruce, dark oak, jungle, then acacia in one progression chain.
   function genPark() {
     world = new Uint8Array(W * H * Dp);
-    genBlobIsland(72, 72, 20, 16, { flat: true });   // 중앙 광장섬
-    const species = [
-      { plant: plantOak, name: 'oak' }, { plant: plantBirch, name: 'birch' }, { plant: plantSpruce, name: 'spruce' },
-      { plant: plantDarkOak, name: 'darkoak' }, { plant: plantJungle, name: 'jungle' }, { plant: plantAcacia, name: 'acacia' },
-      { plant: plantMegaSpruce, name: 'mega' }, { plant: plantSpruce, name: 'snowspruce', snow: true },
+    const chain = [
+      { cx: 72, cz: 126, r: 15, plant: plantOak, count: 5 },
+      { cx: 72, cz: 108, r: 16, plant: plantOak, count: 9 },
+      { cx: 72, cz: 90, r: 16, plant: plantBirch, count: 9 },
+      { cx: 72, cz: 72, r: 16, plant: plantSpruce, count: 8 },
+      { cx: 72, cz: 54, r: 16, plant: plantDarkOak, count: 7 },
+      { cx: 72, cz: 36, r: 16, plant: plantJungle, count: 7 },
+      { cx: 72, cz: 20, r: 14, plant: plantAcacia, count: 7 },
     ];
-    for (let i = 0; i < 8; i++) {
-      const a = i / 8 * Math.PI * 2;
-      const cx = 72 + Math.round(Math.cos(a) * 46), cz = 72 + Math.round(Math.sin(a) * 46);
-      genBlobIsland(cx, cz, 17, 16, species[i].snow ? { surf: ID.snow_block, sub: ID.dirt } : {});
-      // 수종 심기
-      for (let t = 0; t < 9; t++) {
-        const x = cx + Math.floor((hash3(i, 55 + t, 1) - 0.5) * 24), z = cz + Math.floor((hash3(i, 56 + t, 2) - 0.5) * 24);
-        if (Math.hypot(x - cx, z - cz) > 12) continue;
-        species[i].plant(x, z);
+    chain.forEach((isle, i) => {
+      genBlobIsland(isle.cx, isle.cz, isle.r, 16, { flat: i === 0 });
+      const path = ID.grass_path != null ? ID.grass_path : (ID.coarse_dirt != null ? ID.coarse_dirt : ID.dirt);
+      for (let dx = -2; dx <= 2; dx++) {
+        const y = surfaceTop(isle.cx + dx, isle.cz) - 1;
+        if (y > SEA + 1) setW(isle.cx + dx, y, isle.cz, path);
       }
-      // 중앙섬 → 부속섬 다리
-      const steps = 46;
-      for (let st = 14; st <= steps - 12; st++) {
-        const bx = Math.round(72 + Math.cos(a) * st), bz = Math.round(72 + Math.sin(a) * st);
-        for (let o = -1; o <= 1; o++) {
-          const px2 = Math.abs(Math.cos(a)) > 0.5 ? bx : bx + o, pz2 = Math.abs(Math.cos(a)) > 0.5 ? bz + o : bz;
-          setW(px2, 15, pz2, ID.oak_planks); clearAbove(px2, pz2, 16, 4);
+      let planted = 0;
+      for (let t = 0; t < isle.count * 5 && planted < isle.count; t++) {
+        const x = isle.cx + Math.floor((hash3(i, 55 + t, 1) - 0.5) * isle.r * 1.45);
+        const z = isle.cz + Math.floor((hash3(i, 56 + t, 2) - 0.5) * isle.r * 1.45);
+        if (Math.hypot(x - isle.cx, z - isle.cz) > isle.r - 3) continue;
+        if (Math.abs(x - isle.cx) <= 2 && Math.abs(z - isle.cz) <= 3) continue;
+        const y0 = surfaceTop(x, z);
+        if (y0 <= SEA + 1) continue;
+        clearAbove(x, z, y0, 8);
+        isle.plant(x, z);
+        planted++;
+      }
+      if (i > 0) {
+        const prev = chain[i - 1];
+        for (let z = Math.min(prev.cz, isle.cz); z <= Math.max(prev.cz, isle.cz); z++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            const ty = surfaceTop(72 + dx, z);
+            if (ty <= SEA + 1) {
+              setW(72 + dx, 16, z, ID.oak_planks);
+              clearAbove(72 + dx, z, 17, 4);
+            } else {
+              setW(72 + dx, ty - 1, z, path);
+              clearAbove(72 + dx, z, ty, 4);
+            }
+          }
+          if (z % 5 === 0) {
+            setW(70, 16, z, ID.oak_planks);
+            setW(74, 16, z, ID.oak_planks);
+            clearAbove(70, z, 17, 3);
+            clearAbove(74, z, 17, 3);
+            setW(70, 17, z, ID.oak_fence);
+            setW(74, 17, z, ID.oak_fence);
+            if (z % 10 === 0) {
+              setW(70, 18, z, ID.glowstone);
+              setW(74, 18, z, ID.glowstone);
+            }
+          }
         }
-        if (st % 8 === 0) { setW(bx, 16, bz, ID.oak_log); setW(bx, 17, bz, ID.glowstone); }
       }
-    }
-    buildParkCenter();   // V20-AO: 손 배치 중앙 정자(팔각 파빌리온) + 꽃밭 + 방사 산책로
+    });
     buildWarpPads();
   }
   // V20-AO: 파크 중앙 정자 — 좌표 한 칸씩 손 배치(대칭 함수 아님). 팔각 파빌리온 + 방사 꽃밭 +
@@ -3214,6 +3251,15 @@
     mushroom: { sk: 'farming', lv: 2, name: '농사' }, spider: { sk: 'combat', lv: 1, name: '전투' },
     nether: { sk: 'combat', lv: 5, name: '전투' }, end: { sk: 'combat', lv: 12, name: '전투' },
   };
+  function hasHomePortal(dest) {
+    if (dest === 'hub' || dest === 'home') return true;
+    const id = ID['portal_' + dest];
+    if (id == null) return false;
+    const api = econApi();
+    const edits = api.getHomeEdits ? api.getHomeEdits() : {};
+    for (const k in edits) if (Number(edits[k]) === id) return true;
+    return false;
+  }
   // 아라크네 소환: 크리스탈 4개를 성소에 설치(실제 방식)
   function tryArachneSummon(t) {
     const api = econApi();
@@ -3225,10 +3271,15 @@
     const mob = spawnMob({ x: 96, z: 40, r: 4, world: 'spider' }, 'arachne', 60);
     if (mob) { mob.state = 'chase'; if (typeof toast === 'function') toast('🕷️ 크리스탈 4개가 공명한다... 아라크네가 깨어났다!!', false); }
   }
-  function warpTo(dest) {
+  function warpTo(dest, menuWarp) {
     if (!WORLD_DEFS[dest]) return;
     const req = WARP_REQ[dest];
     const api = econApi();
+    if (menuWarp && dest !== 'hub' && dest !== 'home' && !hasHomePortal(dest)) {
+      if (typeof toast === 'function') toast(`🔒 ${WORLD_DEFS[dest].name} 워프 포탈을 프라이빗 섬에 설치해야 메뉴 워프가 가능해요.`, false);
+      warpCharge = null;
+      return;
+    }
     if (req && api.skillLv && api.skillLv(req.sk) < req.lv) {
       if (typeof toast === 'function') toast(`🔒 ${WORLD_DEFS[dest].name}은(는) ${req.name} 스킬 ${req.lv}레벨부터! (실제 스카이블럭 해금 조건)`, false);
       warpCharge = null;
@@ -3498,6 +3549,18 @@
       else { fillNoise(base, hx(base, 0.9), hx(base, 1.08)); for (let i = 0; i < 6; i++) f((r() * 16) | 0, (r() * 16) | 0, hx(base, 0.82)); }
       return;
     }
+    if (name.indexOf('portal_') === 0) {
+      fillNoise('#25143f', '#160b28', '#3a2064');
+      c.fillStyle = '#8f63ff';
+      c.fillRect(ox + 5, oy + 2, 6, 12);
+      c.fillRect(ox + 2, oy + 5, 12, 6);
+      c.fillStyle = '#d8c8ff';
+      c.fillRect(ox + 7, oy + 4, 2, 2);
+      c.fillRect(ox + 4, oy + 10, 2, 2);
+      c.strokeStyle = '#0d0718';
+      c.strokeRect(ox + 1.5, oy + 1.5, 13, 13);
+      return;
+    }
     switch (name) {
       case 'smooth_stone': fillNoise('#9a9a9a', '#8f8f8f', '#a6a6a6'); break;
       case 'polished_andesite': fillNoise('#a2a4a2', '#989a98', '#adafad'); break;
@@ -3505,6 +3568,12 @@
       case 'mossy_cobble': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.22 ? '#4a5a3a' : t < 0.45 ? '#5a5a5a' : t < 0.72 ? '#7d7d7d' : '#6a7a52'); } break;
       case 'prismarine': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.3 ? '#4f9a8e' : t < 0.6 ? '#5aad9e' : t < 0.85 ? '#66c2b4' : '#7ad0c2'); } break;
       case 'bookshelf': { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) f(x, y, ((y >> 2) % 2) ? '#9c7a44' : '#b08a4f'); for (let bx = 0; bx < 16; bx += 3) { const col = ['#b23b2e', '#2e6ab2', '#2e9a4a', '#c8a02a', '#8a4fb2'][(r() * 5) | 0]; for (let y = 2; y < 14; y++) if ((y >> 2) % 2 === 0) c.fillStyle = col, c.fillRect(ox + bx, oy + y, 2, 1); } break; }
+      case 'crafting_table_top': { fillNoise('#9c6b35', '#8a5c2d', '#b47a3c'); c.strokeStyle = '#5a3a1d'; c.strokeRect(ox + 2.5, oy + 2.5, 11, 11); c.fillStyle = '#c69a52'; c.fillRect(ox + 5, oy + 5, 6, 6); break; }
+      case 'crafting_table_side': { fillNoise('#8a5c2d', '#74481f', '#a36a34'); c.fillStyle = '#3a2412'; c.fillRect(ox + 2, oy + 3, 12, 2); c.fillRect(ox + 3, oy + 8, 10, 2); c.fillStyle = '#c0a060'; c.fillRect(ox + 5, oy + 11, 6, 2); break; }
+      case 'furnace_top': { fillNoise('#777', '#666', '#888'); c.strokeStyle = '#444'; c.strokeRect(ox + 2.5, oy + 2.5, 11, 11); break; }
+      case 'furnace_side': { fillNoise('#777', '#666', '#888'); c.fillStyle = '#1f1f1f'; c.fillRect(ox + 4, oy + 5, 8, 5); c.fillStyle = '#d96b28'; c.fillRect(ox + 5, oy + 10, 6, 2); break; }
+      case 'chest_top': { fillNoise('#a66a2c', '#8a5524', '#bb7b34'); c.strokeStyle = '#5a3416'; c.strokeRect(ox + 1.5, oy + 1.5, 13, 13); c.fillStyle = '#d9b64a'; c.fillRect(ox + 7, oy + 6, 2, 4); break; }
+      case 'chest_side': { fillNoise('#a66a2c', '#8a5524', '#bb7b34'); c.strokeStyle = '#4a2a12'; c.strokeRect(ox + 1.5, oy + 3.5, 13, 10); c.fillStyle = '#d9b64a'; c.fillRect(ox + 7, oy + 7, 2, 3); break; }
       case 'hay_top': { fillNoise('#c8a83a', '#b89830', '#d8b84a'); c.strokeStyle = '#8a6f20'; c.strokeRect(ox + 0.5, oy + 0.5, 15, 15); break; }
       case 'hay_side': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { f(x, y, (y % 5 === 4) ? '#8a6f20' : (r() < 0.5 ? '#c2a234' : '#d0b040')); } break;
       case 'stone': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.25 ? '#6f6f6f' : t < 0.5 ? '#787878' : t < 0.78 ? '#828282' : '#8c8c8c'); } break;
@@ -4211,12 +4280,8 @@
     const len = Math.hypot(dx, dz); if (len > 0) { dx /= len; dz /= len; }
     P.vx = dx * speed; P.vz = dz * speed;
     // 오토 점프: 진행 방향 1블록 턱은 자동으로 올라간다(조작감)
-    if (P.onGround && len > 0) {
-      const fx = Math.floor(P.x + dx * 0.8), fz = Math.floor(P.z + dz * 0.8), fy = Math.floor(P.y + 0.1);
-      if (solidAt(fx, fy, fz) && !solidAt(fx, fy + 1, fz) && !solidAt(fx, fy + 2, fz)) { P.vy = 8.5; P.onGround = false; }
-    }
-    const wantJump = keys.Space || (moveT.active && (moveT.y - moveT.oy) < -34);
-    const jumpEdge = wantJump && !P._prevJump;   // 점프 키를 새로 누른 순간(더블점프 판정)
+    const wantJump = !!keys.Space;
+    const jumpEdge = wantJump && !P._prevJump;
     P._prevJump = wantJump;
     if (inWater) {
       P.vy -= 9 * dt; if (wantJump) P.vy += 26 * dt; if (P.vy < -4) P.vy = -4; if (P.vy > 5) P.vy = 5; P._djUsed = false;
@@ -4226,8 +4291,7 @@
     }
     else {
       P.vy -= 32 * dt; if (P.vy < -78) P.vy = -78;
-      if (wantJump && P.onGround) { P.vy = 8.5; P.onGround = false; }
-      else if (jumpEdge && !P.onGround && !P._djUsed) { P.vy = 8.0; P._djUsed = true; }   // 더블점프(메이플 감성)
+      if (jumpEdge && P.onGround) { P.vy = 8.5; P.onGround = false; }
     }
     moveAxis('x', P.vx * dt); moveAxis('z', P.vz * dt); P.onGround = false; moveAxis('y', P.vy * dt);
     if (P.onGround) P._djUsed = false;
@@ -4254,8 +4318,7 @@
     if (e.code === 'Space') e.preventDefault();
     if (e.code === 'Escape') hidePanel();
     if (e.code === 'KeyM') toggleMinimapSize();
-    if (/^Digit[1-8]$/.test(e.code)) { selectedHotbar = +e.code.slice(5) - 1; updateHotbar(); }   // V12-D: 숫자키로 핫바 슬롯 선택
-    if (e.code === 'Digit9') openPanelForZone('hub', 'menu');   // 9 = 스카이블럭 메뉴
+    if (/^Digit[1-9]$/.test(e.code)) { selectedHotbar = +e.code.slice(5) - 1; updateHotbar(); }   // 숫자키 1~9 = 핫바 슬롯 선택
     if (e.code === 'KeyE') {   // V13-A: E 토글(열림이면 닫기)
       if (panelOpen()) { hidePanel(); }
       else { const t = currentAim(); if (t) doInteract(t); else openPanelForZone('hub', 'inv'); }
@@ -4268,9 +4331,11 @@
     if (!isTouch) {
       if (!lookS.locked) { canvas.requestPointerLock && canvas.requestPointerLock(); return; }
       if (e.button === 2) {
+        const t = currentAim();
+        if (t) { doInteract(t); return; }
         if (worldMode === 'home') { homePlaceBlock(); return; }
         if (fishing) return;
-        if (!startFishing()) openPanelForZone('hub', 'menu');   // 우클릭 = 네더의 별 스카이블럭 메뉴(물 조준 시 낚시)
+        startFishing();
         return;
       }
       if (fishing) { reelFishing(); return; }             // 낚시 중 좌클릭 = 낚아채기
@@ -4296,6 +4361,7 @@
     if (panelOpen()) return;
     if (!isTouch) { if (lookS.locked) { P.yaw -= (e.movementX || 0) * 0.0024; P.pitch -= (e.movementY || 0) * 0.0024; clampPitch(); } return; }
     const p = relPos(e);
+    if (e.pointerId === lookT.id && (mouseHeld || gathering || breaking)) lookT.moved = -1000000;
     if (e.pointerId === moveT.id) { moveT.x = p.x; moveT.y = p.y; }
     else if (e.pointerId === lookT.id) { const dx = p.x - lookT.lx, dy = p.y - lookT.ly; P.yaw -= dx * 0.005; P.pitch -= dy * 0.005; clampPitch(); lookT.lx = p.x; lookT.ly = p.y; lookT.moved = (lookT.moved || 0) + Math.abs(dx) + Math.abs(dy); if (lookT.moved > 10) { gathering = false; breaking = null; } }   // V12-D: 화면 회전 시작하면 채집/파괴 중단
   }
@@ -4392,8 +4458,21 @@
     _mapDirty = true; return true;
   }
   // V12 블럭 경제: 핫바에서 고른 블럭 아이템을 소모해서 설치(보유 필요, 무한 아님).
+  function interactHomeBlock(t) {
+    if (!t) return false;
+    const b = BLOCKS[getBlockLocal(t.x, t.y, t.z)];
+    if (!b) return false;
+    if (b.shape === 'door') return toggleDoor(t.x, t.y, t.z);
+    if (b.key === 'crafting_table') { openPanelForZone('hub', 'craft'); return true; }
+    if (b.key === 'furnace') { openPanelForZone('hub', 'craft'); if (typeof toast === 'function') toast('화로: 제작대에서 제련 레시피를 사용하세요.', true); return true; }
+    if (b.key === 'chest') { openPanelForZone('hub', 'inv'); return true; }
+    if (b.key && b.key.indexOf('portal_') === 0) { warpTo(b.key.slice(7), false); return true; }
+    return false;
+  }
   function homePlaceBlock() {
     if (worldMode !== 'home') return false;
+    const aimBlockForInteract = raycastBlock();
+    if (interactHomeBlock(aimBlockForInteract)) return true;
     const t0 = raycastBlock();   // V17-C: 문을 조준하면 여닫기
     if (t0) { const hb = BLOCKS[getBlockLocal(t0.x, t0.y, t0.z)]; if (hb && hb.shape === 'door') return toggleDoor(t0.x, t0.y, t0.z); }
     const key = selectedPlaceKey;
@@ -4452,8 +4531,14 @@
     GB[ID.oak_log] = { res: 'oaklog', fam: 'axe', hard: 0.9, to: 0, regen: 40, back: ID.oak_log };
     GB[ID.birch_log] = { res: 'birchlog', fam: 'axe', hard: 0.9, to: 0, regen: 40, back: ID.birch_log };
     GB[ID.spruce_log] = { res: 'sprucelog', fam: 'axe', hard: 1.0, to: 0, regen: 45, back: ID.spruce_log };
+    GB[ID.dark_oak_log] = { res: 'dark_oak_log', fam: 'axe', hard: 1.0, to: 0, regen: 45, back: ID.dark_oak_log };
+    GB[ID.jungle_log] = { res: 'jungle_log', fam: 'axe', hard: 1.0, to: 0, regen: 45, back: ID.jungle_log };
+    GB[ID.acacia_log] = { res: 'acacia_log', fam: 'axe', hard: 1.0, to: 0, regen: 45, back: ID.acacia_log };
     GB[ID.oak_leaves] = { res: 'apple', chance: 0.05, fam: 'axe', hard: 0.25, to: 0, regen: 55, back: ID.oak_leaves };
     GB[ID.spruce_leaves] = { res: null, fam: 'axe', hard: 0.25, to: 0, regen: 55, back: ID.spruce_leaves };
+    GB[ID.dark_oak_leaves] = { res: null, fam: 'axe', hard: 0.25, to: 0, regen: 55, back: ID.dark_oak_leaves };
+    GB[ID.jungle_leaves] = { res: null, fam: 'axe', hard: 0.25, to: 0, regen: 55, back: ID.jungle_leaves };
+    GB[ID.acacia_leaves] = { res: null, fam: 'axe', hard: 0.25, to: 0, regen: 55, back: ID.acacia_leaves };
     GB[ID.wheat_ripe] = { res: 'wheat', fam: 'hoe', hard: 0.25, to: 0, regen: 18, back: ID.wheat_ripe };
     GB[ID.carrot_ripe] = { res: 'carrot', fam: 'hoe', hard: 0.25, to: 0, regen: 18, back: ID.carrot_ripe };
     GB[ID.potato_ripe] = { res: 'potato', fam: 'hoe', hard: 0.25, to: 0, regen: 18, back: ID.potato_ripe };
@@ -4478,10 +4563,14 @@
   }
   function progressBreaking(dt) {
     if (worldMode === 'visit') return;   // 방문은 구경만
-    const hit = raycastBlock();
+    let hit = raycastBlock();
+    if (breaking && (!hit || breaking.x !== hit.x || breaking.y !== hit.y || breaking.z !== hit.z)) {
+      const id = getBlockLocal(breaking.x, breaking.y, breaking.z);
+      if (id) hit = { x: breaking.x, y: breaking.y, z: breaking.z, face: [0, 0, 0], id };
+    }
     if (!hit) { breaking = null; return; }
     if (worldMode === 'home' && isPortalBlock(hit.x, hit.y, hit.z)) { breaking = null; return; }
-    let g = gatherBlocks()[hit.id];
+    let g = worldMode === 'home' ? null : gatherBlocks()[hit.id];
     if (!g && worldMode === 'home') {   // 홈: 건축 블럭도 hold-to-break(금가는 과정) + 아이템 드롭
       const b = BLOCKS[hit.id];
       if (!b || b.key === 'bedrock' || b.liquid) { breaking = null; return; }
@@ -4779,7 +4868,7 @@
     { world: 'end', x: 64, z: 64, r: 26, y: 8, types: ['zealot'], lv: [55, 55], cap: 3, respawn: 25 },
     { world: 'end', x: 64, z: 64, r: 8, y: 8, types: ['protector_dragon', 'old_dragon', 'wise_dragon', 'unstable_dragon', 'young_dragon', 'strong_dragon', 'superior_dragon', 'holy_dragon'], lv: [80, 200], cap: 1, respawn: 120 },   // 8종 드래곤 랜덤 소환
     // 파크/버섯 사막
-    { world: 'park', x: 72, z: 72, r: 60, rMin: 24, types: ['wolf'], lv: [8, 15], cap: 4, respawn: 15 },
+    { world: 'park', x: 72, z: 82, r: 34, rMin: 0, types: ['wolf'], lv: [8, 15], cap: 4, respawn: 15 },
     { world: 'mushroom', x: 50, z: 72, r: 34, types: ['mushroom_cow'], lv: [1, 3], cap: 6, respawn: 10 },
     // V10 ⑱: 필드 미니보스(고정 레벨 1마리씩)
     { world: 'hub', x: 224, z: 110, r: 14, types: ['yeti'], lv: [40, 40], cap: 1, respawn: 90 },          // 설산 정상
@@ -4891,12 +4980,21 @@
   function spawnMob(area, typeKey, lv, customDef) {
     let def = customDef || MOB_TYPES[typeKey]; if (!def) return null;
     if (def.fixedLv) lv = def.fixedLv;   // 드래곤 등 종 고정 레벨
-    const a = Math.random() * Math.PI * 2;
     const rMin = area.rMin || 0;
-    const rr = rMin + Math.random() * Math.max(1, area.r * 0.9 - rMin);
-    const x = area.x + Math.cos(a) * rr, z = area.z + Math.sin(a) * rr;
-    const y = area.y != null ? groundBelow(Math.floor(x), Math.floor(z), area.y + 2) : surfaceTop(Math.floor(x), Math.floor(z));
-    if (y <= SEA + 1 && worldMode === 'hub') return null;   // 물 위 스폰 방지
+    let x = area.x, z = area.z, y = null;
+    for (let attempt = 0; attempt < 16; attempt++) {
+      const a = Math.random() * Math.PI * 2;
+      const rr = rMin + Math.random() * Math.max(1, area.r * 0.9 - rMin);
+      const tx = area.x + Math.cos(a) * rr;
+      const tz = area.z + Math.sin(a) * rr;
+      const ty = area.y != null ? groundBelow(Math.floor(tx), Math.floor(tz), area.y + 2) : surfaceTop(Math.floor(tx), Math.floor(tz));
+      if (ty <= SEA + 1) continue;
+      const floorId = getBlockLocal(Math.floor(tx), Math.floor(ty - 1), Math.floor(tz));
+      if (!floorId || !BLOCKS[floorId] || !BLOCKS[floorId].solid) continue;
+      x = tx; z = tz; y = ty;
+      break;
+    }
+    if (y == null) return null;
     const elite = !customDef && !def.miniboss && Math.random() < 0.05;   // 미니보스는 정예 중첩 제외(설계 난이도 고정)
     // V11: 필드 난이도(쉬움~지옥) — 던전/프라이빗/방문 제외 전 필드 적용
     const apiF = econApi();
@@ -5691,11 +5789,11 @@
       <canvas id="econ3dMap" class="econ3d-map" width="140" height="140" data-act="econ3d_map"></canvas>
       <!-- V13-A: 핫바 밑 초록 체력바 제거 — 체력은 핫바 위 스탯 액션바에 표시 -->
       <div class="econ3d-statsrow" id="econ3dStats"></div>
-      <div class="econ3d-hotbar" id="econ3dHotbar">${Array.from({ length: 9 }, (_, i) => `<button class="econ3d-slot" data-act="econ3d_hotbar" data-i="${i}" id="econ3dSlot${i}">${i === 8 ? '<span class="econ3d-star">✦</span>' : ''}</button>`).join('')}</div>
+      <div class="econ3d-hotbar" id="econ3dHotbar">${Array.from({ length: 9 }, (_, i) => `<button class="econ3d-slot" data-act="econ3d_hotbar" data-i="${i}" id="econ3dSlot${i}"></button>`).join('')}</div>
       <div class="econ3d-buildbar" id="econ3dBuildBar" style="display:none"></div>
       <div class="econ3d-questhud" id="econ3dQuestHud" style="display:none"></div>
       <div class="econ3d-questbanner" id="econ3dQuestBanner" style="display:none"></div>
-      ${isTouch ? '<div class="econ3d-joy" id="econ3dJoy"><div class="econ3d-joy__knob" id="econ3dJoyKnob"></div></div><div class="econ3d-jump" data-act="econ3d_jump">⤒</div><div class="econ3d-touchhint" id="econ3dTouchHint">◀ 왼쪽 드래그 이동 · 오른쪽 드래그 시점 · 탭 공격/상호작용 · ⤒ 점프</div>' : '<div class="econ3d-controlhint">WASD 이동 · W 더블탭 달리기 · 좌클릭 공격/꾹 눌러 채집 · 우클릭 낚시(물) · E/클릭 NPC · 더블점프 · M 지도</div>'}
+      ${isTouch ? '<div class="econ3d-joy" id="econ3dJoy"><div class="econ3d-joy__knob" id="econ3dJoyKnob"></div></div><div class="econ3d-jump" data-act="econ3d_jump">⤒</div><div class="econ3d-touchhint" id="econ3dTouchHint">◀ 왼쪽 드래그 이동 · 오른쪽 드래그 시점 · 탭 공격/상호작용 · ⤒ 점프</div>' : '<div class="econ3d-controlhint">WASD 이동 · W 더블탭 달리기 · 좌클릭 공격/꾹 눌러 채집 · 우클릭 낚시(물) · E/클릭 NPC · M 지도</div>'}
       <div class="econ3d-panelwrap" id="econ3dPanelWrap" style="display:none">
         <div class="econ3d-panelbar"><span id="econ3dPanelGold"></span><button class="btn btn--ghost btn--sm" data-act="econ3d_panel_close">✕ 닫기</button></div>
         <div id="econBody" class="econ-body econ3d-body"></div>
@@ -5816,19 +5914,21 @@
   }
 
   /* ---------------- 액션 위임 ---------------- */
-  let selectedHotbar = 0;   // V12-D: 활성 핫바 슬롯(0~7). 숫자키 1~8로 선택.
+  let selectedHotbar = 0;   // 활성 핫바 슬롯(0~8). 숫자키 1~9로 선택.
   // 핫바가 비었으면 보유한 도구/블럭으로 자동 채움(실제 MC 초반 감성)
   function ensureHotbar() {
     const api = econApi(); const P0 = api.getP ? api.getP() : null; if (!P0) return;
-    if (!Array.isArray(P0.hotbar) || P0.hotbar.length !== 8) P0.hotbar = [null, null, null, null, null, null, null, null];
+    if (!Array.isArray(P0.hotbar)) P0.hotbar = [];
+    P0.hotbar = P0.hotbar.slice(0, 9);
+    while (P0.hotbar.length < 9) P0.hotbar.push(null);
     // 보유하지 않게 된 아이템은 슬롯에서 비움
-    for (let i = 0; i < 8; i++) if (P0.hotbar[i] && (P0.inv[P0.hotbar[i]] || 0) <= 0 && !isToolKey(P0.hotbar[i])) P0.hotbar[i] = null;
+    for (let i = 0; i < 9; i++) if (P0.hotbar[i] && (P0.inv[P0.hotbar[i]] || 0) <= 0 && !isToolKey(P0.hotbar[i])) P0.hotbar[i] = null;
     if (P0.hotbar.every(x => !x)) {   // 완전히 비었으면 자동 채우기
       const fill = [];
       const D0 = window.ECON_DATA;
       ['pickaxe', 'axe', 'hoe', 'rod'].forEach(fam => { let best = null; (D0.TOOLS[fam] || []).forEach(t => { if ((P0.inv[t.key] || 0) > 0) best = t; }); if (best) fill.push(best.key); });
-      ownedPlaceableList().slice(0, 8 - fill.length).forEach(k => fill.push(k));
-      for (let i = 0; i < 8; i++) P0.hotbar[i] = fill[i] || null;
+      ownedPlaceableList().slice(0, 9 - fill.length).forEach(k => fill.push(k));
+      for (let i = 0; i < 9; i++) P0.hotbar[i] = fill[i] || null;
     }
   }
   function isToolKey(k) { const D0 = window.ECON_DATA; for (const fam in D0.TOOLS) if (D0.TOOLS[fam].some(t => t.key === k)) return true; return false; }
@@ -5841,7 +5941,7 @@
     const api = econApi(); const P0 = api.getP ? api.getP() : null; if (!P0) return;
     ensureHotbar();
     const icon = k => (typeof window.econIcon === 'function' ? `<img src="${window.econIcon(k)}" alt="">` : '');
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 9; i++) {
       const el = document.getElementById('econ3dSlot' + i); if (!el) continue;
       const k = P0.hotbar[i];
       const cnt = (k && !isToolKey(k)) ? (P0.inv[k] || 0) : 0;
@@ -5854,7 +5954,6 @@
     switch (a) {
       case 'econ3d_hotbar': {   // V12-D: 슬롯 클릭 = 선택(빈 슬롯/롱프레스는 인벤토리). 9번=메뉴.
         const i = Number(el.dataset.i);
-        if (i === 8) { openPanelForZone('hub', 'menu'); return true; }
         const P0 = econApi().getP ? econApi().getP() : null;
         if (P0 && P0.hotbar && P0.hotbar[i]) { selectedHotbar = i; updateHotbar(); }
         else openPanelForZone('hub', 'inv');   // 빈 슬롯 클릭 = 인벤토리에서 아이템 지정
@@ -5877,8 +5976,8 @@
   window.economy3dStop = stop;
   window.economy3dAct = act;
   window.economy3dVisit = travelVisit;   // 멀티: 다른 플레이어 섬 방문(economy-net.js가 호출)
-  window.economy3dWarp = dest => { if (running && WORLD_DEFS[dest]) { hidePanel(); warpTo(dest); return true; } return false; };
-  window.economy3dWorlds = () => Object.keys(WORLD_DEFS).filter(k => k !== 'visit' && k !== 'dungeon').map(k => ({ key: k, name: WORLD_DEFS[k].name, req: WARP_REQ[k] || null }));
+  window.economy3dWarp = dest => { if (running && WORLD_DEFS[dest]) { hidePanel(); warpTo(dest, true); return true; } return false; };
+  window.economy3dWorlds = () => Object.keys(WORLD_DEFS).filter(k => k !== 'visit' && k !== 'dungeon').map(k => ({ key: k, name: WORLD_DEFS[k].name, req: WARP_REQ[k] || null, portal: hasHomePortal(k) }));
 
   if (typeof window !== 'undefined' && window.__ECON3D_TEST) {
     window.__econ3d = {
