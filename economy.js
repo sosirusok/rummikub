@@ -2530,7 +2530,8 @@
       <p class="muted">소지금: ${fmtGold(P.gold)}</p>
       <div class="econ-shopgrid">${D().BUILDER_SHOP.map(b => {
         const ok = P.gold >= b.price;
-        return `<div class="econ-shopitem">${iconImg(b.key)}<span>${b.name} <b>×${b.amount}</b></span>
+        const sd = shopDef(b.key) || { key: b.key, name: b.name, category: '건축', flavor: '프라이빗 섬에 설치 가능한 건축 블럭' };
+        return `<div class="econ-shopitem econ-tt"${ttAttr(sd)}>${iconImg(b.key)}<span>${b.name} <b>×${b.amount}</b></span>
           <span class="muted econ-idesc">보유 ${P.inv[b.key] || 0}</span>
           <button class="btn btn--sm" data-act="econ_buildbuy" data-key="${b.key}" ${ok ? '' : 'disabled'}>${fmtGold(b.price)} 구매</button></div>`;
       }).join('')}</div>`;
@@ -2612,18 +2613,21 @@
     const pw = powerStats(), curPw = selectedPowerDef();
     const pwLine = Object.keys(pw).filter(k => pw[k]).map(k => `${({ str: '힘', def: '방어', hp: '체력', intelligence: '지력', critChance: '크리%', critDamage: '크리피해%' })[k]} +${pw[k]}`).join(' · ') || '없음';
     const powerBtns = (D().MAGICAL_POWER.powers || []).map(p => `<button class="btn btn--sm ${p.key === curPw.key ? '' : 'btn--ghost'}" data-act="econ_power" data-key="${p.key}">${p.name}</button>`).join('');
+    const owned = D().TALISMANS.filter(t => hasItem(t.key));
+    const missing = D().TALISMANS.filter(t => !hasItem(t.key));
+    const card = (t, ownedFlag) => `<div class="econ-shopitem econ-tt ${ownedFlag ? '' : 'is-locked'}"${ttAttr(Object.assign({}, t, { flavor: t.desc }))}>
+          ${iconImg(t.key)}<span style="color:${tierColorByKey(t.tierKey)}">${ownedFlag ? '✔ ' : ''}${t.name}</span>
+          <span class="muted">${t.desc}</span>
+          ${!ownedFlag && t.buyPrice > 0 ? `<button class="btn btn--sm" data-act="econ_buy" data-key="${t.key}">구매 ${fmtGold(t.buyPrice)}</button>` : ''}
+        </div>`;
     return `<h4>📿 장신구 가방 — 마력 ${magicalPower()} (최종 공격/방어 +${((mpStatMul() - 1) * 100).toFixed(1)}%)</h4>
       <div class="econ-colgrid" style="margin-bottom:8px">
         <div class="econ-colrow"><span>✨ 전능의 힘</span><span><b>${curPw.name}</b></span><span class="muted">마력 스케일 ${Math.round(mpScale())} → ${pwLine}</span></div>
       </div>
       <div class="econ-tierbtns" style="margin-bottom:8px">${powerBtns}</div>
       <p class="muted">페어리 소울 ${P.fairySouls.length}/${D().FAIRY_SOULS.total} (3D 월드 곳곳에 숨어 있어요)</p>
-      <div class="econ-shopgrid">${D().TALISMANS.map(t => `
-        <div class="econ-shopitem">
-          ${iconImg(t.key)}<span style="color:${tierColorByKey(t.tierKey)}">${hasItem(t.key) ? '✔ ' : ''}${t.name}</span>
-          <span class="muted">${t.desc}</span>
-          ${!hasItem(t.key) && t.buyPrice > 0 ? `<button class="btn btn--sm" data-act="econ_buy" data-key="${t.key}">구매 ${fmtGold(t.buyPrice)}</button>` : ''}
-        </div>`).join('')}</div>
+      ${owned.length ? `<h4 class="muted">보유한 장신구</h4><div class="econ-shopgrid">${owned.map(t => card(t, true)).join('')}</div>` : '<p class="muted">보유한 장신구가 없어요. 미보유 목록에서 구매하거나 보스/퀘스트 보상으로 얻으면 여기에 표시돼요.</p>'}
+      <details class="econ-ownedonly"><summary>미보유 장신구/획득처 보기</summary><div class="econ-shopgrid">${missing.map(t => card(t, false)).join('')}</div></details>
       <p class="muted">합계 보너스: 힘 +${ts.str} · 방어 +${ts.def} · 체력 +${ts.hp} · 판매가 +${ts.sellBonus}% · 미니언속도 +${ts.minionSpeed}%</p>`;
   }
   function enchantHTML() {
