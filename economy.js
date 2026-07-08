@@ -3420,6 +3420,7 @@
   // 3D 프레젠테이션 레이어(economy3d.js) 공개 API
   window.econApi = {
     getP: () => P,
+    save: () => saveNow(),   // V21-D2: 3D 측 진행 플래그(파크 게이트 등) 영속화
     hasActiveEncounter: () => !!(activeCombat || dungeonRun),
     collectFairySoul,
     fairySoulCollected: (id) => !!(P && P.fairySouls.indexOf(id) >= 0),
