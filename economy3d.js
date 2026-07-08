@@ -4723,14 +4723,29 @@
   let mouseHeld = false;
   let useHeld = false, useRepeatT = 0;
   // V13-A: 블럭별 채굴 경도(홈 건축 블럭용) — MC식 상대 경도. 도구 배율로 나눠 시간 산출.
+  // V21-D: 블럭별 채굴 경도 — 바닐라 경도값 비례(스케일 ~0.85). 도구 배율로 나눠 시간 산출.
   function homeBlockHardness(id) {
     const b = BLOCKS[id]; if (!b) return 0.6;
     const k = b.key;
-    if (k === 'obsidian') return 4.2;
-    if (/stone|cobble|brick|ore|bedrock|end_stone|quartz|purpur|magma|netherrack/.test(k)) return 1.3;
-    if (/log|planks|fence/.test(k)) return 0.9;
-    if (/glass|ice|glowstone|leaves|wool|flower|tall_grass|sugar|wheat|carrot|potato/.test(k)) return 0.3;
-    if (/dirt|grass|sand|gravel|mycelium|soul_sand|farmland|snow/.test(k)) return 0.5;
+    // 특수 블럭(바닐라 고유값)
+    if (k === 'obsidian') return 6.5;                                  // 바닐라 50(최장) — 다이아 곡괭이로도 오래 걸림
+    if (k === 'netherrack') return 0.35;                               // 바닐라 0.4(곡괭이로 순삭)
+    if (k === 'end_stone') return 2.6;                                 // 바닐라 3.0
+    if (k === 'glowstone' || /glass/.test(k)) return 0.28;             // 바닐라 0.3
+    if (k === 'ice' || k === 'packed_ice') return 0.45;                // 바닐라 0.5
+    if (k === 'magma' || k === 'soul_sand') return 0.45;               // 바닐라 0.5
+    if (/leaves|flower|tall_grass|sugar|wheat|carrot|potato|mushroom_red$|mushroom_brown$|nether_wart|torch/.test(k)) return 0.18;   // 즉시급
+    if (/wool/.test(k)) return 0.68;                                   // 바닐라 0.8(가위 없이)
+    if (/^snow/.test(k)) return 0.2;
+    if (/dirt|grass|sand$|red_sand|gravel|mycelium|farmland|hay|clay/.test(k)) return 0.5;   // 바닐라 0.5~0.6(삽류)
+    // 광석(바닐라 3.0) > 돌벽돌/조약돌(2.0) > 원석(1.5)
+    if (/_ore$|ancient_debris/.test(k)) return 2.4;
+    if (/cobble|brick|prismarine|purpur_pillar/.test(k)) return 1.7;
+    if (k === 'stone' || /quartz|purpur|sandstone|andesite|diorite|granite|terracotta|concrete/.test(k)) return 1.3;
+    if (/bedrock/.test(k)) return 999;                                 // 파괴 불가(별도 차단도 있음)
+    // 나무 계열(바닐라 2.0 — 도끼)
+    if (/log|planks|fence|door|trapdoor|chest|crafting_table|bookshelf/.test(k)) return 1.6;
+    if (k === 'furnace') return 2.9;                                   // 바닐라 3.5
     return 0.7;
   }
   function progressBreaking(dt) {

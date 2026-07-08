@@ -129,12 +129,13 @@
 
   /* ---------------- 도구(존별 4계열 × 5티어, 수확량 배율) ---------------- */
   // 도구 없음 = 0.5배. 상위 도구 보유 시 최고 티어의 배율 적용.
-  const TOOL_TIER_NAMES = ['나무', '돌', '철', '다이아', '태초의'];
-  const TOOL_MULS = [1.0, 1.2, 1.45, 1.75, 2.2];
-  const TOOL_PRICES = [0, 0, 0, 0, 0];   // V7: 도구는 조합 전용(무화폐 구매 경제)
+  // V21-D: 금 도구 티어 추가(바닐라 도구 6종 완성 — 나무/돌/철/금/다이아/태초)
+  const TOOL_TIER_NAMES = ['나무', '돌', '철', '금', '다이아', '태초의'];
+  const TOOL_MULS = [1.0, 1.2, 1.45, 1.6, 1.75, 2.2];
+  const TOOL_PRICES = [0, 0, 0, 0, 0, 0];   // V7: 도구는 조합 전용(무화폐 구매 경제)
   const TOOL_FAMILY_NAMES = { pickaxe: '곡괭이', hoe: '괭이', axe: '도끼', rod: '낚싯대' };
-  const TOOL_TIER_KEYS = ['wooden', 'stone', 'iron', 'diamond', 'ancient'];
-  const TOOL_REQS = [0, 1, 3, 6, 10];   // V7: 티어별 요구 스킬 레벨(곡괭이=채광 등)
+  const TOOL_TIER_KEYS = ['wooden', 'stone', 'iron', 'golden', 'diamond', 'ancient'];
+  const TOOL_REQS = [0, 1, 3, 4, 6, 10];   // V7: 티어별 요구 스킬 레벨(곡괭이=채광 등)
   const TOOLS = {};   // family -> [{key,name,mul,price,req}] 낮은 티어부터
   Object.keys(TOOL_FAMILY_NAMES).forEach(fam => {
     TOOLS[fam] = TOOL_TIER_KEYS.map((tk, i) => ({
@@ -477,6 +478,7 @@
   );
   EQUIPMENT.weapons.push(
     { key: 'iron_sword', name: '철 검', wclass: 'sword', slot: 'weapon', tierKey: 'uncommon', dmg: 28, buyPrice: 0, sellPrice: 7, flavor: '바닐라 조합으로 만든 철 검.' },
+    { key: 'golden_sword', name: '금 검', wclass: 'sword', slot: 'weapon', tierKey: 'uncommon', dmg: 22, buyPrice: 0, sellPrice: 10, flavor: '바닐라 그대로 — 화려하지만 무르다.' },
     { key: 'diamond_sword', name: '다이아몬드 검', wclass: 'sword', slot: 'weapon', tierKey: 'rare', dmg: 38, buyPrice: 0, sellPrice: 18, flavor: '바닐라 조합으로 만든 다이아몬드 검.' }
   );
   EQUIPMENT.weapons.sort((a, b) => a.dmg - b.dmg || (a.key < b.key ? -1 : 1));
@@ -799,6 +801,12 @@
     { key: 'stone_hoe', needs: { cobblestone: 2, stick: 2 }, gives: 1, unlock: { resource: 'stone', tier: 1 } },
     { key: 'stone_sword', needs: { cobblestone: 2, stick: 1 }, gives: 1, unlock: { resource: 'stone', tier: 1 } },
     { key: 'iron_sword', needs: { iron: 2, stick: 1 }, gives: 1, unlock: { resource: 'iron', tier: 1 } },
+    // V21-D: 금 도구/검(바닐라 조합 — 금 주괴 + 막대)
+    { key: 'golden_pickaxe', needs: { gold: 3, stick: 2 }, gives: 1, unlock: { resource: 'gold', tier: 1 } },
+    { key: 'golden_axe', needs: { gold: 3, stick: 2 }, gives: 1, unlock: { resource: 'gold', tier: 1 } },
+    { key: 'golden_hoe', needs: { gold: 2, stick: 2 }, gives: 1, unlock: { resource: 'gold', tier: 1 } },
+    { key: 'golden_sword', needs: { gold: 2, stick: 1 }, gives: 1, unlock: { resource: 'gold', tier: 1 } },
+    { key: 'golden_rod', needs: { gold: 12, string: 8 }, gives: 1, unlock: { resource: 'gold', tier: 1 } },
     { key: 'diamond_sword', needs: { diamond: 2, stick: 1 }, gives: 1, unlock: { resource: 'diamond', tier: 1 } },
     // V17: 계단/반블럭 조합(MC 정확: 판자 3→반블럭 6, 판자 6→계단 4). 재료 있는 흔한 종류만 조합 지원(나머지는 빌더 구매).
     { key: 'oak_planks_slab', needs: { oak_planks: 3 }, gives: 6, unlock: null },

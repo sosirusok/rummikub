@@ -739,6 +739,10 @@
       case 'iron_axe': return { rows: ['II', 'IS', ' S'], spec: { I: 'iron', S: 'stick' }, mirror: true };
       case 'iron_hoe': return { rows: ['II', ' S', ' S'], spec: { I: 'iron', S: 'stick' }, mirror: true };
       case 'iron_sword': return { rows: ['I', 'I', 'S'], spec: { I: 'iron', S: 'stick' } };
+      case 'golden_pickaxe': return { rows: ['GGG', ' S ', ' S '], spec: { G: 'gold', S: 'stick' } };
+      case 'golden_axe': return { rows: ['GG', 'GS', ' S'], spec: { G: 'gold', S: 'stick' }, mirror: true };
+      case 'golden_hoe': return { rows: ['GG', ' S', ' S'], spec: { G: 'gold', S: 'stick' }, mirror: true };
+      case 'golden_sword': return { rows: ['G', 'G', 'S'], spec: { G: 'gold', S: 'stick' } };
       case 'diamond_pickaxe': return { rows: ['DDD', ' S ', ' S '], spec: { D: 'diamond', S: 'stick' } };
       case 'diamond_axe': return { rows: ['DD', 'DS', ' S'], spec: { D: 'diamond', S: 'stick' }, mirror: true };
       case 'diamond_hoe': return { rows: ['DD', ' S', ' S'], spec: { D: 'diamond', S: 'stick' }, mirror: true };
