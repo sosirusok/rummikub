@@ -51,6 +51,7 @@
     iron_axe: [5, 4], wooden_axe: [5, 4], stone_axe: [5, 4], diamond_axe: [5, 4], ancient_axe: [5, 4],
     iron_hoe: [5, 4], wooden_hoe: [5, 4], stone_hoe: [5, 4], diamond_hoe: [5, 4], ancient_hoe: [5, 4],
     fishing_rod: [6, 4], stone_rod: [6, 4], iron_rod: [7, 4], diamond_rod: [7, 4], ancient_rod: [7, 4],
+    // golden_* 도구는 시트 셀 미지정 — 금색 드로잉 아이콘으로 렌더(철 스프라이트 오인 방지)
     wither_armor: [8, 4],
     // 6행: 인챈트북/금덩이/알/스티브 미니언/반지/심장/요정/주머니/물약
     enchant_book: [0, 5], reforge_stone: [1, 5], pet_egg: [2, 5], minion_item: [3, 5], talisman: [4, 5], talisman_dragon_heart: [5, 5], fairy_soul: [6, 5], minion_fuel_coal: [7, 5], dungeon_essence: [8, 5],
@@ -355,6 +356,7 @@
     if (/^(wooden)/.test(key)) return '#9c7a44';
     if (/^stone_/.test(key)) return '#8c8c8c';
     if (/^iron_/.test(key)) return '#d8d8d4';
+    if (/^golden_/.test(key)) return '#f7d84a';
     if (/^diamond_/.test(key)) return '#5decd5';
     if (/^ancient_/.test(key)) return '#5decd5';
     return '#9aa2ad';

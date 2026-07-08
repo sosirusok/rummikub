@@ -739,6 +739,10 @@
       case 'iron_axe': return { rows: ['II', 'IS', ' S'], spec: { I: 'iron', S: 'stick' }, mirror: true };
       case 'iron_hoe': return { rows: ['II', ' S', ' S'], spec: { I: 'iron', S: 'stick' }, mirror: true };
       case 'iron_sword': return { rows: ['I', 'I', 'S'], spec: { I: 'iron', S: 'stick' } };
+      case 'golden_pickaxe': return { rows: ['GGG', ' S ', ' S '], spec: { G: 'gold', S: 'stick' } };
+      case 'golden_axe': return { rows: ['GG', 'GS', ' S'], spec: { G: 'gold', S: 'stick' }, mirror: true };
+      case 'golden_hoe': return { rows: ['GG', ' S', ' S'], spec: { G: 'gold', S: 'stick' }, mirror: true };
+      case 'golden_sword': return { rows: ['G', 'G', 'S'], spec: { G: 'gold', S: 'stick' } };
       case 'diamond_pickaxe': return { rows: ['DDD', ' S ', ' S '], spec: { D: 'diamond', S: 'stick' } };
       case 'diamond_axe': return { rows: ['DD', 'DS', ' S'], spec: { D: 'diamond', S: 'stick' }, mirror: true };
       case 'diamond_hoe': return { rows: ['DD', ' S', ' S'], spec: { D: 'diamond', S: 'stick' }, mirror: true };
@@ -3416,6 +3420,7 @@
   // 3D 프레젠테이션 레이어(economy3d.js) 공개 API
   window.econApi = {
     getP: () => P,
+    save: () => saveNow(),   // V21-D2: 3D 측 진행 플래그(파크 게이트 등) 영속화
     hasActiveEncounter: () => !!(activeCombat || dungeonRun),
     collectFairySoul,
     fairySoulCollected: (id) => !!(P && P.fairySouls.indexOf(id) >= 0),

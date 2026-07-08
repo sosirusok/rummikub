@@ -1686,7 +1686,7 @@
     else if (mode === 'visit') genHome(visitData && visitData.homeEdits);
     else if (worldCache[mode]) { const c = worldCache[mode]; world = c.world; W = c.W; H = c.H; Dp = c.Dp; }
     else if (mode === 'hub') genWorld();
-    else if (def.gen) { def.gen(); scatterWorldDetail(mode); buildThemeStructures(mode); }   // V16 데코 + V18-C 테마 건물(캐시엔 이미 반영)
+    else if (def.gen) { def.gen(); scatterWorldDetail(mode); buildThemeStructures(mode); if (mode === 'park') buildParkGates(); }   // V16 데코 + V18-C 테마 건물 + V21-D2 파크 게이트(맨 마지막)
     if (mode === 'hub') resetPlayerToSpawn();
     else if (mode === 'home' || mode === 'visit') { P.x = 96.5; P.z = 104.5; P.y = surfaceTop(96, 104) + 0.02; P.yaw = Math.PI; }   // V13-A: 스폰섬
     else { const sp = def.spawn || [W >> 1, Dp >> 1]; P.x = sp[0] + 0.5; P.z = sp[1] + 0.5; P.y = surfaceTop(sp[0], sp[1]) + 0.02; P.yaw = Math.PI; }
@@ -2726,6 +2726,16 @@
       { cx: 72, cz: 36, r: 16, plant: plantJungle, count: 7 },
       { cx: 72, cz: 20, r: 14, plant: plantAcacia, count: 7 },
     ];
+    // V21-D2: 선형 진행 게이트 — 이전 수종 원목 컬렉션을 모아야 다음 섬 다리 개방(우클릭, 실제 스블 파크식)
+    //   섬 체인(남→북): 입구(126) → 참나무(108) → 자작(90) → 가문비(72) → 짙은참나무(54) → 정글(36) → 아카시아(20)
+    const PARK_GATES = [
+      { z: 99, need: 'oaklog', n: 50, name: '참나무 원목 50' },
+      { z: 81, need: 'birchlog', n: 50, name: '자작나무 원목 50' },
+      { z: 63, need: 'sprucelog', n: 50, name: '가문비 원목 50' },
+      { z: 46, need: 'dark_oak_log', n: 50, name: '짙은 참나무 원목 50' },
+      { z: 28, need: 'jungle_log', n: 50, name: '정글 원목 50' },
+    ];
+    genPark._gates = PARK_GATES;
     chain.forEach((isle, i) => {
       genBlobIsland(isle.cx, isle.cz, isle.r, 16, { flat: i === 0 });
       const path = ID.grass_path != null ? ID.grass_path : (ID.coarse_dirt != null ? ID.coarse_dirt : ID.dirt);
@@ -2774,6 +2784,64 @@
       }
     });
     buildWarpPads();
+  }
+  // V21-D2: 진행 게이트 벽 설치 — 모든 구조물 빌더 이후(마지막)에 호출해야 덮어써지지 않는다.
+  //   섬들이 겹쳐 육지로 이어지므로 다리 폭만 막으면 우회 가능 — 지형을 따라 지협 전 폭을 3단 봉쇄.
+  function buildParkGates() {
+    const PARK_GATES = genPark._gates || [];
+    const P0g = econApi().getP ? econApi().getP() : null;
+    const gatesOpen = (P0g && P0g.parkGates) || {};
+    // 게이트 z 자동 보정: 트리하우스/정자 등 구조물이 걸친 줄은 피해 구조물 최소 줄 선택(타고 넘기 방지)
+    const structCount = z => {
+      let n = 0;
+      for (let x = 52; x <= 92; x++) for (let y = 18; y <= 30; y++) {   // y18~: 다리 발판(16)/난간(17)은 구조물로 안 침
+        const b0 = BLOCKS[getBlockLocal(x, y, z)];
+        if (b0 && /planks|bricks|wool_|stairs|slab|glowstone/.test(b0.key)) n++;
+      }
+      return n;
+    };
+    PARK_GATES.forEach(g => {
+      let best = g.z, bestN = structCount(g.z);
+      for (const dz of [1, -1, 2, -2, 3, -3]) { if (bestN === 0) break; const n = structCount(g.z + dz); if (n < bestN) { best = g.z + dz; bestN = n; } }
+      g.z = best;
+    });
+    PARK_GATES.forEach((g, gi) => {
+      if (gatesOpen[gi]) return;
+      // 커튼 벽: 게이트 평면에서 가장 낮은 지면 위의 모든 공기 틈을 울타리로 봉인
+      //   (부유 데크 밑 통로/나무 타기/구조물 위 우회 전부 차단 — 지형·구조물 블럭은 보존)
+      for (let x = 52; x <= 92; x++) {
+        let lowTop = 0;   // 가장 낮은 '위가 뚫린 바닥'(=걸을 수 있는 지면/다리 발판)
+        for (let y = 4; y <= 30; y++) { if (getBlockLocal(x, y, g.z) && !getBlockLocal(x, y + 1, g.z)) { lowTop = y; break; } }
+        if (!lowTop) continue;                                // 공허 기둥(지형·다리 없음)은 통행 불가 — 생략
+        for (let y = lowTop + 1; y <= 32; y++) {
+          if (!getBlockLocal(x, y, g.z)) setW(x, y, g.z, ID.oak_fence);
+        }
+      }
+      setW(72, Math.max(19, surfaceTop(72, g.z) + 3), g.z, ID.glowstone);   // 게이트 표식(우클릭 개방 지점)
+    });
+  }
+  // V21-D2: 파크 게이트 상호작용 — 요구 컬렉션 충족 시 개방(영속)
+  function parkGateAt(x, z) {
+    const gates = genPark._gates || [];
+    for (let i = 0; i < gates.length; i++) if (Math.abs(z - gates[i].z) <= 1 && Math.abs(x - 72) <= 21) return i;
+    return -1;
+  }
+  function tryOpenParkGate(gi) {
+    const gates = genPark._gates || []; const g = gates[gi]; if (!g) return false;
+    const api = econApi(); const P0 = api.getP ? api.getP() : null; if (!P0) return false;
+    P0.parkGates = P0.parkGates || {};
+    if (P0.parkGates[gi]) return true;
+    const have = (P0.collections && P0.collections[g.need]) || 0;
+    if (have < g.n) { if (typeof toast === 'function') toast(`🔒 게이트: ${g.name} 컬렉션 필요 (현재 ${have})`, false); return false; }
+    for (let x = 52; x <= 92; x++) for (let y = 14; y <= 34; y++) {
+      const id = getBlockLocal(x, y, g.z);
+      if (id === ID.oak_fence || id === ID.glowstone) { world[widx(x, y, g.z)] = 0; markBlockDirty(x, g.z); }
+    }
+    P0.parkGates[gi] = true;
+    if (api.save) api.save();
+    if (typeof toast === 'function') toast('🌳 게이트 개방! 다음 숲으로 나아가세요', true);
+    flushWorldEdits();
+    return true;
   }
   // V20-AO: 파크 중앙 정자 — 좌표 한 칸씩 손 배치(대칭 함수 아님). 팔각 파빌리온 + 방사 꽃밭 +
   //   8방 산책로가 부속섬 다리로 이어진다. 평평 광장에 볼거리.
@@ -4442,11 +4510,12 @@
       if (!repeat) doInteract(t);   // NPC/포탈/워프/요정/미니언/플레이어 = 우클릭 상호작용
       return true;
     }
-    // V21-A: 문 여닫기(전 월드) — 우클릭 표준 상호작용
+    // V21-A/D2: 블럭 우클릭 상호작용(전 월드) — 문/작업대/화로/상자/포탈/파크 게이트
     const tb = raycastBlock();
     if (tb) {
       const bb = BLOCKS[getBlockLocal(tb.x, tb.y, tb.z)];
       if (bb && bb.shape === 'door') { if (!repeat) toggleDoor(tb.x, tb.y, tb.z); return true; }
+      if (!repeat && interactHomeBlock(tb)) return true;
     }
     if (worldMode === 'home') return homePlaceBlock(!!repeat);
     if (fishing) return true;
@@ -4640,6 +4709,11 @@
     if (b.key === 'furnace') { openPanelForZone('hub', 'craft'); if (typeof toast === 'function') toast('화로: 제작대에서 제련 레시피를 사용하세요.', true); return true; }
     if (b.key === 'chest') { openPanelForZone('hub', 'inv'); return true; }
     if (b.key && b.key.indexOf('portal_') === 0) { warpTo(b.key.slice(7), false); return true; }
+    // V21-D2: 파크 진행 게이트(울타리/발광석 우클릭 = 개방 시도)
+    if (worldMode === 'park' && (b.key === 'oak_fence' || b.key === 'glowstone')) {
+      const gi = parkGateAt(t.x, t.z);
+      if (gi >= 0) { tryOpenParkGate(gi); return true; }
+    }
     return false;
   }
   function homePlaceBlock(placeOnly) {
@@ -4723,14 +4797,29 @@
   let mouseHeld = false;
   let useHeld = false, useRepeatT = 0;
   // V13-A: 블럭별 채굴 경도(홈 건축 블럭용) — MC식 상대 경도. 도구 배율로 나눠 시간 산출.
+  // V21-D: 블럭별 채굴 경도 — 바닐라 경도값 비례(스케일 ~0.85). 도구 배율로 나눠 시간 산출.
   function homeBlockHardness(id) {
     const b = BLOCKS[id]; if (!b) return 0.6;
     const k = b.key;
-    if (k === 'obsidian') return 4.2;
-    if (/stone|cobble|brick|ore|bedrock|end_stone|quartz|purpur|magma|netherrack/.test(k)) return 1.3;
-    if (/log|planks|fence/.test(k)) return 0.9;
-    if (/glass|ice|glowstone|leaves|wool|flower|tall_grass|sugar|wheat|carrot|potato/.test(k)) return 0.3;
-    if (/dirt|grass|sand|gravel|mycelium|soul_sand|farmland|snow/.test(k)) return 0.5;
+    // 특수 블럭(바닐라 고유값)
+    if (k === 'obsidian') return 6.5;                                  // 바닐라 50(최장) — 다이아 곡괭이로도 오래 걸림
+    if (k === 'netherrack') return 0.35;                               // 바닐라 0.4(곡괭이로 순삭)
+    if (k === 'end_stone') return 2.6;                                 // 바닐라 3.0
+    if (k === 'glowstone' || /glass/.test(k)) return 0.28;             // 바닐라 0.3
+    if (k === 'ice' || k === 'packed_ice') return 0.45;                // 바닐라 0.5
+    if (k === 'magma' || k === 'soul_sand') return 0.45;               // 바닐라 0.5
+    if (/leaves|flower|tall_grass|sugar|wheat|carrot|potato|mushroom_red$|mushroom_brown$|nether_wart|torch/.test(k)) return 0.18;   // 즉시급
+    if (/wool/.test(k)) return 0.68;                                   // 바닐라 0.8(가위 없이)
+    if (/^snow/.test(k)) return 0.2;
+    if (/dirt|grass|sand$|red_sand|gravel|mycelium|farmland|hay|clay/.test(k)) return 0.5;   // 바닐라 0.5~0.6(삽류)
+    // 광석(바닐라 3.0) > 돌벽돌/조약돌(2.0) > 원석(1.5)
+    if (/_ore$|ancient_debris/.test(k)) return 2.4;
+    if (/cobble|brick|prismarine|purpur_pillar/.test(k)) return 1.7;
+    if (k === 'stone' || /quartz|purpur|sandstone|andesite|diorite|granite|terracotta|concrete/.test(k)) return 1.3;
+    if (/bedrock/.test(k)) return 999;                                 // 파괴 불가(별도 차단도 있음)
+    // 나무 계열(바닐라 2.0 — 도끼)
+    if (/log|planks|fence|door|trapdoor|chest|crafting_table|bookshelf/.test(k)) return 1.6;
+    if (k === 'furnace') return 2.9;                                   // 바닐라 3.5
     return 0.7;
   }
   function progressBreaking(dt) {
@@ -6185,6 +6274,7 @@
       ID, BLOCKS,
       // V3: 프라이빗 섬/건축/이동
       travelTo, worldMode: () => worldMode, genHome, PORTALS, HOME_MINION_SLOTS, HOME_BOUNDS, HOME_CENTER, installPortalFrame,
+      parkGateAt, tryOpenParkGate, parkGates: () => genPark._gates || [],
       chunkMeshCount: () => Object.keys(chunkMeshes).length,   // V12 크래시 검증용
       buildQueueLen: () => buildQueue.length,
       updateQuestHud, questNpcList,   // V13-B 퀘스트 HUD 검증용
