@@ -2028,7 +2028,7 @@
     else if (mode === 'gold' && ok(50, 90)) { buildGoldOutpost(); buildGoldDetail(); buildGoldLandmarks(); }   // V20-W 전초기지 + V20-AX 디테일 + V20-BG(7차) 노란림 플랫폼/딥캐번 포탈/용암류
     else if (mode === 'deep' && ok(48, 80)) buildDeepDepot();   // V20-X: 손 배치 지하 크리스탈 채광 정거장
     else if (mode === 'spider' && ok(74, 88)) { buildSpiderNest(); buildSpiderRegions(); buildMonsterDetail('spider'); }   // V20-AA 거미굴 + V20-BD(7차) 실제 6구역 + V20-AZ 디테일
-    else if (mode === 'nether' && ok(62, 78)) { buildNetherKeep(); buildMonsterDetail('nether'); }   // V20-Y 네더 요새 + V20-AZ(5차) 디테일
+    else if (mode === 'nether' && ok(62, 78)) { buildNetherKeep(); buildCrimsonRegions(); buildMonsterDetail('nether'); }   // V20-Y 네더 요새 + V21-D4 크림슨 구역 + V20-AZ 디테일
     else if (mode === 'end' && ok(62, 84)) { buildEndSanctum(); buildEndLandmarks(); buildMonsterDetail('end'); }   // V20-Z 성소 + V20-BE(7차) Dragon's Nest/View + V20-AZ 디테일
     else if (mode === 'mushroom' && ok(58, 100)) { buildMushroomColony(); buildMushroomZones(); buildOtherDetail('mushroom'); }   // V20-AC 군락 + V20-BH(7차) 명명 구역 + V20-BA 디테일
   }
@@ -2355,6 +2355,130 @@
   // V20-Y: 대형 네더 요새 — 좌표 한 칸씩 손 배치(대칭 함수 아님). 네더는 계단/울타리 벽돌이 없어
   //   모서리 코벨링(전블럭 계단식)으로 뾰족아치를 세우고 마그마/발광석/용암으로 조명한다.
   //   구성: 용암 해자 → 뾰족아치 진입 다리 → 관문 → 안뜰 → 3층 중앙 성채(블레이즈 제단) → 쌍둥이 망루.
+  // V21-D4: 크림슨 아일 실제 구역(위키 대조) — Scarleton(마법사 도시)/Dragontail(야만전사 부락)/Dojo(7수련장)/Kuudra's Hollow.
+  //   팔레트: 네더벽돌·석영(마법사)·네더랙/마그마(야만)·흑요석·발광석·마이셀리움(크림슨 니릴리움 대용)·적양털(네더와트 대용)
+  function buildCrimsonRegions() {
+    const nb = ID.nether_bricks, q = ID.quartz_block, obs = ID.obsidian, mag = ID.magma_block, glow = ID.glowstone;
+    const lava = ID.lava, soul = ID.soul_sand, myc = ID.mycelium, nr = ID.netherrack, ch = ID.chiseled_stone_bricks;
+    const wr = ID.wool_red != null ? ID.wool_red : nr, wp = ID.wool_purple != null ? ID.wool_purple : obs;
+    const wo = ID.wool_orange != null ? ID.wool_orange : mag, wb = ID.wool_black != null ? ID.wool_black : obs;
+    const tr = ID.terracotta_red != null ? ID.terracotta_red : nr, to = ID.terracotta_orange != null ? ID.terracotta_orange : nr;
+    const qs = f => (ID['quartz_block_stairs_' + f] != null ? ID['quartz_block_stairs_' + f] : q);
+    const ns = f => (ID['nether_bricks_stairs_' + f] != null ? ID['nether_bricks_stairs_' + f] : nb);
+    // ══ ① Scarleton(마법사 도시, NE 86,38) — 석영·보라, 광장 + 경매장/은행/바자/대장간 + 마법 첨탑 ══
+    {
+      const cx = 86, cz = 38, gy = surfaceTop(cx, cz);
+      const B = (dx, dy, dz, id) => { if (id != null) setW(cx + dx, gy + dy, cz + dz, id); };
+      // 광장 포장(석영 바닥 + 치즐 테두리 + 마이셀리움 골목 줄) — 비대칭 13×11
+      for (let dx = -7; dx <= 6; dx++) for (let dz = -5; dz <= 5; dz++) {
+        const edge = dx === -7 || dx === 6 || dz === -5 || dz === 5;
+        B(dx, 0, dz, edge ? ch : ((dx * 3 + dz * 7 + 40) % 11 === 0 ? myc : q));
+      }
+      B(0, 1, 0, ch); B(0, 2, 0, wp); B(0, 3, 0, glow);   // 광장 중앙 보라 첨두 분수 조형
+      B(-1, 1, 0, qs(1)); B(1, 1, 0, qs(3)); B(0, 1, -1, qs(0)); B(0, 1, 1, qs(2));
+      // 경매장(북서 7×6, 석영 벽 + 보라 지붕띠 + 발광 간판)
+      for (let dx = -7; dx <= -1; dx++) for (let dz = -11; dz <= -6; dz++) B(dx, 0, dz, nb);
+      for (let y = 1; y <= 3; y++) for (let dx = -7; dx <= -1; dx++) for (let dz = -11; dz <= -6; dz++) {
+        const wall = dx === -7 || dx === -1 || dz === -11 || dz === -6;
+        if (wall && !(dz === -6 && dx === -4 && y <= 2)) B(dx, y, dz, q);   // 남쪽 중앙 출입구
+      }
+      for (let dx = -7; dx <= -1; dx++) for (let dz = -11; dz <= -6; dz++) B(dx, 4, dz, (dx === -7 || dx === -1 || dz === -11 || dz === -6) ? wp : nb);   // 보라 처마 + 평지붕
+      B(-4, 3, -6, glow); B(-6, 1, -10, glow); B(-2, 1, -10, glow);   // 간판·내부 조명
+      B(-6, 1, -7, ch); B(-2, 1, -7, ch);   // 경매 카운터
+      // 은행(북동 6×5, 치즐 벽 + 금광석 금고 + 흑요석 문틀)
+      for (let dx = 1; dx <= 6; dx++) for (let dz = -11; dz <= -7; dz++) B(dx, 0, dz, ch);
+      for (let y = 1; y <= 3; y++) for (let dx = 1; dx <= 6; dx++) for (let dz = -11; dz <= -7; dz++) {
+        const wall = dx === 1 || dx === 6 || dz === -11 || dz === -7;
+        if (wall && !(dz === -7 && dx === 3 && y <= 2)) B(dx, y, dz, y === 3 ? q : ch);
+      }
+      for (let dx = 1; dx <= 6; dx++) for (let dz = -11; dz <= -7; dz++) B(dx, 4, dz, q);
+      B(3, 3, -7, glow); B(5, 1, -10, ID.gold_ore); B(5, 2, -10, ID.gold_ore); B(4, 1, -10, obs);   // 금고 + 창살
+      // 바자(광장 동편 노점 2동 — 적/보라 줄무늬 차양)
+      for (const [bx, bz, c1, c2] of [[8, -2, wr, q], [8, 3, wp, q]]) {
+        B(bx, 0, bz, nb); B(bx + 1, 0, bz, nb); B(bx, 0, bz + 1, nb); B(bx + 1, 0, bz + 1, nb);
+        B(bx - 1, 1, bz, nb); B(bx + 2, 1, bz + 1, nb);   // 지주(네더벽돌 — 네더에 목재 금지)
+        B(bx - 1, 2, bz, c1); B(bx, 2, bz, c2); B(bx + 1, 2, bz, c1); B(bx + 2, 2, bz, c2);
+        B(bx - 1, 2, bz + 1, c2); B(bx, 2, bz + 1, c1); B(bx + 1, 2, bz + 1, c2); B(bx + 2, 2, bz + 1, c1);
+        B(bx, 1, bz, ch);   // 진열대
+      }
+      // 대장간(남서 — 용암 화덕 + 흑요석 모루 + 굴뚝)
+      for (let dx = -6; dx <= -2; dx++) for (let dz = 7; dz <= 10; dz++) B(dx, 0, dz, nb);
+      for (let y = 1; y <= 2; y++) { B(-6, y, 7, nb); B(-6, y, 10, nb); B(-2, y, 10, nb); }   // ㄱ자 낮은 벽(개방 작업장)
+      B(-5, 0, 8, lava); B(-5, 1, 8, mag); B(-4, 1, 9, obs);   // 화덕 + 모루
+      B(-6, 3, 10, nb); B(-6, 4, 10, nb); B(-6, 5, 10, mag);   // 굴뚝
+      // 마법 첨탑(광장 남동 — 석영 나선 h12 + 보라 캡 + 발광 나선)
+      const tx = 6, tz = 9;
+      for (let y = 1; y <= 12; y++) {
+        B(tx, y, tz, q);
+        const a = y * 1.05; B(tx + Math.round(Math.cos(a) * 1.5), y, tz + Math.round(Math.sin(a) * 1.5), y % 3 === 0 ? glow : q);
+      }
+      B(tx, 13, tz, wp); B(tx, 14, tz, wp); B(tx, 15, tz, glow);
+      for (const [ox, oz] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) B(tx + ox, 12, tz + oz, wp);   // 캡 차양
+    }
+    // ══ ② Dragontail(야만전사 부락, SW 38,90) — 거친 네더랙 오두막 + 토템 + 모닥불 + 감시탑 ══
+    {
+      const cx = 38, cz = 90, gy = surfaceTop(cx, cz);
+      const B = (dx, dy, dz, id) => { if (id != null) setW(cx + dx, gy + dy, cz + dz, id); };
+      for (let dx = -8; dx <= 8; dx++) for (let dz = -7; dz <= 7; dz++) if (Math.hypot(dx, dz) < 8 && (dx * 5 + dz * 3 + 60) % 7 !== 0) B(dx, 0, dz, ((dx + dz) & 1) ? nr : tr);   // 다진 적토 마당(구멍 숭숭 비대칭)
+      // 오두막 3동(크기·방향 제각각, 마그마 화로)
+      for (const [hx, hz, w, d] of [[-6, -5, 4, 3], [4, -6, 3, 4], [-5, 4, 3, 3]]) {
+        for (let x = 0; x < w; x++) for (let z = 0; z < d; z++) { B(hx + x, 1, hz + z, (x === 0 || x === w - 1 || z === 0 || z === d - 1) ? nr : 0); B(hx + x, 2, hz + z, (x === 0 || x === w - 1 || z === 0 || z === d - 1) ? nb : 0); }
+        for (let x = -1; x <= w; x++) for (let z = -1; z <= d; z++) B(hx + x, 3, hz + z, to);   // 주황 테라코타 낮은 지붕
+        B(hx + Math.floor(w / 2), 1, hz, 0); B(hx + Math.floor(w / 2), 2, hz, 0);   // 문
+        B(hx + 1, 1, hz + 1, mag);   // 내부 화로
+      }
+      B(0, 1, 0, soul); B(0, 2, 0, mag); B(1, 1, 0, mag); B(-1, 1, 0, mag); B(0, 1, 1, mag); B(0, 1, -1, mag); B(0, 3, 0, lava);   // 중앙 대형 모닥불
+      // 뼈 토템 2기(석영 = 뼈 대용) + 적기 깃발
+      for (const [ox, oz] of [[7, 5], [-8, -7]]) { B(ox, 1, oz, q); B(ox, 2, oz, q); B(ox, 3, oz, wb); B(ox, 4, oz, wr); B(ox, 5, oz, wr); }
+      // 감시탑(네더랙 기둥 4 + 상판 + 발광)
+      for (let y = 1; y <= 6; y++) { B(6, y, -6, nr); B(8, y, -6, nr); B(6, y, -4, nr); B(8, y, -4, nr); }
+      for (let dx = 5; dx <= 9; dx++) for (let dz = -7; dz <= -3; dz++) B(dx, 7, dz, nb);
+      B(7, 8, -5, glow);
+      // 네더와트 밭(소울샌드 + 적양털 와트)
+      for (let dx = -2; dx <= 2; dx++) for (let dz = 5; dz <= 7; dz++) { B(dx, 0, dz, soul); if ((dx + dz) % 2 === 0) B(dx, 1, dz, wr); }
+    }
+    // ══ ③ Dojo(서 34,52) — 네더벽돌 담장 + 홍색 토리이 문 + 7개 수련 패드(용암 수로 링) ══
+    {
+      const cx = 34, cz = 52, gy = surfaceTop(cx, cz);
+      const B = (dx, dy, dz, id) => { if (id != null) setW(cx + dx, gy + dy, cz + dz, id); };
+      for (let dx = -9; dx <= 9; dx++) for (let dz = -8; dz <= 8; dz++) B(dx, 0, dz, (Math.abs(dx) === 9 || Math.abs(dz) === 8) ? nb : ((dx * 2 + dz * 5 + 50) % 9 === 0 ? myc : ch));   // 마당 + 담 기초
+      for (let y = 1; y <= 2; y++) for (let dx = -9; dx <= 9; dx++) { if (Math.abs(dx) > 2) { B(dx, y, -8, nb); B(dx, y, 8, nb); } }
+      for (let y = 1; y <= 2; y++) for (let dz = -8; dz <= 8; dz++) { B(-9, y, dz, nb); B(9, y, dz, nb); }
+      // 토리이 문(남쪽 개구부): 흑요석 기둥 + 적양털 인방 2단
+      for (let y = 1; y <= 4; y++) { B(-2, y, 8, obs); B(2, y, 8, obs); }
+      for (let dx = -3; dx <= 3; dx++) { B(dx, 5, 8, wr); if (dx >= -2 && dx <= 2) B(dx, 4, 8, wr); }
+      // 수련 패드 7개(석영 3×3 + 용암 홈 모서리) — 비정형 배치
+      const pads = [[-6, -5], [0, -6], [6, -5], [-6, 1], [6, 1], [-3, 5], [3, 5]];
+      pads.forEach(([px, pz], i) => {
+        for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) B(px + dx, 0, pz + dz, q);
+        B(px + (i % 2 === 0 ? -2 : 2), 0, pz, lava);   // 패드 옆 용암 홈(도전 긴장감)
+        B(px, 1, pz - 1, i % 3 === 0 ? mag : ch);      // 과녁/기물 소품
+      });
+      B(0, 1, 0, nb); B(0, 2, 0, glow);   // 중앙 종
+    }
+    // ══ ④ Kuudra's Hollow(SE 가장자리 98,98) — 용암 바다 위 다리 → 흑요석 가시 링 플랫폼 ══
+    {
+      const ex = 98, ez = 98, gy = Math.max(SEA + 2, surfaceTop(ex, ez));
+      const B = (ax, ay, az, id) => { if (id != null && inBounds(ax, ay, az)) setW(ax, ay, az, id); };
+      for (let i = 0; i <= 10; i++) {   // 섬 끝 → 외해 다리(네더벽돌, 난간 마그마 점등)
+        const bx = ex + Math.round(i * 0.9), bz = ez + Math.round(i * 0.9);
+        B(bx, gy, bz, nb); B(bx + 1, gy, bz, nb); B(bx, gy, bz + 1, nb);
+        if (i % 3 === 0) { B(bx - 1, gy + 1, bz, mag); B(bx + 2, gy + 1, bz + 1, mag); }
+      }
+      const kx = ex + 12, kz = ez + 12;   // 링 플랫폼(반지름 5) + 중앙 용암 못 + 가시 6
+      for (let dx = -5; dx <= 5; dx++) for (let dz = -5; dz <= 5; dz++) {
+        const r = Math.hypot(dx, dz);
+        if (r <= 5) B(kx + dx, gy, kz + dz, r <= 1.6 ? lava : (r > 4.2 ? obs : nb));
+      }
+      for (let i = 0; i < 6; i++) {
+        const a = i / 6 * Math.PI * 2 + 0.4, sx = kx + Math.round(Math.cos(a) * 4), sz = kz + Math.round(Math.sin(a) * 4);
+        const h = 2 + (i % 3);
+        for (let y = 1; y <= h; y++) B(sx, gy + y, sz, obs);
+        B(sx, gy + h + 1, sz, i % 2 === 0 ? mag : wr);   // 가시 끝 마그마/핏빛 깃발
+      }
+      B(kx, gy + 1, kz + 5, glow); B(kx, gy + 1, kz - 5, glow);   // 진입 표식
+    }
+  }
   function buildNetherKeep() {
     const cx = 62, cz = 78, gy = surfaceTop(cx, cz);
     const B = (dx, dy, dz, id) => { if (id != null) setW(cx + dx, gy + dy, cz + dz, id); };
