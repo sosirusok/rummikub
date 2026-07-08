@@ -363,6 +363,10 @@
   function econIcon(key) {
     if (cache[key]) return cache[key];
     trySheet();
+    // V21-B: 블럭 아이템은 월드와 '같은 텍스처'의 등축 큐브 아이콘 우선 — 인벤토리에서 실제 생김새로 구분
+    if (typeof window.econBlockIcon === 'function') {
+      try { const bi = window.econBlockIcon(key); if (bi) return (cache[key] = bi); } catch (e) {}
+    }
     const cv = document.createElement('canvas'); cv.width = cv.height = S;
     const c = cv.getContext('2d');
     if (!c) return '';
@@ -373,6 +377,16 @@
       const pad = Math.round(Math.min(cw, ch) * 0.04);   // 셀 가장자리 여백(이웃 셀 침범 방지)
       c.imageSmoothingEnabled = true;
       c.drawImage(sheet, cell[0] * cw + pad, cell[1] * ch + pad, cw - pad * 2, ch - pad * 2, 0, 0, S, S);
+      // V21-B: 시트의 체커/흰 배경 제거(크로마키) — 아이템이 배경 없이 중앙에 깔끔히
+      try {
+        const img = c.getImageData(0, 0, S, S), d = img.data;
+        for (let i = 0; i < d.length; i += 4) {
+          const r = d[i], g = d[i + 1], b = d[i + 2];
+          const grayish = Math.abs(r - g) < 14 && Math.abs(g - b) < 14 && Math.abs(r - b) < 14;
+          if (grayish && r > 170) d[i + 3] = 0;   // 흰/밝은 회색 체커 → 투명
+        }
+        c.putImageData(img, 0, 0);
+      } catch (e) {}
       return (cache[key] = cv.toDataURL());
     }
     const cat = categoryOf(key);

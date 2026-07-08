@@ -280,8 +280,8 @@
   let selectedPlaceKey = null;            // V12: 현재 설치용으로 고른 블럭 아이템 키(보유한 것만 — 서바이벌, 무한 아님)
   const PORTALS = {
     hub: { x: 210, z: 224, target: 'home', label: '🏝️ 내 섬으로', fx: 0x3fd977 },   // 내 섬행 = 초록 자연빛
-    home: null,
-    visit: null,
+    home: { x: 96, z: 76, target: 'hub', label: '🏘️ 허브로', fx: 0xffcf4d },        // 허브(도시)행 = 황금빛 — 포탈섬(스폰섬과 끊김, 직접 다리 건설)
+    visit: { x: 96, z: 76, target: 'hub', label: '🏘️ 허브로', fx: 0xffcf4d },
   };
   // 멀티: 다른 플레이어 아바타 + 섬 방문 상태
   let others = {};                          // peerId -> {mesh, tx,ty,tz,tyaw, walkT, walkAmp, legL, legR}
@@ -1593,6 +1593,7 @@
   }
   // Private island: a single small SkyBlock starter island, with no house and no detached portal island.
   const HOME_SPAWN = { x: 96, z: 104, r: 8 };     // 스폰섬(작음) — 시작 나무
+  const HOME_PISLE = { x: 96, z: 78, r: 7 };      // 포탈섬(작음) — 제작한 섬 포탈 설치 자리(스폰섬과 끊겨 시작)
   const HOME_TOP = 20;
   function genHomeBlob(cx, cz, baseR, seed) {
     for (let x = cx - baseR - 3; x <= cx + baseR + 3; x++) for (let z = cz - baseR - 3; z <= cz + baseR + 3; z++) {
@@ -1614,7 +1615,8 @@
   function genHome(editsOverride) {
     world = new Uint8Array(W * H * Dp);   // 공허 하늘 — 진짜 스카이블럭 프라이빗 섬
     genHomeBlob(HOME_SPAWN.x, HOME_SPAWN.z, HOME_SPAWN.r, 31);
-    // No separate portal island or bridge on the starter private island.
+    genHomeBlob(HOME_PISLE.x, HOME_PISLE.z, HOME_PISLE.r, 57);
+    // V21-C: 실제 스카이블럭처럼 스폰섬↔포탈섬은 '끊겨' 시작 — 직접 블록으로 다리를 놓아야 건너감(자동 다리 제거)
     // 스폰섬: 시작 참나무(자연스러운 캐노피)
     const tx = HOME_SPAWN.x - 3, tz = HOME_SPAWN.z + 2, ty = surfaceTop(tx, tz);
     if (ty > 2) {
@@ -1625,8 +1627,7 @@
         }
       }
     }
-    // V18-B: 스폰섬 스타터 통나무 오두막(문/유리창/계단 지붕/현관 난간 — 아늑한 시작 집)
-    // Starter house removed: Hypixel-style private island starts as open terrain.
+    // V21-C: 시작 집 제거 — 실제 스카이블럭 프라이빗 섬은 맨 섬 + 나무 한 그루로 시작
     // 스폰섬 꽃/풀 장식
     for (let i = 0; i < 8; i++) {
       const x = HOME_SPAWN.x + Math.round((hash3(i, 81, 3) - 0.5) * HOME_SPAWN.r * 1.3);
@@ -1634,13 +1635,33 @@
       const y = surfaceTop(x, z);
       if (y > 2 && getBlockLocal(x, y - 1, z) === ID.grass) setW(x, y, z, hash3(i, 83, 1) < 0.4 ? ID.flower_red : (hash3(i, 84, 1) < 0.5 ? ID.flower_yellow : ID.tall_grass));
     }
-    // No detached hub-portal platform on the starter private island.
+    // 포탈섬: 허브행 황금 아치(실제 스블처럼 섬에 상시 존재 — 스폰섬에서 다리를 놓아 건너감)
+    buildHomePortal();
     // 저장된 블록 편집 적용(설치/파괴 영속)
     const edits = editsOverride || (econApi().getHomeEdits ? econApi().getHomeEdits() : {});
     for (const k in edits) {
       const p = k.split(',').map(Number);
       if (inBounds(p[0], p[1], p[2])) world[widx(p[0], p[1], p[2])] = edits[k];
     }
+  }
+  // V21-C: 설치형 섬 포탈 프레임 — 포탈 아이템 설치 시 포탈섬에 목적지별 미니 관문을 세우고 영속(setHomeEdit).
+  const PORTAL_SLOT_ORDER = ['barn', 'park', 'gold', 'deep', 'spider', 'mushroom', 'nether', 'end'];
+  const PORTAL_FRAME_COL = { barn: 'hay_block', park: 'oak_log', gold: 'gold_ore', deep: 'diamond_ore', spider: 'mossy_cobblestone', mushroom: 'mushroom_red_block', nether: 'netherrack', end: 'end_stone' };
+  function installPortalFrame(dest) {
+    if (worldMode !== 'home') return false;
+    const idx = PORTAL_SLOT_ORDER.indexOf(dest); if (idx < 0) return false;
+    const api = econApi();
+    const px = HOME_PISLE.x - 7 + (idx % 4) * 4, pz = HOME_PISLE.z - 4 + Math.floor(idx / 4) * -3;
+    const gy = Math.max(HOME_TOP, surfaceTop(px, pz));
+    const put = (x, y, z, id) => { if (!inBounds(x, y, z) || id == null) return; world[widx(x, y, z)] = id; if (api.setHomeEdit) api.setHomeEdit(x, y, z, id); markBlockDirty(x, z); };
+    const accent = ID[PORTAL_FRAME_COL[dest]] != null ? ID[PORTAL_FRAME_COL[dest]] : ID.quartz_block;
+    for (let dy = 0; dy <= 2; dy++) { put(px - 1, gy + dy, pz, ID.quartz_block); put(px + 1, gy + dy, pz, ID.quartz_block); }   // 기둥
+    put(px, gy + 2, pz, accent);                                        // 상인방(목적지 재질)
+    put(px, gy - 1, pz, accent);                                        // 발판(목적지 재질)
+    put(px, gy + 3, pz, ID.glowstone);                                  // 발광 표식
+    put(px, gy, pz, ID['portal_' + dest]);                              // 실제 포탈 블록(우클릭=워프, hasHomePortal 인식)
+    _mapDirty = true;
+    return true;
   }
   // 월드 이동(허브 ↔ 프라이빗 섬 ↔ 남의 섬 방문)
   function travelTo(mode, force) {
@@ -3245,9 +3266,13 @@
   };
   function hasHomePortal(dest) {
     if (dest === 'hub' || dest === 'home') return true;
+    const api = econApi();
+    // V21-C: 인벤토리 '설치' 버튼으로 설치한 경우(P.portals 플래그)
+    const P0 = api.getP ? api.getP() : null;
+    if (P0 && P0.portals && P0.portals[dest]) return true;
+    // 포탈 블록을 프라이빗 섬에 직접 설치한 경우(홈 편집 스캔)
     const id = ID['portal_' + dest];
     if (id == null) return false;
-    const api = econApi();
     const edits = api.getHomeEdits ? api.getHomeEdits() : {};
     for (const k in edits) if (Number(edits[k]) === id) return true;
     return false;
@@ -3267,13 +3292,14 @@
     if (!WORLD_DEFS[dest]) return;
     const req = WARP_REQ[dest];
     const api = econApi();
-    if (menuWarp && dest !== 'hub' && dest !== 'home' && !hasHomePortal(dest)) {
-      if (typeof toast === 'function') toast(`🔒 ${WORLD_DEFS[dest].name} 워프 포탈을 프라이빗 섬에 설치해야 메뉴 워프가 가능해요.`, false);
+    if (req && api.skillLv && api.skillLv(req.sk) < req.lv) {
+      if (typeof toast === 'function') toast(`🔒 ${WORLD_DEFS[dest].name}은(는) ${req.name} 스킬 ${req.lv}레벨부터! (실제 스카이블럭 해금 조건)`, false);
       warpCharge = null;
       return;
     }
-    if (req && api.skillLv && api.skillLv(req.sk) < req.lv) {
-      if (typeof toast === 'function') toast(`🔒 ${WORLD_DEFS[dest].name}은(는) ${req.name} 스킬 ${req.lv}레벨부터! (실제 스카이블럭 해금 조건)`, false);
+    // V21-C: 포탈 설치 게이트(단일) — 허브/홈/던전 제외, 해당 섬 포탈을 제작해 프라이빗 섬에 설치(버튼 또는 직접 배치)해야 워프 가능
+    if (dest !== 'hub' && dest !== 'home' && dest !== 'dungeon' && !hasHomePortal(dest)) {
+      if (typeof toast === 'function') toast(`🌀 ${WORLD_DEFS[dest].name} 포탈을 제작해 프라이빗 섬에 설치해야 워프할 수 있어요 (제작 탭)`, false);
       warpCharge = null;
       return;
     }
@@ -3672,6 +3698,37 @@
     lavaMat = new THREE.MeshBasicMaterial({ map: atlasTex, vertexColors: true });
   }
   function faceTexName(b, faceN) { if (typeof b.tex === 'string') return b.tex; if (faceN === 'top') return b.tex.top; if (faceN === 'bottom') return b.tex.bottom; return b.tex.side; }
+  // V21-B: 블럭 아이템 아이콘 — 월드와 '같은 텍스처'로 등축(아이소메트릭) 큐브 렌더 → 인벤토리에서
+  //   블럭이 실제 생김새 그대로 구분됨. cross(꽃/풀)·문·반블럭 등 비큐브는 타일 평면으로.
+  const _blkIconCache = {};
+  function tileCanvasFor(name) {
+    const cv = document.createElement('canvas'); cv.width = 16; cv.height = 16;
+    const c = cv.getContext('2d'); c.imageSmoothingEnabled = false;
+    paintTile(c, 0, 0, name); return cv;
+  }
+  window.econBlockIcon = function (key) {
+    if (_blkIconCache[key]) return _blkIconCache[key];
+    let id = (typeof PLACE_BLOCK === 'object' && PLACE_BLOCK[key] != null) ? PLACE_BLOCK[key] : ID[key];
+    if (id == null) return null;
+    const b = BLOCKS[id]; if (!b || !b.tex) return null;
+    const S2 = 40, cv = document.createElement('canvas'); cv.width = S2; cv.height = S2;
+    const c = cv.getContext('2d'); c.imageSmoothingEnabled = false;
+    const topT = tileCanvasFor(faceTexName(b, 'top')), sideT = tileCanvasFor(faceTexName(b, 'side'));
+    const quad = (img, ox, oy, ux, uy, vx, vy, dim) => {   // 단위정사각형→평행사변형 매핑
+      c.save(); c.setTransform(ux / 16, uy / 16, vx / 16, vy / 16, ox, oy);
+      c.drawImage(img, 0, 0); c.restore();
+      if (dim < 1) { c.save(); c.globalAlpha = 1 - dim; c.globalCompositeOperation = 'source-atop'; c.setTransform(ux / 16, uy / 16, vx / 16, vy / 16, ox, oy); c.fillStyle = '#000'; c.fillRect(0, 0, 16, 16); c.restore(); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; }
+    };
+    if (b.cross || b.shape === 'door' || b.shape === 'trapdoor' || b.shape === 'fence') {
+      c.drawImage(sideT, 4, 4, 32, 32);                                       // 평면 타일(MC 아이템식)
+    } else {
+      // 등축 큐브: 윗면(마름모) + 좌/우면(음영) — MC 블럭 아이템과 같은 구도
+      quad(topT, 20, 3, 15, 8, -15, 8, 1);        // 윗면: O(20,3), U=(15,8), V=(-15,8)
+      quad(sideT, 5, 11, 15, 8, 0, 14, 0.8);      // 좌면: O(5,11), U=(15,8), V=(0,14) — 어둡게
+      quad(sideT, 20, 19, 15, -8, 0, 14, 0.62);   // 우면: O(20,19), U=(15,-8), V=(0,14) — 더 어둡게
+    }
+    const url = cv.toDataURL(); _blkIconCache[key] = url; return url;
+  };
 
   /* ---------------- 메싱(면 컬링 + AO, 전체 1회 빌드) ---------------- */
   const FACES = [
@@ -4350,6 +4407,10 @@
   function onPLC() {
     lookS.locked = (document.pointerLockElement === canvas);
     if (canvas) canvas.classList.toggle('is-pointerlocked', lookS.locked);
+    // V21-A: 잠금 상태를 조준점에 표시 — 안 잠기면 클릭 유도(브라우저는 제스처 없인 잠금 불가)
+    const cr = document.getElementById('econ3dCross');
+    if (cr && !fishing && !breaking) cr.textContent = lookS.locked ? '+' : '🖱';
+    if (!lookS.locked) clearInputState();
   }
   function clearInputState() {
     mouseHeld = false; useHeld = false; gathering = false; breaking = null;
@@ -4378,12 +4439,18 @@
   function performUseAction(repeat) {
     const t = currentAim();
     if (t) {
-      if (!repeat) doInteract(t);
+      if (!repeat) doInteract(t);   // NPC/포탈/워프/요정/미니언/플레이어 = 우클릭 상호작용
       return true;
+    }
+    // V21-A: 문 여닫기(전 월드) — 우클릭 표준 상호작용
+    const tb = raycastBlock();
+    if (tb) {
+      const bb = BLOCKS[getBlockLocal(tb.x, tb.y, tb.z)];
+      if (bb && bb.shape === 'door') { if (!repeat) toggleDoor(tb.x, tb.y, tb.z); return true; }
     }
     if (worldMode === 'home') return homePlaceBlock(!!repeat);
     if (fishing) return true;
-    if (!repeat) startFishing();
+    if (!repeat) { if (!startFishing()) openPanelForZone('hub', 'menu'); }   // 물 조준=낚시, 빈 우클릭=스카이블럭 메뉴
     return true;
   }
   function onDown(e) {
@@ -4392,6 +4459,8 @@
     const p = relPos(e); const cw = canvas.clientWidth;
     if (!isTouch) {
       requestLookLock(true);
+      if (!lookS.locked) return;   // V21-A: 첫 클릭은 시점 잠금만(잠금 전 오조작 방지, MC 표준)
+      // ── V21-A 입력 재정리(MC 표준): 우클릭=상호작용/설치, 좌클릭=공격/파괴만 ──
       if (e.button === 2) {
         useHeld = true; useRepeatT = 0;
         performUseAction(false);
@@ -4402,9 +4471,8 @@
       const mb = pickMob();
       if (mb) { P._atkCd = 0.45; attackMobHit(mb); mouseHeld = true; return; }   // 몬스터 공격(꾹 누르면 연속)
       const t = currentAim();
-      if (t && t.type === 'node') { gathering = true; gatherZoneKey = t.ref.zone; mouseHeld = true; return; }
-      // V13-A: 홈도 hold-to-break(금가는 과정) — 아래 mouseHeld=true로 진행
-      mouseHeld = true;                                    // 채집: 꾹 누르는 동안 진행
+      if (t && t.type === 'node') { gathering = true; gatherZoneKey = t.ref.zone; mouseHeld = true; return; }   // 채집 노드는 파괴형 동작이므로 좌클릭 유지
+      mouseHeld = true;                                    // 좌클릭 = 파괴/채집만(상호작용은 우클릭·E)
       return;
     }
     if (p.x < cw * 0.4 && moveT.id === -1) { moveT.active = true; moveT.id = e.pointerId; moveT.ox = moveT.x = p.x; moveT.oy = moveT.y = p.y; }
@@ -4555,7 +4623,9 @@
       if (cb && cb.shape === 'door' && cb.key.indexOf(wood + '_door_') === 0) {
         const cm = cb.key.match(/_door_[co]_(\d)$/);
         const cid = ID[wood + '_door_' + ns + '_' + cm[1]];
-        world[widx(x, cy, z)] = cid; if (api.setHomeEdit) api.setHomeEdit(x, cy, z, cid); markBlockDirty(x, z);
+        world[widx(x, cy, z)] = cid;
+        if (worldMode === 'home' && api.setHomeEdit) api.setHomeEdit(x, cy, z, cid);   // V21-A: 홈만 영속(허브 등 공용 월드는 세션 한정)
+        markBlockDirty(x, z);
       }
     }
     _mapDirty = true; return true;
@@ -4672,8 +4742,8 @@
     }
     if (!hit) { breaking = null; return; }
     if (worldMode === 'home' && isPortalBlock(hit.x, hit.y, hit.z)) { breaking = null; return; }
-    let g = worldMode === 'home' ? null : gatherBlocks()[hit.id];
-    if (!g && worldMode === 'home') {   // 홈: 건축 블럭도 hold-to-break(금가는 과정) + 아이템 드롭
+    let g = worldMode === 'home' ? null : gatherBlocks()[hit.id];   // V21-C: 프라이빗 섬은 순수 바닐라(자원 재생 알고리즘 미적용)
+    if (!g && worldMode === 'home') {   // 홈: 모든 블럭 바닐라 채굴 — 부수면 아이템 드롭, 재생 없음
       const b = BLOCKS[hit.id];
       if (!b || b.key === 'bedrock' || b.liquid) { breaking = null; return; }
       const bk = BLOCKS[hit.id].key; const fam = /log|planks|leaves|fence|door|trapdoor/.test(bk) ? 'axe' : /dirt|grass|sand|gravel/.test(bk) ? 'pickaxe' : 'pickaxe';
@@ -5922,7 +5992,7 @@
       // 인월드 게임플레이 틱: 채집 홀드/재생성/낚시/몬스터/피해 텍스트/체력
       if (!panelOpen()) {
         P._atkCd = Math.max(0, (P._atkCd || 0) - dt);
-        if (mouseHeld) {
+        if (mouseHeld) {   // V21-A: 포인터 잠금 여부와 무관하게 홀드 중 계속 진행(화면 회전해도 유지, 대상 바뀌면 진행률 리셋)
           const mb2 = pickMob();
           if (mb2 && P._atkCd <= 0) { P._atkCd = 0.45; attackMobHit(mb2); }
           else if (!mb2) progressBreaking(dt);
@@ -6055,12 +6125,16 @@
     const api = econApi(); const P0 = api.getP ? api.getP() : null; if (!P0) return;
     ensureHotbar();
     const icon = k => (typeof window.econIcon === 'function' ? `<img src="${window.econIcon(k)}" alt="">` : '');
+    const eco = window.__econ || {};
     for (let i = 0; i < 9; i++) {
       const el = document.getElementById('econ3dSlot' + i); if (!el) continue;
       const k = P0.hotbar[i];
       const cnt = (k && !isToolKey(k)) ? (P0.inv[k] || 0) : 0;
       el.classList.toggle('is-active', i === selectedHotbar);
       el.innerHTML = k ? `${icon(k)}${cnt > 1 ? `<span class="econ3d-slotcount">${cnt}</span>` : ''}` : '';
+      // V21-B: 게임 화면 핫바에도 호버 툴팁(이름/등급/능력치 로어)
+      if (k && eco.itemLore) { const sd = (eco.shopDef && eco.shopDef(k)) || { key: k, name: (eco.itemName ? eco.itemName(k) : k) }; el.title = eco.itemLore(sd).replace(/&#10;|\n/g, '\n'); }
+      else el.title = '핫바 ' + (i + 1);
     }
     syncPlaceFromHotbar();
   }
@@ -6110,7 +6184,7 @@
       collide, moveAxis, dayFactor, ambientMobs: () => ambientMobs,
       ID, BLOCKS,
       // V3: 프라이빗 섬/건축/이동
-      travelTo, worldMode: () => worldMode, genHome, PORTALS, HOME_MINION_SLOTS, HOME_BOUNDS, HOME_CENTER,
+      travelTo, worldMode: () => worldMode, genHome, PORTALS, HOME_MINION_SLOTS, HOME_BOUNDS, HOME_CENTER, installPortalFrame,
       chunkMeshCount: () => Object.keys(chunkMeshes).length,   // V12 크래시 검증용
       buildQueueLen: () => buildQueue.length,
       updateQuestHud, questNpcList,   // V13-B 퀘스트 HUD 검증용
