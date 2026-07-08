@@ -766,16 +766,26 @@
     { key: 'oak_planks', needs: { oaklog: 1 }, gives: 4, unlock: null },
     { key: 'birch_planks', needs: { birchlog: 1 }, gives: 4, unlock: null },
     { key: 'spruce_planks', needs: { sprucelog: 1 }, gives: 4, unlock: null },
-    { key: 'stick', needs: { oak_planks: 2 }, gives: 4, unlock: null },
-    { key: 'crafting_table', needs: { oak_planks: 4 }, gives: 1, unlock: null },
+    // V21-C: 나무 호환(MC 표준) — 막대/작업대/상자/나무도구는 '아무 판자'로 제작(any_planks 그룹)
+    { key: 'stick', needs: { any_planks: 2 }, gives: 4, unlock: null },
+    { key: 'crafting_table', needs: { any_planks: 4 }, gives: 1, unlock: null },
     { key: 'furnace', needs: { cobblestone: 8 }, gives: 1, unlock: null },
-    { key: 'chest', needs: { oak_planks: 8 }, gives: 1, unlock: null },
+    { key: 'chest', needs: { any_planks: 8 }, gives: 1, unlock: null },
     { key: 'torch', needs: { coal: 1, stick: 1 }, gives: 4, unlock: null },
     // 바닐라 도구(정확한 재료: 판자/조약돌 + 막대). 여기선 전부 최하 등급 성능.
-    { key: 'wooden_pickaxe', needs: { oak_planks: 3, stick: 2 }, gives: 1, unlock: null },
-    { key: 'wooden_axe', needs: { oak_planks: 3, stick: 2 }, gives: 1, unlock: null },
-    { key: 'wooden_hoe', needs: { oak_planks: 2, stick: 2 }, gives: 1, unlock: null },
-    { key: 'wooden_sword', needs: { oak_planks: 2, stick: 1 }, gives: 1, unlock: null },
+    { key: 'wooden_pickaxe', needs: { any_planks: 3, stick: 2 }, gives: 1, unlock: null },
+    { key: 'wooden_axe', needs: { any_planks: 3, stick: 2 }, gives: 1, unlock: null },
+    { key: 'wooden_hoe', needs: { any_planks: 2, stick: 2 }, gives: 1, unlock: null },
+    { key: 'wooden_sword', needs: { any_planks: 2, stick: 1 }, gives: 1, unlock: null },
+    // V21-C: 섬 포탈 레시피 — 제작 후 '프라이빗 섬에 설치'해야 해당 섬 워프 해금(허브/홈 제외, 실제 스블 방식)
+    { key: 'portal_barn', needs: { wheat: 64, any_planks: 32 }, gives: 1, unlock: null },
+    { key: 'portal_park', needs: { oaklog: 96, stick: 16 }, gives: 1, unlock: null },
+    { key: 'portal_gold', needs: { stone: 128, coal: 64 }, gives: 1, unlock: { resource: 'stone', tier: 1 } },
+    { key: 'portal_deep', needs: { stone: 192, iron: 64 }, gives: 1, unlock: { resource: 'iron', tier: 1 } },
+    { key: 'portal_spider', needs: { string: 64, bone: 32 }, gives: 1, unlock: { skill: 'combat', lv: 2 } },
+    { key: 'portal_mushroom', needs: { wheat: 96, potato: 48 }, gives: 1, unlock: { skill: 'farming', lv: 2 } },
+    { key: 'portal_nether', needs: { obsidian: 24, blaze_rod: 12 }, gives: 1, unlock: { skill: 'combat', lv: 5 } },
+    { key: 'portal_end', needs: { ender_pearl: 24, obsidian: 48 }, gives: 1, unlock: { skill: 'combat', lv: 10 } },
     { key: 'fishing_rod', needs: { stick: 3, string: 2 }, gives: 1, unlock: null },
     { key: 'stone_pickaxe', needs: { cobblestone: 3, stick: 2 }, gives: 1, unlock: { resource: 'stone', tier: 1 } },
     { key: 'stone_axe', needs: { cobblestone: 3, stick: 2 }, gives: 1, unlock: { resource: 'stone', tier: 1 } },
@@ -1311,7 +1321,24 @@
       reward: { gold: 500, xp: { skill: 'foraging', amt: 200 }, items: [{ key: 'glowstone', n: 4 }] } },
   ];
 
+  // V21-C: 섬 포탈 아이템(제작→프라이빗 섬 설치→워프 해금) — 이름/목적지 매핑
+  const PORTAL_ITEMS = {
+    portal_barn: { name: '🌾 더 반 포탈', dest: 'barn' },
+    portal_park: { name: '🌲 더 파크 포탈', dest: 'park' },
+    portal_gold: { name: '⛏️ 골드 광산 포탈', dest: 'gold' },
+    portal_deep: { name: '💎 딥 캐번 포탈', dest: 'deep' },
+    portal_spider: { name: '🕷️ 스파이더 덴 포탈', dest: 'spider' },
+    portal_mushroom: { name: '🍄 버섯 사막 포탈', dest: 'mushroom' },
+    portal_nether: { name: '🔥 블레이징 포트리스 포탈', dest: 'nether' },
+    portal_end: { name: '🌌 디 엔드 포탈', dest: 'end' },
+  };
+  // V21-C: 제작 재료 그룹(MC 나무 호환) — needs 키가 그룹이면 구성원 아무거나 합산 소모
+  const CRAFT_GROUPS = {
+    any_planks: ['oak_planks', 'birch_planks', 'spruce_planks', 'dark_oak_planks', 'jungle_planks', 'acacia_planks'],
+    any_log: ['oaklog', 'birchlog', 'sprucelog'],
+  };
   window.ECON_DATA = {
+    PORTAL_ITEMS, CRAFT_GROUPS,
     ITEM_TIERS, COLLECTIONS, SKILLS, GATHER_TABLE, TOOLS, MINIONS, MINION_STORAGE_BASE, MINION_STORAGE_UPGRADED,
     MINION_STORAGE_UPGRADE_COST, MINION_OFFLINE_CAP_HOURS, MINION_SLOT_MAX, MINION_SLOT_COST_BASE, MINION_SLOT_COST_MUL,
     MINION_FUEL, MINION_FUEL2, SLAYERS, DUNGEON, DUNGEON_ROOM_SCORE, ESSENCE_SHOP, SHOP, BAZAAR, AUCTION_HOUSE, HEART_OF_MOUNTAIN, DAILY_SELL_LIMIT_PER_STACK,

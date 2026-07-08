@@ -7,6 +7,12 @@
   const D = () => window.ECON_DATA;
   const SAVE_KEY = 'econ_save_v1';
   let running = false, tickTimer = null, zone = 'hub', hubTab = 'shop', invFilter = 'all', invDetailKey = null, craftSel = null, bazaarCat = 'farming', bazaarQty = 16, ahDur = 6;
+  // V21-B: Shift 상태 추적(인벤토리 Shift+클릭 = 즉시 핫바 이동, MC 표준) — 테스트 스텁 환경 가드
+  if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+    document.addEventListener('keydown', e => { if (e.key === 'Shift') window.__shiftDown = true; });
+    document.addEventListener('keyup', e => { if (e.key === 'Shift') window.__shiftDown = false; });
+    if (typeof window.addEventListener === 'function') window.addEventListener('blur', () => { window.__shiftDown = false; });
+  }
   let P = null;   // 플레이어 상태(로드 후 채워짐)
   let activeCombat = null;   // { kind:'slayer'|'dungeonBoss', hp,maxHp,dmg,playerHp,maxPlayerHp,_hits, onWin, onLose }
   let dungeonRun = null;     // { floor, roomIdx, rooms:[...], score, secretStep }
@@ -658,12 +664,24 @@
     if (r.unlock.skill && skillLevel(r.unlock.skill) < r.unlock.lv) return false;   // V8: 스킬 레벨 해금
     return true;
   }
-  function canCraft(r) { return recipeUnlocked(r) && Object.keys(r.needs).every(k => (P.inv[k] || 0) >= r.needs[k]); }
+  // V21-C: 재료 그룹(any_planks 등) — 그룹이면 구성원 합산 보유량으로 판정/소모(MC 나무 호환)
+  function craftHave(k) {
+    const g = (D().CRAFT_GROUPS || {})[k];
+    if (!g) return P.inv[k] || 0;
+    return g.reduce((s, m) => s + (P.inv[m] || 0), 0);
+  }
+  function craftConsume(k, n) {
+    const g = (D().CRAFT_GROUPS || {})[k];
+    if (!g) { removeItem(k, n); return; }
+    let left = n;
+    for (const m of g) { if (left <= 0) break; const take = Math.min(left, P.inv[m] || 0); if (take > 0) { removeItem(m, take); left -= take; } }
+  }
+  function canCraft(r) { return recipeUnlocked(r) && Object.keys(r.needs).every(k => craftHave(k) >= r.needs[k]); }
   function craft(key) {
     const r = D().RECIPES.find(x => x.key === key); if (!r) return false;
     if (!recipeUnlocked(r)) { toastFn(r.unlock && r.unlock.skill ? `${r.unlock.skill === 'combat' ? '전투' : r.unlock.skill === 'enchanting' ? '마법부여' : '요구'} 스킬 ${r.unlock.lv}레벨 필요` : '컬렉션 티어가 부족해요', false); return false; }
     if (!canCraft(r)) { toastFn('재료가 부족해요', false); return false; }
-    for (const k in r.needs) removeItem(k, r.needs[k]);
+    for (const k in r.needs) craftConsume(k, r.needs[k]);
     addItem(key, r.gives || 1);
     addSkillXp('enchanting', 10);
     stat('itemsCrafted');   // V13-B: 퀘스트 카운터
@@ -1157,6 +1175,7 @@
   let _buildNameMap = null;
   function itemName(key) {
     const s = shopDef(key); if (s) return s.name;
+    const pi = (D().PORTAL_ITEMS || {})[key]; if (pi) return pi.name;   // V21-C: 섬 포탈 아이템
     if (!_buildNameMap) { _buildNameMap = {}; (D().BUILDER_SHOP || []).forEach(b => { _buildNameMap[b.key] = b.name; }); }   // V15: 건축 블럭 이름
     return _buildNameMap[key] || key;
   }
@@ -2232,6 +2251,7 @@
     return `<div class="econ-cellact">
       <b>${iconImg(k)} ${itemName(k)} ×${P.inv[k] || 0}</b>
       <div class="econ-tierbtns">
+        ${(D().PORTAL_ITEMS || {})[k] ? `<button class="btn btn--sm" data-act="econ_portal_install" data-key="${k}">🌀 프라이빗 섬에 설치(워프 해금)</button>` : ''}
         ${canHot ? `<button class="btn btn--sm" data-act="econ_assign_hotbar" data-key="${k}">${(P.hotbar || []).indexOf(k) >= 0 ? '핫바에서 빼기' : '➕ 핫바에 넣기'}</button>` : ''}
         ${k.indexOf('potion_') === 0 ? `<button class="btn btn--sm" data-act="econ_potion_use" data-key="${k}">🧪 마시기</button>` : ''}
         ${sdef && sdef.slot ? `<button class="btn btn--sm btn--ghost" data-act="econ_pin" data-key="${k}">${(P.equipPin || {})[sdef.slot] === k ? '📌 고정 해제' : '📌 고정 장착'}</button><button class="btn btn--sm btn--ghost" data-act="econ_lock" data-key="${k}">${(P.locked || {})[k] ? '🔓 잠금해제' : '🔒 잠금'}</button><button class="btn btn--sm btn--ghost" data-act="econ_salvage" data-key="${k}">⚒️ 분해</button>` : ''}
@@ -3026,8 +3046,25 @@
       case 'minion_fuel': useMinionFuel(el.dataset.key); break;
       case 'minion_collect_all': collectAllMinions(); break;
       case 'inv_filter': invFilter = el.dataset.key; renderZone(); break;
-      case 'invcell': invDetailKey = (invDetailKey === el.dataset.key ? null : el.dataset.key); renderZone(); break;
+      case 'invcell': {   // V21-B: Shift+클릭 = MC식 즉시 핫바 이동/해제, 일반 클릭 = 상세
+        if (window.__shiftDown && isPlaceableOrTool(el.dataset.key)) { assignHotbar(el.dataset.key); break; }
+        invDetailKey = (invDetailKey === el.dataset.key ? null : el.dataset.key); renderZone(); break;
+      }
       case 'assign_hotbar': assignHotbar(el.dataset.key); break;
+      case 'portal_install': {   // V21-C: 포탈 아이템 설치 — 프라이빗 섬에서만, 설치 시 해당 섬 워프 해금
+        const k = el.dataset.key, pi = (D().PORTAL_ITEMS || {})[k];
+        if (!pi) break;
+        const em = window.__econ3d;
+        if (!em || typeof em.worldMode !== 'function' || em.worldMode() !== 'home') { toastFn('프라이빗 섬에서만 설치할 수 있어요', false); break; }
+        if (!hasItem(k, 1)) { toastFn('포탈 아이템이 없어요', false); break; }
+        P.portals = P.portals || {};
+        if (P.portals[pi.dest]) { toastFn('이미 설치된 포탈이에요', false); break; }
+        removeItem(k, 1);
+        P.portals[pi.dest] = true;
+        if (typeof em.installPortalFrame === 'function') em.installPortalFrame(pi.dest);
+        toastFn(`🌀 ${pi.name} 설치! 이제 메뉴에서 워프할 수 있어요`, true);
+        saveNow(); renderZone(); break;
+      }
       case 'craft_sel': craftSel = el.dataset.key; renderZone(); break;
       case 'hpb': applyHpb(el.dataset.key); break;
       case 'salvage': salvageItem(el.dataset.key); break;
@@ -3228,7 +3265,7 @@
 
   if (typeof window !== 'undefined' && window.__ECON_TEST) {
     window.__econ = {
-      open, stop, act, getP: () => P, setP: v => { P = v; }, renderZone, itemName,
+      open, stop, act, getP: () => P, setP: v => { P = v; }, renderZone, itemName, itemLore, shopDef,
       gather, buyItem, sellItem, addItem, hasItem, removeItem, addGold,
       skillLevel, addSkillXp, addCollection, collectionTierIdx,
       placeMinion, upgradeMinion, upgradeMinionStorage, collectMinion, tickMinions, minionStorageCap, minionSpeedMul, useMinionFuel,
