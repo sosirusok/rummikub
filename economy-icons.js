@@ -8,6 +8,7 @@
   if (typeof window === 'undefined' || typeof document === 'undefined') return;
   const cache = {};
   const S = 40;
+  const USE_SPRITE_SHEET = false;
 
   function D() { return window.ECON_DATA || {}; }
   function tierColor(tierKey) {
@@ -19,7 +20,9 @@
     stone: '#8c8c8c', coal: '#26262a', iron: '#d8a282', gold: '#fbdb4b', lapis: '#1f4fc0', redstone: '#c81f28',
     diamond: '#5decd5', emerald: '#1fbf5c', obsidian: '#2a2040',
     wheat: '#e8c24a', carrot: '#e07b1f', potato: '#c8a25a', pumpkin: '#d6791f', melon: '#4c8f46', sugarcane: '#8fc36a',
-    oaklog: '#8a6a3a', birchlog: '#d7d3c8', sprucelog: '#4a3722', apple: '#d23b32',
+    oaklog: '#8a6a3a', birchlog: '#d7d3c8', sprucelog: '#4a3722', dark_oak_log: '#3d2517', jungle_log: '#7b5b2c', acacia_log: '#b06a36', apple: '#d23b32',
+    oak_planks: '#b8874b', birch_planks: '#d8c88a', spruce_planks: '#6b4a2a', dark_oak_planks: '#4b2f1d', jungle_planks: '#a98245', acacia_planks: '#b86c38',
+    crafting_table: '#9c6b35', furnace: '#777777', chest: '#a66a2c', torch: '#f0b040',
     rawfish: '#7aa5c8', salmon: '#e0806a', clownfish: '#f0983a', pufferfish: '#e8d24a', prismarine: '#66c2b4',
     sponge: '#d8cf62', clay: '#a4a8b6',
     rotten_flesh: '#8a5a3a', bone: '#e8e4d4', string: '#e4e4e4', ender_pearl: '#1f8a7a', blaze_rod: '#f0a03a',
@@ -169,11 +172,102 @@
     c.fillStyle = left; c.beginPath(); c.moveTo(8, 15); c.lineTo(20, 22); c.lineTo(20, 34); c.lineTo(8, 27); c.fill();
     c.fillStyle = right; c.beginPath(); c.moveTo(32, 15); c.lineTo(20, 22); c.lineTo(20, 34); c.lineTo(32, 27); c.fill();
   }
+  function drawIsoLine(c, pts, col) {
+    c.strokeStyle = col; c.lineWidth = 1; c.beginPath();
+    c.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) c.lineTo(pts[i][0], pts[i][1]);
+    c.stroke();
+  }
+  function drawBlock(c, key, col) {
+    drawCube(c, col);
+    const dark = shade(col, 0.45), light = shade(col, 1.45);
+    if (/log$|log_/.test(key) || /^(oaklog|birchlog|sprucelog)$/.test(key)) {
+      c.strokeStyle = dark; c.lineWidth = 1;
+      c.beginPath(); c.ellipse(20, 15, 6, 3.4, 0, 0, Math.PI * 2); c.stroke();
+      c.beginPath(); c.ellipse(20, 15, 3, 1.7, 0, 0, Math.PI * 2); c.stroke();
+      [12, 16, 24, 28].forEach(x => drawIsoLine(c, [[x, 18], [x - 1, 28]], dark));
+      return;
+    }
+    if (/planks|trapdoor|door|fence/.test(key)) {
+      [[11, 17], [15, 19], [24, 19], [29, 17]].forEach(p => c.fillRect(p[0], p[1], 5, 1));
+      drawIsoLine(c, [[10, 22], [19, 27]], dark);
+      drawIsoLine(c, [[22, 24], [30, 19]], dark);
+      drawIsoLine(c, [[20, 23], [20, 33]], dark);
+      return;
+    }
+    if (/ore|coal|iron|gold|lapis|redstone|diamond|emerald/.test(key)) {
+      const ore = key.indexOf('coal') >= 0 ? '#1c1c1f' : key.indexOf('iron') >= 0 ? '#e0b08a' : key.indexOf('gold') >= 0 ? '#ffd84d' : key.indexOf('lapis') >= 0 ? '#234ec8' : key.indexOf('redstone') >= 0 ? '#e63232' : key.indexOf('diamond') >= 0 ? '#78fff2' : key.indexOf('emerald') >= 0 ? '#35e36f' : light;
+      [[18, 12], [12, 20], [25, 18], [15, 27], [27, 26]].forEach(p => { c.fillStyle = ore; c.fillRect(p[0], p[1], 3, 3); });
+      return;
+    }
+    if (key === 'crafting_table') {
+      c.strokeStyle = dark; c.lineWidth = 1; c.strokeRect(15.5, 12.5, 9, 6);
+      c.fillStyle = '#d0aa58'; c.fillRect(18, 14, 4, 3);
+      drawIsoLine(c, [[10, 23], [19, 28]], dark); drawIsoLine(c, [[23, 23], [30, 18]], dark);
+      return;
+    }
+    if (key === 'furnace') {
+      c.fillStyle = '#202020'; c.fillRect(15, 15, 10, 6);
+      c.fillStyle = '#e8632a'; c.fillRect(17, 21, 6, 2);
+      return;
+    }
+    if (key === 'chest') {
+      c.strokeStyle = '#5a3416'; c.lineWidth = 1; c.strokeRect(13.5, 15.5, 13, 9);
+      c.fillStyle = '#d9b64a'; c.fillRect(19, 19, 3, 4);
+      return;
+    }
+    if (/glass/.test(key)) {
+      drawIsoLine(c, [[14, 13], [20, 10], [26, 13]], '#eaffff');
+      drawIsoLine(c, [[11, 21], [18, 25]], '#eaffff');
+      drawIsoLine(c, [[23, 25], [30, 21]], '#eaffff');
+      return;
+    }
+    if (/wool_/.test(key)) {
+      drawIsoLine(c, [[12, 16], [17, 14], [22, 16], [27, 14]], dark);
+      drawIsoLine(c, [[11, 24], [16, 26], [20, 24]], dark);
+      drawIsoLine(c, [[23, 24], [28, 22], [31, 24]], dark);
+      return;
+    }
+    if (/brick/.test(key)) {
+      drawIsoLine(c, [[12, 16], [28, 16]], dark);
+      drawIsoLine(c, [[10, 23], [20, 28]], dark);
+      drawIsoLine(c, [[21, 27], [31, 22]], dark);
+      [15, 23, 27].forEach(x => drawIsoLine(c, [[x, 13], [x + 3, 15]], dark));
+      return;
+    }
+    if (/sandstone|quartz|purpur|smooth_stone|prismarine|concrete_|terracotta_|stone|cobblestone|obsidian|dirt|sand|gravel|hay_block|bookshelf/.test(key)) {
+      drawIsoLine(c, [[11, 17], [20, 22], [29, 17]], dark);
+      c.fillStyle = light; c.globalAlpha = 0.5; c.fillRect(14, 12, 3, 2); c.fillRect(24, 21, 3, 2); c.globalAlpha = 1;
+    }
+  }
+  function isBlockLike(key) {
+    return /(_planks|_log|log$|_ore|stone|cobblestone|dirt|grass|sand|sandstone|brick|glass|obsidian|wool_|concrete_|terracotta_|leaves|crafting_table|furnace|chest|torch|slab|stairs|fence|trapdoor|door|hay_block|bookshelf|prismarine|quartz|purpur|mossy|andesite|gravel)/.test(key);
+  }
   function drawGear(c, col) {
     c.fillStyle = col;
     for (let i = 0; i < 8; i++) { c.save(); c.translate(20, 20); c.rotate(i * Math.PI / 4); c.fillRect(-2.5, -14, 5, 7); c.restore(); }
     c.beginPath(); c.arc(20, 20, 9, 0, Math.PI * 2); c.fill();
     c.fillStyle = '#20242c'; c.beginPath(); c.arc(20, 20, 4, 0, Math.PI * 2); c.fill();
+  }
+  function drawPortal(c, col) {
+    c.save();
+    c.translate(20, 20);
+    c.strokeStyle = '#2a2040';
+    c.lineWidth = 6;
+    c.beginPath();
+    c.ellipse(0, 0, 11, 15, 0, 0, Math.PI * 2);
+    c.stroke();
+    const g = c.createRadialGradient(0, 0, 2, 0, 0, 15);
+    g.addColorStop(0, shade(col, 1.45));
+    g.addColorStop(0.55, col);
+    g.addColorStop(1, '#201030');
+    c.fillStyle = g;
+    c.beginPath();
+    c.ellipse(0, 0, 8, 12, 0, 0, Math.PI * 2);
+    c.fill();
+    c.restore();
+    c.fillStyle = '#d8c8ff';
+    [[14, 10], [26, 13], [12, 28], [29, 26]].forEach(p => c.fillRect(p[0], p[1], 2, 2));
   }
   function drawStone(c, col) {
     c.fillStyle = col; c.beginPath();
@@ -184,6 +278,14 @@
     c.fillStyle = '#e8632a'; c.beginPath(); c.moveTo(20, 6); c.quadraticCurveTo(31, 16, 26, 27); c.quadraticCurveTo(24, 33, 20, 34); c.quadraticCurveTo(16, 33, 14, 27); c.quadraticCurveTo(9, 16, 20, 6); c.fill();
     c.fillStyle = '#f7a02a'; c.beginPath(); c.moveTo(20, 14); c.quadraticCurveTo(26, 21, 22, 29); c.quadraticCurveTo(20, 31, 18, 29); c.quadraticCurveTo(14, 21, 20, 14); c.fill();
     c.fillStyle = '#ffe28a'; c.beginPath(); c.arc(20, 27, 3, 0, Math.PI * 2); c.fill();
+  }
+  function drawTorch(c) {
+    c.save(); c.translate(20, 22); c.rotate(Math.PI / 7);
+    px(c, -2, -1, 4, 15, '#7a4a22');
+    px(c, -3, -5, 6, 5, '#3b2412');
+    c.restore();
+    c.fillStyle = '#e8632a'; c.beginPath(); c.moveTo(20, 5); c.quadraticCurveTo(28, 13, 23, 21); c.quadraticCurveTo(20, 24, 17, 21); c.quadraticCurveTo(12, 13, 20, 5); c.fill();
+    c.fillStyle = '#ffd85a'; c.beginPath(); c.moveTo(20, 10); c.quadraticCurveTo(24, 15, 21, 20); c.quadraticCurveTo(19, 21, 18, 19); c.quadraticCurveTo(16, 15, 20, 10); c.fill();
   }
   function drawCape(c, col) {
     c.fillStyle = col; c.beginPath(); c.moveTo(12, 8); c.lineTo(28, 8); c.lineTo(30, 32); c.lineTo(24, 28); c.lineTo(20, 33); c.lineTo(16, 28); c.lineTo(10, 32); c.fill();
@@ -223,9 +325,12 @@
     if (/^reforge_stone|essence_reforge_stone/.test(key)) return 'stone';
     if (/^minion_fuel/.test(key)) return 'flame';
     if (/^(minion_slot_expander|auto_shipping_module|diamond_spreading)$/.test(key)) return 'gear';
+    if (/^portal_/.test(key)) return 'portal';
+    if (key === 'torch') return 'torch';
     if (/cape/.test(key)) return 'cape';
     if (/^(rawfish|salmon|clownfish|pufferfish|fish_insomnia)$/.test(key)) return 'fish';
     if (/^skin_/.test(key)) return 'skin';
+    if (isBlockLike(key)) return 'block';
     if (/^enchanted_/.test(key)) return 'cube';
     return 'cube';
   }
@@ -246,6 +351,7 @@
     if (cat === 'book') return '#9365b8';
     if (cat === 'stone') return '#c9a227';
     if (cat === 'gear') return '#8c98a8';
+    if (cat === 'portal') return '#8f63ff';
     if (/^(wooden)/.test(key)) return '#9c7a44';
     if (/^stone_/.test(key)) return '#8c8c8c';
     if (/^iron_/.test(key)) return '#d8d8d4';
@@ -266,7 +372,7 @@
     if (!c) return '';
     // 외부 시트 우선(8×6 그리드에서 해당 셀을 잘라 사용 — 셀 크기는 이미지 실제 크기에서 자동 계산)
     const cell = spriteCellFor(key);
-    if (sheetReady && cell) {
+    if (USE_SPRITE_SHEET && sheetReady && cell) {
       const cw = sheet.width / SPRITE_COLS, ch = sheet.height / SPRITE_ROWS;
       const pad = Math.round(Math.min(cw, ch) * 0.04);   // 셀 가장자리 여백(이웃 셀 침범 방지)
       c.imageSmoothingEnabled = true;
@@ -312,10 +418,13 @@
       case 'rod': drawRod(c, col); break;
       case 'stone': drawStone(c, col); break;
       case 'flame': drawFlame(c); break;
+      case 'torch': drawTorch(c); break;
       case 'gear': drawGear(c, col); break;
+      case 'portal': drawPortal(c, col); break;
       case 'cape': drawCape(c, '#9365b8'); break;
       case 'fish': drawFish(c, col); break;
       case 'skin': drawSkin(c); break;
+      case 'block': drawBlock(c, key, col); break;
       default: drawCube(c, col); break;
     }
     // 인챈티드 자원은 보라 반짝이 오버레이

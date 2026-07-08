@@ -13,6 +13,7 @@
     document.addEventListener('keyup', e => { if (e.key === 'Shift') window.__shiftDown = false; });
     if (typeof window.addEventListener === 'function') window.addEventListener('blur', () => { window.__shiftDown = false; });
   }
+  let craftGrid = Array(9).fill(null);
   let P = null;   // 플레이어 상태(로드 후 채워짐)
   let activeCombat = null;   // { kind:'slayer'|'dungeonBoss', hp,maxHp,dmg,playerHp,maxPlayerHp,_hits, onWin, onLose }
   let dungeonRun = null;     // { floor, roomIdx, rooms:[...], score, secretStep }
@@ -50,7 +51,7 @@
       fieldDiff: 'normal',                   // 필드 난이도(easy/normal/heroic/hell)
       arenaBest: {},                         // 아레나 난이도별 최고 웨이브
       // --- V12 필드 ---
-      hotbar: [null, null, null, null, null, null, null, null],   // 핫바 1~8 지정(9번=스카이블럭 메뉴 고정)
+      hotbar: [null, null, null, null, null, null, null, null, null],   // 핫바 1~9.
       // --- V13-B 필드 ---
       quests: { active: {}, done: {}, seen: {} },   // 위치기반 퀘스트({active:{key:{base}}, done:{key:1}, seen:{key:1}})
       // --- V20-F 필드 ---
@@ -90,7 +91,9 @@
     for (const k of ['hpb', 'equipPin', 'locked', 'equipLog', 'stats', 'ach', 'arenaBest']) if (!p[k] || typeof p[k] !== 'object') p[k] = {};
     if (p.daily === undefined) p.daily = null;
     if (!p.fieldDiff) p.fieldDiff = 'normal';
-    if (!Array.isArray(p.hotbar) || p.hotbar.length !== 8) p.hotbar = [null, null, null, null, null, null, null, null];   // V12
+    if (!Array.isArray(p.hotbar)) p.hotbar = [];
+    p.hotbar = p.hotbar.slice(0, 9);
+    while (p.hotbar.length < 9) p.hotbar.push(null);
     if (!p.quests || typeof p.quests !== 'object') p.quests = { active: {}, done: {}, seen: {} };   // V13-B
     if (!p.quests.active) p.quests.active = {}; if (!p.quests.done) p.quests.done = {}; if (!p.quests.seen) p.quests.seen = {};
     if (!Array.isArray(p.ahListings)) p.ahListings = [];   // V20-F 경매장
@@ -679,6 +682,14 @@
   function canCraft(r) { return recipeUnlocked(r) && Object.keys(r.needs).every(k => craftHave(k) >= r.needs[k]); }
   function craft(key) {
     const r = D().RECIPES.find(x => x.key === key); if (!r) return false;
+    const gridMatch = craftGridRecipe();
+    if (gridMatch && gridMatch.key === key) return craftFromGrid();
+    if (manualCraftCapable(r)) {
+      craftSel = key;
+      toastFn('제작대 3x3 칸에 재료를 실제 마인크래프트 모양대로 올려야 제작돼요.', false);
+      renderZone();
+      return false;
+    }
     if (!recipeUnlocked(r)) { toastFn(r.unlock && r.unlock.skill ? `${r.unlock.skill === 'combat' ? '전투' : r.unlock.skill === 'enchanting' ? '마법부여' : '요구'} 스킬 ${r.unlock.lv}레벨 필요` : '컬렉션 티어가 부족해요', false); return false; }
     if (!canCraft(r)) { toastFn('재료가 부족해요', false); return false; }
     for (const k in r.needs) craftConsume(k, r.needs[k]);
@@ -690,6 +701,143 @@
   }
 
   /* ---------------- 채집(광산/농장/숲/부둣가) ---------------- */
+  const WOOD_PLANK_KEYS = ['oak_planks', 'birch_planks', 'spruce_planks', 'dark_oak_planks', 'jungle_planks', 'acacia_planks'];
+  const WOOD_LOG_KEYS = ['oaklog', 'birchlog', 'sprucelog', 'dark_oak_log', 'jungle_log', 'acacia_log'];
+  function isWoodPlank(k) { return WOOD_PLANK_KEYS.indexOf(k) >= 0; }
+  function isWoodLog(k) { return WOOD_LOG_KEYS.indexOf(k) >= 0; }
+  function recipeSumNeeds(r) { return Object.keys(r.needs || {}).reduce((a, k) => a + r.needs[k], 0); }
+  function manualCraftCapable(r) { return !!r && recipeSumNeeds(r) <= 9; }
+  function craftPattern(key) {
+    const woodShape = key.match(/^(oak|birch|spruce|dark_oak|jungle|acacia)_(fence|trapdoor|door)$/);
+    if (woodShape) {
+      const p = woodShape[1] + '_planks';
+      if (woodShape[2] === 'fence') return { rows: ['PSP', 'PSP'], spec: { P: p, S: 'stick' } };
+      if (woodShape[2] === 'trapdoor') return { rows: ['PPP', 'PPP'], spec: { P: p } };
+      if (woodShape[2] === 'door') return { rows: ['PP', 'PP', 'PP'], spec: { P: p } };
+    }
+    const shapedBlock = key.match(/^(.+)_(slab|stairs)$/);
+    if (shapedBlock) {
+      const mat = shapedBlock[1];
+      if (shapedBlock[2] === 'slab') return { rows: ['MMM'], spec: { M: mat } };
+      return { rows: ['M  ', 'MM ', 'MMM'], spec: { M: mat }, mirror: true };
+    }
+    switch (key) {
+      case 'stick': return { rows: ['P', 'P'], spec: { P: 'planks' } };
+      case 'crafting_table': return { rows: ['PP', 'PP'], spec: { P: 'planks' } };
+      case 'chest': return { rows: ['PPP', 'P P', 'PPP'], spec: { P: 'planks' } };
+      case 'furnace': return { rows: ['CCC', 'C C', 'CCC'], spec: { C: 'cobblestone' } };
+      case 'torch': return { rows: ['C', 'S'], spec: { C: 'coal', S: 'stick' } };
+      case 'wooden_pickaxe': return { rows: ['PPP', ' S ', ' S '], spec: { P: 'planks', S: 'stick' } };
+      case 'wooden_axe': return { rows: ['PP', 'PS', ' S'], spec: { P: 'planks', S: 'stick' }, mirror: true };
+      case 'wooden_hoe': return { rows: ['PP', ' S', ' S'], spec: { P: 'planks', S: 'stick' }, mirror: true };
+      case 'wooden_sword': return { rows: ['P', 'P', 'S'], spec: { P: 'planks', S: 'stick' } };
+      case 'stone_pickaxe': return { rows: ['CCC', ' S ', ' S '], spec: { C: 'cobblestone', S: 'stick' } };
+      case 'stone_axe': return { rows: ['CC', 'CS', ' S'], spec: { C: 'cobblestone', S: 'stick' }, mirror: true };
+      case 'stone_hoe': return { rows: ['CC', ' S', ' S'], spec: { C: 'cobblestone', S: 'stick' }, mirror: true };
+      case 'stone_sword': return { rows: ['C', 'C', 'S'], spec: { C: 'cobblestone', S: 'stick' } };
+      case 'iron_pickaxe': return { rows: ['III', ' S ', ' S '], spec: { I: 'iron', S: 'stick' } };
+      case 'iron_axe': return { rows: ['II', 'IS', ' S'], spec: { I: 'iron', S: 'stick' }, mirror: true };
+      case 'iron_hoe': return { rows: ['II', ' S', ' S'], spec: { I: 'iron', S: 'stick' }, mirror: true };
+      case 'iron_sword': return { rows: ['I', 'I', 'S'], spec: { I: 'iron', S: 'stick' } };
+      case 'diamond_pickaxe': return { rows: ['DDD', ' S ', ' S '], spec: { D: 'diamond', S: 'stick' } };
+      case 'diamond_axe': return { rows: ['DD', 'DS', ' S'], spec: { D: 'diamond', S: 'stick' }, mirror: true };
+      case 'diamond_hoe': return { rows: ['DD', ' S', ' S'], spec: { D: 'diamond', S: 'stick' }, mirror: true };
+      case 'diamond_sword': return { rows: ['D', 'D', 'S'], spec: { D: 'diamond', S: 'stick' } };
+      case 'fishing_rod': return { rows: ['  S', ' SF', 'S F'], spec: { S: 'stick', F: 'string' } };
+      default: return null;
+    }
+  }
+  function craftSlotMatches(item, token, spec) {
+    if (!token || token === ' ') return !item;
+    const want = spec[token];
+    if (want === 'planks') return isWoodPlank(item);
+    if (want === 'logs') return isWoodLog(item);
+    return item === want;
+  }
+  function normalizedCraftGrid() {
+    const rows = [];
+    let any = false;
+    for (let r = 0; r < 3; r++) {
+      const row = [];
+      for (let c = 0; c < 3; c++) {
+        const k = craftGrid[r * 3 + c] || null;
+        if (k) any = true;
+        row.push(k);
+      }
+      rows.push(row);
+    }
+    return any ? rows : null;
+  }
+  function patternRowsMatchGrid(rows, spec, grid) {
+    const h = rows.length, w = Math.max(...rows.map(r => r.length));
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
+      const token = (r < h && c < w) ? (rows[r][c] || ' ') : ' ';
+      if (!craftSlotMatches(grid[r][c], token, spec || {})) return false;
+    }
+    return true;
+  }
+  function mirrorRows(rows) {
+    const w = Math.max(...rows.map(r => r.length));
+    return rows.map(row => row.padEnd(w, ' ').split('').reverse().join(''));
+  }
+  function patternMatchesGrid(pattern) {
+    const grid = normalizedCraftGrid(); if (!grid) return false;
+    if (patternRowsMatchGrid(pattern.rows, pattern.spec || {}, grid)) return true;
+    return !!pattern.mirror && patternRowsMatchGrid(mirrorRows(pattern.rows), pattern.spec || {}, grid);
+  }
+  function shapelessMatchesGrid(r) {
+    const used = {};
+    let total = 0;
+    for (const k of craftGrid) if (k) { used[k] = (used[k] || 0) + 1; total++; }
+    if (total !== recipeSumNeeds(r)) return false;
+    for (const k in r.needs) if ((used[k] || 0) !== r.needs[k]) return false;
+    return true;
+  }
+  function recipeMatchesGrid(r) {
+    if (!manualCraftCapable(r)) return false;
+    const ptn = craftPattern(r.key);
+    return ptn ? patternMatchesGrid(ptn) : shapelessMatchesGrid(r);
+  }
+  function craftGridRecipe() {
+    return (D().RECIPES || []).find(r => recipeUnlocked(r) && recipeMatchesGrid(r)) || null;
+  }
+  function craftGridCounts() {
+    const out = {};
+    for (const k of craftGrid) if (k) out[k] = (out[k] || 0) + 1;
+    return out;
+  }
+  function putCraftItem(key) {
+    if (!key || !hasItem(key, 1)) return;
+    const used = craftGridCounts();
+    if ((used[key] || 0) >= (P.inv[key] || 0)) { toastFn('이미 보유 수량만큼 제작대에 올렸어요.', false); return; }
+    const i = craftGrid.indexOf(null);
+    if (i < 0) { toastFn('제작대 3x3 칸이 가득 찼어요.', false); return; }
+    craftGrid[i] = key;
+    renderZone();
+  }
+  function clearCraftSlot(i) {
+    if (i >= 0 && i < 9) craftGrid[i] = null;
+    renderZone();
+  }
+  function clearCraftGrid() {
+    craftGrid = Array(9).fill(null);
+    renderZone();
+  }
+  function craftFromGrid() {
+    const r = craftGridRecipe();
+    if (!r) { toastFn('이 배치로는 만들 수 있는 조합법이 없어요.', false); return false; }
+    const counts = craftGridCounts();
+    for (const k in counts) if (!hasItem(k, counts[k])) { toastFn(`${itemName(k)} 수량이 부족해요.`, false); return false; }
+    for (const k in counts) removeItem(k, counts[k]);
+    addItem(r.key, r.gives || 1);
+    addSkillXp('enchanting', 10);
+    stat('itemsCrafted');
+    craftSel = r.key;
+    craftGrid = Array(9).fill(null);
+    toastFn(`제작 완료: ${itemName(r.key)}`, true);
+    saveNow(); renderZone(); return true;
+  }
+
   const TOOL_SKILL = { pickaxe: 'mining', axe: 'foraging', hoe: 'farming', rod: 'fishing' };
   function bestToolMul(family) {
     const ladder = D().TOOLS[family]; if (!ladder) return 1;
@@ -2078,6 +2226,8 @@
         lines.push(`장착 중(${eq.name}) 대비: ${d >= 0 ? '▲ +' : '▼ '}${d} ${sdef.dmg != null ? '공격' : '방어'}`);
       } else if (eq && eq.key === sdef.key) lines.push('✔ 장착 중');
     }
+    const canUseHotbar = sdef.key && isPlaceableOrTool(sdef.key);
+    if (canUseHotbar) lines.push('핫바 배정/프라이빗 섬 사용 가능');
     const d = shopItemDesc(sdef); if (d) lines.push(d);
     if (sdef.reqCombat) lines.push(`⚔ 요구 전투 레벨: ${sdef.reqCombat}`);
     for (const fam in D().TOOLS) {
@@ -2091,12 +2241,14 @@
     }
     if (sdef.sellPrice > 0) lines.push(`판매가: ${fmtGold(sdef.sellPrice)}`);
     if (sdef.tierKey) { const t = D().ITEM_TIERS.find(x => x.key === sdef.tierKey); if (t) lines.push(`◆ ${t.name.toUpperCase()}`); }
+    else if (canUseHotbar) lines.push('◆ COMMON');
     return lines.join('\n');
   }
   function ttAttr(keyOrDef) {
     const sdef = typeof keyOrDef === 'string' ? shopDef(keyOrDef) : keyOrDef;
     if (!sdef) return '';
-    return ` data-tt="${escHtml(itemLore(sdef))}"`;
+    const lore = escHtml(itemLore(sdef));
+    return ` data-tt="${lore}" title="${lore}"`;
   }
   function hubHTML() {
     return `<div class="econ-panel">
@@ -2197,8 +2349,18 @@
     const sd = shopDef(k);
     return !!(sd && (sd.category === '건축' || sd.category === '제작품' || sd.category === '무기' || sd.category === '방어구' || sd.category === '도구')) || (window.__econ3dPlaceable ? window.__econ3dPlaceable(k) : false);
   }
-  function assignHotbar(key) {
-    if (!P.hotbar) P.hotbar = [null, null, null, null, null, null, null, null];
+  function assignHotbar(key, slot) {
+    if (!Array.isArray(P.hotbar)) P.hotbar = [];
+    P.hotbar = P.hotbar.slice(0, 9);
+    while (P.hotbar.length < 9) P.hotbar.push(null);
+    if (slot != null && slot >= 0 && slot < 9) {
+      const old = P.hotbar.indexOf(key);
+      if (old >= 0) P.hotbar[old] = null;
+      P.hotbar[slot] = key;
+      saveNow(); renderZone();
+      if (typeof window.economy3dRefreshHotbar === 'function') window.economy3dRefreshHotbar();
+      return;
+    }
     const at = P.hotbar.indexOf(key);
     if (at >= 0) { P.hotbar[at] = null; }        // 이미 있으면 해제(토글)
     else { let i = P.hotbar.indexOf(null); if (i < 0) i = 0; P.hotbar[i] = key; }
@@ -2216,8 +2378,9 @@
       const sd = shopDef(k); const n = P.inv[k] || 0;
       const border = sd && sd.tierKey ? tierColorByKey(sd.tierKey) : 'rgba(255,255,255,.14)';
       const inHot = (P.hotbar || []).indexOf(k) >= 0;
+      const canHot = isPlaceableOrTool(k);
       return `<div class="mc-slot econ-tt ${inHot ? 'is-hot' : ''}" style="border-color:${border}"${ttAttr(sd || { key: k, name: itemName(k) })} data-act="econ_invcell" data-key="${k}">
-        ${iconImg(k)}${n > 1 ? `<span class="mc-cnt">${n > 9999 ? fmtNum(n) : n}</span>` : ''}${inHot ? '<span class="mc-hotmark">▸</span>' : ''}</div>`;
+        ${iconImg(k)}${n > 1 ? `<span class="mc-cnt">${n > 9999 ? fmtNum(n) : n}</span>` : ''}${inHot ? '<span class="mc-hotmark">▸</span>' : ''}${canHot ? `<button class="mc-hotquick" data-act="econ_assign_hotbar" data-key="${k}" title="${inHot ? '핫바에서 빼기' : '핫바에 넣기'}">${inHot ? '−' : '+'}</button>` : ''}</div>`;
     };
     const GRID = 36;
     const gridCells = []; for (let i = 0; i < GRID; i++) gridCells.push(cell(all[i]));
@@ -2226,11 +2389,10 @@
     const armorSlot = (sl, emoji) => { const p = equippedPiece(sl); return `<div class="mc-slot mc-armor" title="${SLOT_NAMES[sl]}">${p ? iconImg(p.key) : `<span class="mc-armormark">${emoji}</span>`}</div>`; };
     const wpn = equippedPiece('weapon'), bow = equippedPiece('bow');
     // 핫바 9칸(1~8 지정 + 9 메뉴)
-    const hot = (P.hotbar || [null, null, null, null, null, null, null, null]);
+    const hot = (P.hotbar || [null, null, null, null, null, null, null, null, null]);
     const hotRow = Array.from({ length: 9 }, (_, i) => {
-      if (i === 8) return `<div class="mc-slot mc-hot mc-menu" title="스카이블럭 메뉴">✦</div>`;
       const k = hot[i];
-      return `<div class="mc-slot mc-hot ${k ? '' : 'mc-empty'}" data-act="${k ? 'econ_assign_hotbar' : ''}" data-key="${k || ''}" title="핫바 ${i + 1}">${k ? `${iconImg(k)}${(P.inv[k] || 0) > 1 ? `<span class="mc-cnt">${P.inv[k]}</span>` : ''}` : `<span class="mc-slotnum">${i + 1}</span>`}</div>`;
+      return `<div class="mc-slot mc-hot ${k ? '' : 'mc-empty'}" data-act="${k ? 'econ_assign_hotbar' : (invDetailKey ? 'econ_assign_hotbar_slot' : '')}" data-key="${k || invDetailKey || ''}" data-slot="${i}" title="핫바 ${i + 1}">${k ? `${iconImg(k)}${(P.inv[k] || 0) > 1 ? `<span class="mc-cnt">${P.inv[k]}</span>` : ''}` : `<span class="mc-slotnum">${i + 1}</span>`}</div>`;
     }).join('');
     return `<h4>🎒 인벤토리</h4>
       <div class="mc-invtop">
@@ -2238,7 +2400,7 @@
         <div class="mc-charhint"><div class="mc-slot mc-armor" title="무기">${wpn ? iconImg(wpn.key) : '⚔️'}</div><div class="mc-slot mc-armor" title="활">${bow ? iconImg(bow.key) : '🏹'}</div><span class="muted">방어구/무기는<br>자동 장착</span></div>
       </div>
       <div class="mc-grid">${gridCells.join('')}</div>
-      <div class="mc-hotbar-label">핫바 (숫자키 1~8로 선택 · 아이템 클릭 → 핫바 지정)</div>
+      <div class="mc-hotbar-label">핫바 9칸 (숫자키 1~9 선택 · 아이템 클릭 → 핫바 지정)</div>
       <div class="mc-hotbar">${hotRow}</div>
       ${overflow.length ? `<p class="muted">+ ${overflow.length}칸 초과(정리 필요) — 아이템을 팔거나 써서 공간을 확보하세요</p>` : ''}
       <p class="muted">아이템을 클릭하면 상세(판매/장착/분해/핫바지정)가 열려요.</p>
@@ -2388,7 +2550,8 @@
       <p class="muted">소지금: ${fmtGold(P.gold)}</p>
       <div class="econ-shopgrid">${D().BUILDER_SHOP.map(b => {
         const ok = P.gold >= b.price;
-        return `<div class="econ-shopitem">${iconImg(b.key)}<span>${b.name} <b>×${b.amount}</b></span>
+        const sd = shopDef(b.key) || { key: b.key, name: b.name, category: '건축', flavor: '프라이빗 섬에 설치 가능한 건축 블럭' };
+        return `<div class="econ-shopitem econ-tt"${ttAttr(sd)}>${iconImg(b.key)}<span>${b.name} <b>×${b.amount}</b></span>
           <span class="muted econ-idesc">보유 ${P.inv[b.key] || 0}</span>
           <button class="btn btn--sm" data-act="econ_buildbuy" data-key="${b.key}" ${ok ? '' : 'disabled'}>${fmtGold(b.price)} 구매</button></div>`;
       }).join('')}</div>`;
@@ -2450,34 +2613,41 @@
   }
   function petsHTML() {
     const eggs = D().SHOP.filter(s => s.category === '펫' && hasItem(s.key));
+    const ownedPets = (D().PETS || []).filter(p => !!P.pets[p.key]);
     return `<h4>🐾 펫 (활성 1마리의 보너스가 적용돼요)</h4>
       ${eggs.length ? `<h4 class="muted">보유한 알</h4><div class="econ-tierbtns">${eggs.map(e => `<button class="btn btn--sm" data-act="econ_pet_hatch" data-key="${e.key.replace('pet_egg_', '')}">${e.name} 부화 (보유 ${P.inv[e.key]})</button>`).join('')}</div>` : ''}
-      <div class="econ-shopgrid">${D().PETS.map(p => {
-        const owned = !!P.pets[p.key]; const lvl = owned ? petLevel(p.key) : 0;
-        return `<div class="econ-shopitem">
+      ${ownedPets.length ? `<h4 class="muted">보유한 펫</h4><div class="econ-shopgrid">${ownedPets.map(p => {
+        const lvl = petLevel(p.key);
+        return `<div class="econ-shopitem econ-tt"${ttAttr({ key: `pet_egg_${p.key}`, name: p.name, tierKey: p.tierKey, flavor: p.perkText })}>
           ${iconImg(`pet_egg_${p.key}`)}<span style="color:${tierColorByKey(p.tierKey)}">${p.name} [${tierNameByKey(p.tierKey)}]</span>
-          <span class="muted">${owned ? `Lv.${lvl} — ${p.perkText}` : (p.eggPrice > 0 ? '상점에서 알 구매' : '보스 드롭 전용')}</span>
-          ${owned ? (P.activePet === p.key ? '<span style="color:#4ade80">✔ 활성</span>' : `<button class="btn btn--sm" data-act="econ_pet_activate" data-key="${p.key}">활성화</button>`) : ''}
+          <span class="muted">Lv.${lvl} — ${p.perkText}</span>
+          ${P.activePet === p.key ? '<span style="color:#4ade80">✔ 활성</span>' : `<button class="btn btn--sm" data-act="econ_pet_activate" data-key="${p.key}">활성화</button>`}
         </div>`;
-      }).join('')}</div>`;
+      }).join('')}</div>` : '<p class="muted">보유한 펫이 없어요. 보유한 알을 부화시키면 여기에서 바로 선택할 수 있어요.</p>'}
+      <details class="econ-ownedonly"><summary>미보유 펫 획득처 보기</summary>
+        <div class="econ-shopgrid">${(D().PETS || []).filter(p => !P.pets[p.key]).map(p => `<div class="econ-shopitem is-locked">${iconImg(`pet_egg_${p.key}`)}<span style="color:${tierColorByKey(p.tierKey)}">${p.name}</span><span class="muted">${p.eggPrice > 0 ? '상점 알 구매' : '보스 드롭 전용'}</span></div>`).join('')}</div>
+      </details>`;
   }
   function talismansHTML() {
     const ts = talismanStats();
     const pw = powerStats(), curPw = selectedPowerDef();
     const pwLine = Object.keys(pw).filter(k => pw[k]).map(k => `${({ str: '힘', def: '방어', hp: '체력', intelligence: '지력', critChance: '크리%', critDamage: '크리피해%' })[k]} +${pw[k]}`).join(' · ') || '없음';
     const powerBtns = (D().MAGICAL_POWER.powers || []).map(p => `<button class="btn btn--sm ${p.key === curPw.key ? '' : 'btn--ghost'}" data-act="econ_power" data-key="${p.key}">${p.name}</button>`).join('');
+    const owned = D().TALISMANS.filter(t => hasItem(t.key));
+    const missing = D().TALISMANS.filter(t => !hasItem(t.key));
+    const card = (t, ownedFlag) => `<div class="econ-shopitem econ-tt ${ownedFlag ? '' : 'is-locked'}"${ttAttr(Object.assign({}, t, { flavor: t.desc }))}>
+          ${iconImg(t.key)}<span style="color:${tierColorByKey(t.tierKey)}">${ownedFlag ? '✔ ' : ''}${t.name}</span>
+          <span class="muted">${t.desc}</span>
+          ${!ownedFlag && t.buyPrice > 0 ? `<button class="btn btn--sm" data-act="econ_buy" data-key="${t.key}">구매 ${fmtGold(t.buyPrice)}</button>` : ''}
+        </div>`;
     return `<h4>📿 장신구 가방 — 마력 ${magicalPower()} (최종 공격/방어 +${((mpStatMul() - 1) * 100).toFixed(1)}%)</h4>
       <div class="econ-colgrid" style="margin-bottom:8px">
         <div class="econ-colrow"><span>✨ 전능의 힘</span><span><b>${curPw.name}</b></span><span class="muted">마력 스케일 ${Math.round(mpScale())} → ${pwLine}</span></div>
       </div>
       <div class="econ-tierbtns" style="margin-bottom:8px">${powerBtns}</div>
       <p class="muted">페어리 소울 ${P.fairySouls.length}/${D().FAIRY_SOULS.total} (3D 월드 곳곳에 숨어 있어요)</p>
-      <div class="econ-shopgrid">${D().TALISMANS.map(t => `
-        <div class="econ-shopitem">
-          ${iconImg(t.key)}<span style="color:${tierColorByKey(t.tierKey)}">${hasItem(t.key) ? '✔ ' : ''}${t.name}</span>
-          <span class="muted">${t.desc}</span>
-          ${!hasItem(t.key) && t.buyPrice > 0 ? `<button class="btn btn--sm" data-act="econ_buy" data-key="${t.key}">구매 ${fmtGold(t.buyPrice)}</button>` : ''}
-        </div>`).join('')}</div>
+      ${owned.length ? `<h4 class="muted">보유한 장신구</h4><div class="econ-shopgrid">${owned.map(t => card(t, true)).join('')}</div>` : '<p class="muted">보유한 장신구가 없어요. 미보유 목록에서 구매하거나 보스/퀘스트 보상으로 얻으면 여기에 표시돼요.</p>'}
+      <details class="econ-ownedonly"><summary>미보유 장신구/획득처 보기</summary><div class="econ-shopgrid">${missing.map(t => card(t, false)).join('')}</div></details>
       <p class="muted">합계 보너스: 힘 +${ts.str} · 방어 +${ts.def} · 체력 +${ts.hp} · 판매가 +${ts.sellBonus}% · 미니언속도 +${ts.minionSpeed}%</p>`;
   }
   function enchantHTML() {
@@ -2655,6 +2825,67 @@
         </div>`;
       }).join('')}</div>`;
   }
+  function craftGridHTML(r) {
+    if (!r) return '';
+    const matched = craftGridRecipe();
+    const out = matched || null;
+    const cell = (k, i) => k
+      ? `<button class="mc-slot econ-tt" data-act="econ_craft_grid_clear" data-i="${i}"${ttAttr(shopDef(k) || { key: k, name: itemName(k) })}>${iconImg(k)}</button>`
+      : `<button class="mc-slot mc-empty" data-act="econ_craft_grid_clear" data-i="${i}"></button>`;
+    const needKeys = Object.keys(r.needs || {});
+    const needTxt = needKeys.map(k => `${itemName(k)} ${P.inv[k] || 0}/${r.needs[k]}`).join(', ');
+    return `<div class="econ-crafttable">
+      <div class="mc-craftgrid">${craftGrid.map(cell).join('')}</div>
+      <div class="mc-craftarrow">→</div>
+      <div class="mc-craftout">
+        <button class="mc-slot econ-tt ${out ? '' : 'mc-empty'}" style="width:56px;height:56px" data-act="econ_craft_take" ${out ? ttAttr(shopDef(out.key) || { key: out.key, name: itemName(out.key) }) : ''}>${out ? `${iconImg(out.key)}${(out.gives || 1) > 1 ? `<span class="mc-cnt">${out.gives}</span>` : ''}` : ''}</button>
+        <div class="muted">${out ? `${itemName(out.key)}${(out.gives || 1) > 1 ? ` x${out.gives}` : ''}` : '배치가 맞으면 결과가 표시됩니다'}</div>
+        <button class="btn btn--sm btn--ghost" data-act="econ_craft_grid_clear_all">그리드 비우기</button>
+      </div>
+    </div>
+    <p class="muted">선택 레시피: ${itemName(r.key)} · 필요: ${needTxt || '없음'} · 제작대 위 재료 배치가 레시피 모양과 맞아야 합니다.</p>`;
+  }
+  function craftInventoryHTML() {
+    const keys = Object.keys(P.inv).filter(k => (P.inv[k] || 0) > 0).sort((a, b) => itemName(a).localeCompare(itemName(b), 'ko'));
+    const used = craftGridCounts();
+    const cells = [];
+    for (let i = 0; i < 36; i++) {
+      const k = keys[i];
+      if (!k) { cells.push('<div class="mc-slot mc-empty"></div>'); continue; }
+      const left = (P.inv[k] || 0) - (used[k] || 0);
+      cells.push(`<button class="mc-slot econ-tt ${left <= 0 ? 'is-locked' : ''}" data-act="econ_craft_put" data-key="${k}" ${left <= 0 ? 'disabled' : ''}${ttAttr(shopDef(k) || { key: k, name: itemName(k) })}>${iconImg(k)}${left > 1 ? `<span class="mc-cnt">${left}</span>` : ''}</button>`);
+    }
+    return `<h4 class="muted">보유 인벤토리 36칸</h4><div class="mc-grid mc-grid--craftinv">${cells.join('')}</div>`;
+  }
+  function craftHTML() {
+    const recs = craftRecommendations();
+    const recHTML = recs.length ? `<div class="econ-craftrec"><b>추천 레시피</b>${recs.map(x => {
+      const needsTxt = Object.keys(x.r.needs).map(k => `${itemName(k)} ${P.inv[k] || 0}/${x.r.needs[k]}`).join(', ');
+      return `<div class="econ-recitem">${iconImg(x.r.key)}<span>${itemName(x.r.key)} <span class="muted">(${needsTxt})</span></span><button class="btn btn--sm btn--ghost" data-act="econ_craft_sel" data-key="${x.r.key}">보기</button></div>`;
+    }).join('')}</div>` : '';
+    const sel = D().RECIPES.find(r => r.key === craftSel) || (recs[0] && recs[0].r) || D().RECIPES.find(r => recipeUnlocked(r));
+    return `<h4>제작대</h4>
+      ${craftGridHTML(sel)}
+      ${craftInventoryHTML()}
+      ${recHTML}
+      <details class="econ-ownedonly"><summary>전체 레시피 목록</summary>
+      <div class="econ-shopgrid">${D().RECIPES.map(r => {
+        const unlocked = recipeUnlocked(r);
+        const needsTxt = Object.keys(r.needs).map(k => `${itemName(k)} x${r.needs[k]} (${P.inv[k] || 0})`).join(', ');
+        let lockTxt = '';
+        if (!unlocked && r.unlock) {
+          if (r.unlock.skill) lockTxt = `🔒 ${skillDef(r.unlock.skill).name} Lv.${r.unlock.lv} 필요 (현재 ${skillLevel(r.unlock.skill)})`;
+          else { const rn = resourceDef(r.unlock.resource); lockTxt = `🔒 ${rn ? rn.name : r.unlock.resource} 컬렉션 티어 ${r.unlock.tier} 필요 (현재 ${collectionTierIdx(r.unlock.resource)})`; }
+        }
+        return `<div class="econ-shopitem ${unlocked ? '' : 'is-locked'}">
+          ${iconImg(r.key)}<span>${itemName(r.key)}</span>
+          <span class="muted">${unlocked ? `재료: ${needsTxt}` : lockTxt}</span>
+          <button class="btn btn--sm btn--ghost" data-act="econ_craft_sel" data-key="${r.key}">레시피 보기</button>
+          ${manualCraftCapable(r) ? '' : `<button class="btn btn--sm" data-act="econ_craft" data-key="${r.key}" ${canCraft(r) ? '' : 'disabled'}>대량 제작</button>`}
+        </div>`;
+      }).join('')}</div></details>`;
+  }
+
   function dealsHTML() {
     // V7: 경매인 = 수집상. 매일 원하는 아이템 3종을 시세의 2.5배로 매입(무화폐 구매 경제의 골드 수급처)
     const deals = dealsForToday();
@@ -3051,6 +3282,7 @@
         invDetailKey = (invDetailKey === el.dataset.key ? null : el.dataset.key); renderZone(); break;
       }
       case 'assign_hotbar': assignHotbar(el.dataset.key); break;
+      case 'assign_hotbar_slot': assignHotbar(el.dataset.key, Number(el.dataset.slot)); break;
       case 'portal_install': {   // V21-C: 포탈 아이템 설치 — 프라이빗 섬에서만, 설치 시 해당 섬 워프 해금
         const k = el.dataset.key, pi = (D().PORTAL_ITEMS || {})[k];
         if (!pi) break;
@@ -3066,6 +3298,10 @@
         saveNow(); renderZone(); break;
       }
       case 'craft_sel': craftSel = el.dataset.key; renderZone(); break;
+      case 'craft_put': putCraftItem(el.dataset.key); break;
+      case 'craft_grid_clear': clearCraftSlot(Number(el.dataset.i)); break;
+      case 'craft_grid_clear_all': clearCraftGrid(); break;
+      case 'craft_take': craftFromGrid(); break;
       case 'hpb': applyHpb(el.dataset.key); break;
       case 'salvage': salvageItem(el.dataset.key); break;
       case 'lock': toggleLock(el.dataset.key); break;
@@ -3214,7 +3450,7 @@
     hasItem: (k, n) => hasItem(k, n || 1),
     invCount: k => (P.inv[k] || 0),
     ownedPlaceable: keys => keys.filter(k => (P.inv[k] || 0) > 0),   // 보유한 설치가능 아이템만
-    setHotbar: (i, k) => { if (i >= 0 && i < 8) { P.hotbar[i] = k; saveNow(); } },
+    setHotbar: (i, k) => { if (i >= 0 && i < 9) { P.hotbar[i] = k; saveNow(); } },
     getHotbar: () => P.hotbar.slice(),
     gatherBlock: gatherBlock3d,
     fishCatch: fishCatch3d,
@@ -3282,6 +3518,7 @@
       startSlayerQuest, slayerQuestProgress, slayerLevel, slayerXpOf, usePotion, buffBonus, bestiaryBonusPct, upgradeBank, bankTierInfo, dungeon3dComplete,
       enhanceStar, starCost, starRate,
       craft, canCraft, recipeUnlocked, rolledStat, rollItemStat, equipBase,
+      putCraftItem, craftFromGrid, clearCraftGrid, craftGridRecipe, getCraftGrid: () => craftGrid, setCraftGrid: g => { craftGrid = Array.isArray(g) ? g.slice(0, 9) : Array(9).fill(null); while (craftGrid.length < 9) craftGrid.push(null); },
       dungeonAttack, dungeonLootTreasure,
       bankDeposit, bankWithdraw, bankInterestTick,
       dealsForToday, buyDeal, bestToolMul, sellBonusPct, minionSlotCost,

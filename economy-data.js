@@ -475,6 +475,10 @@
     { key: 'wooden_sword', name: '나무 검', wclass: 'sword', slot: 'weapon', tierKey: 'common', dmg: 15, buyPrice: 0, sellPrice: 2, flavor: '갓 깎은 나무 검. 없는 것보다 낫다.' },
     { key: 'stone_sword', name: '돌 검', wclass: 'sword', slot: 'weapon', tierKey: 'common', dmg: 20, buyPrice: 0, sellPrice: 4, flavor: '조약돌을 깎아 만든 투박한 검.' }
   );
+  EQUIPMENT.weapons.push(
+    { key: 'iron_sword', name: '철 검', wclass: 'sword', slot: 'weapon', tierKey: 'uncommon', dmg: 28, buyPrice: 0, sellPrice: 7, flavor: '바닐라 조합으로 만든 철 검.' },
+    { key: 'diamond_sword', name: '다이아몬드 검', wclass: 'sword', slot: 'weapon', tierKey: 'rare', dmg: 38, buyPrice: 0, sellPrice: 18, flavor: '바닐라 조합으로 만든 다이아몬드 검.' }
+  );
   EQUIPMENT.weapons.sort((a, b) => a.dmg - b.dmg || (a.key < b.key ? -1 : 1));
   EQUIPMENT.weapons.forEach(w => { w.reqCombat = REQ_COMBAT_BY_TIER[w.tierKey] || 0; });
   EQUIPMENT.armor.forEach(a => { a.reqCombat = REQ_COMBAT_BY_TIER[a.tierKey] || 0; });
@@ -766,6 +770,9 @@
     { key: 'oak_planks', needs: { oaklog: 1 }, gives: 4, unlock: null },
     { key: 'birch_planks', needs: { birchlog: 1 }, gives: 4, unlock: null },
     { key: 'spruce_planks', needs: { sprucelog: 1 }, gives: 4, unlock: null },
+    { key: 'dark_oak_planks', needs: { dark_oak_log: 1 }, gives: 4, unlock: null },
+    { key: 'jungle_planks', needs: { jungle_log: 1 }, gives: 4, unlock: null },
+    { key: 'acacia_planks', needs: { acacia_log: 1 }, gives: 4, unlock: null },
     // V21-C: 나무 호환(MC 표준) — 막대/작업대/상자/나무도구는 '아무 판자'로 제작(any_planks 그룹)
     { key: 'stick', needs: { any_planks: 2 }, gives: 4, unlock: null },
     { key: 'crafting_table', needs: { any_planks: 4 }, gives: 1, unlock: null },
@@ -791,6 +798,8 @@
     { key: 'stone_axe', needs: { cobblestone: 3, stick: 2 }, gives: 1, unlock: { resource: 'stone', tier: 1 } },
     { key: 'stone_hoe', needs: { cobblestone: 2, stick: 2 }, gives: 1, unlock: { resource: 'stone', tier: 1 } },
     { key: 'stone_sword', needs: { cobblestone: 2, stick: 1 }, gives: 1, unlock: { resource: 'stone', tier: 1 } },
+    { key: 'iron_sword', needs: { iron: 2, stick: 1 }, gives: 1, unlock: { resource: 'iron', tier: 1 } },
+    { key: 'diamond_sword', needs: { diamond: 2, stick: 1 }, gives: 1, unlock: { resource: 'diamond', tier: 1 } },
     // V17: 계단/반블럭 조합(MC 정확: 판자 3→반블럭 6, 판자 6→계단 4). 재료 있는 흔한 종류만 조합 지원(나머지는 빌더 구매).
     { key: 'oak_planks_slab', needs: { oak_planks: 3 }, gives: 6, unlock: null },
     { key: 'oak_planks_stairs', needs: { oak_planks: 6 }, gives: 4, unlock: null },
@@ -798,6 +807,12 @@
     { key: 'birch_planks_stairs', needs: { birch_planks: 6 }, gives: 4, unlock: null },
     { key: 'spruce_planks_slab', needs: { spruce_planks: 3 }, gives: 6, unlock: null },
     { key: 'spruce_planks_stairs', needs: { spruce_planks: 6 }, gives: 4, unlock: null },
+    { key: 'dark_oak_planks_slab', needs: { dark_oak_planks: 3 }, gives: 6, unlock: null },
+    { key: 'dark_oak_planks_stairs', needs: { dark_oak_planks: 6 }, gives: 4, unlock: null },
+    { key: 'jungle_planks_slab', needs: { jungle_planks: 3 }, gives: 6, unlock: null },
+    { key: 'jungle_planks_stairs', needs: { jungle_planks: 6 }, gives: 4, unlock: null },
+    { key: 'acacia_planks_slab', needs: { acacia_planks: 3 }, gives: 6, unlock: null },
+    { key: 'acacia_planks_stairs', needs: { acacia_planks: 6 }, gives: 4, unlock: null },
     { key: 'cobblestone_slab', needs: { cobblestone: 3 }, gives: 6, unlock: null },
     { key: 'cobblestone_stairs', needs: { cobblestone: 6 }, gives: 4, unlock: null },
     { key: 'stone_bricks', needs: { cobblestone: 4 }, gives: 4, unlock: { resource: 'stone', tier: 1 } },
@@ -813,6 +828,15 @@
     { key: 'oak_door', needs: { oak_planks: 6 }, gives: 3, unlock: null },
     { key: 'birch_door', needs: { birch_planks: 6 }, gives: 3, unlock: null },
     { key: 'spruce_door', needs: { spruce_planks: 6 }, gives: 3, unlock: null },
+    { key: 'dark_oak_fence', needs: { dark_oak_planks: 4, stick: 2 }, gives: 3, unlock: null },
+    { key: 'dark_oak_trapdoor', needs: { dark_oak_planks: 6 }, gives: 2, unlock: null },
+    { key: 'dark_oak_door', needs: { dark_oak_planks: 6 }, gives: 3, unlock: null },
+    { key: 'jungle_fence', needs: { jungle_planks: 4, stick: 2 }, gives: 3, unlock: null },
+    { key: 'jungle_trapdoor', needs: { jungle_planks: 6 }, gives: 2, unlock: null },
+    { key: 'jungle_door', needs: { jungle_planks: 6 }, gives: 3, unlock: null },
+    { key: 'acacia_fence', needs: { acacia_planks: 4, stick: 2 }, gives: 3, unlock: null },
+    { key: 'acacia_trapdoor', needs: { acacia_planks: 6 }, gives: 2, unlock: null },
+    { key: 'acacia_door', needs: { acacia_planks: 6 }, gives: 3, unlock: null },
     { key: 'iron_pickaxe', needs: { iron: 3, stick: 2 }, gives: 1, unlock: { resource: 'iron', tier: 2 } },
     { key: 'iron_axe', needs: { iron: 3, stick: 2 }, gives: 1, unlock: { resource: 'iron', tier: 2 } },
     { key: 'minion_fuel_coal', needs: { coal: 32 }, gives: 1, unlock: { resource: 'coal', tier: 2 } },
@@ -826,10 +850,10 @@
     { key: 'talisman_feather', needs: { string: 64, bone: 64 }, gives: 1, unlock: { resource: 'bone', tier: 2 } },
     { key: 'reforge_stone_common', needs: { gold: 32, diamond: 4 }, gives: 1, unlock: { resource: 'gold', tier: 3 } },
     { key: 'reforge_stone_rare', needs: { diamond: 32, obsidian: 8 }, gives: 1, unlock: { resource: 'diamond', tier: 4 } },
-    { key: 'diamond_pickaxe', needs: { diamond: 12, oaklog: 4 }, gives: 1, unlock: { resource: 'diamond', tier: 2 } },
-    { key: 'diamond_axe', needs: { diamond: 12, oaklog: 4 }, gives: 1, unlock: { resource: 'diamond', tier: 2 } },
-    { key: 'diamond_hoe', needs: { diamond: 10, oaklog: 4 }, gives: 1, unlock: { resource: 'diamond', tier: 2 } },
-    { key: 'iron_hoe', needs: { iron: 20, oaklog: 6 }, gives: 1, unlock: { resource: 'iron', tier: 2 } },
+    { key: 'diamond_pickaxe', needs: { diamond: 3, stick: 2 }, gives: 1, unlock: { resource: 'diamond', tier: 2 } },
+    { key: 'diamond_axe', needs: { diamond: 3, stick: 2 }, gives: 1, unlock: { resource: 'diamond', tier: 2 } },
+    { key: 'diamond_hoe', needs: { diamond: 2, stick: 2 }, gives: 1, unlock: { resource: 'diamond', tier: 2 } },
+    { key: 'iron_hoe', needs: { iron: 2, stick: 2 }, gives: 1, unlock: { resource: 'iron', tier: 2 } },
     { key: 'iron_rod', needs: { iron: 16, string: 8 }, gives: 1, unlock: { resource: 'string', tier: 2 } },
     { key: 'diamond_rod', needs: { diamond: 10, string: 16 }, gives: 1, unlock: { resource: 'clay', tier: 3 } },
     { key: 'ancient_pickaxe', needs: { dungeon_essence: 60, diamond: 32 }, gives: 1, unlock: { resource: 'diamond', tier: 5 } },
@@ -865,7 +889,32 @@
     { key: 'enchant_book_efficiency', needs: { lapis: 48, redstone: 16 }, gives: 1, unlock: { resource: 'redstone', tier: 2 } },
     { key: 'enchant_book_sharpness', needs: { lapis: 48, ender_pearl: 4 }, gives: 1, unlock: { resource: 'lapis', tier: 2 } },
     { key: 'enchant_book_protection', needs: { lapis: 48, obsidian: 8 }, gives: 1, unlock: { resource: 'lapis', tier: 2 } },
+    { key: 'portal_park', needs: { oaklog: 32, birchlog: 16, sprucelog: 16 }, gives: 1, unlock: { resource: 'oaklog', tier: 2 } },
+    { key: 'portal_barn', needs: { wheat: 48, carrot: 16, potato: 16 }, gives: 1, unlock: { resource: 'wheat', tier: 2 } },
+    { key: 'portal_gold', needs: { stone: 64, coal: 16 }, gives: 1, unlock: { resource: 'stone', tier: 2 } },
+    { key: 'portal_deep', needs: { iron: 32, coal: 32, redstone: 16 }, gives: 1, unlock: { resource: 'iron', tier: 3 } },
+    { key: 'portal_spider', needs: { string: 32, spider_eye: 16, bone: 16 }, gives: 1, unlock: { resource: 'string', tier: 2 } },
+    { key: 'portal_nether', needs: { blaze_rod: 16, magma_cream: 32, obsidian: 8 }, gives: 1, unlock: { resource: 'blaze_rod', tier: 2 } },
+    { key: 'portal_end', needs: { ender_pearl: 32, obsidian: 16, diamond: 8 }, gives: 1, unlock: { resource: 'ender_pearl', tier: 3 } },
+    { key: 'portal_mushroom', needs: { sugarcane: 32, melon: 24, pumpkin: 16 }, gives: 1, unlock: { resource: 'melon', tier: 2 } },
   ];
+
+  const _recipeKeys = new Set(RECIPES.map(r => r.key));
+  function addRecipe(r) {
+    if (_recipeKeys.has(r.key)) return;
+    RECIPES.push(r);
+    _recipeKeys.add(r.key);
+  }
+  [
+    ['stone', null], ['quartz_block', null], ['sandstone', null], ['bricks', null], ['purpur', null],
+    ['smooth_stone', null], ['prismarine', null], ['mossy_cobblestone', null], ['polished_andesite', null],
+    ['chiseled_stone_bricks', null],
+  ].forEach(([mat, unlock]) => {
+    addRecipe({ key: mat + '_slab', needs: { [mat]: 3 }, gives: 6, unlock });
+    addRecipe({ key: mat + '_stairs', needs: { [mat]: 6 }, gives: 4, unlock });
+  });
+  addRecipe({ key: 'sandstone', needs: { sand: 4 }, gives: 1, unlock: null });
+  addRecipe({ key: 'hay_block', needs: { wheat: 9 }, gives: 1, unlock: null });
 
   /* ---------------- 페어리 소울(3D 월드 12개 은닉) ---------------- */
   const FAIRY_SOULS = { total: 24, goldPerSoul: 200, mpPerSoul: 2, per5Bonus: { hp: 10, str: 2 } };   // V9: 테마 월드 12개 추가
@@ -939,6 +988,22 @@
     ...EQUIPMENT.weapons.map(w => ({ key: w.key, name: `${w.name} [${ITEM_TIERS.find(t => t.key === w.tierKey).name}]`, category: '무기', tierKey: w.tierKey, buyPrice: w.buyPrice, sellPrice: w.sellPrice, stackSize: 1, dmg: w.dmg, slot: w.slot, traits: w.traits, set: w.set, flavor: w.flavor, reqCombat: w.reqCombat })),
     ...EQUIPMENT.armor.map(a => ({ key: a.key, name: `${a.name} [${ITEM_TIERS.find(t => t.key === a.tierKey).name}]`, category: '방어구', tierKey: a.tierKey, buyPrice: a.buyPrice, sellPrice: a.sellPrice, stackSize: 1, defense: a.defense, hp: a.hp || 0, slot: a.slot, traits: a.traits, set: a.set, flavor: a.flavor, reqCombat: a.reqCombat })),
   ];
+  SHOP.push(
+    { key: 'dark_oak_log', name: '짙은 참나무 원목', category: '자원', buyPrice: 0, sellPrice: 6, stackSize: 64 },
+    { key: 'jungle_log', name: '정글나무 원목', category: '자원', buyPrice: 0, sellPrice: 6, stackSize: 64 },
+    { key: 'acacia_log', name: '아카시아 원목', category: '자원', buyPrice: 0, sellPrice: 6, stackSize: 64 },
+    { key: 'dark_oak_planks', name: '짙은 참나무 판자', category: '건축', buyPrice: 0, sellPrice: 1, stackSize: 64 },
+    { key: 'jungle_planks', name: '정글나무 판자', category: '건축', buyPrice: 0, sellPrice: 1, stackSize: 64 },
+    { key: 'acacia_planks', name: '아카시아 판자', category: '건축', buyPrice: 0, sellPrice: 1, stackSize: 64 },
+    { key: 'portal_park', name: '더 파크 워프 포탈', category: '제작품', buyPrice: 0, sellPrice: 150, stackSize: 1, flavor: '프라이빗 섬에 설치한 뒤 더 파크 메뉴 워프를 해금한다.' },
+    { key: 'portal_barn', name: '농장 워프 포탈', category: '제작품', buyPrice: 0, sellPrice: 150, stackSize: 1, flavor: '프라이빗 섬에 설치한 뒤 농장 메뉴 워프를 해금한다.' },
+    { key: 'portal_gold', name: '골드 광산 워프 포탈', category: '제작품', buyPrice: 0, sellPrice: 150, stackSize: 1, flavor: '프라이빗 섬에 설치한 뒤 골드 광산 메뉴 워프를 해금한다.' },
+    { key: 'portal_deep', name: '깊은 동굴 워프 포탈', category: '제작품', buyPrice: 0, sellPrice: 180, stackSize: 1, flavor: '프라이빗 섬에 설치한 뒤 깊은 동굴 메뉴 워프를 해금한다.' },
+    { key: 'portal_spider', name: '스파이더 덴 워프 포탈', category: '제작품', buyPrice: 0, sellPrice: 180, stackSize: 1, flavor: '프라이빗 섬에 설치한 뒤 스파이더 덴 메뉴 워프를 해금한다.' },
+    { key: 'portal_nether', name: '네더 요새 워프 포탈', category: '제작품', buyPrice: 0, sellPrice: 240, stackSize: 1, flavor: '프라이빗 섬에 설치한 뒤 네더 계열 메뉴 워프를 해금한다.' },
+    { key: 'portal_end', name: '엔드 워프 포탈', category: '제작품', buyPrice: 0, sellPrice: 320, stackSize: 1, flavor: '프라이빗 섬에 설치한 뒤 엔드 메뉴 워프를 해금한다.' },
+    { key: 'portal_mushroom', name: '버섯 사막 워프 포탈', category: '제작품', buyPrice: 0, sellPrice: 180, stackSize: 1, flavor: '프라이빗 섬에 설치한 뒤 버섯 사막 메뉴 워프를 해금한다.' }
+  );
   const DAILY_SELL_LIMIT_PER_STACK = 10;   // dailySellLimit = 10 * stackSize
 
   // V20-E: 바자회(Bazaar) — 실제 스카이블럭 대량 자원 시장. 즉시구매/즉시판매 + 실시간 시세 변동(스프레드).
@@ -1178,7 +1243,7 @@
      metric은 economy.js questMetric()가 카운터/컬렉션 스냅샷으로 계산(일일퀘스트와 동일 방식). */
   const QUEST_NPCS = [
     // 프라이빗 섬(home) — 온보딩 튜토리얼 담당
-    { key: 'jerry',   name: '제리',        world: 'home', x: 99,  z: 78,  color: 0x4fae5a, region: 12, blurb: '이 섬을 물려준 마을의 괴짜 어르신' },
+    { key: 'jerry',   name: '제리',        world: 'home', x: 99,  z: 106, color: 0x4fae5a, region: 12, blurb: '이 섬을 물려준 마을의 괴짜 어르신' },
     { key: 'pat',     name: '농부 팻',      world: 'home', x: 92,  z: 106, color: 0x7cb342, region: 12, blurb: '스폰섬 텃밭을 가꾸는 이웃' },
     // 허브(hub) — 각 구역별 퀘스트 안내인
     { key: 'q_village', name: '촌장 엘더',   world: 'hub', x: 218, z: 236, color: 0xcaa24a, region: 22, blurb: '허브 마을의 촌장' },
