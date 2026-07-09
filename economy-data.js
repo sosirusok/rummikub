@@ -807,6 +807,10 @@
     { key: 'golden_hoe', needs: { gold: 2, stick: 2 }, gives: 1, unlock: { resource: 'gold', tier: 1 } },
     { key: 'golden_sword', needs: { gold: 2, stick: 1 }, gives: 1, unlock: { resource: 'gold', tier: 1 } },
     { key: 'golden_rod', needs: { gold: 12, string: 8 }, gives: 1, unlock: { resource: 'gold', tier: 1 } },
+    // V21-E2: 사다리/침대/보트(바닐라 조합)
+    { key: 'ladder', needs: { stick: 7 }, gives: 3, unlock: null },
+    { key: 'bed', needs: { any_wool: 3, any_planks: 3 }, gives: 1, unlock: null },
+    { key: 'boat', needs: { any_planks: 5 }, gives: 1, unlock: null },
     { key: 'diamond_sword', needs: { diamond: 2, stick: 1 }, gives: 1, unlock: { resource: 'diamond', tier: 1 } },
     // V17: 계단/반블럭 조합(MC 정확: 판자 3→반블럭 6, 판자 6→계단 4). 재료 있는 흔한 종류만 조합 지원(나머지는 빌더 구매).
     { key: 'oak_planks_slab', needs: { oak_planks: 3 }, gives: 6, unlock: null },
@@ -997,6 +1001,9 @@
     ...EQUIPMENT.armor.map(a => ({ key: a.key, name: `${a.name} [${ITEM_TIERS.find(t => t.key === a.tierKey).name}]`, category: '방어구', tierKey: a.tierKey, buyPrice: a.buyPrice, sellPrice: a.sellPrice, stackSize: 1, defense: a.defense, hp: a.hp || 0, slot: a.slot, traits: a.traits, set: a.set, flavor: a.flavor, reqCombat: a.reqCombat })),
   ];
   SHOP.push(
+    { key: 'ladder', name: '사다리', category: '건축', buyPrice: 0, sellPrice: 2, stackSize: 64 },
+    { key: 'bed', name: '침대', category: '건축', buyPrice: 0, sellPrice: 8, stackSize: 1 },
+    { key: 'boat', name: '보트', category: '도구', buyPrice: 0, sellPrice: 6, stackSize: 1 },
     { key: 'dark_oak_log', name: '짙은 참나무 원목', category: '자원', buyPrice: 0, sellPrice: 6, stackSize: 64 },
     { key: 'jungle_log', name: '정글나무 원목', category: '자원', buyPrice: 0, sellPrice: 6, stackSize: 64 },
     { key: 'acacia_log', name: '아카시아 원목', category: '자원', buyPrice: 0, sellPrice: 6, stackSize: 64 },
@@ -1415,6 +1422,7 @@
   const CRAFT_GROUPS = {
     any_planks: ['oak_planks', 'birch_planks', 'spruce_planks', 'dark_oak_planks', 'jungle_planks', 'acacia_planks'],
     any_log: ['oaklog', 'birchlog', 'sprucelog'],
+    any_wool: DYES.map(d => 'wool_' + d.k),   // V21-E2: 침대 등 — 아무 색 양털
   };
   window.ECON_DATA = {
     PORTAL_ITEMS, CRAFT_GROUPS, SMELT_RECIPES,
