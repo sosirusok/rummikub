@@ -1886,7 +1886,16 @@
     }
   }
 
+  // V21-D9: 나무 위 나무 방지(전 수종 공통) — 진짜 지면 위에서만 심는다. surfaceTop이 이웃 나무
+  //   캐노피 위를 반환하면(밑이 잎/통나무) 심기를 거부해 '나무 위 나무'가 생기지 않는다.
+  function plantable(x, z, extraIds) {
+    const y0 = surfaceTop(x, z); if (y0 <= 2) return false;
+    const u = getBlockLocal(x, y0 - 1, z);
+    if (u === ID.grass || u === ID.dirt || u === ID.coarse_dirt) return true;
+    return !!(extraIds && extraIds.indexOf(u) >= 0);
+  }
   function plantOak(x, z) {
+    if (!plantable(x, z)) return;
     const y0 = surfaceTop(x, z);
     for (let i = 0; i < 4; i++) setW(x, y0 + i, z, ID.oak_log);
     for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) for (let dy = 3; dy <= 5; dy++) {
@@ -1896,6 +1905,7 @@
     }
   }
   function plantBirch(x, z) {
+    if (!plantable(x, z)) return;
     const y0 = surfaceTop(x, z);
     for (let i = 0; i < 5; i++) setW(x, y0 + i, z, ID.birch_log);
     for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) for (let dy = 4; dy <= 6; dy++) {
@@ -1903,6 +1913,7 @@
     }
   }
   function plantSpruce(x, z) {
+    if (!plantable(x, z, [ID.snow_block])) return;
     const y0 = surfaceTop(x, z);
     const th = 6 + Math.floor(hash3(x, 24, z) * 3);
     for (let i = 0; i < th; i++) setW(x, y0 + i, z, ID.spruce_log);
@@ -2839,6 +2850,7 @@
     }
   }
   function plantDarkOak(x, z) {
+    if (!plantable(x, z)) return;
     const y0 = surfaceTop(x, z);
     for (let i = 0; i < 6; i++) { setW(x, y0 + i, z, ID.dark_oak_log); setW(x + 1, y0 + i, z, ID.dark_oak_log); }
     for (let dx = -3; dx <= 4; dx++) for (let dz = -3; dz <= 3; dz++) for (let dy = 5; dy <= 7; dy++) {
@@ -2846,6 +2858,7 @@
     }
   }
   function plantJungle(x, z) {
+    if (!plantable(x, z)) return;
     const y0 = surfaceTop(x, z);
     const th = 8 + Math.floor(hash3(x, 41, z) * 4);
     for (let i = 0; i < th; i++) setW(x, y0 + i, z, ID.jungle_log);
@@ -2854,6 +2867,7 @@
     }
   }
   function plantAcacia(x, z) {
+    if (!plantable(x, z)) return;
     const y0 = surfaceTop(x, z);
     for (let i = 0; i < 5; i++) setW(x + (i > 2 ? 1 : 0), y0 + i, z, ID.acacia_log);
     for (let dx = -2; dx <= 3; dx++) for (let dz = -2; dz <= 2; dz++) {
@@ -2910,6 +2924,9 @@
         if (Math.abs(x - isle.cx) <= 2 && Math.abs(z - isle.cz) <= 3) continue;
         const y0 = surfaceTop(x, z);
         if (y0 <= SEA + 1) continue;
+        // V21-D9: 나무 위 나무 방지 — 진짜 지면(잔디/흙)에서만 심는다(캐노피 위를 지면으로 오인 금지)
+        const under = getBlockLocal(x, y0 - 1, z);
+        if (under !== ID.grass && under !== ID.dirt) continue;
         clearAbove(x, z, y0, 8);
         isle.plant(x, z);
         planted++;
@@ -6500,6 +6517,7 @@
       // V3: 프라이빗 섬/건축/이동
       travelTo, worldMode: () => worldMode, genHome, PORTALS, HOME_MINION_SLOTS, HOME_BOUNDS, HOME_CENTER, installPortalFrame,
       parkGateAt, tryOpenParkGate, parkGates: () => genPark._gates || [],
+      mobList: () => mobs.filter(m => !m.dead).map(m => ({ type: m.type, x: m.mesh.position.x, y: m.mesh.position.y, z: m.mesh.position.z })),   // V21-D9 공허 몹 감사용
       chunkMeshCount: () => Object.keys(chunkMeshes).length,   // V12 크래시 검증용
       buildQueueLen: () => buildQueue.length,
       updateQuestHud, questNpcList,   // V13-B 퀘스트 HUD 검증용
