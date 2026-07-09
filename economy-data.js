@@ -23,7 +23,7 @@
   function res(key, name, sell, th0, custom) { return { key, name, stackSize: 64, sellPrice: sell, tierThresholds: custom || [th0, th0 * 2, th0 * 5, th0 * 20, th0 * 50, th0 * 100, th0 * 200, th0 * 500, th0 * 800, th0 * 1400] }; }
   const COLLECTIONS = [
     { category: '채굴', key: 'mining', resources: [
-      res('stone', '조약돌', 2, 50), res('coal', '석탄', 3, 0, [50, 100, 250, 1000, 2500, 5000, 10000, 25000, 50000, 100000]), res('iron', '철 주괴', 6, 0, [50, 100, 250, 1000, 2500, 5000, 10000, 25000, 50000, 100000]),
+      res('stone', '돌', 2, 50),   /* V23-B: '조약돌' 중복 이름 해소 — 채집/제련 돌='돌', 건축 블럭 cobblestone='조약돌' */ res('coal', '석탄', 3, 0, [50, 100, 250, 1000, 2500, 5000, 10000, 25000, 50000, 100000]), res('iron', '철 주괴', 6, 0, [50, 100, 250, 1000, 2500, 5000, 10000, 25000, 50000, 100000]),
       res('gold', '금 주괴', 12, 40), res('lapis', '청금석', 8, 40), res('redstone', '레드스톤', 7, 40),
       res('diamond', '다이아몬드', 45, 0, [25, 50, 100, 250, 1000, 2500, 5000, 10000, 25000]), res('emerald', '에메랄드', 25, 0, [10, 30, 100, 250, 1000, 2500, 5000, 10000]), res('obsidian', '흑요석', 18, 0, [20, 50, 100, 250, 1000, 2500, 5000]),
     ] },
@@ -160,7 +160,7 @@
   }
   function minion(key, name, resource, baseInterval, baseCost) { return { key, name, resource, tiers: mkMinionTiers(baseInterval, resource), maxTier: 11, unlockCollection: resource }; }
   const MINIONS = [
-    minion('cobblestone_minion', '조약돌 미니언', 'stone', 27, 80),
+    minion('cobblestone_minion', '돌 미니언', 'stone', 27, 80),   /* V23-B: 생산 자원(돌)과 이름 일치 */
     minion('coal_minion', '석탄 미니언', 'coal', 27, 80),
     minion('iron_minion', '철 미니언', 'iron', 28, 80),
     minion('gold_minion', '금 미니언', 'gold', 29, 120),
