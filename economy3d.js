@@ -1354,9 +1354,10 @@
   function buildGraveyardZone() {
     // V18: 을씨년스러운 공동묘지 — 계단 묘비 + 이끼/자갈 바닥 + 울타리 난간 + 고사목 + 지하 크립트 아치 입구
     const gFence = ID.dark_oak_fence != null ? ID.dark_oak_fence : ID.spruce_fence;
-    for (let gx = 0; gx < 6; gx++) for (let gz = 0; gz < 5; gz++) {
-      const x = 132 + gx * 7, z = 300 + gz * 8;
+    for (let gx = 0; gx < 12; gx++) for (let gz = 0; gz < 9; gz++) {   // V24-F(건축 #14): 존 전체로 확장(기존 6×5 구석 → 12×9)
+      const x = 108 + gx * 7, z = 282 + gz * 8;
       if (zoneAt(x, z) !== 'graveyard') continue;
+      if (hash3(gx, 61, gz) < 0.25) continue;   // 불규칙 결원(줄맞춘 격자 탈피)
       const y = surfaceTop(x, z);
       // 묘비: 조약돌 대 + 이끼조약돌 비석 + 계단 지붕돌(반쯤 기울어진 느낌)
       setW(x, y, z, ID.mossy_cobblestone); setW(x, y + 1, z, ID.cobblestone);
@@ -1366,6 +1367,23 @@
       if (hash3(gx, 63, gz) < 0.4) setW(x + 1, y, z, ID.tall_grass);
       if (gz === 0 && gFence != null) setW(x, y, z - 2, gFence);   // 앞줄 난간
     }
+    // V24-F(건축 #14): 예배당 폐허(북서) — 반쯤 무너진 석재 예배당(박공 잔해 + 제단 + 장미창 잔해)
+    {
+      const cx = 122, cz = 292, gy = surfaceTop(cx, cz);
+      for (let dx = 0; dx <= 8; dx++) for (let dz = 0; dz <= 12; dz++) {
+        if (zoneAt(cx + dx, cz + dz) !== 'graveyard') continue;
+        setW(cx + dx, gy - 1, cz + dz, hash3(dx, 190, dz) < 0.4 ? ID.mossy_cobblestone : ID.stone_bricks);   // 바닥
+      }
+      for (let dz = 0; dz <= 12; dz++) {   // 양 측벽(파도형 붕괴)
+        const h = Math.max(0, Math.round(4 + Math.sin(dz * 0.7) * 2 - (dz > 9 ? dz - 9 : 0)));
+        for (let y = 0; y < h; y++) { setW(cx, gy + y, cz + dz, hash3(0, 191 + y, dz) < 0.35 ? ID.mossy_cobblestone : ID.stone_bricks); setW(cx + 8, gy + y, cz + dz, hash3(8, 192 + y, dz) < 0.35 ? ID.mossy_cobblestone : ID.stone_bricks); }
+      }
+      for (let dx = 0; dx <= 8; dx++) for (let y = 0; y < 5 - Math.abs(dx - 4); y++) setW(cx + dx, gy + y, cz, ID.stone_bricks);   // 정면 박공(온전)
+      setW(cx + 4, gy + 2, cz, 0); setW(cx + 4, gy + 3, cz, ID.glass);   // 장미창 잔해
+      setW(cx + 4, gy, cz + 10, ID.chiseled_stone_bricks != null ? ID.chiseled_stone_bricks : ID.stone_bricks); setW(cx + 4, gy + 1, cz + 10, ID.glowstone);   // 제단
+    }
+    // V24-F: 묘지 테두리 낮은 철책 느낌(다크오크 울타리 남/서 라인)
+    for (let x = 110; x <= 188; x += 2) { const fy = surfaceTop(x, 352); if (zoneAt(x, 351) === 'graveyard' && gFence != null) setW(x, fy, 352, gFence); }
     // 고사목(잎 없는 통나무) 산발
     for (let i = 0; i < 5; i++) {
       const x = 138 + Math.floor(hash3(i, 66, 3) * 30), z = 302 + Math.floor(hash3(i, 67, 4) * 28);
@@ -1452,16 +1470,45 @@
     buildHouse(134, 126, 7, 6, surfaceTop(137, 129), ID.spruce_planks, ID.spruce_planks);
   }
   function buildPondZone() {
-    // 낚시 연못 + 오두막 + 부두 데크
-    for (let dx = -12; dx <= 12; dx++) for (let dz = -9; dz <= 9; dz++) {
-      if (Math.hypot(dx / 1.35, dz) < 8.4) {
-        const x = 322 + dx, z = 322 + dz, y = surfaceTop(x, z) - 1;
-        setW(x, y, z, ID.water); setW(x, y - 1, z, ID.water); setW(x, y - 2, z, ID.sand);
+    // V24-F(건축 #13): 연못 → 진짜 호수(비대칭 2엽) + 어부 오두막 + 보트하우스 + 부두 2 + 수련잎/갈대
+    const lakeY = surfaceTop(322, 322) - 1;
+    for (let dx = -16; dx <= 16; dx++) for (let dz = -14; dz <= 14; dz++) {
+      const x = 322 + dx, z = 322 + dz;
+      const d1 = Math.hypot(dx / 1.3, dz) / 12, d2 = Math.hypot((dx - 7) / 1.1, dz - 8) / 7;   // 본체 + 남동 만(灣)
+      if (Math.min(d1, d2) + (hash3(x, 93, z) - 0.5) * 0.14 < 1) {
+        setW(x, lakeY, z, ID.water); setW(x, lakeY - 1, z, ID.water); setW(x, lakeY - 2, z, ID.sand);
+        setW(x, lakeY + 1, z, 0); setW(x, lakeY + 2, z, 0);   // 물 위 걸림돌 제거
       }
     }
-    buildHouse(310, 314, 6, 6, surfaceTop(313, 317), ID.oak_planks, ID.spruce_planks);
-    for (let i = 0; i < 6; i++) { const y = surfaceTop(318 + i, 324); setW(318 + i, y - 1, 324, ID.oak_planks); }   // 데크
-    lampPost(312, 322);
+    // 수련잎(물 위 잎 블럭) + 물가 갈대
+    for (let i = 0; i < 10; i++) {
+      const x = 314 + Math.floor(hash3(i, 94, 1) * 18), z = 314 + Math.floor(hash3(i, 95, 2) * 16);
+      if (getBlockLocal(x, lakeY, z) === ID.water && hash3(i, 96, 3) < 0.6) setW(x, lakeY + 1, z, ID.oak_leaves);
+    }
+    for (let i = 0; i < 8; i++) {
+      const x = 310 + Math.floor(hash3(i, 97, 4) * 24), z = 310 + Math.floor(hash3(i, 98, 5) * 24);
+      const y = surfaceTop(x, z);
+      if (getBlockLocal(x, y - 1, z) === ID.grass && (getBlockLocal(x + 1, y - 1, z) === ID.water || getBlockLocal(x - 1, y - 1, z) === ID.water)) { setW(x, y, z, ID.sugar_cane); setW(x, y + 1, z, ID.sugar_cane); }
+    }
+    buildHouse(304, 310, 6, 6, surfaceTop(307, 313), ID.oak_planks, ID.spruce_planks);   // 어부 오두막
+    // 부두 2개(동/남) — 반블럭 데크 + 끝 랜턴
+    const deck = slabIdFor(ID.oak_planks) != null ? slabIdFor(ID.oak_planks) : ID.oak_planks;
+    for (let i = 0; i < 7; i++) { setW(316 + i, lakeY + 1, 320, deck); if (i % 3 === 0) setW(316 + i, lakeY, 320, ID.oak_fence); }
+    setW(323, lakeY + 1, 320, ID.oak_fence); setW(323, lakeY + 2, 320, ID.glowstone);
+    for (let i = 0; i < 5; i++) setW(326, lakeY + 1, 326 + i, deck);
+    setW(326, lakeY + 1, 331, ID.oak_fence); setW(326, lakeY + 2, 331, ID.glowstone);
+    // 보트하우스(호수 남서변): 3면 벽 + 물로 열린 입구 + 박공
+    {
+      const bx = 310, bz = 330, by = lakeY + 1;
+      for (let y = 0; y < 3; y++) for (let dx = 0; dx <= 4; dx++) for (let dz = 0; dz <= 5; dz++) {
+        const edge = dx === 0 || dx === 4 || dz === 5;   // 북면(물 방향)은 개방
+        if (edge) setW(bx + dx, by + y, bz + dz, y === 0 ? ID.stone_bricks : ID.spruce_planks);
+        else if (dz > 0) setW(bx + dx, by + y, bz + dz, 0);
+      }
+      for (let dx = -1; dx <= 5; dx++) for (let dz = -1; dz <= 6; dz++) setW(bx + dx, by + 3, bz + dz, ID.dark_oak_planks != null ? ID.dark_oak_planks : ID.spruce_planks);
+      setW(bx + 2, by + 4, bz + 2, ID.glowstone);
+    }
+    lampPost(306, 318);
   }
   function buildColosseum() {
     // V18: 로마식 원형 투기장 — 계단식 관중석 + 아치 입구 4방 + 크레넬 성벽 + 깃발/랜턴
@@ -1892,9 +1939,13 @@
     buildHomePortal();
     // 저장된 블록 편집 적용(설치/파괴 영속)
     const edits = editsOverride || (econApi().getHomeEdits ? econApi().getHomeEdits() : {});
+    let _pruned = 0;
     for (const k in edits) {
       const p = k.split(',').map(Number);
-      if (inBounds(p[0], p[1], p[2])) world[widx(p[0], p[1], p[2])] = edits[k];
+      if (!inBounds(p[0], p[1], p[2])) continue;
+      // V24-F(감사 #44): 기반 지형과 동일한 편집(부쉈다 원상복구/의미 없는 0)은 저장에서 제거 — 6,000키 상한 낭비 방지
+      if (!editsOverride && world[widx(p[0], p[1], p[2])] === edits[k]) { delete edits[k]; _pruned++; continue; }
+      world[widx(p[0], p[1], p[2])] = edits[k];
     }
   }
   // V21-C: 설치형 섬 포탈 프레임 — 포탈 아이템 설치 시 포탈섬에 목적지별 미니 관문을 세우고 영속(setHomeEdit).
