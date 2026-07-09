@@ -109,12 +109,13 @@
   }
   function todayStr() { return new Date().toISOString().slice(0, 10); }
   function loadLocal() { try { const p = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); return p ? migrate(p) : null; } catch (e) { return null; } }
-  function saveLocal() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(P)); } catch (e) {} }
+  function saveLocal() { try { if (P) P._savedAt = Date.now(); localStorage.setItem(SAVE_KEY, JSON.stringify(P)); } catch (e) {} }
   function cloudReady() { return typeof sb !== 'undefined' && sb && typeof ME !== 'undefined' && ME && ME.token; }
   let _cloudSaveAt = 0;
+  let _cloudLoadDone = false;   // V24-F(감사 #45): 초기 클라우드 로드 완료 전엔 클라우드에 쓰지 않음(구본 덮어쓰기 레이스 방지)
   function saveNow() {
     saveLocal();
-    if (!cloudReady()) return;
+    if (!cloudReady() || !_cloudLoadDone) return;
     const now = Date.now(); if (now - _cloudSaveAt < 4000) return; _cloudSaveAt = now;
     sb.rpc('econ_save_player', { p_token: ME.token, p_state: P }).catch(() => {});
   }
@@ -3565,9 +3566,12 @@
     else { if (typeof setScreen === 'function') setScreen('econ'); if (typeof app === 'function') app().innerHTML = screenHTML(); renderZone(); }
     // 클라우드 세이브가 로컬보다 최신이면 교체 — 실패해도 로컬로 계속 동작
     loadCloud().then(cloudState => {
+      _cloudLoadDone = true;   // V24-F: 이제부터 클라우드 쓰기 허용
       if (!running || !cloudState) return;
+      // V24-F(감사 #45): 로드 대기 중 로컬 진행이 더 최신이면 클라우드본으로 되돌리지 않고 로컬을 올림
+      if (cloudState._savedAt && P && P._savedAt && P._savedAt > cloudState._savedAt) { saveNow(); return; }
       P = cloudState; dailySoldCheck(); bankInterestTick(); tickMinions(); renderZone();
-    });
+    }).catch(() => { _cloudLoadDone = true; });
   }
   function stop() {
     running = false;
