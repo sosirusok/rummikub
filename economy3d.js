@@ -340,6 +340,7 @@
   let warpCharge = null;        // {dest, t} — 패드 위 0.6초 차지 후 발사
 
   let atlasTex = null, atlasUV = {};
+  let _fluidAnim = null, _fluidT = 0, _fluidPhase = 0;   // V21-G1: 물/용암 타일 애니메이션 상태
   let blockMat = null, waterMat = null, plantMat = null, lavaMat = null;
   let islandMeshes = { opaque: null, water: null, plant: null, lava: null };
   let npcGroup = null, nodeGroup = null, minionGroup = null, fairyGroup = null, cloudGroup = null, propGroup = null, outlineMesh = null;
@@ -4019,6 +4020,9 @@
     } catch (e) {}
     atlasUV = {};
     list.forEach((nm, i) => { const cx = (i % cols), cy = ((i / cols) | 0); const e = 0.01; atlasUV[nm] = { x0: (cx + e) / cols, x1: (cx + 1 - e) / cols, y0: (cy + e) / rows, y1: (cy + 1 - e) / rows }; });
+    // V21-G1: 유체 애니메이션 준비 — 물/용암 타일 위치를 기억해 매 틱 자체 디자인 프레임으로 다시 그린다
+    _fluidAnim = { c, tiles: [] };
+    ['water', 'lava'].forEach(nm => { const i = list.indexOf(nm); if (i >= 0) _fluidAnim.tiles.push([nm, (i % cols) * 16, ((i / cols) | 0) * 16]); });
     atlasTex = new THREE.CanvasTexture(cv); atlasTex.magFilter = THREE.NearestFilter; atlasTex.minFilter = THREE.NearestFilter; atlasTex.generateMipmaps = false;
     atlasTex.flipY = false; atlasTex.needsUpdate = true;
     // V21-E4: 사용자 리소스팩 오버레이 — resourcepack/manifest.json에 나열된 타일명을
@@ -4027,16 +4031,35 @@
     try {
       // 매니페스트 불요 — 아틀라스의 '모든' 타일명에 대해 resourcepack/<타일명>.png를 시도한다.
       // 파일이 있는 타일만 교체되고 없는 타일은 절차 텍스처 유지(404는 조용히 무시).
+      // 공식 MC 파일명 별칭 — 추출한 textures/block 폴더를 이름 변경 없이 통째로 넣어도 적용되게
+      const RP_ALIAS = {
+        cobble: 'cobblestone', planks: 'oak_planks', log_side: 'oak_log', log_top: 'oak_log_top',
+        grass_top: 'grass_block_top', grass_side: 'grass_block_side', glow: 'glowstone', stonebrick: 'stone_bricks',
+        mossy_cobble: 'mossy_cobblestone', quartz: 'quartz_block_side', birch_side: 'birch_log', spruce_side: 'spruce_log',
+        spruce_top: 'spruce_log_top', dark_oak_side: 'dark_oak_log', dark_oak_top: 'dark_oak_log_top',
+        jungle_side: 'jungle_log', jungle_top: 'jungle_log_top', acacia_side: 'acacia_log', acacia_top: 'acacia_log_top',
+        leaves: 'azalea_leaves', water: 'blue_concrete', lava: 'magma',   // 잎/유체는 원본이 회색(틴트용)이거나 다중 프레임이라 근사 대체
+        mycelium_top: 'mycelium_top', farmland_top: 'farmland', wheat_mature: 'wheat_stage7',
+      };
       let applied = 0, done = 0;
+      const fin = () => { done++; if (done === list.length && applied > 0 && typeof toast === 'function') toast(`🎨 리소스팩 ${applied}개 타일 적용됨`, true); };
       list.forEach((nm, i) => {
-        const img2 = new Image();
-        img2.onload = () => {
+        const paint2 = (img2) => {
           const tx = (i % cols) * 16, ty = ((i / cols) | 0) * 16;
-          c.clearRect(tx, ty, 16, 16); c.drawImage(img2, tx, ty, 16, 16);
-          atlasTex.needsUpdate = true; applied++; done++;
-          if (done === list.length && applied > 0 && typeof toast === 'function') toast(`🎨 리소스팩 ${applied}개 타일 적용됨`, true);
+          c.clearRect(tx, ty, 16, 16); c.drawImage(img2, 0, 0, img2.width, Math.min(img2.height, img2.width), tx, ty, 16, 16);   // 애니메이션 스트립은 첫 프레임만
+          if (_fluidAnim) _fluidAnim.tiles = _fluidAnim.tiles.filter(t => t[0] !== nm);
+          atlasTex.needsUpdate = true; applied++; fin();
         };
-        img2.onerror = () => { done++; if (done === list.length && applied > 0 && typeof toast === 'function') toast(`🎨 리소스팩 ${applied}개 타일 적용됨`, true); };
+        const img2 = new Image();
+        img2.onload = () => paint2(img2);
+        img2.onerror = () => {
+          const alias = RP_ALIAS[nm];
+          if (!alias) return fin();
+          const img3 = new Image();
+          img3.onload = () => paint2(img3);
+          img3.onerror = fin;
+          img3.src = 'resourcepack/' + alias + '.png';
+        };
         img2.src = 'resourcepack/' + nm + '.png';
       });
     } catch (e) {}
@@ -4211,6 +4234,28 @@
   let VIEW_DIST = 96;             // 이 반경 안의 미빌드 청크는 큐잉해 복원(48~96 동적)
   let CULL_DIST = 140;            // 이 밖의 청크 메시는 해제(히스테리시스로 스래싱 방지)
   let _fpsAvg = 60, _adaptT = 0;
+  // V21-G1: 물/용암 타일 애니메이션(자체 디자인 프레임) — 0.18초마다 위상 이동, 흐르는 느낌
+  function tickFluidAnim(dt) {
+    if (!_fluidAnim || !atlasTex) return;
+    _fluidT += dt; if (_fluidT < 0.18) return; _fluidT = 0;
+    _fluidPhase = (_fluidPhase + 1) & 15;
+    const c = _fluidAnim.c, ph = _fluidPhase;
+    for (const [nm, tx, ty] of _fluidAnim.tiles) {
+      for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+        const w = ((x + ph) & 15);   // 위상 이동으로 흐름 표현
+        let col;
+        if (nm === 'water') {
+          const band = (y * 2 + w + ((x * 7 + y * 13) % 3)) & 7;
+          col = band < 3 ? '#3463cf' : band < 5 ? '#3a6ee0' : band < 7 ? '#2f5ac0' : '#4a7ce8';   // 물결 밴드
+        } else {
+          const band = (y + ((w * 3) >> 1) + ((x * 5 + y * 11) % 4)) & 7;
+          col = band < 3 ? '#d2541f' : band < 5 ? '#e8632a' : band < 7 ? '#b8431a' : '#f7a02a';   // 용암 맥동
+        }
+        px(c, tx + x, ty + y, col);
+      }
+    }
+    atlasTex.needsUpdate = true;
+  }
   function tickAdaptiveView(dt) {
     if (dt > 0) _fpsAvg = _fpsAvg * 0.95 + (1 / dt) * 0.05;
     _adaptT += dt; if (_adaptT < 2.5) return; _adaptT = 0;
@@ -6475,7 +6520,7 @@
         if (isTouch && worldMode !== 'visit' && lookT.id !== -1 && !lookT.acted && (lookT.moved || 0) < 10 && performance.now() - lookT.downT > 250) progressBreaking(dt);
         tickMobs(dt); tickFishing(); tickPlayerVitals(dt); tickWarpPads(dt); tickPartyDungeonSync(dt);
       }
-      tickRegen(); tickDmgTexts(dt); tickBuildQueue(); tickChunkCulling(dt); tickAdaptiveView(dt);
+      tickRegen(); tickDmgTexts(dt); tickBuildQueue(); tickChunkCulling(dt); tickAdaptiveView(dt); tickFluidAnim(dt);
       _hpHudT += dt; if (_hpHudT > 0.5) { _hpHudT = 0; updateHpHud(); }
       if (isTouch) updateJoystick(dt);
       flushWorldEdits();   // 블록 편집 → 메시 리빌드(프레임당 1회로 병합, 더티 청크만)
