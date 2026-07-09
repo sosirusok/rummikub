@@ -122,6 +122,10 @@
       BLOCKS.push({ key: w + '_door_o_' + f, tex, shape: 'door', facing: f, open: true, opaque: false, solid: false });
     }
   });
+  // V22-G2: 석재 변형 계열(화강암/섬록암/안산암/이끼·금간 석재벽돌/붉은 사암/매끄러운 사암) — 자체 디자인 텍스처
+  [['granite', 'granite'], ['polished_granite', 'polished_granite'], ['diorite', 'diorite'], ['polished_diorite', 'polished_diorite'],
+   ['andesite', 'andesite'], ['mossy_stone_bricks', 'mossy_stone_bricks'], ['cracked_stone_bricks', 'cracked_stone_bricks'],
+   ['red_sandstone', 'red_sandstone'], ['smooth_sandstone', 'smooth_sandstone']].forEach(([k, tex]) => BLOCKS.push({ key: k, tex }));
   // V21-F1: 바닐라 광물 저장 블록 7종(주괴 9 ↔ 블록 1)
   [['iron_block', 'iron_block'], ['gold_block', 'gold_block'], ['diamond_block', 'diamond_block'], ['emerald_block', 'emerald_block'],
    ['coal_block', 'coal_block'], ['redstone_block', 'redstone_block'], ['lapis_block', 'lapis_block']].forEach(([k, tex]) => BLOCKS.push({ key: k, tex }));
@@ -424,7 +428,7 @@
   }
   function hubZoneName(key) { const zn = HUB_ZONES.find(z => z.key === key); return zn ? zn.name : '🌿 야생 지대'; }
   function genWorld() {
-    world = new Uint8Array(W * H * Dp);
+    world = new Uint16Array(W * H * Dp);
     for (let x = 0; x < W; x++) for (let z = 0; z < Dp; z++) {
       const { y: top, f } = columnSurface(x, z);
       if (!f || f <= 0) continue;
@@ -470,6 +474,8 @@
     buildWarpPads();
     beautifyHub();   // V20-L: 광장 미화(분수·정원·벤치·현수막) — 마지막에 얹어 덮이지 않게
     buildHubInteriors();   // V21-D5: 명명 건물 인테리어(은행 창구/도서관/경매 전시대/게시판) — 대로·미화 이후 최후 배치(덮어쓰기 방지)
+    agingPass(70, 260, 110, 300, 0.5);    // V22-G2: 폐허 구역 — 석재 벽돌 절반을 이끼/금 간 변형으로(고대 유적 질감)
+    agingPass(126, 296, 176, 336, 0.28);  // V22-G2: 묘지 구역 — 은은한 노후화
   }
   // V20-M: 섬 전역을 풍성한 힐링 들판으로 — 색밭·풀·덤불·이끼바위(길가 포함). 나무·덤불은 야생만, 광장 코어는 정갈.
   function decorateWilds() {
@@ -1511,6 +1517,17 @@
     for (let dx = -1; dx <= 1; dx++) { if (slab != null) setW(cx + dx, base - 1, gz, slab); setW(cx + dx, base - 1, gz + gd, ID.wool_red != null ? ID.wool_red : ID.stone_bricks); }
     for (const lx of [cx - 2, cx + 2]) { for (let y = base; y < base + 3; y++) setW(lx, y, gz - gd, band); setW(lx, base + 3, gz - gd, ID.glowstone); }
   }
+  // V22-G2: 노후화 패스 — 지역의 석재 벽돌 일부를 이끼/금 간 변형으로 치환(실제 MC 폐허·던전 질감)
+  function agingPass(x0, z0, x1, z1, frac) {
+    const my = ID.mossy_stone_bricks, cr = ID.cracked_stone_bricks;
+    if (my == null || cr == null) return;
+    for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) for (let y = 4; y < H - 4; y++) {
+      if (getBlockLocal(x, y, z) !== ID.stone_bricks) continue;
+      const h = hash3(x * 3 + y, 77, z * 5 - y);
+      if (h < frac * 0.55) setW(x, y, z, my);
+      else if (h < frac) setW(x, y, z, cr);
+    }
+  }
   function buildRuinsZone() {
     // V18: 이끼 낀 고대 폐허 — 무너진 아치·기울어진 기둥·부서진 바닥 타일·덩굴
     const mossy = ID.mossy_cobblestone, sb = ID.stone_bricks;
@@ -1659,7 +1676,7 @@
     }
   }
   function genHome(editsOverride) {
-    world = new Uint8Array(W * H * Dp);   // 공허 하늘 — 진짜 스카이블럭 프라이빗 섬
+    world = new Uint16Array(W * H * Dp);   // 공허 하늘 — 진짜 스카이블럭 프라이빗 섬
     genHomeBlob(HOME_SPAWN.x, HOME_SPAWN.z, HOME_SPAWN.r, 31);
     genHomeBlob(HOME_PISLE.x, HOME_PISLE.z, HOME_PISLE.r, 57);
     // V21-C: 실제 스카이블럭처럼 스폰섬↔포탈섬은 '끊겨' 시작 — 직접 블록으로 다리를 놓아야 건너감(자동 다리 제거)
@@ -2088,7 +2105,16 @@
     else if (mode === 'spider' && ok(74, 88)) { buildSpiderNest(); buildSpiderRegions(); buildMonsterDetail('spider'); }   // V20-AA 거미굴 + V20-BD(7차) 실제 6구역 + V20-AZ 디테일
     else if (mode === 'nether' && ok(62, 78)) { buildNetherKeep(); buildCrimsonRegions(); buildMonsterDetail('nether'); }   // V20-Y 네더 요새 + V21-D4 크림슨 구역 + V20-AZ 디테일
     else if (mode === 'end' && ok(62, 84)) { buildEndSanctum(); buildEndLandmarks(); buildMonsterDetail('end'); }   // V20-Z 성소 + V20-BE(7차) Dragon's Nest/View + V20-AZ 디테일
-    else if (mode === 'mushroom' && ok(58, 100)) { buildMushroomColony(); buildMushroomZones(); buildOtherDetail('mushroom'); }   // V20-AC 군락 + V20-BH(7차) 명명 구역 + V20-BA 디테일
+    else if (mode === 'mushroom' && ok(58, 100)) {
+      buildMushroomColony(); buildMushroomZones(); buildOtherDetail('mushroom');   // V20-AC 군락 + V20-BH(7차) 명명 구역 + V20-BA 디테일
+      // V22-G2: 사막 건축 사암 변주 — 일부를 붉은/매끄러운 사암으로(실제 사막 구조물 질감)
+      if (ID.red_sandstone != null) for (let x = 0; x < W; x++) for (let z = 0; z < Dp; z++) for (let y = 4; y < H - 4; y++) {
+        if (getBlockLocal(x, y, z) !== ID.sandstone) continue;
+        const h = hash3(x + y, 81, z - y);
+        if (h < 0.22) setW(x, y, z, ID.red_sandstone);
+        else if (h < 0.4) setW(x, y, z, ID.smooth_sandstone);
+      }
+    }
   }
   // V20-W: 골드 광산 대형 전초기지 — 좌표 한 칸씩 손 배치(대칭 함수 아님).
   //   중심(50,90): 갱도 + 목재 헤드프레임 타워 + 도르래 + 광차 데크 + 광석 창고 + 감독관 오두막.
@@ -2904,7 +2930,7 @@
   // The Park follows Hypixel's gated wood-island rhythm: hub forest, oak,
   // birch, spruce, dark oak, jungle, then acacia in one progression chain.
   function genPark() {
-    world = new Uint8Array(W * H * Dp);
+    world = new Uint16Array(W * H * Dp);
     const chain = [   // V21-F3: 섬 확대(r15~16→19~21) + 나무 밀도 증가 — "작고 허전한 숲" 지적 해소
       { cx: 72, cz: 126, r: 18, plant: plantOak, count: 7 },
       { cx: 72, cz: 108, r: 20, plant: plantOak, count: 13 },
@@ -3068,7 +3094,7 @@
   }
   // 🌾 더 반: 대형 농장(밀/당근/감자/호박/수박/사탕수수 대구획)
   function genBarn() {
-    world = new Uint8Array(W * H * Dp);
+    world = new Uint16Array(W * H * Dp);
     // ── V20-AF: 손 사각 자연 구릉 농지(평평한 허허벌판 폐기). 스무스노이즈로 완만한 밭두렁 굴곡. ──
     for (let x = 8; x < W - 8; x++) for (let z = 8; z < Dp - 8; z++) {
       const d = Math.hypot(x - 72, z - 72) / 62; if (d >= 1) continue;
@@ -3100,7 +3126,7 @@
   }
   // ⛏️ 골드 광산: 노천 금광 산
   function genGoldMine() {
-    world = new Uint8Array(W * H * Dp);
+    world = new Uint16Array(W * H * Dp);
     genBlobIsland(56, 56, 48, 14, { surf: ID.stone, sub: ID.stone });
     // ── V20-AD: 손 사각(cell-by-cell) 자연 산괴 — 기하학 링 폐기. 여러 봉우리 중심 + 노이즈로
     //   비대칭 능선을 쌓고, 노출 암벽에 광맥을 박고, 갱도 입구(아딧)·스위치백 등산로를 판다.
@@ -3156,7 +3182,7 @@
   }
   // 💎 딥 캐번: 실제처럼 층별 광물(위→아래: 석탄/철/금·청금/레드스톤/에메랄드·슬라임/다이아/흑요석) + 리프트
   function genDeepCaverns() {
-    world = new Uint8Array(W * H * Dp);
+    world = new Uint16Array(W * H * Dp);
     for (let x = 6; x < W - 6; x++) for (let z = 6; z < Dp - 6; z++) for (let y = 2; y <= 40; y++) setW(x, y, z, ID.stone);
     // ── V20-BC 정통 재건: 실제 딥 캐번의 6개 명명 층(위→아래) — 리서치(위키) 반영 ──
     //   Gunpowder Mines(석탄) → Lapis Quarry(청금) → Pigmen's Den(금/네더랙) → Slimehill(슬라임/이끼)
@@ -3164,10 +3190,10 @@
     const netherrack = ID.netherrack, moss = ID.mossy_cobblestone, cob = ID.cobblestone;
     const LAYERS = [
       { name: 'Gunpowder Mines', y: 33, ore: ID.coal_ore, n: 40, acc: ID.gravel },
-      { name: 'Lapis Quarry', y: 28, ore: ID.lapis_ore, n: 34, acc: ID.stone },
+      { name: 'Lapis Quarry', y: 28, ore: ID.lapis_ore, n: 34, acc: ID.andesite != null ? ID.andesite : ID.stone },   // V22-G2: 층별 실제 암석 변형
       { name: "Pigmen's Den", y: 22, ore: ID.gold_ore, n: 26, acc: netherrack },
       { name: 'Slimehill', y: 17, ore: ID.emerald_ore, n: 20, acc: moss },
-      { name: 'Diamond Reserve', y: 11, ore: ID.diamond_ore, n: 26, acc: ID.stone },
+      { name: 'Diamond Reserve', y: 11, ore: ID.diamond_ore, n: 26, acc: ID.diorite != null ? ID.diorite : ID.stone },
       { name: 'Obsidian Sanctuary', y: 5, ore: ID.obsidian, n: 24, acc: cob, floor: cob, gem: ID.diamond_ore },
     ];
     // 각 층 챔버(3칸 높이 대형 공동) + 층 바닥/광석/발광 + 층 재질 악센트
@@ -3219,7 +3245,7 @@
   }
   // 🕷️ 스파이더 덴 V6: 거미산 등반 던전 — 나선 등산로를 오르면 점점 강한 거미, 정상에 브루드마더
   function genSpiderDen() {
-    world = new Uint8Array(W * H * Dp);
+    world = new Uint16Array(W * H * Dp);
     genBlobIsland(64, 64, 56, 14, { surf: ID.dirt });
     // ── V20-AE: 손 사각 비대칭 거미산(단일 원뿔 폐기). 여러 봉우리 + 노이즈로 울퉁불퉁한
     //   바위산을 쌓고 이끼/거미줄(흰 양털) 줄무늬를 박는다. 정상 y≈45.
@@ -3296,7 +3322,7 @@
   }
   // 🔥 블레이징 포트리스 V6: 던전 컨셉 — 용암 바다 위 붉은 요새(복도망·블레이즈 첨탑·위더 홀·마그마 분지)
   function genNether() {
-    world = new Uint8Array(W * H * Dp);
+    world = new Uint16Array(W * H * Dp);
     for (let x = 0; x < W; x++) for (let z = 0; z < Dp; z++) for (let y = 2; y <= SEA - 1; y++) setW(x, y, z, ID.lava);   // 용암 바다
     genBlobIsland(64, 64, 54, 16, { surf: ID.netherrack, sub: ID.netherrack, fill: ID.netherrack });
     for (let i = 0; i < 70; i++) {   // 소울샌드/마그마 패치
@@ -3373,7 +3399,7 @@
   }
   // 🌌 디 엔드 V6: 중앙이 깊게 뚫린 심연 — 나선 미로 발판을 타고 내려가면 거대한 드래곤 둥지(실제 Dragon's Nest)
   function genEnd() {
-    world = new Uint8Array(W * H * Dp);
+    world = new Uint16Array(W * H * Dp);
     // 두꺼운 엔드스톤 원반(상판 y30, 바닥 y3)
     for (let x = 0; x < W; x++) for (let z = 0; z < Dp; z++) {
       let d = Math.hypot(x - 64, z - 64) / 56;
@@ -3462,7 +3488,7 @@
   }
   // 🍄 버섯 사막 V6: 서쪽 균사체 버섯 숲 + 동쪽 사막(실제 Mushroom Desert 반반 구성)
   function genMushroom() {
-    world = new Uint8Array(W * H * Dp);
+    world = new Uint16Array(W * H * Dp);
     genBlobIsland(72, 72, 62, 15, {});
     // 반반 표면: 서쪽 균사체 / 동쪽 사막
     for (let x = 0; x < W; x++) for (let z = 0; z < Dp; z++) {
@@ -3585,7 +3611,7 @@
   /* ---------------- 3D 카타콤 던전: 직접 돌아다니며 몬스터를 잡고 보스까지 ---------------- */
   let dungeonState = null;   // {floor, fd, rooms:[{x0,x1,gateX,kills,need,cleared}], t0, deaths, kills, bossSpawned}
   function genDungeon() {
-    world = new Uint8Array(W * H * Dp);
+    world = new Uint16Array(W * H * Dp);
     const ROOM_W = 22, ROOMS = 5;
     // 바닥/외벽(개방형 천장 — 카타콤 폐허 분위기, 하늘은 자정 고정)
     for (let x = 0; x < W; x++) for (let z = 8; z < 40; z++) setW(x, 2, z, ID.stone_bricks);
@@ -3961,6 +3987,15 @@
       case 'snow': fillNoise('#eef4f7', '#e2eaef', '#f8fcff'); break;
       case 'ice': { fillNoise('#8fc0e8', '#7ab2e0', '#a8d2f0'); c.fillStyle = '#c8e8f8'; c.fillRect(ox + 2, oy + 2, 4, 1); c.fillRect(ox + 9, oy + 8, 4, 1); break; }
       case 'mycelium_top': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.3 ? '#6a5a70' : t < 0.65 ? '#7a6a80' : '#8a7690'); } break;
+      case 'granite': { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const p = hash3(x >> 2, 9, y >> 2), t = r(); f(x, y, t < 0.12 ? '#7a4a3a' : p < 0.35 ? '#9a6a55' : p < 0.7 ? '#a87560' : '#b5806a'); } break; }
+      case 'polished_granite': { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) f(x, y, ((x === 0 || y === 0) ? '#c08a72' : (x === 15 || y === 15) ? '#8a5a48' : (r() < 0.15 ? '#9a6a55' : '#a87560'))); break; }
+      case 'diorite': { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.2 ? '#8a8a8a' : t < 0.55 ? '#c8c8c6' : t < 0.85 ? '#d8d8d4' : '#b8b8b4'); } break; }
+      case 'polished_diorite': { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) f(x, y, ((x === 0 || y === 0) ? '#e8e8e4' : (x === 15 || y === 15) ? '#a8a8a4' : (r() < 0.12 ? '#b8b8b4' : '#d0d0cc'))); break; }
+      case 'andesite': { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const p = hash3(x >> 2, 13, y >> 2), t = r(); f(x, y, t < 0.15 ? '#7a7a76' : p < 0.5 ? '#8a8a86' : '#989892'); } break; }
+      case 'mossy_stone_bricks': { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const e = (y % 8 === 0) || (x % 8 === (y < 8 ? 0 : 4)); const mossy = hash3(x >> 1, 15, y >> 1) < 0.3; f(x, y, e ? (mossy ? '#3e5a2e' : '#5a5a5a') : (mossy && r() < 0.5 ? '#5a7a44' : (r() < 0.5 ? '#7b7b7b' : '#888'))); } break; }
+      case 'cracked_stone_bricks': { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const e = (y % 8 === 0) || (x % 8 === (y < 8 ? 0 : 4)); f(x, y, e ? '#5a5a5a' : (r() < 0.5 ? '#757575' : '#828282')); } for (let i2 = 0; i2 < 10; i2++) { const cx2 = 2 + ((hash3(i2, 3, 1) * 12) | 0), cy2 = 2 + ((hash3(i2, 5, 2) * 12) | 0); f(cx2, cy2, '#4a4a4a'); f(cx2 + 1, cy2 + 1, '#4a4a4a'); } break; }
+      case 'red_sandstone': { fillNoise('#c46a35', '#b55f2d', '#d2763d'); for (let y = 3; y < 16; y += 4) for (let x = 0; x < 16; x++) f(x, y, '#a35426'); break; }
+      case 'smooth_sandstone': { fillNoise('#e2d6a8', '#d8cc9c', '#eaddb2'); break; }
       case 'iron_block': case 'gold_block': case 'diamond_block': case 'emerald_block': case 'coal_block': case 'redstone_block': case 'lapis_block': {
         // V21-F1: 자체 디자인 광물 블록 — 본체 음영 + 밝은 테두리 + 모서리 리벳
         const MB = { iron_block: '#d8d8d4', gold_block: '#f7d84a', diamond_block: '#5decd5', emerald_block: '#17a94f', coal_block: '#31313a', redstone_block: '#a01818', lapis_block: '#1a44a5' }[name];
@@ -6720,7 +6755,7 @@
       ID, BLOCKS,
       // V3: 프라이빗 섬/건축/이동
       travelTo, worldMode: () => worldMode, genHome, PORTALS, HOME_MINION_SLOTS, HOME_BOUNDS, HOME_CENTER, installPortalFrame,
-      parkGateAt, tryOpenParkGate, parkGates: () => genPark._gates || [],
+      parkGateAt, tryOpenParkGate, parkGates: () => genPark._gates || [], agingPass,
       mobList: () => mobs.filter(m => !m.dead).map(m => ({ type: m.type, x: m.mesh.position.x, y: m.mesh.position.y, z: m.mesh.position.z })),   // V21-D9 공허 몹 감사용
       chunkMeshCount: () => Object.keys(chunkMeshes).length,   // V12 크래시 검증용
       buildQueueLen: () => buildQueue.length,

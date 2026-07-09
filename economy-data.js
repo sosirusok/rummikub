@@ -807,6 +807,13 @@
     { key: 'golden_hoe', needs: { gold: 2, stick: 2 }, gives: 1, unlock: { resource: 'gold', tier: 1 } },
     { key: 'golden_sword', needs: { gold: 2, stick: 1 }, gives: 1, unlock: { resource: 'gold', tier: 1 } },
     { key: 'golden_rod', needs: { gold: 12, string: 8 }, gives: 1, unlock: { resource: 'gold', tier: 1 } },
+    // V22-G2: 석재 변형(바닐라 조합) — 섬록암=조약돌2+석영2, 화강암=섬록암+석영, 안산암=섬록암+조약돌, 연마=4→4, 석재벽돌=돌4
+    { key: 'diorite', needs: { cobblestone: 2, quartz_block: 2 }, gives: 2, unlock: null },
+    { key: 'granite', needs: { diorite: 1, quartz_block: 1 }, gives: 1, unlock: null },
+    { key: 'andesite', needs: { diorite: 1, cobblestone: 1 }, gives: 2, unlock: null },
+    { key: 'polished_granite', needs: { granite: 4 }, gives: 4, unlock: null },
+    { key: 'polished_diorite', needs: { diorite: 4 }, gives: 4, unlock: null },
+    { key: 'stone_bricks', needs: { stone: 4 }, gives: 4, unlock: null },
     // V21-F1: 광물 저장 블록 9↔1 (바닐라 압축/해체)
     { key: 'iron_block', needs: { iron: 9 }, gives: 1, unlock: null },
     { key: 'gold_block', needs: { gold: 9 }, gives: 1, unlock: null },
@@ -1016,6 +1023,15 @@
     ...EQUIPMENT.armor.map(a => ({ key: a.key, name: `${a.name} [${ITEM_TIERS.find(t => t.key === a.tierKey).name}]`, category: '방어구', tierKey: a.tierKey, buyPrice: a.buyPrice, sellPrice: a.sellPrice, stackSize: 1, defense: a.defense, hp: a.hp || 0, slot: a.slot, traits: a.traits, set: a.set, flavor: a.flavor, reqCombat: a.reqCombat })),
   ];
   SHOP.push(
+    { key: 'granite', name: '화강암', category: '건축', buyPrice: 0, sellPrice: 1, stackSize: 64 },
+    { key: 'polished_granite', name: '윤나는 화강암', category: '건축', buyPrice: 0, sellPrice: 2, stackSize: 64 },
+    { key: 'diorite', name: '섬록암', category: '건축', buyPrice: 0, sellPrice: 1, stackSize: 64 },
+    { key: 'polished_diorite', name: '윤나는 섬록암', category: '건축', buyPrice: 0, sellPrice: 2, stackSize: 64 },
+    { key: 'andesite', name: '안산암', category: '건축', buyPrice: 0, sellPrice: 1, stackSize: 64 },
+    { key: 'mossy_stone_bricks', name: '이끼 낀 석재 벽돌', category: '건축', buyPrice: 0, sellPrice: 2, stackSize: 64 },
+    { key: 'cracked_stone_bricks', name: '금 간 석재 벽돌', category: '건축', buyPrice: 0, sellPrice: 2, stackSize: 64 },
+    { key: 'red_sandstone', name: '붉은 사암', category: '건축', buyPrice: 0, sellPrice: 2, stackSize: 64 },
+    { key: 'smooth_sandstone', name: '매끄러운 사암', category: '건축', buyPrice: 0, sellPrice: 2, stackSize: 64 },
     { key: 'iron_block', name: '철 블록', category: '건축', buyPrice: 0, sellPrice: 54, stackSize: 64 },
     { key: 'gold_block', name: '금 블록', category: '건축', buyPrice: 0, sellPrice: 72, stackSize: 64 },
     { key: 'diamond_block', name: '다이아몬드 블록', category: '건축', buyPrice: 0, sellPrice: 270, stackSize: 64 },
@@ -1429,6 +1445,8 @@
     { in: 'cobblestone', inN: 1, out: 'stone', n: 1, name: '조약돌 → 돌' },
     { in: 'sand', inN: 1, out: 'glass', n: 1, name: '모래 → 유리' },
     { in: 'clay', inN: 4, out: 'bricks', n: 1, name: '점토 4 → 벽돌 블록' },
+    { in: 'stone_bricks', inN: 1, out: 'cracked_stone_bricks', n: 1, name: '석재 벽돌 → 금 간 석재 벽돌' },   // V22-G2(바닐라)
+    { in: 'sandstone', inN: 1, out: 'smooth_sandstone', n: 1, name: '사암 → 매끄러운 사암' },
   ];
   const PORTAL_ITEMS = {
     portal_barn: { name: '🌾 더 반 포탈', dest: 'barn' },
