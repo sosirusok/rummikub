@@ -1029,6 +1029,36 @@
       S(302, surfaceTop(302, 262) - 1, 262, ID.water);   // 물통(움푹)
       S(304, surfaceTop(304, 252), 252, 0);   // 출입구
     }
+    // ── 6.5) V24-D(건축 #5): 주거지 골목 — 2층 타운하우스 4채(1층 석재/2층 판자+발코니, 수종 변주) ──
+    const townhouse = (x0, z0, wallId) => {
+      const base = surfaceTop(x0 + 3, z0 + 3);
+      flattenSite(x0 - 1, z0 - 1, x0 + 7, z0 + 6, base - 1);
+      for (let x = x0; x < x0 + 7; x++) for (let z = z0; z < z0 + 6; z++) setW(x, base - 1, z, ID.oak_planks);
+      for (let y = 0; y < 7; y++) for (let x = x0; x < x0 + 7; x++) for (let z = z0; z < z0 + 6; z++) {
+        const edge = x === x0 || x === x0 + 6 || z === z0 || z === z0 + 5;
+        const corner = (x === x0 || x === x0 + 6) && (z === z0 || z === z0 + 5);
+        if (!edge) { if (y === 3) setW(x, base + y, z, ID.oak_planks); else setW(x, base + y, z, 0); continue; }   // 2층 바닥
+        setW(x, base + y, z, corner ? ID.oak_log : y < 3 ? (y === 0 ? ID.stone_bricks : ID.cobblestone) : y === 3 ? ID.oak_log : wallId);
+      }
+      // 창(1층+2층 남면/북면), 문(남면 중앙), 발코니(남면 2층)
+      setW(x0 + 2, base + 1, z0 + 5, ID.glass); setW(x0 + 4, base + 1, z0 + 5, ID.glass);
+      setW(x0 + 2, base + 5, z0 + 5, ID.glass); setW(x0 + 4, base + 5, z0 + 5, ID.glass);
+      setW(x0 + 3, base + 5, z0, ID.glass);
+      const dId = ID.oak_door_c_0; if (dId != null) { setW(x0 + 3, base, z0 + 5, dId); setW(x0 + 3, base + 1, z0 + 5, dId); }
+      for (let x = x0 + 2; x <= x0 + 4; x++) { setW(x, base + 3, z0 + 6, ID.oak_planks); setW(x, base + 4, z0 + 6, ID.oak_fence); }   // 발코니
+      // 박공 지붕(z축 경사)
+      for (let x = x0 - 1; x <= x0 + 7; x++) for (let dz = -1; dz <= 6; dz++) {
+        const h = 3 - Math.abs(dz - 2.5 | 0); if (h < 0) continue;
+        const ry = base + 7 + Math.min(h, 2), z = z0 + dz;
+        const sid = stairIdFor(ID.spruce_planks, dz < 2.5 ? 2 : 0);
+        setW(x, ry, z, (dz === 2 || dz === 3) ? ID.spruce_planks : (sid != null ? sid : ID.spruce_planks));
+      }
+      setW(x0 + 3, base + 2, z0 + 2, ID.glowstone);   // 1층 조명
+      setW(x0 + 3, base + 6, z0 + 2, ID.glowstone);   // 2층 조명
+    };
+    townhouse(252, 240, ID.oak_planks); townhouse(262, 240, ID.birch_planks);
+    townhouse(272, 240, ID.spruce_planks); townhouse(282, 240, ID.oak_planks);
+    [[250, 248], [270, 248], [290, 248]].forEach(([lx, lz]) => lampPost(lx, lz));
     // ── 7) 대로변 가로등(광장→각 존 도로를 따라 약 18칸 간격) ──
     [[224, 92], [110, 208], [156, 314], [326, 224], [146, 136], [318, 318], [224, 348], [318, 124]].forEach(([tx, tz]) => {
       const steps = Math.max(Math.abs(tx - 224), Math.abs(tz - 224));
@@ -5123,6 +5153,9 @@
         if (mf > 0 || wantJump) P.vy = 3.4;
         else if (keys.ShiftLeft || keys.ShiftRight) P.vy = 0;
         else if (P.vy < -2.4) P.vy = -2.4;
+        // V24-D(감사 #21): 꼭대기 립 자동 넘기 — 머리 위에 사다리가 없고 전진 중이면 올라설 부스트
+        const headLb = BLOCKS[getBlockLocal(bx, Math.floor(P.y + 1.6), bz)];
+        if (mf > 0 && !(headLb && headLb.climb)) P.vy = Math.max(P.vy, 4.4);
       }
     }
     moveAxis('x', P.vx * dt); moveAxis('z', P.vz * dt); P.onGround = false; moveAxis('y', P.vy * dt);
@@ -6389,9 +6422,15 @@
       if (distP > 70) continue;   // 먼 몹은 AI 정지(대형 허브 성능)
       const aggro = m.def.passive ? -1 : (m.elite ? 14 : 10);
       if (aggro > 0 && distP < aggro && Math.abs(P.y - mp.y) < 4) m.state = 'chase';
-      else if (distP > aggro * 2) m.state = 'wander';
+      else if (m.state !== 'flee' && distP > aggro * 2) m.state = 'wander';
+      // V24-D(감사 #26): 소극적 몹은 맞으면 도망(패닉 질주) — 기존엔 오히려 다가옴
+      if (m.state === 'flee') {
+        m._fleeT = (m._fleeT || 0) - dt;
+        if (m._fleeT <= 0 || distP > 24) m.state = 'wander';
+      }
       let mvx = 0, mvz = 0;
-      if (m.state === 'chase') {
+      if (m.state === 'flee' && distP > 0.1) { mvx = -dx / distP; mvz = -dz / distP; m.walkT += dt * 5; }
+      else if (m.state === 'chase') {
         if (distP > 1.5) { mvx = dx / distP; mvz = dz / distP; }
         m.atkCd -= dt;
         if (distP < 1.8 && m.atkCd <= 0) {
@@ -6433,7 +6472,7 @@
         if (Math.abs(m._kbx) < 0.1 && Math.abs(m._kbz) < 0.1) m._kbx = m._kbz = 0;
       }
       if (mvx || mvz || kbdx || kbdz) {
-        const sp = m.def.speed * (m.state === 'chase' ? 1 : 0.5);
+        const sp = m.def.speed * (m.state === 'chase' ? 1 : m.state === 'flee' ? 1.3 : 0.5);   // V24-D: 도망은 패닉 질주
         const nx = mp.x + mvx * sp * dt + kbdx, nz = mp.z + mvz * sp * dt + kbdz;
         if (m.def.fly) {   // 가스트: 부유 비행(지면 +5~7 유지)
           const gy = groundBelow(Math.floor(nx), Math.floor(nz), 44) + 5.5 + Math.sin(m.walkT * 0.7) * 1.2;
@@ -6488,13 +6527,14 @@
     m.hitIdx++;
     m.hp -= r.dmg;
     m._hitFx = 0.15;   // V24-B: 피격 반응(스케일 펀치)
+    if (m.def && m.def.passive) { m.state = 'flee'; m._fleeT = 4; }   // V24-D: 동물은 도망
     if (php && r.heal) { php.hp = Math.min(php.max, php.hp + r.heal); }
     spawnDmgText(m.mesh.position, r.dmg, r.crit);
     // V24: 넉백 — 순간이동식(0.7블럭 즉시) 대신 실제 MC처럼 밀려나는 관성(감쇠 속도)
     const dx = m.mesh.position.x - P.x, dz = m.mesh.position.z - P.z; const l = Math.hypot(dx, dz) || 1;
     const kbPow = m.def && (m.def.miniboss || m.def.hellBoss || m.isBoss) ? 2.5 : 6.5;   // 보스급은 덜 밀림
     m._kbx = (m._kbx || 0) + dx / l * kbPow; m._kbz = (m._kbz || 0) + dz / l * kbPow;
-    m.state = 'chase';
+    if (!(m.def && m.def.passive)) m.state = 'chase';
     if (m.hp <= 0) attackMobFinish(m);
     else drawMobLabel(m);
   }
