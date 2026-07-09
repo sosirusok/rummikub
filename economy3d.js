@@ -947,7 +947,9 @@
       for (let dx = 0; dx <= 2; dx++) S(x0 + dx, 23, (zc + zb) / 2 | 0, awn);         // 차양 중앙 채움
       S(x0, 21, zc, goods[0]); S(x0 + 1, 21, zc, goods[1]); S(x0 + 2, 21, zc, goods[2]);   // 진열품(카운터 위)
       S(x0 + 1, 20, zb, crate); S(x0 + 1, 21, zb, crate);                            // 뒤 재고 상자 더미
+      S(x0 + 1, 22, zb, ID.oak_planks);                                              // V23-B: 뒷벽 상단 마감(구멍 제거)
       S(x0, 22, zc, glow);                                                            // 노점 등불
+      S(x0 + 2, 21, zc, goods[2] != null ? goods[2] : fence); S(x0 + 2, 22, zc, fence);   // V23-B: 차양 앞단 지지 기둥(공중에 뜬 차양 수정)
     };
     // 5개 노점 — 서로 다른 업종/차양/진열(남측 줄: z252 남향 / 북측 줄: z254 북향 교차)
     stall(198, 252, true, ID.wool_red != null ? ID.wool_red : ID.bricks, [ID.pumpkin, ID.hay_block, ID.melon], ID.hay_block);           // 청과물(붉은 차양)
@@ -1114,10 +1116,20 @@
     const SMOOTH = ID.smooth_stone != null ? ID.smooth_stone : ID.stone_bricks;
     // 1) 광장 전체 재포장(반경16) — 다중 석재 동심원 패턴 + 십자 대로(석영). 위쪽 완전 클리어로 통행 보장
     const R = 16;
+    // V23-B: 클리어가 반경 안에 걸친 건물(포탈/대장간/로툰다) 벽까지 지워 '만들다 만' 잔해를 만들던 버그 —
+    //   자연 블럭(식생/흙/원돌)만 치우고 건축 블럭은 보존, 건물 자리 바닥은 재포장도 건너뜀
+    const natural = id => { if (!id) return false; const bk = BLOCKS[id].key; return /leaves|_log$|flower|tall_grass|pumpkin|melon|mushroom|snow|sugar/.test(bk) || id === ID.dirt || id === ID.grass || id === ID.coarse_dirt || id === ID.gravel || id === ID.stone || id === ID.sand; };
     for (let dx = -R; dx <= R; dx++) for (let dz = -R; dz <= R; dz++) {
       const d = Math.hypot(dx, dz); if (d > R + 0.5) continue;
       const x = cx + dx, z = cz + dz;
-      for (let yy = fy + 1; yy <= fy + 6; yy++) setW(x, yy, z, 0);   // 걸림돌 제거(통행 확보)
+      if (x >= 207 && x <= 214 && z >= 221 && z <= 227) continue;   // 내 섬 포탈 footprint는 통째로 보존
+      let struct = false;
+      for (let yy = fy + 1; yy <= fy + 6; yy++) {
+        const bid = getBlockLocal(x, yy, z);
+        if (natural(bid)) setW(x, yy, z, 0);   // 걸림돌(나무/풀/지형 돌출)만 제거
+        else if (bid) struct = true;
+      }
+      if (struct) continue;   // 건물 기둥/벽이 있는 칸은 바닥 재포장도 하지 않음
       let mat;
       if (Math.abs(dx) <= 1 || Math.abs(dz) <= 1) mat = ID.quartz_block;      // 십자 대로(석영)
       else if (d > R - 1.3) mat = SMOOTH;                                     // 외곽 테두리

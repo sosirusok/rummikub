@@ -195,11 +195,22 @@
     let tier = 0; for (let i = 0; i < def.tierThresholds.length; i++) if (n >= def.tierThresholds[i]) tier = i + 1;
     return tier;
   }
+  // V23-B: 컬렉션 티어 보상(실제 스카이블럭식 진행 보상) — 골드 + 해당 카테고리 스킬 경험치 + 레시피 해금(RECIPES) + 미니언 생산 +2%
+  function collectionCategoryKey(resKey) { for (const c of D().COLLECTIONS) if (c.resources.some(r => r.key === resKey)) return c.key; return 'mining'; }
+  function collectionTierReward(t) { return { gold: 150 * t * t, xp: 200 * t }; }
   function addCollection(key, n) {
     if (!resourceDef(key)) return;
     P.collections[key] = (P.collections[key] || 0) + n;
     const before = P.collectionTier[key] || 0, after = collectionTierIdx(key);
-    if (after > before) { P.collectionTier[key] = after; toastFn(`${resourceDef(key).name} 컬렉션 티어 ${after} 달성!`, true); }
+    if (after > before) {
+      P.collectionTier[key] = after;
+      let gold = 0, xp = 0;
+      for (let t = before + 1; t <= after; t++) { const rw = collectionTierReward(t); gold += rw.gold; xp += rw.xp; }
+      addGold(gold);
+      const cat = collectionCategoryKey(key);
+      addSkillXp(cat, xp);
+      toastFn(`📚 ${resourceDef(key).name} 컬렉션 티어 ${after} 달성! +${fmtGold(gold)} · ${cat} XP +${xp}`, true);
+    }
   }
 
   /* ---------------- 펫 ---------------- */
@@ -3147,18 +3158,41 @@
       <h4 style="margin-top:14px">➕ 등록 &nbsp;<span class="muted" style="font-weight:400">경매 기간: ${durNav}</span></h4>
       <div class="econ-shopgrid">${listForms}</div>`;
   }
+  // V23-B: 컬렉션 상세 — 행 클릭 시 실제 스카이블럭처럼 모든 티어의 필요량·보상을 표로 표시
+  let colDetailKey = null;
+  function collectionDetailHTML(r) {
+    const tier = collectionTierIdx(r.key), cur = P.collections[r.key] || 0;
+    const minions = D().MINIONS.filter(m => (m.unlockCollection || m.resource) === r.key).map(m => m.name);
+    const rows = r.tierThresholds.map((th, i) => {
+      const t = i + 1;
+      const done = tier >= t;
+      const recipes = D().RECIPES.filter(rc => rc.unlock && rc.unlock.resource === r.key && rc.unlock.tier === t).map(rc => itemName(rc.key));
+      const rw = collectionTierReward(t);
+      const parts = [];
+      if (t === 1 && minions.length) parts.push(`⚙️ ${minions.join('·')} 해금`);
+      if (recipes.length) parts.push(`⚒️ 레시피: ${recipes.join(', ')}`);
+      parts.push(`💰 ${fmtGold(rw.gold)}`, `✨ ${collectionCategoryKey(r.key)} XP +${rw.xp}`, `생산 +2%`);
+      return `<div class="econ-colrow" style="${done ? 'opacity:.92' : 'opacity:.62'}">
+        <span style="min-width:88px">${done ? '✅' : '🔒'} <b>티어 ${t}</b></span>
+        <span style="min-width:110px">${fmtNum(th)}개${done ? '' : cur >= (r.tierThresholds[i - 1] || 0) && tier === t - 1 ? ` <span class="muted">(${fmtNum(cur)}/${fmtNum(th)})</span>` : ''}</span>
+        <span class="muted" style="flex:1">${parts.join(' · ')}</span></div>`;
+    }).join('');
+    return `<div style="margin:4px 0 10px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:rgba(122,92,255,.06)">
+      <div style="font-weight:800;margin-bottom:4px">${r.name} 컬렉션 — 전체 티어 보상 <span class="muted">(누적 ${fmtNum(cur)}개 · 현재 T${tier})</span></div>${rows}</div>`;
+  }
   function collectionsHTML() {
-    return D().COLLECTIONS.map(cat => `<h4>${cat.category}</h4><div class="econ-colgrid">${cat.resources.map(r => {
+    return `<div class="muted" style="margin:2px 0 6px">컬렉션을 클릭하면 실제 스카이블럭처럼 모든 티어의 필요량과 보상을 볼 수 있어요.</div>` +
+      D().COLLECTIONS.map(cat => `<h4>${cat.category}</h4><div class="econ-colgrid">${cat.resources.map(r => {
       const tier = collectionTierIdx(r.key), maxT = r.tierThresholds.length;
       const cur = P.collections[r.key] || 0;
       const next = tier < maxT ? r.tierThresholds[tier] : null;
       const prev = tier > 0 ? r.tierThresholds[tier - 1] : 0;
       const pct = next ? Math.min(100, Math.max(0, (cur - prev) / (next - prev) * 100)) : 100;
       const nextRecipes = next ? D().RECIPES.filter(rc => rc.unlock && rc.unlock.resource === r.key && rc.unlock.tier === tier + 1).map(rc => itemName(rc.key)) : [];
-      const rewardTxt = next ? `T${tier + 1} 보상: ${nextRecipes.length ? `레시피 ${nextRecipes.slice(0, 2).join('·')}${nextRecipes.length > 2 ? ` 외 ${nextRecipes.length - 2}` : ''} · ` : ''}미니언 생산 +2%` : 'MAX 달성!';
-      return `<div class="econ-colrow"><span>${r.name} <b>T${tier}</b><span class="muted">/${maxT}</span></span>
+      const rewardTxt = next ? `T${tier + 1} 보상: ${nextRecipes.length ? `레시피 ${nextRecipes.slice(0, 2).join('·')}${nextRecipes.length > 2 ? ` 외 ${nextRecipes.length - 2}` : ''} · ` : ''}💰${fmtGold(collectionTierReward(tier + 1).gold)}` : 'MAX 달성!';
+      return `<div class="econ-colrow" data-act="econ_col_detail" data-key="${r.key}" style="cursor:pointer" title="클릭 = 전체 티어 보상 보기"><span>${colDetailKey === r.key ? '▼' : '▶'} ${r.name} <b>T${tier}</b><span class="muted">/${maxT}</span></span>
         <span class="econ-hpbar" style="flex:1;height:12px"><span class="econ-hpbar__fill" style="width:${pct.toFixed(0)}%;background:linear-gradient(90deg,#7a5cff,#b28dff)"></span></span>
-        <span class="muted">${fmtNum(cur)}${next ? `/${fmtNum(next)}` : ''} · ${rewardTxt}</span></div>`;
+        <span class="muted">${fmtNum(cur)}${next ? `/${fmtNum(next)}` : ''} · ${rewardTxt}</span></div>${colDetailKey === r.key ? collectionDetailHTML(r) : ''}`;
     }).join('')}</div>`).join('');
   }
   function statsHTML() {
@@ -3391,6 +3425,7 @@
     switch (k) {
       case 'zone': zone = el.dataset.key; renderZone(); break;
       case 'hubtab': hubTab = el.dataset.key; renderZone(); break;
+      case 'col_detail': colDetailKey = colDetailKey === el.dataset.key ? null : el.dataset.key; renderZone(); break;   // V23-B: 컬렉션 전체 티어 상세 토글
       case 'buildbuy': buildBuy(el.dataset.key); break;
       case 'menu': zone = 'hub'; hubTab = el.dataset.key; renderZone(); break;
       case 'warp': if (typeof window.economy3dWarp === 'function') window.economy3dWarp(el.dataset.key); break;
