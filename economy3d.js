@@ -1429,6 +1429,40 @@
       }
       [[px - 1, pz - 1], [px + 14, pz - 1], [px - 1, pz + 20], [px + 14, pz + 20]].forEach(c => { const y = surfaceTop(c[0], c[1]); setW(c[0], y, c[1], ID.oak_log); });
     }
+    // V24-G(건축 #15): 서측 빈 스트립(x280~306) 채우기 — 온실 + 축사 + 서측 작물 플롯 2
+    for (let ci = 0; ci < 2; ci++) {
+      const px = 284, pz = 204 + ci * 30;
+      for (let x = px; x < px + 12; x++) for (let z = pz; z < pz + 16; z++) {
+        if (zoneAt(x, z) !== 'farm') continue;
+        const y = surfaceTop(x, z) - 1;
+        if ((x + z) % 9 === 0) { setW(x, y, z, ID.water); continue; }
+        setW(x, y, z, ID.farmland); setW(x, y + 1, z, ci ? ID.carrot_ripe : ID.wheat_ripe);
+      }
+    }
+    // 온실(유리 아치 지붕 + 내부 밭): (284, 236)
+    {
+      const gx = 284, gz = 236, gy = surfaceTop(gx + 4, gz + 3);
+      for (let dx = 0; dx <= 8; dx++) for (let dz = 0; dz <= 6; dz++) {
+        if (zoneAt(gx + dx, gz + dz) !== 'farm') continue;
+        setW(gx + dx, gy - 1, gz + dz, dx === 0 || dx === 8 || dz === 0 || dz === 6 ? ID.stone_bricks : ID.farmland);
+        if (dx > 0 && dx < 8 && dz > 0 && dz < 6) setW(gx + dx, gy, gz + dz, (dx + dz) % 2 ? ID.wheat_ripe : ID.carrot_ripe);
+        const arch = 3 - Math.abs(dx - 4) * 0.7;
+        for (let y = 0; y <= Math.round(arch); y++) if (dx === 0 || dx === 8 || dz === 0 || dz === 6 || y === Math.round(arch)) setW(gx + dx, gy + 1 + y, gz + dz, ID.glass);
+      }
+      setW(gx + 4, gy, gz, 0); setW(gx + 4, gy + 1, gz, 0);   // 입구
+    }
+    // 축사(울타리 사육장 + 여물통 + 헛간 지붕 쉼터): (292, 254)
+    {
+      const ax0 = 290, az0 = 252, ax1 = 302, az1 = 262;
+      for (let x = ax0; x <= ax1; x++) { setW(x, surfaceTop(x, az0), az0, ID.oak_fence); setW(x, surfaceTop(x, az1), az1, ID.oak_fence); }
+      for (let z = az0; z <= az1; z++) { setW(ax0, surfaceTop(ax0, z), z, ID.oak_fence); setW(ax1, surfaceTop(ax1, z), z, ID.oak_fence); }
+      setW(296, surfaceTop(296, az0), az0, 0);   // 출입구
+      const hy = surfaceTop(293, 255);
+      setW(292, hy, 254, ID.hay_block); setW(293, hy, 254, ID.hay_block); setW(292, hy + 1, 254, ID.hay_block);
+      setW(299, surfaceTop(299, 259) - 1, 259, ID.water);   // 물통
+      for (let dx = 0; dx <= 3; dx++) for (let dz = 0; dz <= 2; dz++) setW(297 + dx, hy + 2, 253 + dz, ID.spruce_planks);   // 쉼터 지붕
+      for (const [px2, pz2] of [[297, 253], [300, 253], [297, 255], [300, 255]]) { const py = surfaceTop(px2, pz2); for (let y = py; y < hy + 2; y++) setW(px2, y, pz2, ID.oak_fence); }
+    }
     // V18: 네덜란드식 풍차 — 석재 기단 + 통나무 기둥 몸통 + 유리창 + 반블럭 처마 + 원뿔 지붕 + X자 날개(천 돛)
     const wx = 344, wz = 206, wy = surfaceTop(wx, wz);
     const stoneSlab = slabIdFor(ID.stone_bricks);
