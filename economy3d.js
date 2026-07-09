@@ -5281,7 +5281,9 @@
     }
     if (b.shape === 'bed') {   // V21-E2: 침대 — 프라이빗 섬 전용, 수면=완전 회복+아침
       if (worldMode !== 'home') { if (typeof toast === 'function') toast('🔒 내 프라이빗 섬에서만 사용할 수 있어요', false); return true; }
-      if (dayFactor() > 0.35) { if (typeof toast === 'function') toast('🛏️ 밤이나 해질녘에만 잘 수 있어요 (실제 MC 규칙)', false); return true; }   // V22-K: 무한 힐 악용 방지
+      // V22-K3: 내 섬은 시간대가 '항상 정오' 고정이라 밤 게이트는 침대를 영구 봉인함 → 60초 쿨다운으로 무한 힐 악용만 방지
+      if (performance.now() - (P._bedAt || 0) < 60000) { if (typeof toast === 'function') toast(`🛏️ 아직 졸리지 않아요 (${Math.ceil((60000 - (performance.now() - (P._bedAt || 0))) / 1000)}초 후 가능)`, false); return true; }
+      P._bedAt = performance.now();
       if (php) php.hp = php.max;
       worldTime = DAY_LEN * 0.25;
       if (typeof toast === 'function') toast('🛏️ 푹 잤다! 체력이 모두 회복되고 아침이 밝았어요', true);
