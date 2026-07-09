@@ -122,6 +122,9 @@
       BLOCKS.push({ key: w + '_door_o_' + f, tex, shape: 'door', facing: f, open: true, opaque: false, solid: false });
     }
   });
+  // V21-E2: 사다리(4방향 벽 부착, 오르기 가능) + 침대(수면) + 보트(물 위 탈것)
+  for (let f = 0; f < 4; f++) BLOCKS.push({ key: 'ladder_' + f, tex: 'ladder', shape: 'ladder', facing: f, opaque: false, solid: false, climb: true });
+  BLOCKS.push({ key: 'bed', tex: { top: 'bed_top', side: 'bed_side', bottom: 'planks' }, shape: 'bed', opaque: false, interact: true });
   const ID = {};
   BLOCKS.forEach((b, i) => { b.id = i; ID[b.key] = i; if (b.solid === undefined) b.solid = true; if (b.opaque === undefined) b.opaque = true; });
 
@@ -144,7 +147,8 @@
   }
   /* V12: 설치 가능한 아이템 키 → 블럭 ID(자원 키 별칭 포함) */
   const PLACE_BLOCK = {};
-  BLOCKS.forEach(b => { if (b.key !== 'air' && b.key !== 'bedrock' && !b.liquid && !/_stairs_\d$/.test(b.key) && !/_door_[co]_\d$/.test(b.key)) PLACE_BLOCK[b.key] = b.id; });   // 계단/문 변형은 아이템 아님
+  BLOCKS.forEach(b => { if (b.key !== 'air' && b.key !== 'bedrock' && !b.liquid && !/_stairs_\d$/.test(b.key) && !/_door_[co]_\d$/.test(b.key) && !/^ladder_\d$/.test(b.key)) PLACE_BLOCK[b.key] = b.id; });   // 계단/문/사다리 변형은 아이템 아님
+  PLACE_BLOCK.ladder = null;   // 아래에서 ID.ladder_0으로 지정
   PLACE_BLOCK.oaklog = ID.oak_log; PLACE_BLOCK.birchlog = ID.birch_log; PLACE_BLOCK.sprucelog = ID.spruce_log;
   PLACE_BLOCK.dark_oak_log = ID.dark_oak_log; PLACE_BLOCK.jungle_log = ID.jungle_log; PLACE_BLOCK.acacia_log = ID.acacia_log;
   PLACE_BLOCK.sugarcane = ID.sugar_cane;
@@ -158,6 +162,9 @@
     PLACE_BLOCK[w + '_door'] = ID[w + '_door_c_0'];
     for (let f = 0; f < 4; f++) { BLOCK_DROP[w + '_door_c_' + f] = w + '_door'; BLOCK_DROP[w + '_door_o_' + f] = w + '_door'; }
   });
+  // V21-E2: 사다리 제네릭 아이템 → 설치 시 벽면 방향 재계산, 변형은 제네릭 드롭
+  PLACE_BLOCK.ladder = ID.ladder_0;
+  for (let f = 0; f < 4; f++) BLOCK_DROP['ladder_' + f] = 'ladder';
   function isPlaceable(key) { return key != null && PLACE_BLOCK[key] != null; }
   function isStairsItem(key) { return typeof key === 'string' && /_stairs$/.test(key); }
   function isDoorItem(key) { return typeof key === 'string' && /_door$/.test(key); }
@@ -1702,6 +1709,7 @@
   function travelTo(mode, force) {
     if (mode === worldMode && !force) return;
     restoreAllRegen(); clearMobs(); stopFishing(); mouseHeld = false; useHeld = false; warpCharge = null;
+    P._boat = false; removeBoatMesh();   // V21-E2: 월드 이동 시 보트 하선
     if (worldMode === 'dungeon' && mode !== 'dungeon') { dungeonState = null; partyGuestMode = false; }
     if (world && worldMode !== 'visit' && worldMode !== 'dungeon') {   // 현재 월드 캐시(널 월드 금지)
       worldCache[worldMode] = { world, W, H, Dp, _at: (worldCache[worldMode] && worldCache[worldMode]._at || 0) + 1 };
@@ -2828,7 +2836,10 @@
       d += (hash3(x, 7, z) - 0.5) * 0.14;
       if (d >= 1) continue;
       const t = Math.min(1, (1 - d) * 2.4); const sm = t * t * (3 - 2 * t);
-      const y0 = opt.flat ? top : Math.round(top - 2 + sm * 3);
+      // V21-E3: 섬 윗면은 평평(가장자리 저고도 폐지 — 실제 스블처럼 절벽 단면). 언덕 기복은
+      //   가장자리 거리와 무관한 저주파 노이즈로만, 내륙(d<0.8)에서만 준다.
+      const hill = (!opt.flat && d < 0.8) ? Math.round((smoothNoise(x, z, 23) - 0.5) * 3) : 0;
+      const y0 = top + hill;
       for (let y = y0; y >= Math.max(2, y0 - 6 - Math.round(sm * 10)); y--) {
         let id = opt.fill || ID.stone;
         if (y === y0) id = opt.surf || ID.grass;
@@ -3946,6 +3957,22 @@
       case 'snow': fillNoise('#eef4f7', '#e2eaef', '#f8fcff'); break;
       case 'ice': { fillNoise('#8fc0e8', '#7ab2e0', '#a8d2f0'); c.fillStyle = '#c8e8f8'; c.fillRect(ox + 2, oy + 2, 4, 1); c.fillRect(ox + 9, oy + 8, 4, 1); break; }
       case 'mycelium_top': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.3 ? '#6a5a70' : t < 0.65 ? '#7a6a80' : '#8a7690'); } break;
+      case 'ladder': {   // V21-E2: 자체 디자인 — 세로 레일 2 + 가로 발판 4(배경 투명)
+        for (let y = 0; y < 16; y++) for (const x of [2, 3, 12, 13]) f(x, y, x === 2 || x === 12 ? '#8a6a3c' : '#a07c46');
+        for (const ry of [2, 6, 10, 14]) for (let x = 4; x < 12; x++) { f(x, ry, '#9c7a44'); f(x, ry + 1, '#7a5f34'); }
+        break;
+      }
+      case 'bed_top': {   // 자체 디자인 — 베개(상단 1/3 흰색) + 이불(하단 붉은색, 주름선)
+        for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) f(x, y, y < 5 ? (r() < 0.15 ? '#e2e2dc' : '#f2f2ec') : (r() < 0.2 ? '#9e1f1c' : '#b02724'));
+        for (let x = 0; x < 16; x++) { f(x, 5, '#7a1512'); f(x, 10, '#8e1b18'); }
+        c.strokeStyle = '#5a3a1d'; c.strokeRect(ox + 0.5, oy + 0.5, 15, 15);
+        break;
+      }
+      case 'bed_side': {   // 자체 디자인 — 나무 받침 + 이불 옆면
+        for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) f(x, y, y >= 12 ? '#7a5f34' : y >= 10 ? '#8a6a3c' : (r() < 0.2 ? '#9e1f1c' : '#b02724'));
+        for (let x = 0; x < 16; x++) f(x, 3, '#7a1512');
+        break;
+      }
       case 'mushroom_stem': fillNoise('#d5cfc2', '#c8c2b4', '#e2dcd0'); break;
       case 'mushroom_red': { fillNoise('#b02724', '#9e1f1c', '#c23330'); for (let i = 0; i < 4; i++) { const bx = 1 + ((r() * 11) | 0), by = 1 + ((r() * 11) | 0); c.fillStyle = '#f2efe4'; c.fillRect(ox + bx, oy + by, 3, 3); } break; }
       case 'mushroom_brown': fillNoise('#8a674a', '#7a5a3e', '#9a7656'); break;
@@ -3982,6 +4009,29 @@
     list.forEach((nm, i) => { const cx = (i % cols), cy = ((i / cols) | 0); const e = 0.01; atlasUV[nm] = { x0: (cx + e) / cols, x1: (cx + 1 - e) / cols, y0: (cy + e) / rows, y1: (cy + 1 - e) / rows }; });
     atlasTex = new THREE.CanvasTexture(cv); atlasTex.magFilter = THREE.NearestFilter; atlasTex.minFilter = THREE.NearestFilter; atlasTex.generateMipmaps = false;
     atlasTex.flipY = false; atlasTex.needsUpdate = true;
+    // V21-E4: 사용자 리소스팩 오버레이 — resourcepack/manifest.json에 나열된 타일명을
+    //   resourcepack/<타일명>.png(16×16)로 로드해 아틀라스에 덮어쓴다(없으면 절차 텍스처 유지).
+    //   ※ 텍스처 파일은 사용자가 직접 로컬에 넣는다 — 저장소에는 포함하지 않는다(저작권).
+    try {
+      fetch('resourcepack/manifest.json').then(r => (r.ok ? r.json() : null)).then(man => {
+        if (!man || !Array.isArray(man.tiles)) return;
+        let pending = 0;
+        man.tiles.forEach(nm => {
+          if (!atlasUV[nm]) return;
+          const i = list.indexOf(nm); if (i < 0) return;
+          pending++;
+          const img2 = new Image();
+          img2.onload = () => {
+            const tx = (i % cols) * 16, ty = ((i / cols) | 0) * 16;
+            c.clearRect(tx, ty, 16, 16); c.drawImage(img2, tx, ty, 16, 16);
+            atlasTex.needsUpdate = true;
+            if (--pending === 0 && typeof toast === 'function') toast('🎨 리소스팩 텍스처 적용됨', true);
+          };
+          img2.onerror = () => { pending--; };
+          img2.src = 'resourcepack/' + nm + '.png';
+        });
+      }).catch(() => {});
+    } catch (e) {}
     blockMat = new THREE.MeshBasicMaterial({ map: atlasTex, vertexColors: true });
     waterMat = new THREE.MeshBasicMaterial({ map: atlasTex, vertexColors: true, transparent: true, opacity: 0.72, depthWrite: false });
     plantMat = new THREE.MeshBasicMaterial({ map: atlasTex, vertexColors: true, alphaTest: 0.5, side: THREE.DoubleSide });
@@ -4081,6 +4131,16 @@
     }
     if (b.shape === 'trapdoor') { emitBox(T, b, x, y, z, 0, 0, 0, 1, 0.1875, 1); return; }   // 닫힘: 바닥 얇은 판
     if (b.shape === 'chest') { emitBox(T, b, x, y, z, 0.0625, 0, 0.0625, 0.9375, 0.875, 0.9375); return; }
+    if (b.shape === 'ladder') {   // V21-E2: 벽 부착 얇은 판(부착 벽 방향 f: 0=-z 1=+x 2=+z 3=-x)
+      const L = [[0, 0, 0, 1, 1, 0.0625], [0.9375, 0, 0, 1, 1, 1], [0, 0, 0.9375, 1, 1, 1], [0, 0, 0, 0.0625, 1, 1]][b.facing || 0];
+      emitBox(T, b, x, y, z, L[0], L[1], L[2], L[3], L[4], L[5]);
+      return;
+    }
+    if (b.shape === 'bed') {   // V21-E2: 침대 — 매트리스(9/16) + 받침 다리 4개
+      emitBox(T, b, x, y, z, 0, 0.1875, 0, 1, 0.5625, 1);
+      for (const [lx, lz] of [[0, 0], [0.8125, 0], [0, 0.8125], [0.8125, 0.8125]]) emitBox(T, b, x, y, z, lx, 0, lz, lx + 0.1875, 0.1875, lz + 0.1875);
+      return;
+    }
     if (b.shape === 'door') {   // 얇은 세로 판(한 칸 높이) — 열림은 90° 회전
       const f = b.open ? (b.facing + 1) % 4 : b.facing;
       const D = [[0, 0, 0, 1, 1, 0.1875], [0.8125, 0, 0, 1, 1, 1], [0, 0, 0.8125, 1, 1, 1], [0, 0, 0, 0.1875, 1, 1]][f];
@@ -4608,6 +4668,12 @@
       return boxes;
     }
     if (b.shape === 'chest') { add(0.0625, 0, 0.0625, 0.9375, 0.875, 0.9375); return boxes; }
+    if (b.shape === 'ladder') {   // V21-E2: 보이는 얇은 판과 정확히 일치하는 히트박스
+      const L = [[0, 0, 0, 1, 1, 0.0625], [0.9375, 0, 0, 1, 1, 1], [0, 0, 0.9375, 1, 1, 1], [0, 0, 0, 0.0625, 1, 1]][b.facing || 0];
+      add(L[0], L[1], L[2], L[3], L[4], L[5]);
+      return boxes;
+    }
+    if (b.shape === 'bed') { add(0, 0, 0, 1, 0.5625, 1); return boxes; }
     add(0, 0, 0, 1, b.collTop != null ? b.collTop : 1, 1);
     return boxes;
   }
@@ -4653,7 +4719,7 @@
     P._sneaking = !!(keys.ShiftLeft || keys.ShiftRight) && P.onGround && !inWater;   // V12 Sneak 상태
     const sin = Math.sin(P.yaw), cos = Math.cos(P.yaw);
     let speed = P._sneaking ? 1.3 : (sprint ? 5.8 : 4.3);   // V12: 슬금 = 걷기 30%(위키)
-    if (inWater) speed *= 0.55;
+    if (inWater) speed *= (P._boat ? 1.8 : 0.55);   // V21-E2: 보트는 물에서 빠르게 활주
     // 슈가 러시 인챈트 이동속도 보너스
     if (window.econApi && window.econApi.moveSpeedPct) speed *= 1 + window.econApi.moveSpeedPct() / 100;
     let dx = (-sin * mf + cos * ms), dz = (-cos * mf - sin * ms);
@@ -4664,14 +4730,35 @@
     const jumpEdge = wantJump && !P._prevJump;
     P._prevJump = wantJump;
     if (inWater) {
+      if (P._boat) {   // V21-E2: 보트 — 수면에 떠서 활주(가라앉지 않음), 슬금=하선
+        let topW = Math.floor(P.y);
+        for (let yy = Math.floor(P.y); yy < H - 1; yy++) { if (getBlockLocal(Math.floor(P.x), yy, Math.floor(P.z)) === ID.water) topW = yy; else break; }
+        P.vy = 0; P.y += ((topW + 0.95) - P.y) * Math.min(1, dt * 10);
+        if (keys.ShiftLeft || keys.ShiftRight) { P._boat = false; removeBoatMesh(); if (typeof toast === 'function') toast('🛶 하선했어요', true); }
+      } else {
       P.vy -= 9 * dt; if (wantJump) P.vy += 26 * dt; if (P.vy < -4) P.vy = -4; if (P.vy > 5) P.vy = 5; P._djUsed = false;
       // 수면 근처에서 점프하면 뭍으로 뛰어오를 수 있게(허우적대다 못 나오는 문제 해결)
       const headWater = getBlockLocal(Math.floor(P.x), Math.floor(P.y + 1.1), Math.floor(P.z)) === ID.water;
       if (wantJump && !headWater) P.vy = 8.5;
+      }
     }
     else {
       P.vy -= 32 * dt; if (P.vy < -78) P.vy = -78;
       if (jumpEdge && P.onGround) { P.vy = 8.5; P.onGround = false; }
+    }
+    // V21-E2: 사다리 오르기(MC 표준) — 몸이 사다리 칸과 겹치면: 전진/점프=상승, 슬금=정지, 그 외 느린 하강
+    {
+      const bx = Math.floor(P.x), bz = Math.floor(P.z);
+      let onLadder = false;
+      for (const yy of [Math.floor(P.y + 0.1), Math.floor(P.y + 1)]) {
+        const lb = BLOCKS[getBlockLocal(bx, yy, bz)];
+        if (lb && lb.climb) { onLadder = true; break; }
+      }
+      if (onLadder && !inWater) {
+        if (mf > 0 || wantJump) P.vy = 3.4;
+        else if (keys.ShiftLeft || keys.ShiftRight) P.vy = 0;
+        else if (P.vy < -2.4) P.vy = -2.4;
+      }
     }
     moveAxis('x', P.vx * dt); moveAxis('z', P.vz * dt); P.onGround = false; moveAxis('y', P.vy * dt);
     if (P.onGround) P._djUsed = false;
@@ -4747,11 +4834,39 @@
       if (bb && bb.shape === 'door') { if (!repeat) toggleDoor(tb.x, tb.y, tb.z); return true; }
       if (!repeat && interactHomeBlock(tb)) return true;
     }
+    // V21-E2: 보트 — 보트를 들고 물을 향해 우클릭 = 탑승(슬금 키로 하선)
+    if (!repeat && !P._boat && activeHotbarKey() === 'boat') {
+      const d = lookDir(); const wx = Math.floor(P.x + d.x * 2.2), wz = Math.floor(P.z + d.z * 2.2);
+      let wy = -1;
+      for (let yy = Math.min(H - 2, Math.floor(P.y + 2)); yy >= 2; yy--) { if (getBlockLocal(wx, yy, wz) === ID.water) { wy = yy; break; } }
+      if (wy > 0) {
+        P._boat = true; P.x = wx + 0.5; P.z = wz + 0.5; P.y = wy + 0.95; P.vy = 0;
+        ensureBoatMesh();
+        if (typeof toast === 'function') toast('🛶 보트 탑승! Shift(슬금)로 내려요', true);
+        return true;
+      }
+    }
     if (worldMode === 'home') return homePlaceBlock(!!repeat);
     if (fishing) return true;
     if (!repeat) { if (!startFishing()) openPanelForZone('hub', 'menu'); }   // 물 조준=낚시, 빈 우클릭=스카이블럭 메뉴
     return true;
   }
+  // V21-E2: 보트 메시(자체 디자인 — 선체 + 좌석)
+  let boatMesh = null;
+  function ensureBoatMesh() {
+    if (boatMesh) { boatMesh.visible = true; return; }
+    const g = new THREE.Group();
+    const hull = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.35, 2.0), new THREE.MeshBasicMaterial({ color: 0x8a5c2d }));
+    hull.position.y = 0.18; g.add(hull);
+    const rimL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.28, 2.0), new THREE.MeshBasicMaterial({ color: 0x6b4520 }));
+    rimL.position.set(-0.6, 0.4, 0); g.add(rimL);
+    const rimR = rimL.clone(); rimR.position.x = 0.6; g.add(rimR);
+    const bow = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.28, 0.14), new THREE.MeshBasicMaterial({ color: 0x6b4520 }));
+    bow.position.set(0, 0.4, -0.95); g.add(bow);
+    const stern = bow.clone(); stern.position.z = 0.95; g.add(stern);
+    boatMesh = g; scene.add(g);
+  }
+  function removeBoatMesh() { if (boatMesh) boatMesh.visible = false; }
   function onDown(e) {
     if (panelOpen()) return;
     if (!isTouch) e.preventDefault();
@@ -4935,9 +5050,21 @@
     const b = BLOCKS[getBlockLocal(t.x, t.y, t.z)];
     if (!b) return false;
     if (b.shape === 'door') return toggleDoor(t.x, t.y, t.z);
-    if (b.key === 'crafting_table') { openPanelForZone('hub', 'craft'); return true; }
-    if (b.key === 'furnace') { openPanelForZone('hub', 'craft'); if (typeof toast === 'function') toast('🔥 화로: 제작 탭의 [화로 제련]에서 제련하세요 (석탄 1 = 8회)', true); return true; }
-    if (b.key === 'chest') { openPanelForZone('hub', 'inv'); return true; }
+    // V21-E1: 작업대/화로/상자는 '내 프라이빗 섬'에서만 사용(허브·타인 섬·테마 섬 사용 금지, 실제 스블 규칙)
+    if (b.key === 'crafting_table' || b.key === 'furnace' || b.key === 'chest') {
+      if (worldMode !== 'home') { if (typeof toast === 'function') toast('🔒 내 프라이빗 섬에서만 사용할 수 있어요', false); return true; }
+      if (b.key === 'crafting_table') { openPanelForZone('hub', 'craft'); return true; }
+      if (b.key === 'furnace') { openPanelForZone('hub', 'craft'); if (typeof toast === 'function') toast('🔥 화로: 제작 탭의 [화로 제련]에서 제련하세요 (석탄 1 = 8회)', true); return true; }
+      openChestAt(t.x, t.y, t.z); return true;   // V21-E1: 상자별 독립 보관함
+    }
+    if (b.shape === 'bed') {   // V21-E2: 침대 — 프라이빗 섬 전용, 수면=완전 회복+아침
+      if (worldMode !== 'home') { if (typeof toast === 'function') toast('🔒 내 프라이빗 섬에서만 사용할 수 있어요', false); return true; }
+      if (php) php.hp = php.max;
+      worldTime = DAY_LEN * 0.25;
+      if (typeof toast === 'function') toast('🛏️ 푹 잤다! 체력이 모두 회복되고 아침이 밝았어요', true);
+      updateHpHud();
+      return true;
+    }
     if (b.key && b.key.indexOf('portal_') === 0) { warpTo(b.key.slice(7), false); return true; }
     // V21-D2: 파크 진행 게이트(울타리/발광석 우클릭 = 개방 시도)
     if (worldMode === 'park' && (b.key === 'oak_fence' || b.key === 'glowstone')) {
@@ -4945,6 +5072,12 @@
       if (gi >= 0) { tryOpenParkGate(gi); return true; }
     }
     return false;
+  }
+  // V21-E1: 상자 열기 — economy.js의 상자별 독립 보관함 + 패널 표시
+  function openChestAt(x, y, z) {
+    const api = econApi();
+    if (api.openChest) { api.openChest(`${x},${y},${z}`); openPanelForZone('hub', 'chest'); }
+    else openPanelForZone('hub', 'inv');
   }
   function homePlaceBlock(placeOnly) {
     if (worldMode !== 'home') return false;
@@ -4976,6 +5109,12 @@
       const d = lookDir(); let f;
       if (Math.abs(d.x) > Math.abs(d.z)) f = d.x > 0 ? 1 : 3; else f = d.z > 0 ? 2 : 0;
       id = ID[key + '_' + f];
+    }
+    if (key === 'ladder') {   // V21-E2: 클릭한 옆면 벽에 부착(윗면/밑면 클릭 시 시선 반대 벽)
+      let f;
+      if (t.face[1] === 0) f = t.face[2] === -1 ? 2 : t.face[2] === 1 ? 0 : (t.face[0] === -1 ? 1 : 3);
+      else { const d = lookDir(); f = Math.abs(d.x) > Math.abs(d.z) ? (d.x > 0 ? 3 : 1) : (d.z > 0 ? 0 : 2); }
+      id = ID['ladder_' + f];
     }
     world[widx(nx, ny, nz)] = id;
     if (api.setHomeEdit) api.setHomeEdit(nx, ny, nz, id);
@@ -5118,6 +5257,7 @@
   function doGatherBreak(x, y, z, g, api) {
     if (g.res && (g.chance == null || Math.random() < g.chance) && api.gatherBlock) api.gatherBlock(g.res, g.fam);
     if (g.homeDrop !== undefined) {   // V13-A: 홈 건축 블럭 파괴 → 아이템 드롭 + 영속 편집
+      if (g.homeDrop === 'chest' && api.dumpChest) api.dumpChest(`${x},${y},${z}`);   // V21-E1: 상자 파괴 시 내용물 회수(유실 방지)
       if (g.homeDrop && api.giveItem) api.giveItem(g.homeDrop, 1);
       if (api.setHomeEdit) api.setHomeEdit(x, y, z, 0);
     }
@@ -6330,6 +6470,7 @@
       _hpHudT += dt; if (_hpHudT > 0.5) { _hpHudT = 0; updateHpHud(); }
       if (isTouch) updateJoystick(dt);
       flushWorldEdits();   // 블록 편집 → 메시 리빌드(프레임당 1회로 병합, 더티 청크만)
+      if (boatMesh && boatMesh.visible) { boatMesh.position.set(P.x, P.y - 0.35, P.z); boatMesh.rotation.y = P.yaw; if (!P._boat) removeBoatMesh(); }
       camera.position.set(P.x, P.y + P.eye, P.z);
       const d = lookDir(); camera.lookAt(P.x + d.x, P.y + P.eye + d.y, P.z + d.z);
       updateAimHighlight();
