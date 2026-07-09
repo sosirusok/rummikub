@@ -1753,7 +1753,7 @@
     }
     else if (roll < 0.05) { const coins = 100 + Math.floor(Math.random() * 400); addGold(coins); extra = { kind: 'treasure', coins }; }
     else if (roll < 0.17) extra = { kind: 'seaCreature', deep: fishLv >= 15 && Math.random() < 0.25 };   // V11: 낚시 Lv15+ 심해 생물
-    saveLocal();
+    if (++_gatherSaveN % 10 === 0) saveLocal();   // V24-B: 스로틀
     return { key: pick.key, name: itemName(pick.key), n: qty, extra };
   }
   // 3D 전투: 한 타격의 피해 계산(크리/조건부 인챈트/흡혈 포함)
@@ -1817,7 +1817,7 @@
       P.bestiary[mob.type] = (P.bestiary[mob.type] || 0) + 1;
       slayerQuestProgress(mob.type);
     }
-    saveLocal();
+    if (++_gatherSaveN % 10 === 0) saveLocal();   // V24-B: 처치마다 풀 저장 → 10회당 1회(프레임 히치 방지)
     return coins;
   }
   // 도감 마일스톤: 종별 처치 100마리당 전투 피해 +0.5%(최대 +20%)
