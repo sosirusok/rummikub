@@ -1059,6 +1059,30 @@
     townhouse(252, 240, ID.oak_planks); townhouse(262, 240, ID.birch_planks);
     townhouse(272, 240, ID.spruce_planks); townhouse(282, 240, ID.oak_planks);
     [[250, 248], [270, 248], [290, 248]].forEach(([lx, lz]) => lampPost(lx, lz));
+    // ── 6.7) V24-E(건축 #10): 설산 산장촌 — 가문비 산장 3채 + 진입 가로등 ──
+    buildHouse(200, 62, 7, 6, surfaceTop(203, 65), ID.spruce_planks, ID.dark_oak_planks != null ? ID.dark_oak_planks : ID.spruce_planks, ID.spruce_log);
+    buildHouse(214, 58, 6, 5, surfaceTop(217, 60), ID.spruce_planks, ID.spruce_planks, ID.spruce_log);
+    buildHouse(228, 64, 7, 6, surfaceTop(231, 67), ID.oak_planks, ID.spruce_planks, ID.spruce_log);
+    [[208, 70], [222, 66]].forEach(([lx, lz]) => lampPost(lx, lz));
+    // ── 6.8) V24-E(건축 #11): 광산 지상 시설 — 갱구 헤드프레임(도르래 탑) + 광차 레일 + 폐석 더미 + 광부 텐트 ──
+    {
+      const hx = 100, hz = 203, hy = surfaceTop(hx, hz);
+      for (const [ox, oz] of [[-1, -1], [2, -1], [-1, 2], [2, 2]]) for (let y = 0; y < 5; y++) S(hx + ox, hy + y, hz + oz, ID.spruce_log);   // 4주 다리
+      for (let dx = -1; dx <= 2; dx++) for (let dz = -1; dz <= 2; dz++) S(hx + dx, hy + 5, hz + dz, ID.spruce_planks);   // 상판
+      S(hx, hy + 6, hz, ID.oak_fence); S(hx + 1, hy + 6, hz, ID.oak_fence); S(hx, hy + 7, hz, ID.glowstone);   // 도르래 + 등
+      // 광차 레일(자갈 침목 + 울타리 레일 암시): 갱구에서 폐석장까지
+      for (let i = 0; i < 12; i++) { const rx = hx - 4 - i, rz = hz - (i >> 2); const ry = surfaceTop(rx, rz); S(rx, ry - 1, rz, ID.gravel); if (i % 3 === 0) S(rx, ry, rz, slabIdFor(ID.oak_planks) != null ? slabIdFor(ID.oak_planks) : ID.oak_planks); }
+      // 폐석 더미 2 + 석탄 더미 1
+      const t1 = surfaceTop(84, 198); S(84, t1, 198, ID.gravel); S(85, t1, 198, ID.gravel); S(84, t1 + 1, 198, ID.gravel);
+      const t2 = surfaceTop(88, 194); S(88, t2, 194, ID.coal_block != null ? ID.coal_block : ID.gravel); S(88, t2 + 1, 194, ID.gravel);
+      // 광부 텐트 2(양털 A형)
+      for (const [tx, tz, col] of [[92, 188, ID.wool_white], [96, 186, ID.wool_yellow != null ? ID.wool_yellow : ID.wool_white]]) {
+        const ty = surfaceTop(tx, tz);
+        for (let dz = 0; dz <= 2; dz++) { S(tx - 1, ty, tz + dz, col); S(tx + 1, ty, tz + dz, col); S(tx, ty + 1, tz + dz, col); }
+        S(tx, ty, tz + 2, 0);
+      }
+      lampPost(94, 196);
+    }
     // ── 7) 대로변 가로등(광장→각 존 도로를 따라 약 18칸 간격) ──
     [[224, 92], [110, 208], [156, 314], [326, 224], [146, 136], [318, 318], [224, 348], [318, 124]].forEach(([tx, tz]) => {
       const steps = Math.max(Math.abs(tx - 224), Math.abs(tz - 224));
@@ -6419,6 +6443,12 @@
       const mp = m.mesh.position;
       const dx = P.x - mp.x, dz = P.z - mp.z;
       const distP = Math.hypot(dx, dz);
+      // V24-E(감사 #25): 원거리 디스폰 — 128칸 밖 일반 몹은 조용히 제거(스포너가 밀도 유지, 보스/아레나/고스트 제외)
+      if (distP > 128 && !m.isBoss && !m.arena && !m.ghost && !(m.def && (m.def.miniboss || m.def.hellBoss)) && worldMode !== 'dungeon') {
+        m.dead = true; scene.remove(m.mesh); disposeGroup(m.mesh);
+        const _mi = mobs.indexOf(m); if (_mi >= 0) mobs.splice(_mi, 1);
+        continue;
+      }
       if (distP > 70) continue;   // 먼 몹은 AI 정지(대형 허브 성능)
       const aggro = m.def.passive ? -1 : (m.elite ? 14 : 10);
       if (aggro > 0 && distP < aggro && Math.abs(P.y - mp.y) < 4) m.state = 'chase';
@@ -6481,6 +6511,12 @@
         const ny = groundBelow(Math.floor(nx), Math.floor(nz), mp.y + 1.8);
         const floorOk = solidAt(Math.floor(nx), Math.floor(ny - 0.05), Math.floor(nz));
         if (floorOk && ny - mp.y < 1.6 && ny - mp.y > -6 && ny > 2) { mp.x = nx; mp.z = nz; mp.y += (ny - mp.y) * Math.min(1, dt * 8); }
+        else if ((kbdx || kbdz) && ny > 2) { mp.x = nx; mp.z = nz; mp.y += (ny - mp.y) * Math.min(1, dt * 6); }   // V24-E(#10): 넉백은 절벽 아래로도 밀려남
+        else if ((kbdx || kbdz) && ny <= 2) {   // 공허로 밀려 떨어짐 — 조용히 제거(보상 없음, MC 공허사)
+          m.dead = true; scene.remove(m.mesh); disposeGroup(m.mesh);
+          const _mi2 = mobs.indexOf(m); if (_mi2 >= 0) mobs.splice(_mi2, 1);
+          continue;
+        }
         }
         if (mvx || mvz) m.mesh.rotation.y = Math.atan2(mvx, mvz);   // V24: 넉백만 있을 땐 방향 유지
         m.walkT += dt * 7;
@@ -6954,9 +6990,13 @@
     const c = cv.getContext('2d'); const s = cv.width;
     c.imageSmoothingEnabled = false;
     c.drawImage(minimapBase, 0, 0, W, Dp, 0, 0, s, s);
-    // NPC 점(금색) + 플레이어(빨강 + 시선 방향)
-    c.fillStyle = '#ffd700';
-    NPCS.forEach(n => c.fillRect(n.x / W * s - 1, n.z / Dp * s - 1, 2, 2));
+    // V24-E(감사 #18): NPC는 허브에서만 + 적대 몹(주황)/동물(흰)/포탈(초록)/워프패드(청록) 마커
+    if (worldMode === 'hub') { c.fillStyle = '#ffd700'; NPCS.forEach(n => c.fillRect(n.x / W * s - 1, n.z / Dp * s - 1, 2, 2)); }
+    for (const mb of mobs) { if (mb.dead) continue; const q = mb.mesh.position; c.fillStyle = mb.def && mb.def.passive ? '#ffffff' : '#ff8820'; c.fillRect(q.x / W * s - 1, q.z / Dp * s - 1, 2, 2); }
+    const pt = PORTALS[worldMode];
+    if (pt) { c.fillStyle = '#35e07a'; c.fillRect((pt.x + 1) / W * s - 2, pt.z / Dp * s - 2, 4, 4); }
+    c.fillStyle = '#3ad9e0';
+    for (const wp of (WARPS[worldMode] || [])) c.fillRect(wp.x / W * s - 2, wp.z / Dp * s - 2, 4, 4);
     const pxx = P.x / W * s, pzz = P.z / Dp * s;
     c.fillStyle = '#ff3333'; c.beginPath(); c.arc(pxx, pzz, 3, 0, Math.PI * 2); c.fill();
     const d = lookDir();
@@ -6967,6 +7007,14 @@
     const g = document.getElementById('econ3dGold'); if (g) g.textContent = '💰 ' + P0.gold.toLocaleString('ko-KR') + 'G';
     const pg = document.getElementById('econ3dPanelGold'); if (pg) pg.textContent = '💰 ' + P0.gold.toLocaleString('ko-KR') + 'G · 🏦 ' + (P0.bank || 0).toLocaleString('ko-KR') + 'G';
     const fs = document.getElementById('econ3dSouls'); if (fs) fs.textContent = '✨ ' + (P0.fairySouls ? P0.fairySouls.length : 0) + '/' + ((window.ECON_DATA && window.ECON_DATA.FAIRY_SOULS && window.ECON_DATA.FAIRY_SOULS.total) || 24);
+    // V24-E(감사 #14): XP 바 — 최근 획득 스킬의 레벨 내 진행도(실제 MC 경험치 바 위치)
+    const api2 = econApi();
+    if (api2.skillBar) {
+      const sb = api2.skillBar();
+      const fill = document.getElementById('econ3dXpFill'), txt = document.getElementById('econ3dXpTxt');
+      if (fill && sb) { fill.style.width = (sb.need > 0 ? Math.min(100, sb.cur / sb.need * 100) : 100) + '%'; }
+      if (txt && sb) { txt.textContent = `${sb.name} Lv.${sb.lv}` + (sb.need > 0 ? ` · ${Math.floor(sb.cur)}/${sb.need}` : ' · MAX'); }
+    }
   }
   // V13-B: 우측 중앙 위치기반 퀘스트 HUD(진행 중 퀘스트 + 근처 NPC 수락 제안)
   let _lastQuestOffer = '';
@@ -7070,6 +7118,7 @@
       <!-- V13-A: 핫바 밑 초록 체력바 제거 — 체력은 핫바 위 스탯 액션바에 표시 -->
       <div class="econ3d-statsrow" id="econ3dStats"></div>
       <div class="econ3d-itemtitle" id="econ3dItemTitle"></div>
+      <div class="econ3d-xpbar" id="econ3dXpBar"><i id="econ3dXpFill"></i><span id="econ3dXpTxt"></span></div>
       <div class="econ3d-hotbar" id="econ3dHotbar">${Array.from({ length: 9 }, (_, i) => `<button class="econ3d-slot" data-act="econ3d_hotbar" data-i="${i}" id="econ3dSlot${i}"></button>`).join('')}</div>
       <div class="econ3d-buildbar" id="econ3dBuildBar" style="display:none"></div>
       <div class="econ3d-questhud" id="econ3dQuestHud" style="display:none"></div>

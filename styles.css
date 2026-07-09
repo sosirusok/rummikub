@@ -1435,6 +1435,12 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .econ-richtt{position:fixed; z-index:300; display:none; pointer-events:none;
   background:linear-gradient(180deg,rgba(22,15,36,.96),rgba(13,10,24,.97)); border:2px solid #6a3fb5; border-radius:8px; padding:10px 13px;
   font-size:12px; line-height:1.6; min-width:190px; max-width:300px; box-shadow:0 10px 26px rgba(0,0,0,.65);}
+/* V24-E: XP 바 — 핫바 바로 위 얇은 초록 진행 바(실제 MC 위치) */
+.econ3d-xpbar{position:absolute; left:50%; transform:translateX(-50%); bottom:30px; width:388px; max-width:80vw; height:5px;
+  background:rgba(10,14,24,.72); border:1px solid rgba(255,255,255,.22); border-radius:3px; z-index:5; pointer-events:none;}
+.econ3d-xpbar i{display:block; height:100%; width:0; background:linear-gradient(90deg,#69d84f,#a6f26a); border-radius:2px; transition:width .3s;}
+.econ3d-xpbar span{position:absolute; left:50%; transform:translateX(-50%); top:-15px; font-size:11px; font-weight:800; color:#b8f29a;
+  text-shadow:1px 1px 0 #000,-1px 1px 0 #000,1px -1px 0 #000,-1px -1px 0 #000; white-space:nowrap;}
 /* V23-A: 포탈 통과 울렁임(외곡) — 실제 지옥문처럼 화면이 일렁이며 1초 뒤 자동 이동 */
 @keyframes econ3d-portalwob{
   0%{transform:scale(1) skewX(0deg); filter:hue-rotate(0deg) blur(0px) saturate(1);}
