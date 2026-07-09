@@ -1733,6 +1733,7 @@
     restoreAllRegen(); clearMobs(); stopFishing(); mouseHeld = false; useHeld = false; warpCharge = null;
     P._boat = false; removeBoatMesh();   // V21-E2: 월드 이동 시 보트 하선
     P._fallPeak = null; P._air = 0; P._lavaT = 0;   // V22-K: 월드 이동 후 낙하/익사 계산 초기화
+    P._portalT = 0; setPortalFx(false);   // V23-A: 포탈 울렁임 해제
     if (worldMode === 'dungeon' && mode !== 'dungeon') { dungeonState = null; partyGuestMode = false; }
     if (world && worldMode !== 'visit' && worldMode !== 'dungeon') {   // 현재 월드 캐시(널 월드 금지)
       worldCache[worldMode] = { world, W, H, Dp, _at: (worldCache[worldMode] && worldCache[worldMode]._at || 0) + 1 };
@@ -3610,6 +3611,30 @@
     if (warpCharge) { warpCharge = null; const cross = document.getElementById('econ3dCross'); if (cross && !fishing && !breaking) cross.textContent = '+'; }
   }
 
+  // V23-A: 포탈 개구부에 들어가 1초 서 있으면 자동 워프(실제 지옥문) + 화면 울렁임(외곡) 이펙트
+  let _portalFxOn = false;
+  function setPortalFx(on) {
+    if (on === _portalFxOn) return;
+    _portalFxOn = on;
+    if (canvas) canvas.classList.toggle('econ3d-portalwob', on);
+  }
+  function tickPortalStand(dt) {
+    const p = PORTALS[worldMode];
+    if (!p || panelOpen()) { P._portalT = 0; setPortalFx(false); return; }
+    const oy = portalOpenY(p);
+    const inside = P.x >= p.x - 0.1 && P.x <= p.x + 2.1 && P.z >= p.z - 0.15 && P.z <= p.z + 1.15 && P.y > oy - 0.6 && P.y < oy + 3;
+    if (!inside) { P._portalT = 0; setPortalFx(false); return; }
+    setPortalFx(true);
+    P._portalT = (P._portalT || 0) + dt;
+    const cross = document.getElementById('econ3dCross');
+    if (cross) cross.textContent = '🌀';
+    if (P._portalT >= 1.0) {
+      P._portalT = 0; setPortalFx(false);
+      if (cross) cross.textContent = '+';
+      travelTo(p.target);
+    }
+  }
+
   /* ---------------- 3D 카타콤 던전: 직접 돌아다니며 몬스터를 잡고 보스까지 ---------------- */
   let dungeonState = null;   // {floor, fd, rooms:[{x0,x1,gateX,kills,need,cleared}], t0, deaths, kills, bossSpawned}
   function genDungeon() {
@@ -4900,7 +4925,7 @@
     // V22-H1: 조이스틱(가상 이동 드래그) 제거
     const inWater = feetInWater();
     if (mf <= 0) P._sprintLatch = false;                    // 전진을 멈추면 스프린트 해제
-    const sprint = (P._sprintLatch || keys.ControlLeft || keys.ControlRight) && mf > 0 && !inWater;
+    const sprint = P._sprintLatch && mf > 0 && !inWater;   // V23-A: Ctrl 달리기 제거 — Ctrl+W가 브라우저 탭 닫기(튕김)와 충돌. 더블탭 W만 사용
     P._sneaking = !!(keys.ShiftLeft || keys.ShiftRight) && P.onGround && !inWater;   // V12 Sneak 상태
     const sin = Math.sin(P.yaw), cos = Math.cos(P.yaw);
     let speed = P._sneaking ? 1.3 : (sprint ? 5.8 : 4.3);   // V12: 슬금 = 걷기 30%(위키)
@@ -4910,9 +4935,8 @@
     let dx = (-sin * mf + cos * ms), dz = (-cos * mf - sin * ms);
     const len = Math.hypot(dx, dz); if (len > 0) { dx /= len; dz /= len; }
     P.vx = dx * speed; P.vz = dz * speed;
-    // 수동 점프: Space를 새로 눌렀을 때만 점프한다.
+    // V23-A: 점프 — Space를 꾹 누르고 있으면 착지할 때마다 자동 재점프(실제 MC 동작)
     const wantJump = !!keys.Space;
-    const jumpEdge = wantJump && !P._prevJump;
     P._prevJump = wantJump;
     if (inWater) {
       if (P._boat) {   // V21-E2: 보트 — 수면에 떠서 활주(가라앉지 않음), 슬금=하선
@@ -4929,7 +4953,7 @@
     }
     else {
       P.vy -= 32 * dt; if (P.vy < -78) P.vy = -78;
-      if (jumpEdge && P.onGround) { P.vy = 8.5; P.onGround = false; }
+      if (wantJump && P.onGround) { P.vy = 8.5; P.onGround = false; }
     }
     // V21-E2: 사다리 오르기(MC 표준) — 몸이 사다리 칸과 겹치면: 전진/점프=상승, 슬금=정지, 그 외 느린 하강
     let onLadderNow = false;
@@ -5245,6 +5269,7 @@
     }
     const drop = blockDropKey(t.id);
     if (drop && econApi().giveItem) econApi().giveItem(drop, 1);   // 파괴 = 아이템 획득
+    scheduleFluidAround(t.x, t.y, t.z);   // V23-A: 빈 자리로 주변 물/용암 확산
     updateBuildHud();
     return true;
   }
@@ -5529,6 +5554,7 @@
     setW(x, y, z, g.to);
     if (g.regen) regenQueue.push({ x, y, z, back: g.back, at: performance.now() + g.regen * 1000 });
     markBlockDirty(x, z);
+    if (!g.to) scheduleFluidAround(x, y, z);   // V23-A: 빈 자리로 주변 물/용암 확산
   }
   function tickRegen() {
     if (!regenQueue.length) return;
@@ -5545,6 +5571,82 @@
   function restoreAllRegen() {   // 월드 이탈 시 즉시 원상복구(캐시된 월드가 영구 고갈되지 않게)
     for (const q of regenQueue) if (getBlockLocal(q.x, q.y, q.z) === ID.bedrock || getBlockLocal(q.x, q.y, q.z) === 0) setW(q.x, q.y, q.z, q.back);
     regenQueue = []; breaking = null;
+    fluidQueue = []; fluidLvl.clear();   // V23-A: 유체 시뮬레이션도 월드 단위로 리셋
+  }
+
+  /* ---------------- V23-A: 물/용암 확산 시뮬레이션 (MC 단순화판) ---------------- */
+  // 소스 블럭 개념 대신 흐름 거리(level)를 Map으로 추적 — 월드 생성 유체 = 레벨 0(소스 취급).
+  // 물: 수평 최대 7칸 / 용암: 3칸(MC 오버월드), 아래로는 무제한(낙하 시 레벨 0 리셋, MC 규칙).
+  // 물+용암 접촉 시 용암이 굳음: 수직(위에서 물) = 흑요석, 수평 = 조약돌 (MC 근사).
+  let fluidQueue = [];            // {x,y,z,at} — 다음 확산 스텝 예약
+  const fluidLvl = new Map();     // "x,y,z" -> 흐름 거리
+  const FLUID_MAX = { water: 7, lava: 3 };
+  const FLUID_TICK = { water: 260, lava: 750 };   // 확산 스텝 간격(ms) — 용암이 더 느리게 흐름(MC)
+  function fkey(x, y, z) { return x + ',' + y + ',' + z; }
+  function fluidLevelOf(x, y, z) { const v = fluidLvl.get(fkey(x, y, z)); return v == null ? 0 : v; }
+  // 블럭이 부서지거나 유체가 노출됐을 때 주변 유체를 깨워 확산 시작
+  function scheduleFluidAround(x, y, z) {
+    for (const d of [[0, 1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, -1, 0]]) {
+      const nx = x + d[0], ny = y + d[1], nz = z + d[2];
+      const b = BLOCKS[getBlockLocal(nx, ny, nz)];
+      if (b && b.liquid) fluidQueue.push({ x: nx, y: ny, z: nz, at: performance.now() + FLUID_TICK[b.lava ? 'lava' : 'water'] });
+    }
+  }
+  function fluidFill(x, y, z, fid, lvl) {
+    if (!inBounds(x, y, z) || y < 2) return;
+    const cb = BLOCKS[getBlockLocal(x, y, z)];
+    if (cb && cb.liquid) {
+      const eff = fluidLvl.has(fkey(x, y, z)) ? fluidLvl.get(fkey(x, y, z)) : 0;   // 기존 유체(소스=0)는 더 강한 흐름만 대체
+      if (eff <= lvl) return;
+    }
+    setW(x, y, z, fid);
+    fluidLvl.set(fkey(x, y, z), lvl);
+    markBlockDirty(x, z); _mapDirty = true;
+    fluidQueue.push({ x, y, z, at: performance.now() + FLUID_TICK[BLOCKS[fid].lava ? 'lava' : 'water'] });
+    if (worldMode === 'home') { const api = econApi(); if (api.setHomeEdit) api.setHomeEdit(x, y, z, fid); }   // 내 섬은 영속 저장
+  }
+  let _hardenToastAt = 0;
+  function hardenLava(x, y, z, vertical) {   // 물과 접촉한 용암 칸이 굳음
+    const to = vertical ? ID.obsidian : ID.cobblestone;
+    setW(x, y, z, to);
+    fluidLvl.delete(fkey(x, y, z));
+    markBlockDirty(x, z); _mapDirty = true;
+    if (worldMode === 'home') { const api = econApi(); if (api.setHomeEdit) api.setHomeEdit(x, y, z, to); }
+    if (typeof toast === 'function' && performance.now() - _hardenToastAt > 4000) { _hardenToastAt = performance.now(); toast(vertical ? '⬛ 물과 용암이 만나 흑요석이 생겼어요!' : '🪨 물과 용암이 만나 조약돌이 생겼어요!', true); }
+  }
+  function tickFluids() {
+    if (!fluidQueue.length) return;
+    const now = performance.now();
+    let budget = 48;   // 프레임당 처리 상한(대홍수 시 프레임 드랍 방지)
+    for (let i = 0; i < fluidQueue.length && budget > 0;) {
+      const q = fluidQueue[i];
+      if (now < q.at) { i++; continue; }
+      fluidQueue.splice(i, 1); budget--;
+      const id = getBlockLocal(q.x, q.y, q.z);
+      const b = BLOCKS[id];
+      if (!b || !b.liquid) { fluidLvl.delete(fkey(q.x, q.y, q.z)); continue; }
+      const kind = b.lava ? 'lava' : 'water';
+      const lvl = fluidLevelOf(q.x, q.y, q.z);
+      const below = getBlockLocal(q.x, q.y - 1, q.z);
+      const bb = BLOCKS[below];
+      if (bb && bb.liquid && !!bb.lava !== !!b.lava) {   // 위아래로 다른 유체 접촉
+        if (bb.lava) hardenLava(q.x, q.y - 1, q.z, true);   // 물이 용암 위로 → 아래 용암이 흑요석
+        else if (b.lava) hardenLava(q.x, q.y, q.z, false);  // 용암이 물 위로 떨어짐 → 용암이 조약돌
+        continue;
+      }
+      if (q.y > 2 && (below === 0 || (bb && !bb.solid && !bb.liquid))) {
+        fluidFill(q.x, q.y - 1, q.z, id, 0);   // 수직 낙하(레벨 리셋) — 아래로 흐르면 수평 확산 없음(MC)
+        continue;
+      }
+      if (lvl >= FLUID_MAX[kind]) continue;
+      for (const d of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = q.x + d[0], nz = q.z + d[1];
+        const nid = getBlockLocal(nx, q.y, nz);
+        const nb = BLOCKS[nid];
+        if (nb && nb.liquid) { if (!!nb.lava !== !!b.lava) hardenLava(b.lava ? q.x : nx, q.y, b.lava ? q.z : nz, false); continue; }
+        if (nid === 0 || (nb && !nb.solid)) fluidFill(nx, q.y, nz, id, lvl + 1);
+      }
+    }
   }
 
   /* ---------------- 낚시(실제로 물에 찌 던지고 기다렸다 낚아채기) ---------------- */
@@ -6284,8 +6386,8 @@
     });
     const portal = PORTALS[worldMode];
     if (portal) {
-      const py = surfaceTop(portal.x, portal.z);
-      interactables.push({ type: 'portal', ref: portal, x: portal.x + 0.5, y: py + 1.5, z: portal.z + 0.5 });
+      const py = portalOpenY(portal);
+      interactables.push({ type: 'portal', ref: portal, x: portal.x + 1.0, y: py + 1.2, z: portal.z + 0.5 });   // V23-A: 개구부 중심(x+1.0, 가슴 높이)으로 정렬
     }
     if (worldMode === 'spider') {
       const ay = surfaceTop(96, 40);
@@ -6640,18 +6742,24 @@
       propGroup.add(label);
     }
   }
+  // V23-A: 포탈 개구부 바닥(문지방 바로 위 설 수 있는 칸) — 프레임 지붕 때문에 surfaceTop(위→아래 스캔)은
+  //   아치 꼭대기를 짚어 이펙트/트리거가 공중에 뜨던 고질 버그의 원인. 아래→위로 '고체 + 위 2칸 공기'를 찾는다.
+  function portalOpenY(p) {
+    for (let y = 2; y < H - 3; y++) if (solidAt(p.x, y, p.z) && !solidAt(p.x, y + 1, p.z) && !solidAt(p.x, y + 2, p.z)) return y + 1;
+    return surfaceTop(p.x, p.z);
+  }
   function buildPortalMarker() {
     if (portalMarker) { scene.remove(portalMarker); disposeGroup(portalMarker); portalMarker = null; }
     const p = PORTALS[worldMode];
     if (!p) { buildWarpMarkers(); return; }   // 테마 월드는 포털 대신 워프 패드 마커
-    const y = surfaceTop(p.x, p.z);
+    const y = portalOpenY(p);
     const g = new THREE.Group();
-    // V20-T: 포탈 이펙트를 프레임 개구부(가로2×세로3, y+1~y+4) 안에 정확히 배치. 목적지별 이펙트 색.
+    // 포탈 이펙트를 프레임 개구부(가로2×세로3) 안에 정확히 배치. 목적지별 이펙트 색.
     const fillCol = (p.fx != null) ? p.fx : 0xb04ae8;
     const fill = new THREE.Mesh(new THREE.PlaneGeometry(1.86, 2.86), new THREE.MeshBasicMaterial({ color: fillCol, transparent: true, opacity: 0.62, side: THREE.DoubleSide }));
-    fill.position.set(p.x + 0.5, y + 2.5, p.z + 0.5);
+    fill.position.set(p.x + 1.0, y + 1.5, p.z + 0.5);   // V23-A: 개구부 두 칸(x~x+2)의 중심 x+1.0, 바닥 y부터 3칸
     g.add(fill);
-    const label = makeLabel(p.label); label.position.set(p.x + 0.5, y + 4.8, p.z + 0.5); g.add(label);
+    const label = makeLabel(p.label); label.position.set(p.x + 1.0, y + 3.8, p.z + 0.5); g.add(label);
     buildWarpMarkers();
     g.userData.fill = fill;
     scene.add(g);
@@ -6718,9 +6826,9 @@
           }
         }
         if (isTouch && worldMode !== 'visit' && lookT.id !== -1 && !lookT.acted && (lookT.moved || 0) < 10 && performance.now() - lookT.downT > 250) progressBreaking(dt);
-        tickMobs(dt); tickFishing(); tickPlayerVitals(dt); tickWarpPads(dt); tickPartyDungeonSync(dt);
+        tickMobs(dt); tickFishing(); tickPlayerVitals(dt); tickWarpPads(dt); tickPortalStand(dt); tickPartyDungeonSync(dt);
       }
-      tickRegen(); tickDmgTexts(dt); tickBuildQueue(); tickChunkCulling(dt); tickAdaptiveView(dt); tickFluidAnim(dt); tickCrackOverlay();
+      tickRegen(); tickFluids(); tickDmgTexts(dt); tickBuildQueue(); tickChunkCulling(dt); tickAdaptiveView(dt); tickFluidAnim(dt); tickCrackOverlay();
       _hpHudT += dt; if (_hpHudT > 0.5) { _hpHudT = 0; updateHpHud(); }
       flushWorldEdits();   // 블록 편집 → 메시 리빌드(프레임당 1회로 병합, 더티 청크만)
       if (boatMesh && boatMesh.visible) { boatMesh.position.set(P.x, P.y - 0.35, P.z); boatMesh.rotation.y = P.yaw; if (!P._boat) removeBoatMesh(); }
@@ -6947,6 +7055,7 @@
       parkGateAt, tryOpenParkGate, parkGates: () => genPark._gates || [], agingPass,
       _testCrack: (b) => { breaking = b; tickCrackOverlay(); return { visible: !!(crackMesh && crackMesh.visible), stage: crackStage }; },
       requiredTierFor, homeBlockHardness, showHotbarTitle,   // V22-K 검증용
+      scheduleFluidAround, tickFluids, portalOpenY, tickPortalStand, _setW: setW,   // V23-A 검증용
       mobList: () => mobs.filter(m => !m.dead).map(m => ({ type: m.type, x: m.mesh.position.x, y: m.mesh.position.y, z: m.mesh.position.z })),   // V21-D9 공허 몹 감사용
       chunkMeshCount: () => Object.keys(chunkMeshes).length,   // V12 크래시 검증용
       buildQueueLen: () => buildQueue.length,

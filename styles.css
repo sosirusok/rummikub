@@ -1435,6 +1435,15 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .econ-richtt{position:fixed; z-index:300; display:none; pointer-events:none;
   background:linear-gradient(180deg,rgba(22,15,36,.96),rgba(13,10,24,.97)); border:2px solid #6a3fb5; border-radius:8px; padding:10px 13px;
   font-size:12px; line-height:1.6; min-width:190px; max-width:300px; box-shadow:0 10px 26px rgba(0,0,0,.65);}
+/* V23-A: 포탈 통과 울렁임(외곡) — 실제 지옥문처럼 화면이 일렁이며 1초 뒤 자동 이동 */
+@keyframes econ3d-portalwob{
+  0%{transform:scale(1) skewX(0deg); filter:hue-rotate(0deg) blur(0px) saturate(1);}
+  25%{transform:scale(1.02,0.985) skewX(.5deg); filter:hue-rotate(40deg) blur(1.6px) saturate(1.35);}
+  50%{transform:scale(0.985,1.02) skewX(-.5deg); filter:hue-rotate(-25deg) blur(1px) saturate(1.5);}
+  75%{transform:scale(1.015,0.99) skewX(.35deg); filter:hue-rotate(20deg) blur(1.8px) saturate(1.3);}
+  100%{transform:scale(1) skewX(0deg); filter:hue-rotate(0deg) blur(0px) saturate(1);}
+}
+#econ3dCanvas.econ3d-portalwob{animation:econ3d-portalwob .55s ease-in-out infinite;}
 /* V22-K: MC식 아이템 이름 타이틀 — 핫바 선택 변경 시 핫바 위에 뜨고 서서히 사라짐 */
 .econ3d-itemtitle{position:absolute; left:50%; transform:translateX(-50%); bottom:112px; z-index:5; opacity:0;
   font-size:16px; font-weight:900; letter-spacing:.3px; pointer-events:none; white-space:nowrap;
