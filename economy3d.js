@@ -238,11 +238,13 @@
     oaklog: 0x8a6a3a, birchlog: 0xd7d3c8, sprucelog: 0x4a3722,
     rawfish: 0x3a6ee0, clay: 0xa4a8b6,
   };
+  // V24: 미니언 슬롯 좌표 현행화 — 구 192² 레이아웃 좌표가 공허/엉뚱한 존에 떠 있던 버그.
+  //   각 존 실제 중심 인근(광산 96,208 / 농장 330,224 / 숲 140,130 / 연못 322,322)으로 재배치
   const MINION_SLOTS = {
-    mine: [[48, 96], [50, 100], [46, 100], [52, 96], [44, 92], [50, 92]],
-    farm: [[136, 52], [140, 54], [144, 56], [148, 58], [136, 46], [140, 44]],
-    forest: [[48, 44], [52, 40], [44, 48], [50, 48], [40, 44], [46, 36]],
-    dock: [[140, 142], [144, 140], [148, 138], [140, 148], [136, 146], [144, 152]],
+    mine: [[86, 200], [90, 204], [84, 210], [92, 196], [80, 206], [94, 212]],
+    farm: [[314, 210], [318, 214], [322, 208], [314, 240], [318, 244], [324, 238]],
+    forest: [[128, 118], [134, 114], [124, 126], [150, 120], [146, 142], [122, 138]],
+    dock: [[308, 312], [312, 308], [304, 318], [334, 314], [330, 334], [310, 336]],
   };
   // NPC(존 + 허브 서브탭 연결)
   const NPCS = [
@@ -485,6 +487,7 @@
     // 광장 → 각 구역 대로(자갈길)
     [[224, 92], [110, 208], [156, 314], [326, 224], [146, 136], [318, 318], [224, 348], [318, 124], [294, 372]].forEach(t => pathTo(224, 224, t[0], t[1]));
     decorateWilds();
+    buildWilderness();   // V24: 허허벌판 채우기 — 풍차/코티지/과수원/정자/캠프/목장(손 배치)
     buildHubPortal();
     buildWarpPads();
     beautifyHub();   // V20-L: 광장 미화(분수·정원·벤치·현수막) — 마지막에 얹어 덮이지 않게
@@ -550,7 +553,7 @@
     buildObservatory();  // V20-AP: 손 배치 원형 천문 관측탑 — 허브 북동측
     buildGrandFountain(); // V20-AQ: 손 배치 대형 3단 분수 — 허브 북서측
     buildCathedral();    // V20-AR: 손 배치 대성당(고딕 신전) — 허브 남측
-    buildZiggurat();     // V20-AS: 손 배치 계단식 지구라트(공중정원) — 허브 남동측
+    // V24: buildZiggurat() 제거 — 84칸 옆 buildZigguratV6(던전 입구)와 실루엣 중복(감사 #7). V6 쪽만 유지
     buildMageTower();    // V20-AT: 손 배치 뒤틀린 마법사 탑(부유 룬 고리) — 허브 남서측
     buildShopDetails();  // V20-AV(1차): 도시 중심 상점 인테리어/아웃테리어(업종별 가구·진열·차양)
     buildDowntown();     // V20-AU(1차): 도시 중심 다운타운 — 허허벌판 제거(포장 도로+가로등+화단+시장 소품+우물)
@@ -598,7 +601,7 @@
     const flowers = [ID.wool_red, ID.wool_yellow != null ? ID.wool_yellow : ID.wool_white, ID.wool_pink != null ? ID.wool_pink : ID.wool_red, ID.wool_blue != null ? ID.wool_blue : ID.wool_white];
     const tg = ID.tall_grass, moss = ID.mossy_cobblestone, cob = ID.cobblestone, and_ = ID.polished_andesite != null ? ID.polished_andesite : ID.stone, leaf = ID.oak_leaves != null ? ID.oak_leaves : ID.spruce_leaves;
     for (let x = 96; x <= 352; x += 7) for (let z = 96; z <= 352; z += 7) {
-      if (x >= 176 && x <= 272 && z >= 166 && z <= 264) continue;   // 도시 중심 제외
+      if (x >= 184 && x <= 262 && z >= 178 && z <= 258) continue;   // V24: 다운타운 실제 포장 범위(186-258/182-256)에 맞춤 — 맨땅 해자 링 제거(감사 #17)
       const t = surfaceTop(x, z), g = t - 1;
       if (!isGrass(getBlockLocal(x, g, z))) continue;               // 빈 잔디만
       if (getBlockLocal(x, t, z) !== 0) continue;
@@ -945,6 +948,87 @@
   }
   // V20-AM: 시장 노점 거리 — 좌표 한 칸씩 손 배치(대칭 함수 아님). 5개 노점이 각각 다른 업종/차양색/진열.
   //   허브 남측(광장 아래) z249~257 포장 거리 양옆에 배치. 하이픽셀 상점가 활기.
+  // V24: 야생 지대 손 배치 구조물 — 마을과 외곽 존 사이 빈 들판을 볼거리로 채움("맵이 쓸데없이 크다" 해소)
+  function buildWilderness() {
+    const S = (x, y, z, id) => { if (id != null) setW(x, y, z, id); };
+    // ── 1) 풍차(172,254): 석재 탑신 + 다크오크 캡 + 양털/판자 십자 날개 ──
+    {
+      const cx = 172, cz = 254, gy = surfaceTop(cx, cz);
+      flattenSite(cx - 3, cz - 3, cx + 3, cz + 3, gy - 1);
+      for (let y = 0; y < 9; y++) for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) {
+        const edge = Math.abs(dx) === 2 || Math.abs(dz) === 2;
+        S(cx + dx, gy + y, cz + dz, edge ? (y % 3 === 2 ? ID.stone_bricks : ID.cobblestone) : 0);
+      }
+      for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) S(cx + dx, gy + 9, cz + dz, ID.dark_oak_planks != null ? ID.dark_oak_planks : ID.spruce_planks);
+      S(cx, gy + 10, cz, ID.dark_oak_log != null ? ID.dark_oak_log : ID.oak_log);
+      const dId = ID.spruce_door_c_2; if (dId != null) { S(cx, gy, cz - 2, dId); S(cx, gy + 1, cz - 2, dId); }
+      S(cx - 1, gy + 4, cz - 2, ID.glass); S(cx + 1, gy + 6, cz - 2, ID.glass);
+      // 날개: 정면(z-) 허브 중심(gy+7)에서 대각 4방 — 판자 축 + 양털 깃
+      const hub = [cx, gy + 7, cz - 3]; S(hub[0], hub[1], hub[2], ID.oak_log);
+      for (let i = 1; i <= 4; i++) {
+        for (const [sx, sy] of [[1, 1], [-1, -1], [1, -1], [-1, 1]]) {
+          S(hub[0] + sx * i, hub[1] + sy * i, hub[2], i <= 2 ? ID.oak_planks : (ID.wool_white != null ? ID.wool_white : ID.oak_planks));
+        }
+      }
+      [[190, 246], [180, 262]].forEach(([lx, lz]) => lampPost(lx, lz));
+    }
+    // ── 2) 코티지 3채(서로 다른 수종/크기) ──
+    buildHouse(266, 166, 7, 6, surfaceTop(269, 169), ID.spruce_planks, ID.dark_oak_planks != null ? ID.dark_oak_planks : ID.spruce_planks);
+    buildHouse(184, 180, 6, 5, surfaceTop(187, 182), ID.birch_planks, ID.spruce_planks);
+    buildHouse(260, 262, 7, 6, surfaceTop(263, 265), ID.oak_planks, ID.birch_planks);
+    // ── 3) 과수원(274~292, 148~164): 참나무/자작 격자 + 울타리 테 ──
+    {
+      for (let x = 274; x <= 292; x += 5) for (let z = 148; z <= 164; z += 5) {
+        const gy = surfaceTop(x, z); if (getBlockLocal(x, gy - 1, z) !== ID.grass) continue;
+        const log = (x + z) % 2 ? ID.oak_log : ID.birch_log, leaf = (x + z) % 2 ? ID.oak_leaves : ID.oak_leaves;
+        for (let i = 0; i < 3; i++) S(x, gy + i, z, log);
+        for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) for (let dy = 2; dy <= 3; dy++)
+          if (!(dx === 0 && dz === 0 && dy === 2)) S(x + dx, gy + dy, z + dz, leaf);
+      }
+      for (let x = 272; x <= 294; x += 2) { const g1 = surfaceTop(x, 146), g2 = surfaceTop(x, 166); S(x, g1, 146, ID.oak_fence); S(x, g2, 166, ID.oak_fence); }
+    }
+    // ── 4) 정자(276,276): 석재 단 + 울타리 기둥 + 계단 지붕 + 벤치 ──
+    {
+      const cx = 276, cz = 276, gy = surfaceTop(cx, cz);
+      flattenSite(cx - 3, cz - 3, cx + 3, cz + 3, gy - 1);
+      for (let dx = -3; dx <= 3; dx++) for (let dz = -3; dz <= 3; dz++) S(cx + dx, gy - 1, cz + dz, ID.smooth_stone != null ? ID.smooth_stone : ID.stone_bricks);
+      for (const [ox, oz] of [[-2, -2], [2, -2], [-2, 2], [2, 2]]) { for (let y = 0; y < 3; y++) S(cx + ox, gy + y, cz + oz, ID.oak_fence); }
+      for (let dx = -3; dx <= 3; dx++) for (let dz = -3; dz <= 3; dz++) {
+        const r = Math.max(Math.abs(dx), Math.abs(dz));
+        if (r <= 3) S(cx + dx, gy + 3 + (r === 3 ? 0 : 1), cz + dz, r % 2 ? ID.spruce_planks : ID.dark_oak_planks != null ? ID.dark_oak_planks : ID.spruce_planks);
+      }
+      S(cx, gy + 5, cz, ID.glowstone);
+      const bs = slabIdFor(ID.oak_planks); if (bs != null) { S(cx - 1, gy, cz, bs); S(cx + 1, gy, cz, bs); }
+    }
+    // ── 5) 캠프장(150,232): 양털 텐트 + 모닥불 + 통나무 의자 ──
+    {
+      const cx = 150, cz = 232, gy = surfaceTop(cx, cz);
+      const wR = ID.wool_red != null ? ID.wool_red : ID.bricks, wW = ID.wool_white != null ? ID.wool_white : ID.quartz_block;
+      for (let dz = 0; dz <= 3; dz++) { S(cx - 1, gy, cz + dz, wR); S(cx + 1, gy, cz + dz, wR); S(cx, gy + 1, cz + dz, wW); }
+      S(cx, gy, cz + 3, 0);   // 입구
+      S(cx + 4, gy - 1, cz + 1, ID.netherrack); S(cx + 4, gy, cz + 1, ID.glowstone);   // 모닥불
+      S(cx + 3, gy, cz - 1, ID.oak_log); S(cx + 5, gy, cz + 3, ID.oak_log);           // 통나무 의자
+    }
+    // ── 6) 건초 목장(304,258): 울타리 링 + 건초 더미 + 물통 ──
+    {
+      const x0 = 300, z0 = 252, x1 = 312, z1 = 264;
+      for (let x = x0; x <= x1; x++) { S(x, surfaceTop(x, z0), z0, ID.oak_fence); S(x, surfaceTop(x, z1), z1, ID.oak_fence); }
+      for (let z = z0; z <= z1; z++) { S(x0, surfaceTop(x0, z), z, ID.oak_fence); S(x1, surfaceTop(x1, z), z, ID.oak_fence); }
+      const hg = surfaceTop(305, 257); S(305, hg, 257, ID.hay_block); S(306, hg, 257, ID.hay_block); S(305, hg + 1, 257, ID.hay_block);
+      S(309, surfaceTop(309, 261), 261, ID.hay_block);
+      S(302, surfaceTop(302, 262) - 1, 262, ID.water);   // 물통(움푹)
+      S(304, surfaceTop(304, 252), 252, 0);   // 출입구
+    }
+    // ── 7) 대로변 가로등(광장→각 존 도로를 따라 약 18칸 간격) ──
+    [[224, 92], [110, 208], [156, 314], [326, 224], [146, 136], [318, 318], [224, 348], [318, 124]].forEach(([tx, tz]) => {
+      const steps = Math.max(Math.abs(tx - 224), Math.abs(tz - 224));
+      for (let s = 26; s < steps - 8; s += 18) {
+        const x = Math.round(224 + (tx - 224) * s / steps) + 2, z = Math.round(224 + (tz - 224) * s / steps) + 2;
+        const gy = surfaceTop(x, z);
+        if (getBlockLocal(x, gy - 1, z) === ID.grass || getBlockLocal(x, gy - 1, z) === ID.gravel) lampPost(x, z);
+      }
+    });
+  }
   function buildMarketStalls() {
     flattenSite(196, 248, 244, 258, 19);
     for (let x = 197; x <= 243; x++) for (let z = 250; z <= 256; z++) setW(x, 19, z, ((x + z) % 5 === 0) ? ID.quartz_block : ID.stone_bricks);   // 포장 거리
@@ -1556,33 +1640,48 @@
     }
   }
   function buildRuinsZone() {
-    // V18: 이끼 낀 고대 폐허 — 무너진 아치·기울어진 기둥·부서진 바닥 타일·덩굴
-    const mossy = ID.mossy_cobblestone, sb = ID.stone_bricks;
-    for (let i = 0; i < 14; i++) {
-      const x = 74 + Math.floor(hash3(i, 71, 1) * 30), z = 266 + Math.floor(hash3(i, 72, 2) * 30);
+    // V24(감사 #16): 흩뿌린 기둥 '색종이' 폐허 폐기 → 실제 무너진 신전 한 채(좌표 한 칸 단위 손 배치)
+    //   구성: 침몰 광장 바닥(76~100 × 268~292) + 열주랑 2열(부러진 높이 변주) + 반쯤 선 서벽 + 쓰러진 보 + 중앙 제단
+    const mossy = ID.mossy_cobblestone, sb = ID.stone_bricks, csb = ID.cracked_stone_bricks != null ? ID.cracked_stone_bricks : sb, msb = ID.mossy_stone_bricks != null ? ID.mossy_stone_bricks : mossy;
+    const gy = surfaceTop(88, 280);
+    // 1) 침몰 신전 바닥(가장자리로 갈수록 파손 — 잔디 침식 패치)
+    for (let x = 76; x <= 100; x++) for (let z = 268; z <= 292; z++) {
       if (zoneAt(x, z) !== 'ruins') continue;
-      const y = surfaceTop(x, z), h = 3 + Math.floor(hash3(i, 73, 3) * 4);
-      // 부서진 기둥(위로 갈수록 이끼/파손)
-      for (let j = 0; j < h; j++) setW(x, y + j, z, hash3(i, 74, j) < 0.4 ? mossy : sb);
-      // 기둥머리(계단 4방으로 부서진 주두)
-      if (hash3(i, 76, 5) < 0.5) { const s = stairIdFor(ID.stone_bricks, (i % 4)); if (s != null) setW(x, y + h, z, s); }
-      // 무너진 아치 잔해(옆으로 흘러내린 계단/반블럭)
-      if (hash3(i, 75, 4) < 0.5) {
-        const s = slabIdFor(ID.stone_bricks); const dir = hash3(i, 77, 6) < 0.5 ? 1 : -1;
-        if (s != null) { setW(x + dir, y, z, s); setW(x + dir * 2, y, z, mossy); }
+      const edge = Math.min(x - 76, 100 - x, z - 268, 292 - z);
+      if (edge === 0 && hash3(x, 84, z) < 0.5) continue;   // 테두리는 반쯤 침식
+      const r = hash3(x, 85, z);
+      setW(x, gy - 1, z, r < 0.3 ? mossy : r < 0.55 ? msb : r < 0.8 ? ID.polished_andesite : csb);
+      setW(x, gy, z, 0); setW(x, gy + 1, z, 0);   // 바닥 위 걸림돌 제거
+    }
+    // 2) 열주랑 2열(z272/z288) — 기둥 높이 2~5 변주(부러짐), 일부만 주두 유지
+    const colH = [5, 3, 5, 2, 4, 5, 1];
+    [272, 288].forEach((cz, row) => {
+      for (let i = 0; i < 7; i++) {
+        const cx = 78 + i * 4, h = colH[(i + row * 3) % colH.length];
+        for (let j = 0; j < h; j++) setW(cx, gy + j, cz, j === 0 ? sb : (hash3(cx, 86 + j, cz) < 0.35 ? msb : sb));
+        if (h >= 5) { const s = stairIdFor(sb, row ? 0 : 2); setW(cx, gy + 5, cz, s != null ? s : sb); }   // 온전한 기둥만 주두
       }
+    });
+    // 3) 온전한 기둥 위 남은 인방(부분) — z272 열 x78~86만 연결(반쯤 남은 지붕선)
+    for (let x = 78; x <= 86; x++) setW(x, gy + 6, 272, hash3(x, 88, 1) < 0.3 ? csb : sb);
+    // 4) 반쯤 선 서벽(x76, z270~290) — 높이 파도형 붕괴 + 아치 창 하나
+    for (let z = 270; z <= 290; z++) {
+      const h = Math.max(1, Math.round(4 + Math.sin((z - 270) * 0.55) * 2 - (z > 284 ? (z - 284) : 0)));
+      for (let j = 0; j < h; j++) setW(76, gy + j, z, hash3(76, 89 + j, z) < 0.4 ? msb : sb);
     }
-    // 깨진 바닥 타일 패치(석재벽돌/이끼조약돌 혼합)
-    for (let i = 0; i < 40; i++) {
-      const x = 74 + Math.floor(hash3(i, 81, 7) * 30), z = 266 + Math.floor(hash3(i, 82, 8) * 30);
-      if (zoneAt(x, z) !== 'ruins') continue;
-      const y = surfaceTop(x, z) - 1;
-      if (getBlockLocal(x, y, z) === ID.grass || getBlockLocal(x, y, z) === ID.dirt) setW(x, y, z, hash3(i, 83, 9) < 0.5 ? mossy : ID.polished_andesite);
-    }
-    // 반쯤 무너진 아치 게이트(입구 랜드마크)
-    const gx = 88, gz = 280, gy = surfaceTop(gx, gz);
-    for (let dy = 0; dy < 4; dy++) { setW(gx - 2, gy + dy, gz, sb); setW(gx + 2, gy + dy, gz, dy < 3 ? mossy : sb); }
-    setW(gx - 1, gy + 4, gz, stairIdFor(ID.stone_bricks, 3) || sb); setW(gx, gy + 4, gz, sb); setW(gx + 1, gy + 4, gz, stairIdFor(ID.stone_bricks, 1) || sb);
+    setW(76, gy + 1, 278, 0); setW(76, gy + 2, 278, 0); setW(76, gy + 3, 278, stairIdFor(sb, 2) || sb);   // 아치 창
+    // 5) 쓰러진 보(바닥에 누운 기둥 잔해 — 대각 2개)
+    for (let i = 0; i < 5; i++) { setW(90 + i, gy, 276 + (i >> 1), i === 4 ? csb : sb); }
+    for (let i = 0; i < 4; i++) { setW(82 + i, gy, 284, msb); }
+    // 6) 중앙 제단(치즐 석재 단 + 발광 크리스탈) + 모서리 덤불
+    const ch = ID.chiseled_stone_bricks != null ? ID.chiseled_stone_bricks : sb;
+    setW(88, gy, 280, ch); setW(89, gy, 280, ch); setW(88, gy, 281, ch); setW(89, gy, 281, ch);
+    setW(88, gy + 1, 280, ID.glowstone);
+    [[78, 270], [98, 290], [98, 270]].forEach(([bx, bz]) => { setW(bx, gy, bz, ID.oak_leaves); setW(bx, gy + 1, bz, ID.oak_leaves); });
+    // 7) 입구 아치 게이트(동측, 광장 방향)
+    const gx = 100, gz = 280;
+    for (let dy = 0; dy < 4; dy++) { setW(gx, gy + dy, gz - 2, sb); setW(gx, gy + dy, gz + 2, dy < 3 ? mossy : sb); }
+    setW(gx, gy + 4, gz - 1, stairIdFor(sb, 3) || sb); setW(gx, gy + 4, gz, sb); setW(gx, gy + 4, gz + 1, stairIdFor(sb, 1) || sb);
   }
   function buildZigguratV6() {
     // V18: 대신전 지구라트 — 층마다 계단 트림 + 정면 대계단 + 모서리 화톳불 + 정상 흑요석 성소
@@ -2127,7 +2226,7 @@
     const ok = (x, z) => surfaceTop(x, z) > 3;
     const base = (x, z) => surfaceTop(x, z) + 1;
     buildArrivalPlaza(mode);   // V20-AH: 섬마다 고유 컨셉 포탈 도착 광장(손 배치)
-    if (mode === 'park' && ok(70, 100)) { buildHouse(67, 97, 7, 6, base(70, 100), ID.spruce_planks, ID.oak_planks, ID.oak_log); buildOtherDetail('park'); }   // 삼림 산장 + V20-BA(6차) 디테일
+    if (mode === 'park' && ok(70, 100)) { buildHouse(67, 97, 7, 6, base(70, 100), ID.spruce_planks, ID.oak_planks, ID.oak_log); buildParkCenter(); buildOtherDetail('park'); }   // 삼림 산장 + V24: 중앙 파빌리온(죽은 코드였음, 감사 #20) + 디테일
     else if (mode === 'barn' && ok(58, 100)) { buildBarnEstate(); buildOtherDetail('barn'); }   // V20-AB 대형 농장 + V20-BA(6차) 디테일
     else if (mode === 'gold' && ok(50, 90)) { buildGoldOutpost(); buildGoldDetail(); buildGoldLandmarks(); }   // V20-W 전초기지 + V20-AX 디테일 + V20-BG(7차) 노란림 플랫폼/딥캐번 포탈/용암류
     else if (mode === 'deep' && ok(48, 80)) buildDeepDepot();   // V20-X: 손 배치 지하 크리스탈 채광 정거장
@@ -4509,7 +4608,7 @@
         if (liq && nid === id) continue;
         if (liq && f.n === 'bottom' && ny < 0) continue;
         const tn = faceTexName(b, f.n); const u = atlasUV[tn] || atlasUV.stone;
-        const T = b.lava ? Lv : liq ? Wt : B;
+        const T = b.lava ? Lv : liq ? Wt : (!b.opaque ? Pl : B);   // V24: 유리 등 비불투명 큐브는 알파컷 재질(진짜 투명)
         const sh = f.shade;
         const uvco = [[u.x0, u.y1], [u.x0, u.y0], [u.x1, u.y0], [u.x1, u.y1]];
         const axA = f.ax[0], axB = f.ax[1];
@@ -4970,6 +5069,13 @@
     let dx = (-sin * mf + cos * ms), dz = (-cos * mf - sin * ms);
     const len = Math.hypot(dx, dz); if (len > 0) { dx /= len; dz /= len; }
     P.vx = dx * speed; P.vz = dz * speed;
+    // V24: 넉백 잔류 속도(피격 시 부여) — 입력 속도에 더해지고 지수 감쇠
+    if (P._kbx || P._kbz) {
+      P.vx += P._kbx; P.vz += P._kbz;
+      const dec = Math.max(0, 1 - dt * 5);
+      P._kbx *= dec; P._kbz *= dec;
+      if (Math.abs(P._kbx) < 0.05 && Math.abs(P._kbz) < 0.05) P._kbx = P._kbz = 0;
+    }
     // V23-A: 점프 — Space를 꾹 누르고 있으면 착지할 때마다 자동 재점프(실제 MC 동작)
     const wantJump = !!keys.Space;
     P._prevJump = wantJump;
@@ -6221,6 +6327,9 @@
           const defPct = api.defensePct ? api.defensePct(php && php.hp <= php.max * 0.3) : 0;
           const dealt = m.dmg * (0.85 + Math.random() * 0.3) * (1 - defPct);
           damagePlayer(dealt);
+          // V24: 넉백(실제 MC) — 몹 반대 방향으로 밀려나고 살짝 뜬다
+          const kd = Math.max(0.001, distP); P._kbx = (P.x - mp.x) / kd * 7.5; P._kbz = (P.z - mp.z) / kd * 7.5;
+          if (P.onGround) P.vy = Math.max(P.vy, 4.6);
           const th = (api.traitSum ? api.traitSum('thorns') : 0) + (api.enchThornsPct ? api.enchThornsPct() * 100 : 0);   // V22-K: 가시 — 특성 + 방어구 인챈트 합산 반사
           if (th > 0 && !m.ghost && !m.dead && mobs.indexOf(m) >= 0) {   // 사망→리스폰으로 몹이 정리됐으면 스킵
             m.hp -= dealt * th / 100;
@@ -6234,9 +6343,17 @@
         if (Math.hypot(wdx, wdz) < 0.8) { const a = Math.random() * Math.PI * 2, rr = Math.random() * m.area.r * 0.8; m.tx = m.area.x + Math.cos(a) * rr; m.tz = m.area.z + Math.sin(a) * rr; }
         else { const l = Math.hypot(wdx, wdz); mvx = wdx / l * 0.4; mvz = wdz / l * 0.4; }
       }
-      if (mvx || mvz) {
+      // V24: 몹 넉백 — 플레이어 타격 시 부여된 잔류 속도(지수 감쇠)
+      let kbdx = 0, kbdz = 0;
+      if (m._kbx || m._kbz) {
+        kbdx = m._kbx * dt; kbdz = m._kbz * dt;
+        const dec = Math.max(0, 1 - dt * 6);
+        m._kbx *= dec; m._kbz *= dec;
+        if (Math.abs(m._kbx) < 0.1 && Math.abs(m._kbz) < 0.1) m._kbx = m._kbz = 0;
+      }
+      if (mvx || mvz || kbdx || kbdz) {
         const sp = m.def.speed * (m.state === 'chase' ? 1 : 0.5);
-        const nx = mp.x + mvx * sp * dt, nz = mp.z + mvz * sp * dt;
+        const nx = mp.x + mvx * sp * dt + kbdx, nz = mp.z + mvz * sp * dt + kbdz;
         if (m.def.fly) {   // 가스트: 부유 비행(지면 +5~7 유지)
           const gy = groundBelow(Math.floor(nx), Math.floor(nz), 44) + 5.5 + Math.sin(m.walkT * 0.7) * 1.2;
           mp.x = nx; mp.z = nz; mp.y += (gy - mp.y) * Math.min(1, dt * 2);
@@ -6245,7 +6362,7 @@
         const floorOk = solidAt(Math.floor(nx), Math.floor(ny - 0.05), Math.floor(nz));
         if (floorOk && ny - mp.y < 1.6 && ny - mp.y > -6 && ny > 2) { mp.x = nx; mp.z = nz; mp.y += (ny - mp.y) * Math.min(1, dt * 8); }
         }
-        m.mesh.rotation.y = Math.atan2(mvx, mvz);
+        if (mvx || mvz) m.mesh.rotation.y = Math.atan2(mvx, mvz);   // V24: 넉백만 있을 땐 방향 유지
         m.walkT += dt * 7;
         const sw = Math.sin(m.walkT) * 0.5;
         if (m.legL) { m.legL.rotation.x = sw; m.legR.rotation.x = -sw; }
@@ -6292,9 +6409,10 @@
     m.hp -= r.dmg;
     if (php && r.heal) { php.hp = Math.min(php.max, php.hp + r.heal); }
     spawnDmgText(m.mesh.position, r.dmg, r.crit);
-    // 넉백
-    const kb = 0.7; const dx = m.mesh.position.x - P.x, dz = m.mesh.position.z - P.z; const l = Math.hypot(dx, dz) || 1;
-    m.mesh.position.x += dx / l * kb; m.mesh.position.z += dz / l * kb;
+    // V24: 넉백 — 순간이동식(0.7블럭 즉시) 대신 실제 MC처럼 밀려나는 관성(감쇠 속도)
+    const dx = m.mesh.position.x - P.x, dz = m.mesh.position.z - P.z; const l = Math.hypot(dx, dz) || 1;
+    const kbPow = m.def && (m.def.miniboss || m.def.hellBoss || m.isBoss) ? 2.5 : 6.5;   // 보스급은 덜 밀림
+    m._kbx = (m._kbx || 0) + dx / l * kbPow; m._kbz = (m._kbz || 0) + dz / l * kbPow;
     m.state = 'chase';
     if (m.hp <= 0) attackMobFinish(m);
     else drawMobLabel(m);
@@ -6360,11 +6478,13 @@
     if (!php) php = { hp: max, max, lastHitAt: 0 };
     else { php.max = max; if (php.hp > max) php.hp = max; }
   }
+  let _hurtT = 0;   // V24: 피격 붉은 플래시 타이머
   function damagePlayer(dmg) {
     if (!php) return;
     const apiG = econApi();
     if (apiG.guardPct) dmg *= (1 - apiG.guardPct());   // V11: 수호 특성(받는 피해 감소)
     php.hp -= dmg; php.lastHitAt = performance.now();
+    _hurtT = 0.4;   // V24: 화면 붉은 플래시(맞았다는 확실한 피드백)
     spawnDmgText({ x: P.x, y: P.y, z: P.z }, dmg, false);
     if (php.hp <= 0) {
       const api = econApi();
@@ -6876,12 +6996,16 @@
       _hpHudT += dt; if (_hpHudT > 0.5) { _hpHudT = 0; updateHpHud(); }
       flushWorldEdits();   // 블록 편집 → 메시 리빌드(프레임당 1회로 병합, 더티 청크만)
       if (boatMesh && boatMesh.visible) { boatMesh.position.set(P.x, P.y - 0.35, P.z); boatMesh.rotation.y = P.yaw; if (!P._boat) removeBoatMesh(); }
-      // V21-F2: 수중/용암 속 화면 틴트(머리가 잠긴 동안 색 오버레이 — MC식)
+      // V21-F2: 수중/용암 속 화면 틴트 + V24: 피격 붉은 플래시 / 저체력(25%↓) 상시 경고 비네트 — MC식
       {
         const hb = getBlockLocal(Math.floor(P.x), Math.floor(P.y + P.eye), Math.floor(P.z));
         const tintEl = document.getElementById('econ3dTint');
         if (tintEl) {
-          const want = hb === ID.water ? 'rgba(18,54,150,0.34)' : (hb === ID.lava ? 'rgba(214,72,10,0.55)' : '');
+          if (_hurtT > 0) _hurtT -= dt;
+          const lowHp = php && php.hp < php.max * 0.25;
+          const want = _hurtT > 0 ? 'radial-gradient(ellipse at center, rgba(255,40,40,0.12) 38%, rgba(190,0,0,0.55) 100%)'
+            : lowHp ? 'radial-gradient(ellipse at center, rgba(255,0,0,0) 55%, rgba(170,0,0,0.34) 100%)'
+            : hb === ID.water ? 'rgba(18,54,150,0.34)' : (hb === ID.lava ? 'rgba(214,72,10,0.55)' : '');
           if (tintEl._cur !== want) { tintEl._cur = want; tintEl.style.background = want; tintEl.style.display = want ? 'block' : 'none'; }
         }
       }
