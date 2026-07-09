@@ -497,7 +497,8 @@
       }
     }
     decorateWilds();
-    buildWilderness();   // V24: 허허벌판 채우기 — 풍차/코티지/과수원/정자/캠프/목장(손 배치)
+    buildWilderness();
+    buildHubRealign();   // V25-A: 딥서치(위키 좌표) 기반 실제 허브 정합 — 터번/플라워하우스/커뮤니티센터/시리우스 오두막/침몰 크립트   // V24: 허허벌판 채우기 — 풍차/코티지/과수원/정자/캠프/목장(손 배치)
     buildHubPortal();
     buildWarpPads();
     beautifyHub();   // V20-L: 광장 미화(분수·정원·벤치·현수막) — 마지막에 얹어 덮이지 않게
@@ -1092,6 +1093,68 @@
         if (getBlockLocal(x, gy - 1, z) === ID.grass || getBlockLocal(x, gy - 1, z) === ID.gravel) lampPost(x, z);
       }
     });
+  }
+  // V25-A: 딥서치(wiki.hypixel.net 추출 좌표) 기반 허브 정합 1차 — 실제 허브의 명명 건물/탐험 요소를 우리 좌표계로 이식
+  //   실측 근거: 터번(스폰 서측), 플라워 하우스/커뮤니티 센터(마을 내), 다크 옥션 오두막(야생), 카타콤 입구(묘지 옆 지하 ~14블럭 침몰)
+  function buildHubRealign() {
+    const S = (x, y, z, id) => { if (id != null) setW(x, y, z, id); };
+    // ── 1) 터번(Tavern, 광장 서측 176,210): 다크오크 + 입구 술통(통나무 더미) + 처마 랜턴 ──
+    buildHouse(176, 208, 8, 7, surfaceTop(180, 211), ID.dark_oak_planks != null ? ID.dark_oak_planks : ID.spruce_planks, ID.spruce_planks, ID.dark_oak_log != null ? ID.dark_oak_log : ID.oak_log);
+    { const by = surfaceTop(186, 217); S(186, by, 217, ID.oak_log); S(187, by, 217, ID.oak_log); S(186, by + 1, 217, ID.oak_log); S(185, by, 218, ID.hay_block); }
+    // ── 2) 플라워 하우스(198,194): 흰 벽(석영) + 잎 트림 + 창가 꽃 화단 + 지붕 꽃밭 ──
+    {
+      buildHouse(196, 192, 6, 5, surfaceTop(199, 194), ID.quartz_block, ID.birch_planks, ID.birch_log != null ? ID.birch_log : ID.oak_log);
+      const fy = surfaceTop(199, 198);
+      [[195, 193], [195, 195], [202, 193], [202, 195]].forEach(([fx, fz]) => { S(fx, surfaceTop(fx, fz), fz, hash3(fx, 231, fz) < 0.5 ? ID.flower_red : ID.flower_yellow); });
+      [[197, 191], [199, 191], [201, 191]].forEach(([fx, fz]) => { S(fx, fy + 1, fz, ID.oak_leaves); S(fx, fy + 2, fz, hash3(fx, 232, fz) < 0.5 ? ID.flower_red : ID.flower_yellow); });
+    }
+    // ── 3) 커뮤니티 센터(238,196): 석재 + 초록 배너 기둥 + 게시판 벽 ──
+    {
+      buildHouse(236, 194, 9, 7, surfaceTop(240, 197), ID.stone_bricks, ID.dark_oak_planks != null ? ID.dark_oak_planks : ID.spruce_planks, ID.chiseled_stone_bricks != null ? ID.chiseled_stone_bricks : ID.stone_bricks);
+      const cy = surfaceTop(235, 202);
+      const wg = ID.wool_green != null ? ID.wool_green : (ID.wool_lime != null ? ID.wool_lime : ID.oak_leaves);
+      for (let y = 0; y < 4; y++) S(235, cy + y, 202, y === 3 ? ID.glowstone : wg);   // 배너 기둥
+      for (let dx = 0; dx < 3; dx++) { S(246 + 0, cy + 1, 197 + dx, ID.bookshelf); }   // 게시판 벽(동측)
+    }
+    // ── 4) 다크 옥션 오두막(시리우스 쉑, 야생 336,336): 흑요석 소옥 + 발광 눈 + 다크오크 지붕 ──
+    {
+      const sx = 334, sz = 334, sy = surfaceTop(sx + 2, sz + 2);
+      flattenSite(sx - 1, sz - 1, sx + 5, sz + 5, sy - 1);
+      for (let y = 0; y < 3; y++) for (let dx = 0; dx <= 4; dx++) for (let dz = 0; dz <= 4; dz++) {
+        const edge = dx === 0 || dx === 4 || dz === 0 || dz === 4;
+        S(sx + dx, sy + y, sz + dz, edge ? ID.obsidian : 0);
+      }
+      S(sx + 2, sy, sz, 0); S(sx + 2, sy + 1, sz, 0);   // 입구
+      S(sx + 1, sy + 1, sz + 4, ID.glowstone); S(sx + 3, sy + 1, sz + 4, ID.glowstone);   // 발광 '눈'
+      for (let dx = -1; dx <= 5; dx++) for (let dz = -1; dz <= 5; dz++) S(sx + dx, sy + 3, sz + dz, ID.dark_oak_planks != null ? ID.dark_oak_planks : ID.spruce_planks);
+      S(sx + 2, sy + 4, sz + 2, ID.glowstone);
+    }
+    // ── 5) 침몰 크립트 입구(묘지 168,306): 실제 카타콤처럼 지하로 내려가는 계단 갱도 + 아치 ──
+    {
+      const cx = 168, cz = 306, gy = surfaceTop(cx, cz);
+      for (let i = 0; i < 6; i++) {   // 계단 갱도(남→북, 6칸 내려감)
+        const z = cz + i, fy = gy - 1 - i;
+        for (let dx = -1; dx <= 1; dx++) {
+          for (let y = fy + 1; y <= gy + 1; y++) S(cx + dx, y, z, 0);   // 갱도 비우기
+          S(cx + dx, fy, z, ID.stone_bricks);                            // 계단 바닥
+          S(cx - 2, fy + 1, z, ID.mossy_stone_bricks != null ? ID.mossy_stone_bricks : ID.mossy_cobblestone);   // 측벽
+          S(cx + 2, fy + 1, z, ID.mossy_stone_bricks != null ? ID.mossy_stone_bricks : ID.mossy_cobblestone);
+        }
+        if (i % 2 === 0) S(cx - 2, fy + 2, z, ID.glowstone);
+      }
+      // 바닥 크립트 방(3×3) + 관(석재) + 아치 입구
+      const by = gy - 7, bz = cz + 7;
+      for (let dx = -2; dx <= 2; dx++) for (let dz = 0; dz <= 4; dz++) {
+        for (let y = by + 1; y <= by + 3; y++) S(cx + dx, y, bz + dz, (Math.abs(dx) === 2 || dz === 0 || dz === 4) ? ID.stone_bricks : 0);
+        S(cx + dx, by, bz + dz, ID.cracked_stone_bricks != null ? ID.cracked_stone_bricks : ID.stone_bricks);
+        S(cx + dx, by + 4, bz + dz, ID.stone_bricks);
+      }
+      S(cx, by + 1, bz + 2, ID.chiseled_stone_bricks != null ? ID.chiseled_stone_bricks : ID.stone_bricks);   // 석관
+      S(cx, by + 2, bz + 2, ID.glowstone);
+      // 지상 아치(입구 표식)
+      for (let dy = 0; dy < 3; dy++) { S(cx - 2, gy + dy, cz - 1, ID.stone_bricks); S(cx + 2, gy + dy, cz - 1, ID.stone_bricks); }
+      for (let dx = -2; dx <= 2; dx++) S(cx + dx, gy + 3, cz - 1, ID.mossy_stone_bricks != null ? ID.mossy_stone_bricks : ID.stone_bricks);
+    }
   }
   function buildMarketStalls() {
     flattenSite(196, 248, 244, 258, 19);
