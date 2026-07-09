@@ -4292,6 +4292,47 @@
     }
     atlasTex.needsUpdate = true;
   }
+  // V22-I1: 블럭 파괴 금 가기 오버레이 — MC destroy_stage 0~9와 동일 개념.
+  //   resourcepack/destroy_stage_N.png가 있으면 그대로 사용, 없으면 자체 디자인 크랙 프레임.
+  let crackMesh = null, crackMats = null, crackStage = -1;
+  function buildCrackAssets() {
+    if (crackMats) return;
+    crackMats = [];
+    for (let s = 0; s < 10; s++) {
+      const cv = document.createElement('canvas'); cv.width = cv.height = 16;
+      const c2 = cv.getContext('2d');
+      if (c2) {   // 자체 디자인: 단계가 오를수록 갈라짐(선 수·길이) 증가
+        c2.clearRect(0, 0, 16, 16);
+        c2.strokeStyle = 'rgba(18,18,18,0.88)'; c2.lineWidth = 1;
+        const rng = rngFrom(4321 + s * 97);
+        for (let i = 0; i < 2 + s; i++) {
+          let x = 5 + rng() * 6, y = 5 + rng() * 6;
+          c2.beginPath(); c2.moveTo(x, y);
+          for (let j = 0; j < 2 + ((s / 2) | 0); j++) {
+            x += (rng() - 0.5) * (5 + s); y += (rng() - 0.5) * (5 + s);
+            c2.lineTo(Math.max(0.5, Math.min(15.5, x)), Math.max(0.5, Math.min(15.5, y)));
+          }
+          c2.stroke();
+        }
+      }
+      const tex = new THREE.CanvasTexture(cv);
+      tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestFilter; tex.generateMipmaps = false;
+      const img = new Image();
+      img.onload = () => { const c3 = cv.getContext('2d'); if (!c3) return; c3.clearRect(0, 0, 16, 16); c3.drawImage(img, 0, 0, img.width, Math.min(img.height, img.width), 0, 0, 16, 16); tex.needsUpdate = true; };
+      img.src = 'resourcepack/destroy_stage_' + s + '.png';
+      crackMats.push(new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }));
+    }
+  }
+  function tickCrackOverlay() {
+    if (!scene) return;
+    if (!breaking || !breaking.need) { if (crackMesh) crackMesh.visible = false; crackStage = -1; return; }
+    buildCrackAssets();
+    if (!crackMesh) { crackMesh = new THREE.Mesh(new THREE.BoxGeometry(1.004, 1.004, 1.004), crackMats[0]); scene.add(crackMesh); }
+    const s = Math.max(0, Math.min(9, Math.floor(breaking.t / breaking.need * 10)));
+    if (s !== crackStage) { crackStage = s; crackMesh.material = crackMats[s]; }
+    crackMesh.position.set(breaking.x + 0.5, breaking.y + 0.5, breaking.z + 0.5);
+    crackMesh.visible = true;
+  }
   function tickAdaptiveView(dt) {
     if (dt > 0) _fpsAvg = _fpsAvg * 0.95 + (1 / dt) * 0.05;
     _adaptT += dt; if (_adaptT < 2.5) return; _adaptT = 0;
@@ -6545,7 +6586,7 @@
         if (isTouch && worldMode !== 'visit' && lookT.id !== -1 && !lookT.acted && (lookT.moved || 0) < 10 && performance.now() - lookT.downT > 250) progressBreaking(dt);
         tickMobs(dt); tickFishing(); tickPlayerVitals(dt); tickWarpPads(dt); tickPartyDungeonSync(dt);
       }
-      tickRegen(); tickDmgTexts(dt); tickBuildQueue(); tickChunkCulling(dt); tickAdaptiveView(dt); tickFluidAnim(dt);
+      tickRegen(); tickDmgTexts(dt); tickBuildQueue(); tickChunkCulling(dt); tickAdaptiveView(dt); tickFluidAnim(dt); tickCrackOverlay();
       _hpHudT += dt; if (_hpHudT > 0.5) { _hpHudT = 0; updateHpHud(); }
       flushWorldEdits();   // 블록 편집 → 메시 리빌드(프레임당 1회로 병합, 더티 청크만)
       if (boatMesh && boatMesh.visible) { boatMesh.position.set(P.x, P.y - 0.35, P.z); boatMesh.rotation.y = P.yaw; if (!P._boat) removeBoatMesh(); }
@@ -6750,6 +6791,7 @@
       // V3: 프라이빗 섬/건축/이동
       travelTo, worldMode: () => worldMode, genHome, PORTALS, HOME_MINION_SLOTS, HOME_BOUNDS, HOME_CENTER, installPortalFrame,
       parkGateAt, tryOpenParkGate, parkGates: () => genPark._gates || [], agingPass,
+      _testCrack: (b) => { breaking = b; tickCrackOverlay(); return { visible: !!(crackMesh && crackMesh.visible), stage: crackStage }; },
       mobList: () => mobs.filter(m => !m.dead).map(m => ({ type: m.type, x: m.mesh.position.x, y: m.mesh.position.y, z: m.mesh.position.z })),   // V21-D9 공허 몹 감사용
       chunkMeshCount: () => Object.keys(chunkMeshes).length,   // V12 크래시 검증용
       buildQueueLen: () => buildQueue.length,
