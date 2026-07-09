@@ -4084,7 +4084,7 @@
         flower_red: 'poppy', flower_yellow: 'dandelion', tall_grass: 'short_grass',
         mushroom_red: 'red_mushroom', mushroom_brown: 'brown_mushroom',
         hay_top: 'hay_block_top', hay_side: 'hay_block_side',
-        melon: 'melon_side', purpur: 'purpur_block', end_bricks: 'end_stone_bricks',
+        melon: 'melon_side', purpur: 'purpur_block', end_bricks: 'end_stone_bricks', smooth_sandstone: 'sandstone_top',
         crafting_table_top: 'crafting_table_top', furnace_side: 'furnace_side',
       };
       for (const col of ['white', 'orange', 'magenta', 'lightblue', 'yellow', 'lime', 'pink', 'gray', 'lightgray', 'cyan', 'purple', 'blue', 'brown', 'green', 'red', 'black']) {
@@ -4110,7 +4110,10 @@
         const paint2 = (img2) => {
           const tx = (i % cols) * 16, ty = ((i / cols) | 0) * 16;
           const frames = img2.height > img2.width ? Math.floor(img2.height / img2.width) : 1;
-          c.clearRect(tx, ty, 16, 16); c.drawImage(img2, 0, 0, img2.width, img2.width, tx, ty, 16, 16);
+          c.clearRect(tx, ty, 16, 16);
+          // 잎처럼 투명 픽셀이 있는 '불투명 큐브' 타일은 어두운 배경 위에 합성(MC 빠른 그래픽 방식) — 투명 얼룩 방지
+          if (/leaves/.test(nm)) { c.fillStyle = '#3a3a3a'; c.fillRect(tx, ty, 16, 16); }
+          c.drawImage(img2, 0, 0, img2.width, img2.width, tx, ty, 16, 16);
           if (RP_TINT[nm]) applyTint(c, tx, ty, RP_TINT[nm]);
           if (_fluidAnim) {
             _fluidAnim.tiles = _fluidAnim.tiles.filter(t => t[0] !== nm);   // 내장 절차 애니메이션 해제
