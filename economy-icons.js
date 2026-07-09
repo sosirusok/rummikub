@@ -27,6 +27,11 @@
     sponge: '#d8cf62', clay: '#a4a8b6',
     rotten_flesh: '#8a5a3a', bone: '#e8e4d4', string: '#e4e4e4', ender_pearl: '#1f8a7a', blaze_rod: '#f0a03a',
     dungeon_essence: '#b06ae8',
+    // V23-C: 딥슬레이트/구리 계열 대표색
+    deepslate: '#4a4a52', cobbled_deepslate: '#3f3f47', polished_deepslate: '#55555e', deepslate_bricks: '#50505a',
+    cracked_deepslate_bricks: '#46464f', deepslate_tiles: '#3c3c44', chiseled_deepslate: '#585862',
+    raw_copper: '#c8734a', copper: '#d8845a', raw_copper_block: '#b8663f', copper_block: '#c96a41', cut_copper: '#c46a45',
+    chiseled_copper: '#c06843', exposed_copper: '#a97e63', weathered_copper: '#6f9a72', oxidized_copper: '#52a284',
   };
 
   function findShop(key) { return (D().SHOP || []).find(s => s.key === key); }

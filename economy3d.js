@@ -129,6 +129,16 @@
   // V21-F1: 바닐라 광물 저장 블록 7종(주괴 9 ↔ 블록 1)
   [['iron_block', 'iron_block'], ['gold_block', 'gold_block'], ['diamond_block', 'diamond_block'], ['emerald_block', 'emerald_block'],
    ['coal_block', 'coal_block'], ['redstone_block', 'redstone_block'], ['lapis_block', 'lapis_block']].forEach(([k, tex]) => BLOCKS.push({ key: k, tex }));
+  // V23-C: 딥슬레이트 + 구리 계열(공식 MC 텍스처 파일명 그대로 = 리소스팩 자동 매핑, CLAUDE.md 규칙)
+  BLOCKS.push({ key: 'deepslate', tex: { top: 'deepslate_top', side: 'deepslate', bottom: 'deepslate_top' } });
+  [['cobbled_deepslate', 'cobbled_deepslate'], ['polished_deepslate', 'polished_deepslate'], ['deepslate_bricks', 'deepslate_bricks'],
+   ['cracked_deepslate_bricks', 'cracked_deepslate_bricks'], ['deepslate_tiles', 'deepslate_tiles'], ['chiseled_deepslate', 'chiseled_deepslate'],
+   ['deepslate_coal_ore', 'deepslate_coal_ore'], ['deepslate_iron_ore', 'deepslate_iron_ore'], ['deepslate_gold_ore', 'deepslate_gold_ore'],
+   ['deepslate_diamond_ore', 'deepslate_diamond_ore'], ['deepslate_emerald_ore', 'deepslate_emerald_ore'], ['deepslate_lapis_ore', 'deepslate_lapis_ore'],
+   ['deepslate_redstone_ore', 'deepslate_redstone_ore'], ['deepslate_copper_ore', 'deepslate_copper_ore'],
+   ['copper_ore', 'copper_ore'], ['raw_copper_block', 'raw_copper_block'], ['copper_block', 'copper_block'], ['cut_copper', 'cut_copper'],
+   ['chiseled_copper', 'chiseled_copper'], ['exposed_copper', 'exposed_copper'], ['weathered_copper', 'weathered_copper'],
+   ['oxidized_copper', 'oxidized_copper']].forEach(([k, tex]) => BLOCKS.push({ key: k, tex }));
   // V21-E2: 사다리(4방향 벽 부착, 오르기 가능) + 침대(수면) + 보트(물 위 탈것)
   for (let f = 0; f < 4; f++) BLOCKS.push({ key: 'ladder_' + f, tex: 'ladder', shape: 'ladder', facing: f, opaque: false, solid: false, climb: true });
   BLOCKS.push({ key: 'bed', tex: { top: 'bed_top', side: 'bed_side', bottom: 'planks' }, shape: 'bed', opaque: false, interact: true });
@@ -140,6 +150,10 @@
     grass: 'dirt', farmland: 'dirt', mycelium: 'dirt',
     stone: 'cobblestone', coal_ore: 'coal', iron_ore: 'iron', gold_ore: 'gold', lapis_ore: 'lapis',
     redstone_ore: 'redstone', diamond_ore: 'diamond', emerald_ore: 'emerald',
+    // V23-C: 딥슬레이트/구리(바닐라 드롭 규칙 — 딥슬레이트=조각난 딥슬레이트, 광석=자원)
+    deepslate: 'cobbled_deepslate', deepslate_coal_ore: 'coal', deepslate_iron_ore: 'iron', deepslate_gold_ore: 'gold',
+    deepslate_lapis_ore: 'lapis', deepslate_redstone_ore: 'redstone', deepslate_diamond_ore: 'diamond', deepslate_emerald_ore: 'emerald',
+    copper_ore: 'raw_copper', deepslate_copper_ore: 'raw_copper',
     oak_log: 'oaklog', birch_log: 'birchlog', spruce_log: 'sprucelog',
     dark_oak_log: 'dark_oak_log', jungle_log: 'jungle_log', acacia_log: 'acacia_log',
     oak_leaves: null, spruce_leaves: null, dark_oak_leaves: null, jungle_leaves: null, acacia_leaves: null,
@@ -2893,12 +2907,13 @@
       }
     }
   }
-  function scatterOre(cx, cz, r, yMin, yMax, oreId, n, seed) {
+  function scatterOre(cx, cz, r, yMin, yMax, oreId, n, seed, baseId) {
+    const base = baseId != null ? baseId : ID.stone;   // V23-C: 딥슬레이트 지대에도 광석 배치 가능
     let placed = 0;
     for (let i = 0; i < n * 14 && placed < n; i++) {
       const x = Math.floor(cx - r + hash3(i, seed, 1) * r * 2), z = Math.floor(cz - r + hash3(i, seed, 2) * r * 2);
       const y = yMin + Math.floor(hash3(i, seed, 3) * (yMax - yMin + 1));
-      if (getBlockLocal(x, y, z) !== ID.stone) continue;
+      if (getBlockLocal(x, y, z) !== base) continue;
       if (!(getBlockLocal(x + 1, y, z) === 0 || getBlockLocal(x - 1, y, z) === 0 || getBlockLocal(x, y, z + 1) === 0 || getBlockLocal(x, y, z - 1) === 0 || getBlockLocal(x, y + 1, z) === 0 || getBlockLocal(x, y - 1, z) === 0)) continue;
       setW(x, y, z, oreId);
       if (hash3(i, seed, 4) < 0.5) setW(x, y + 1, z, oreId);
@@ -3198,18 +3213,23 @@
   // 💎 딥 캐번: 실제처럼 층별 광물(위→아래: 석탄/철/금·청금/레드스톤/에메랄드·슬라임/다이아/흑요석) + 리프트
   function genDeepCaverns() {
     world = new Uint16Array(W * H * Dp);
-    for (let x = 6; x < W - 6; x++) for (let z = 6; z < Dp - 6; z++) for (let y = 2; y <= 40; y++) setW(x, y, z, ID.stone);
+    // V23-C: 실제 MC처럼 깊이별 암석 전환 — y24 위 = 돌, 아래 = 딥슬레이트(경계는 노이즈로 자연스럽게)
+    for (let x = 6; x < W - 6; x++) for (let z = 6; z < Dp - 6; z++) for (let y = 2; y <= 40; y++) {
+      const border = 24 + Math.round((hash3(x, 77, z) - 0.5) * 3);
+      setW(x, y, z, y < border ? ID.deepslate : ID.stone);
+    }
     // ── V20-BC 정통 재건: 실제 딥 캐번의 6개 명명 층(위→아래) — 리서치(위키) 반영 ──
     //   Gunpowder Mines(석탄) → Lapis Quarry(청금) → Pigmen's Den(금/네더랙) → Slimehill(슬라임/이끼)
     //   → Diamond Reserve(다이아) → Obsidian Sanctuary(조약돌 바닥+흑요석+다이아, 최심).
     const netherrack = ID.netherrack, moss = ID.mossy_cobblestone, cob = ID.cobblestone;
+    // V23-C: 딥슬레이트 경계(y≈24) 아래 층은 딥슬레이트 광석 변형 + 상층에 구리 광맥 추가(실제 MC 분포)
     const LAYERS = [
       { name: 'Gunpowder Mines', y: 33, ore: ID.coal_ore, n: 40, acc: ID.gravel },
       { name: 'Lapis Quarry', y: 28, ore: ID.lapis_ore, n: 34, acc: ID.andesite != null ? ID.andesite : ID.stone },   // V22-G2: 층별 실제 암석 변형
-      { name: "Pigmen's Den", y: 22, ore: ID.gold_ore, n: 26, acc: netherrack },
-      { name: 'Slimehill', y: 17, ore: ID.emerald_ore, n: 20, acc: moss },
-      { name: 'Diamond Reserve', y: 11, ore: ID.diamond_ore, n: 26, acc: ID.diorite != null ? ID.diorite : ID.stone },
-      { name: 'Obsidian Sanctuary', y: 5, ore: ID.obsidian, n: 24, acc: cob, floor: cob, gem: ID.diamond_ore },
+      { name: "Pigmen's Den", y: 22, ore: ID.deepslate_gold_ore, n: 26, acc: netherrack, base: ID.deepslate },
+      { name: 'Slimehill', y: 17, ore: ID.deepslate_emerald_ore, n: 20, acc: moss, base: ID.deepslate },
+      { name: 'Diamond Reserve', y: 11, ore: ID.deepslate_diamond_ore, n: 26, acc: ID.cobbled_deepslate, base: ID.deepslate },
+      { name: 'Obsidian Sanctuary', y: 5, ore: ID.obsidian, n: 24, acc: ID.cobbled_deepslate, floor: ID.cobbled_deepslate, gem: ID.deepslate_diamond_ore, base: ID.deepslate },
     ];
     // 각 층 챔버(3칸 높이 대형 공동) + 층 바닥/광석/발광 + 층 재질 악센트
     LAYERS.forEach((L, li) => {
@@ -3221,8 +3241,8 @@
         if (L.floor) setW(x, ly - 3, z, L.floor);                                    // 흑요석 성소: 조약돌 바닥
         if (L.acc && hash3(x, 300 + li, z) < 0.10) setW(x, ly - 3, z, L.acc);         // 층 재질 악센트(자갈/네더랙/이끼)
       }
-      scatterOre(48, 48, 34, ly - 2, ly + 1, L.ore, L.n, 71 + li);                    // 층 고유 광석
-      if (L.gem) scatterOre(48, 48, 30, ly - 2, ly + 1, L.gem, 12, 90 + li);          // 성소: 다이아 추가
+      scatterOre(48, 48, 34, ly - 2, ly + 1, L.ore, L.n, 71 + li, L.base);            // 층 고유 광석(V23-C: 심층=딥슬레이트 기반)
+      if (L.gem) scatterOre(48, 48, 30, ly - 2, ly + 1, L.gem, 12, 90 + li, L.base);  // 성소: 다이아 추가
       // 발광(층 조명) + 종유석/석순 + 정동
       [[30, 34], [64, 60], [48, 30], [36, 62]].forEach((p2, i) => setW(p2[0], ly - 2, p2[1] + i, ID.glowstone));
       for (let n = 0; n < 24; n++) {
@@ -3236,6 +3256,9 @@
       for (let g = 0; g < 3; g++) { const a = hash3(g, 210 + li, 1) * Math.PI * 2; const x = Math.round(48 + Math.cos(a) * 30), z = Math.round(48 + Math.sin(a) * 30);
         for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) if (Math.abs(dx) + Math.abs(dz) <= 1) setW(x + dx, ly - 1, z + dz, L.ore); setW(x, ly - 1, z, ID.glowstone); }
     });
+    // V23-C: 구리 광맥 — 챔버 굴착 후 배치(광석은 공기 노출면 필요). 상층=돌, 심층=딥슬레이트 변형
+    scatterOre(48, 48, 34, 26, 36, ID.copper_ore, 36, 68);
+    scatterOre(48, 48, 34, 9, 23, ID.deepslate_copper_ore, 22, 69, ID.deepslate);
     // ── 중앙 리프트 수직 갱도(3×3, 상단~최심) + 층별 착지 정거장(석재 착지판+발광+케이지) ──
     for (let y = 3; y <= 40; y++) for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) setW(48 + dx, y, 48 + dz, 0);
     LAYERS.forEach(L => {
@@ -5411,8 +5434,13 @@
     GB = {};
     GB[ID.stone] = { res: 'stone', fam: 'pickaxe', hard: 1.0, to: ID.cobblestone };
     GB[ID.cobblestone] = { res: 'stone', fam: 'pickaxe', hard: 1.3, to: ID.bedrock, regen: 25, back: ID.stone };
-    const ores = { coal_ore: ['coal', 1.7, 30], iron_ore: ['iron', 2.1, 35], gold_ore: ['gold', 2.3, 40], lapis_ore: ['lapis', 2.1, 35], redstone_ore: ['redstone', 2.1, 35], diamond_ore: ['diamond', 3.4, 55], emerald_ore: ['emerald', 3.4, 55] };
+    const ores = { coal_ore: ['coal', 1.7, 30], iron_ore: ['iron', 2.1, 35], gold_ore: ['gold', 2.3, 40], lapis_ore: ['lapis', 2.1, 35], redstone_ore: ['redstone', 2.1, 35], diamond_ore: ['diamond', 3.4, 55], emerald_ore: ['emerald', 3.4, 55],
+      // V23-C: 딥슬레이트 광석(더 단단, 자원 동일) + 구리
+      deepslate_coal_ore: ['coal', 2.6, 30], deepslate_iron_ore: ['iron', 3.1, 35], deepslate_gold_ore: ['gold', 3.4, 40], deepslate_lapis_ore: ['lapis', 3.1, 35],
+      deepslate_redstone_ore: ['redstone', 3.1, 35], deepslate_diamond_ore: ['diamond', 4.6, 55], deepslate_emerald_ore: ['emerald', 4.6, 55],
+      copper_ore: ['raw_copper', 2.0, 32], deepslate_copper_ore: ['raw_copper', 3.0, 32] };
     for (const k in ores) GB[ID[k]] = { res: ores[k][0], fam: 'pickaxe', hard: ores[k][1], to: ID.bedrock, regen: ores[k][2], back: ID[k] };
+    GB[ID.deepslate] = { res: 'cobbled_deepslate', fam: 'pickaxe', hard: 2.0, to: ID.bedrock, regen: 25, back: ID.deepslate };   // V23-C: 딥슬레이트 채굴 → 조각난 딥슬레이트
     GB[ID.obsidian] = { res: 'obsidian', fam: 'pickaxe', hard: 4.2, to: ID.bedrock, regen: 70, back: ID.obsidian };
     GB[ID.oak_log] = { res: 'oaklog', fam: 'axe', hard: 0.9, to: 0, regen: 40, back: ID.oak_log };
     GB[ID.birch_log] = { res: 'birchlog', fam: 'axe', hard: 0.9, to: 0, regen: 40, back: ID.birch_log };
@@ -5459,6 +5487,10 @@
     // V22-K: 광물 블럭(바닐라 5.0/3.0) — 기존엔 기본값 0.7로 흙처럼 캐지던 버그
     if (/iron_block|diamond_block|emerald_block|coal_block|redstone_block/.test(k)) return 4.2;
     if (/gold_block|lapis_block/.test(k)) return 2.5;
+    // V23-C: 딥슬레이트(바닐라: 원석 3.0/조각·벽돌 3.5/광석 4.5 — 지상 돌의 2배 감성) + 구리
+    if (/^deepslate_.*_ore$/.test(k)) return 3.7;
+    if (/deepslate/.test(k)) return k === 'deepslate' ? 2.5 : 2.9;
+    if (/copper_block|cut_copper|chiseled_copper|exposed_copper|weathered_copper|oxidized_copper|raw_copper_block/.test(k)) return 2.5;   // 바닐라 3.0
     // 광석(바닐라 3.0) > 돌벽돌/조약돌(2.0) > 원석(1.5)
     if (/_ore$|ancient_debris/.test(k)) return 2.4;
     if (/sandstone|quartz/.test(k)) return 0.7;                        // 바닐라 0.8(연질 석재)
@@ -5475,8 +5507,8 @@
   function requiredTierFor(bk) {
     if (/obsidian/.test(bk)) return 5;
     if (/diamond_ore|emerald_ore|gold_ore|redstone_ore|gold_block|diamond_block|emerald_block/.test(bk)) return 3;   // 레드스톤 블럭은 바닐라상 나무 곡괭이(아래 stone 매칭 → 1)
-    if (/iron_ore|lapis_ore|iron_block|lapis_block/.test(bk)) return 2;
-    if (/stone|cobble|brick|_ore$|sandstone|andesite|diorite|granite|quartz|purpur|prismarine|netherrack|end_stone|magma|furnace|concrete|terracotta|coal_block/.test(bk)) return 1;
+    if (/iron_ore|lapis_ore|iron_block|lapis_block|copper_ore|copper_block|cut_copper|chiseled_copper|exposed_copper|weathered_copper|oxidized_copper|raw_copper_block/.test(bk)) return 2;   // V23-C: 구리 = 돌 곡괭이(바닐라)
+    if (/stone|cobble|brick|_ore$|sandstone|andesite|diorite|granite|quartz|purpur|prismarine|netherrack|end_stone|magma|furnace|concrete|terracotta|coal_block|deepslate/.test(bk)) return 1;
     return 0;
   }
   function progressBreaking(dt) {
