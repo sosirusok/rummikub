@@ -171,6 +171,7 @@
   }
   function addSkillXp(key, n) {
     if (!P.skillsXp[key] && P.skillsXp[key] !== 0) P.skillsXp[key] = 0;
+    P._lastSkill = key;   // V24-E: 3D XP 바 표시용(최근 획득 스킬)
     const before = skillLevel(key);
     P.skillsXp[key] += n;
     const after = skillLevel(key);
@@ -3601,6 +3602,7 @@
     // 슈가 러시 등 이동속도 인챈트(%): economy3d.js가 매 프레임 참조
     moveSpeedPct: () => (P ? enchSum('speed') : 0),
     enchThornsPct: () => (P ? enchThornsPct() : 0),   // V22-K: 방어구 가시 인챈트 — 3D 반사 데미지
+    skillBar: () => { if (!P) return null; const k = P._lastSkill || 'combat'; const d = skillDef(k); if (!d) return null; const pr = skillXpProgress(k); return { key: k, name: d.name, lv: skillLevel(k), cur: pr.cur, need: pr.need }; },   // V24-E: 3D XP 바
     // 멀티(economy-net.js가 호출): 거래 검증/적용 + 파티 던전 훅
     tradeCanGive, tradeApply,
     partyStartDungeon, partyRemoteAttack, partyGuestReward,
