@@ -487,6 +487,15 @@
     buildShrineV6();
     // 광장 → 각 구역 대로(자갈길)
     [[224, 92], [110, 208], [156, 314], [326, 224], [146, 136], [318, 318], [224, 348], [318, 124], [294, 372]].forEach(t => pathTo(224, 224, t[0], t[1]));
+    // V24-C(건축 #4): 반경 150 순환로 — 외곽 존들을 잇는 자갈/조약돌 링(잔디/흙 위만 포장)
+    for (let a = 0; a < 900; a++) {
+      const ang = a / 900 * Math.PI * 2;
+      for (let w = -1; w <= 1; w++) {
+        const x = Math.round(224 + Math.cos(ang) * (150 + w)), z = Math.round(224 + Math.sin(ang) * (150 + w));
+        const t = surfaceTop(x, z), gb = getBlockLocal(x, t - 1, z);
+        if (gb === ID.grass || gb === ID.dirt || gb === ID.coarse_dirt) setW(x, t - 1, z, (x + z) % 5 ? ID.gravel : ID.cobblestone);
+      }
+    }
     decorateWilds();
     buildWilderness();   // V24: 허허벌판 채우기 — 풍차/코티지/과수원/정자/캠프/목장(손 배치)
     buildHubPortal();
@@ -1856,7 +1865,7 @@
   // 월드 이동(허브 ↔ 프라이빗 섬 ↔ 남의 섬 방문)
   function travelTo(mode, force) {
     if (mode === worldMode && !force) return;
-    restoreAllRegen(); clearMobs(); stopFishing(); mouseHeld = false; useHeld = false; warpCharge = null;
+    restoreAllRegen(); clearMobs(); stopFishing(); clearParticles(); mouseHeld = false; useHeld = false; warpCharge = null;
     P._boat = false; removeBoatMesh();   // V21-E2: 월드 이동 시 보트 하선
     P._fallPeak = null; P._air = 0; P._lavaT = 0;   // V22-K: 월드 이동 후 낙하/익사 계산 초기화
     P._portalT = 0; setPortalFx(false);   // V23-A: 포탈 울렁임 해제
@@ -4357,6 +4366,9 @@
   function emitBox(T, b, x, y, z, bx0, by0, bz0, bx1, by1, bz1) {
     for (let fi = 0; fi < 6; fi++) {
       const f = FACES[fi];
+      // V24-C(감사 #5): 셀 경계에 딱 붙은 면이 불투명 이웃에 가려지면 스킵(반블럭/계단 숨은 면 컬링)
+      const flush = (fi === 0 && bx1 === 1) || (fi === 1 && bx0 === 0) || (fi === 2 && by1 === 1) || (fi === 3 && by0 === 0) || (fi === 4 && bz1 === 1) || (fi === 5 && bz0 === 0);
+      if (flush && opaqueAt(x + f.dir[0], y + f.dir[1], z + f.dir[2])) continue;
       const tn = faceTexName(b, f.n || 'side'); const u = atlasUV[tn] || atlasUV.stone;
       const sh = f.shade;
       for (let k = 0; k < 4; k++) {
@@ -5412,6 +5424,7 @@
     }
     const drop = blockDropKey(t.id);
     if (drop && econApi().giveItem) econApi().giveItem(drop, 1);   // 파괴 = 아이템 획득
+    spawnBreakParticles(t.x, t.y, t.z, t.id); if (drop) spawnPickupFx(t.x, t.y, t.z, drop);   // V24-C
     scheduleFluidAround(t.x, t.y, t.z);   // V23-A: 빈 자리로 주변 물/용암 확산
     updateBuildHud();
     return true;
@@ -5690,7 +5703,61 @@
     if (cross) cross.textContent = '+';
     breaking = null;
   }
+  /* ---------------- V24-C: 파괴 파티클 + 아이템 획득 이펙트(감사 #29,#31) ---------------- */
+  let particles = [];   // {spr, vx, vy, vz, t}
+  let pickups = [];     // {spr, t}
+  const _partMatCache = {}, _pickMatCache = {}, _tileColCache = {};
+  function partMat(col) { if (!_partMatCache[col]) _partMatCache[col] = new THREE.SpriteMaterial({ color: col }); return _partMatCache[col]; }
+  function tileColor(b) {
+    const tn = typeof b.tex === 'string' ? b.tex : (b.tex && (b.tex.side || b.tex.top)) || 'stone';
+    if (_tileColCache[tn] != null) return _tileColCache[tn];
+    let col = 0x9a9a9a;
+    try {
+      const u = atlasUV[tn], cvs = atlasTex.image, ctx2 = cvs.getContext('2d');
+      const px = ctx2.getImageData(Math.floor((u.x0 + u.x1) / 2 * cvs.width), Math.floor((1 - (u.y0 + u.y1) / 2) * cvs.height), 1, 1).data;
+      col = (px[0] << 16) | (px[1] << 8) | px[2];
+    } catch (e) {}
+    return (_tileColCache[tn] = col);
+  }
+  function spawnBreakParticles(x, y, z, id) {
+    const b = BLOCKS[id]; if (!b || !scene) return;
+    const col = tileColor(b);
+    for (let i = 0; i < 8; i++) {
+      const spr = new THREE.Sprite(partMat(col));
+      spr.scale.setScalar(0.11 + Math.random() * 0.08);
+      spr.position.set(x + 0.2 + Math.random() * 0.6, y + 0.2 + Math.random() * 0.6, z + 0.2 + Math.random() * 0.6);
+      scene.add(spr);
+      particles.push({ spr, vx: (Math.random() - 0.5) * 2.6, vy: 1.6 + Math.random() * 2, vz: (Math.random() - 0.5) * 2.6, t: 0.5 + Math.random() * 0.25 });
+    }
+    if (particles.length > 240) { const n = particles.length - 240; for (let i = 0; i < n; i++) scene.remove(particles[i].spr); particles.splice(0, n); }
+  }
+  function spawnPickupFx(x, y, z, key) {
+    if (!scene || typeof window.econIcon !== 'function' || !key) return;
+    if (!_pickMatCache[key]) { try { _pickMatCache[key] = new THREE.SpriteMaterial({ map: new THREE.TextureLoader().load(window.econIcon(key)), transparent: true, depthTest: false }); } catch (e) { return; } }
+    const spr = new THREE.Sprite(_pickMatCache[key]);
+    spr.scale.setScalar(0.45);
+    spr.position.set(x + 0.5, y + 0.6, z + 0.5);
+    scene.add(spr);
+    pickups.push({ spr, t: 0 });
+    if (pickups.length > 40) { scene.remove(pickups[0].spr); pickups.shift(); }
+  }
+  function tickParticles(dt) {
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const q = particles[i]; q.t -= dt;
+      if (q.t <= 0) { scene.remove(q.spr); particles.splice(i, 1); continue; }
+      q.vy -= 9 * dt;
+      q.spr.position.x += q.vx * dt; q.spr.position.y += q.vy * dt; q.spr.position.z += q.vz * dt;
+    }
+    for (let i = pickups.length - 1; i >= 0; i--) {
+      const q = pickups[i]; q.t += dt;
+      const tp = q.spr.position, k = Math.min(1, dt * (2 + q.t * 10));   // 점점 빨라지며 플레이어에게 흡수
+      tp.x += (P.x - tp.x) * k; tp.y += (P.y + 1.0 - tp.y) * k; tp.z += (P.z - tp.z) * k;
+      if (q.t > 0.9 || Math.hypot(tp.x - P.x, tp.y - (P.y + 1), tp.z - P.z) < 0.4) { scene.remove(q.spr); pickups.splice(i, 1); }
+    }
+  }
+  function clearParticles() { particles.forEach(q => scene && scene.remove(q.spr)); pickups.forEach(q => scene && scene.remove(q.spr)); particles = []; pickups = []; }
   function doGatherBreak(x, y, z, g, api) {
+    const _pid = getBlockLocal(x, y, z);   // V24-C: 파괴 파티클용(교체 전 블럭)
     if (g.res && (g.chance == null || Math.random() < g.chance) && api.gatherBlock) api.gatherBlock(g.res, g.fam);
     if (g.homeDrop !== undefined) {   // V13-A: 홈 건축 블럭 파괴 → 아이템 드롭 + 영속 편집
       if (g.homeDrop === 'chest' && api.dumpChest) api.dumpChest(`${x},${y},${z}`);   // V21-E1: 상자 파괴 시 내용물 회수(유실 방지)
@@ -5707,6 +5774,9 @@
     if (g.regen) regenQueue.push({ x, y, z, back: g.back, at: performance.now() + g.regen * 1000 });
     markBlockDirty(x, z);
     if (!g.to) scheduleFluidAround(x, y, z);   // V23-A: 빈 자리로 주변 물/용암 확산
+    spawnBreakParticles(x, y, z, _pid);   // V24-C: 블럭 파편 파티클
+    const _pk = g.homeDrop !== undefined ? g.homeDrop : g.res;
+    if (_pk) spawnPickupFx(x, y, z, _pk);   // V24-C: 아이템 흡수 이펙트
   }
   function tickRegen() {
     if (!regenQueue.length) return;
@@ -7005,7 +7075,7 @@
         if (isTouch && worldMode !== 'visit' && lookT.id !== -1 && !lookT.acted && (lookT.moved || 0) < 10 && performance.now() - lookT.downT > 250) progressBreaking(dt);
         tickMobs(dt); tickFishing(); tickPlayerVitals(dt); tickWarpPads(dt); tickPortalStand(dt); tickPartyDungeonSync(dt);
       }
-      tickRegen(); tickFluids(); tickDmgTexts(dt); tickBuildQueue(); tickChunkCulling(dt); tickAdaptiveView(dt); tickFluidAnim(dt); tickCrackOverlay();
+      tickRegen(); tickFluids(); tickParticles(dt); tickDmgTexts(dt); tickBuildQueue(); tickChunkCulling(dt); tickAdaptiveView(dt); tickFluidAnim(dt); tickCrackOverlay();
       _hpHudT += dt; if (_hpHudT > 0.5) { _hpHudT = 0; updateHpHud(); }
       flushWorldEdits();   // 블록 편집 → 메시 리빌드(프레임당 1회로 병합, 더티 청크만)
       if (boatMesh && boatMesh.visible) { boatMesh.position.set(P.x, P.y - 0.35, P.z); boatMesh.rotation.y = P.yaw; if (!P._boat) removeBoatMesh(); }
@@ -7240,6 +7310,7 @@
       _testCrack: (b) => { breaking = b; tickCrackOverlay(); return { visible: !!(crackMesh && crackMesh.visible), stage: crackStage }; },
       requiredTierFor, homeBlockHardness, showHotbarTitle,   // V22-K 검증용
       scheduleFluidAround, tickFluids, portalOpenY, tickPortalStand, _setW: setW,   // V23-A 검증용
+      spawnBreakParticles, tickParticles, _particleCount: () => particles.length,   // V24-C 검증용
       mobList: () => mobs.filter(m => !m.dead).map(m => ({ type: m.type, x: m.mesh.position.x, y: m.mesh.position.y, z: m.mesh.position.z })),   // V21-D9 공허 몹 감사용
       chunkMeshCount: () => Object.keys(chunkMeshes).length,   // V12 크래시 검증용
       buildQueueLen: () => buildQueue.length,
