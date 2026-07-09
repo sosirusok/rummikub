@@ -1395,6 +1395,12 @@
   ];
 
   // V21-C: 섬 포탈 아이템(제작→프라이빗 섬 설치→워프 해금) — 이름/목적지 매핑
+  // V21-D8: 화로 제련 레시피(바닐라식) — 화로 근처에서만, 석탄 1개 = 8회 제련
+  const SMELT_RECIPES = [
+    { in: 'cobblestone', inN: 1, out: 'stone', n: 1, name: '조약돌 → 돌' },
+    { in: 'sand', inN: 1, out: 'glass', n: 1, name: '모래 → 유리' },
+    { in: 'clay', inN: 4, out: 'bricks', n: 1, name: '점토 4 → 벽돌 블록' },
+  ];
   const PORTAL_ITEMS = {
     portal_barn: { name: '🌾 더 반 포탈', dest: 'barn' },
     portal_park: { name: '🌲 더 파크 포탈', dest: 'park' },
@@ -1411,7 +1417,7 @@
     any_log: ['oaklog', 'birchlog', 'sprucelog'],
   };
   window.ECON_DATA = {
-    PORTAL_ITEMS, CRAFT_GROUPS,
+    PORTAL_ITEMS, CRAFT_GROUPS, SMELT_RECIPES,
     ITEM_TIERS, COLLECTIONS, SKILLS, GATHER_TABLE, TOOLS, MINIONS, MINION_STORAGE_BASE, MINION_STORAGE_UPGRADED,
     MINION_STORAGE_UPGRADE_COST, MINION_OFFLINE_CAP_HOURS, MINION_SLOT_MAX, MINION_SLOT_COST_BASE, MINION_SLOT_COST_MUL,
     MINION_FUEL, MINION_FUEL2, SLAYERS, DUNGEON, DUNGEON_ROOM_SCORE, ESSENCE_SHOP, SHOP, BAZAAR, AUCTION_HOUSE, HEART_OF_MOUNTAIN, DAILY_SELL_LIMIT_PER_STACK,

@@ -827,6 +827,37 @@
     craftGrid = Array(9).fill(null);
     renderZone();
   }
+  // V21-D8: 화로 제련 — 화로 근처에서만(3D가 판정), 석탄 1 = 8회 연료(바닐라 비율)
+  function smeltItem(inKey) {
+    const r = (D().SMELT_RECIPES || []).find(x => x.in === inKey); if (!r) return false;
+    const near = (typeof window.economy3dNearFurnace === 'function') ? window.economy3dNearFurnace() : true;
+    if (!near) { toastFn('🔥 화로 근처에서만 제련할 수 있어요 (화로를 제작해 설치하세요)', false); return false; }
+    const inN = r.inN || 1;
+    if (!hasItem(inKey, inN)) { toastFn(`${itemName(inKey)} ${inN}개가 필요해요`, false); return false; }
+    P.furnaceFuel = P.furnaceFuel || 0;
+    if (P.furnaceFuel <= 0) {
+      if (!hasItem('coal', 1)) { toastFn('연료가 없어요 — 석탄 1개 = 8회 제련', false); return false; }
+      removeItem('coal', 1); P.furnaceFuel = 8;
+    }
+    P.furnaceFuel--;
+    removeItem(inKey, inN); addItem(r.out, r.n || 1); addCollection(r.out, r.n || 1);
+    addSkillXp('mining', 2);
+    toastFn(`🔥 제련 완료: ${itemName(r.out)} (연료 ${P.furnaceFuel}/8)`, true);
+    saveNow(); renderZone(); return true;
+  }
+  function smeltHTML() {
+    const near = (typeof window.economy3dNearFurnace === 'function') ? window.economy3dNearFurnace() : true;
+    const fuel = P.furnaceFuel || 0;
+    return `<div class="econ-panel"><h4>🔥 화로 제련 ${near ? '' : '<span class="muted">— 화로 근처가 아니에요</span>'}</h4>
+      <p class="econ-note">화로를 제작해 설치하고 가까이에서 제련하세요. 석탄 1개 = 8회 (남은 연료 ${fuel}/8, 석탄 ${P.inv.coal || 0}개)</p>
+      <div class="econ-shopgrid">${(D().SMELT_RECIPES || []).map(r => {
+        const inN = r.inN || 1, have = P.inv[r.in] || 0;
+        const ok = near && have >= inN && ((P.furnaceFuel || 0) > 0 || (P.inv.coal || 0) > 0);
+        return `<div class="econ-shopitem">${iconImg(r.out)}<span>${r.name}</span>
+          <span class="muted">${itemName(r.in)} ${have}/${inN}</span>
+          <button class="btn btn--sm" data-act="econ_smelt" data-key="${r.in}" ${ok ? '' : 'disabled'}>제련</button></div>`;
+      }).join('')}</div></div>`;
+  }
   function craftFromGrid() {
     const r = craftGridRecipe();
     if (!r) { toastFn('이 배치로는 만들 수 있는 조합법이 없어요.', false); return false; }
@@ -2871,6 +2902,7 @@
     return `<h4>제작대</h4>
       ${craftGridHTML(sel)}
       ${craftInventoryHTML()}
+      ${smeltHTML()}
       ${recHTML}
       <details class="econ-ownedonly"><summary>전체 레시피 목록</summary>
       <div class="econ-shopgrid">${D().RECIPES.map(r => {
@@ -3301,6 +3333,7 @@
         toastFn(`🌀 ${pi.name} 설치! 이제 메뉴에서 워프할 수 있어요`, true);
         saveNow(); renderZone(); break;
       }
+      case 'smelt': smeltItem(el.dataset.key); break;
       case 'craft_sel': craftSel = el.dataset.key; renderZone(); break;
       case 'craft_put': putCraftItem(el.dataset.key); break;
       case 'craft_grid_clear': clearCraftSlot(Number(el.dataset.i)); break;
@@ -3524,6 +3557,7 @@
       enhanceStar, starCost, starRate,
       craft, canCraft, recipeUnlocked, rolledStat, rollItemStat, equipBase,
       putCraftItem, craftFromGrid, clearCraftGrid, craftGridRecipe, getCraftGrid: () => craftGrid, setCraftGrid: g => { craftGrid = Array.isArray(g) ? g.slice(0, 9) : Array(9).fill(null); while (craftGrid.length < 9) craftGrid.push(null); },
+      smeltItem,
       dungeonAttack, dungeonLootTreasure,
       bankDeposit, bankWithdraw, bankInterestTick,
       dealsForToday, buyDeal, bestToolMul, sellBonusPct, minionSlotCost,
