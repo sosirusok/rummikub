@@ -458,6 +458,7 @@
     buildHubPortal();
     buildWarpPads();
     beautifyHub();   // V20-L: 광장 미화(분수·정원·벤치·현수막) — 마지막에 얹어 덮이지 않게
+    buildHubInteriors();   // V21-D5: 명명 건물 인테리어(은행 창구/도서관/경매 전시대/게시판) — 대로·미화 이후 최후 배치(덮어쓰기 방지)
   }
   // V20-M: 섬 전역을 풍성한 힐링 들판으로 — 색밭·풀·덤불·이끼바위(길가 포함). 나무·덤불은 야생만, 광장 코어는 정갈.
   function decorateWilds() {
@@ -522,6 +523,40 @@
     buildShopDetails();  // V20-AV(1차): 도시 중심 상점 인테리어/아웃테리어(업종별 가구·진열·차양)
     buildDowntown();     // V20-AU(1차): 도시 중심 다운타운 — 허허벌판 제거(포장 도로+가로등+화단+시장 소품+우물)
     buildHubWilds();     // V20-AW(2차): 허브 메인섬 야생 — 빈 잔디 허허벌판에 나무숲·바위·꽃 메도우·덤불 손 배치
+  }
+  // V21-D5: 허브 명명 건물 인테리어 정밀화 — 좌표 한 칸씩 손 배치.
+  //   실제 스카이블럭 허브의 은행(창구·금고실)/도서관(서가·열람석)/경매장(매물 전시대)/커뮤니티 게시판 감성.
+  function buildHubInteriors() {
+    const S = (x, y, z, id) => { if (id != null) setW(x, y, z, id); };
+    const glow = ID.glowstone, book = ID.bookshelf != null ? ID.bookshelf : ID.oak_planks;
+    const slab = ID.oak_planks_slab != null ? ID.oak_planks_slab : ID.oak_planks, log = ID.oak_log;
+    const wr = ID.wool_red != null ? ID.wool_red : ID.bricks, ch = ID.chiseled_stone_bricks;
+    // ── ① 은행 돔(240,200 r5, base20) 내부: 창구 카운터 호 + 금고실 벽(금광석 격납) + 레드카펫 + 샹들리에 ──
+    for (let x = 238; x <= 242; x++) S(x, 20, 202, slab);                       // 남측 창구 카운터(입구 방향)
+    S(237, 20, 202, log); S(243, 20, 202, log);                                  // 카운터 양끝 기둥
+    for (let x = 238; x <= 242; x++) if (x !== 240) S(x, 20, 197, ch);           // 북측 금고실 벽(중앙 금고 뒤)
+    S(238, 21, 197, ID.gold_ore); S(242, 21, 197, ID.gold_ore); S(240, 21, 197, ch);   // 격납 금궤
+    for (let z = 202; z <= 204; z++) S(240, 19, z, wr);                          // 입구→창구 레드카펫
+    S(240, 23, 200, glow); S(238, 23, 202, glow); S(242, 23, 198, glow);         // 샹들리에(비대칭 3점)
+    // ── ② 인챈트 탑 1층(218,186 11×9) → 왕립 도서관: 서가 벽 + 열람 탁자 2 + 낭독대 + 보라 융단 ──
+    for (let x = 220; x <= 226; x++) { S(x, 20, 187, book); S(x, 21, 187, book); }   // 북벽 서가 2단
+    for (let z = 188; z <= 192; z++) { S(219, 20, z, book); S(227, 20, z, book); if (z % 2 === 0) { S(219, 21, z, book); S(227, 21, z, book); } }   // 동서 서가(상단 들쭉)
+    for (const tx of [221, 225]) { S(tx, 20, 190, log); S(tx, 21, 190, slab); S(tx + 1, 21, 190, slab); }   // 열람 탁자 2개
+    S(223, 20, 192, log); S(223, 21, 192, book);                                  // 낭독대(입구 쪽)
+    for (let x = 222; x <= 224; x++) for (let z = 189; z <= 191; z++) S(x, 19, z, ID.purpur);   // 보라 융단
+    S(223, 22, 190, glow); S(220, 22, 188, glow);                                 // 서고 조명
+    // ── ③ 경매장 로툰다(208,218 r4) 매물 전시대 3기: 석영 대 + 색양털 '매물' ──
+    const disp = [[206, 218, ID.wool_yellow != null ? ID.wool_yellow : glow], [210, 218, ID.wool_blue != null ? ID.wool_blue : glow], [208, 216, wr]];
+    for (const [px, pz, cap] of disp) { S(px, 20, pz, ID.quartz_block); S(px, 21, pz, cap); }
+    // ── ④ 커뮤니티 게시판(광장 남서 모퉁이): 통나무 지주 + 다크오크 판 + 등불 ──
+    {
+      const bx = 216, bz = 231, gy = surfaceTop(bx, bz);
+      const dk = ID.dark_oak_planks != null ? ID.dark_oak_planks : ID.oak_planks;
+      S(bx, gy, bz, log); S(bx + 3, gy, bz, log); S(bx, gy + 1, bz, log); S(bx + 3, gy + 1, bz, log);
+      for (let dx = 0; dx <= 3; dx++) { S(bx + dx, gy + 2, bz, dk); S(bx + dx, gy + 3, bz, dk); }
+      S(bx + 1, gy + 3, bz - 1, glow);                                            // 게시판 등
+      S(bx + 1, gy + 2, bz, ID.wool_white != null ? ID.wool_white : dk); S(bx + 2, gy + 3, bz, ID.wool_yellow != null ? ID.wool_yellow : dk);   // 공고 쪽지 2장
+    }
   }
   // V20-AW 2차: 허브 메인섬 야생 — 좌표 한 칸씩 손 배치(해시 결정). 빈 잔디 허허벌판만 감지해
   //   나무숲·바위 노두·꽃 메도우·덤불을 흩뿌린다. 코어·건물·포장·급경사는 자동 제외.
@@ -3742,9 +3777,38 @@
   function px(c, x, y, col) { c.fillStyle = col; c.fillRect(x, y, 1, 1); }
   function rngFrom(n) { let s = (n >>> 0) || 1; return function () { s ^= s << 13; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; }; }
   function hashStr(s) { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return h >>> 0; }
+  // V21-D6: 실제 MC 광석 질감 — 돌 바탕(군집 얼룩) 위에 불규칙 십자·다이아형 광맥(외곽 그림자+하이라이트)
   function oreTex(c, ox, oy, r, ore) {
-    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); px(c, ox + x, oy + y, t < 0.33 ? '#727272' : t < 0.66 ? '#7e7e7e' : '#8a8a8a'); }
-    for (let i = 0; i < 6; i++) { const x = 2 + ((hash3(i, 1, 0) * 11) | 0), y = 2 + ((hash3(i, 2, 0) * 11) | 0); c.fillStyle = ore; c.fillRect(ox + x, oy + y, 3, 3); }
+    // 바탕: MC 스타일 군집 돌(저주파 패치)
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+      const patch = hash3(x >> 2, 7, y >> 2), fine = r();
+      const base = patch < 0.3 ? '#747474' : patch < 0.7 ? '#7e7e7e' : '#868686';
+      px(c, ox + x, oy + y, fine < 0.12 ? '#6b6b6b' : fine > 0.9 ? '#8f8f8f' : base);
+    }
+    // 광맥: 고정 배치 4군집(실제 MC처럼 십자+모서리 결손형), 어두운 테두리 + 밝은 심
+    const hxc = (hex, fac) => { const n = parseInt(hex.slice(1), 16); const R = Math.min(255, ((n >> 16 & 255) * fac) | 0), G = Math.min(255, ((n >> 8 & 255) * fac) | 0), B = Math.min(255, ((n & 255) * fac) | 0); return '#' + (0x1000000 + (R << 16) + (G << 8) + B).toString(16).slice(1); };
+    const dark = hxc(ore, 0.55), lite = hxc(ore, 1.35);
+    const clusters = [[2, 2], [10, 3], [4, 9], [11, 11]];
+    for (const [bx, by] of clusters) {
+      // 십자형 본체(모서리 1픽셀 결손 → 불규칙)
+      const cells = [[1, 0], [0, 1], [1, 1], [2, 1], [1, 2], [2, 2], [2, 0], [0, 2]];
+      cells.forEach(([dx, dy], i) => { if (i >= 6 && hash3(bx, i, by) < 0.5) return; px(c, ox + bx + dx, oy + by + dy, ore); });
+      px(c, ox + bx + 1, oy + by + 1, lite);                       // 심(하이라이트)
+      px(c, ox + bx + 3, oy + by + 2, dark); px(c, ox + bx, oy + by, dark);   // 그림자 픽셀
+    }
+  }
+  // V21-D6: 실제 MC 판자 질감 — 가로 널 4장 + 널마다 어긋난 세로 이음매 + 상단 하이라이트
+  function plankTex(c, ox, oy, r, light, mid, dark) {
+    const seams = [11, 3, 13, 5];   // 널(row)별 세로 이음매 x 오프셋(MC처럼 어긋남)
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+      const row = y >> 2;
+      let col = (row % 2) ? mid : light;
+      if (r() < 0.08) col = dark;                       // 나뭇결 점
+      if (y % 4 === 3) col = dark;                      // 널 사이 가로 홈
+      if (y % 4 === 0 && r() < 0.5) col = light;        // 널 상단 하이라이트
+      if (x === seams[row]) col = dark;                 // 세로 이음매
+      px(c, ox + x, oy + y, col);
+    }
   }
   function paintTile(c, ox, oy, name) {
     const r = rngFrom(hashStr(name) >>> 0);
@@ -3786,21 +3850,31 @@
       case 'chest_side': { fillNoise('#a66a2c', '#8a5524', '#bb7b34'); c.strokeStyle = '#4a2a12'; c.strokeRect(ox + 1.5, oy + 3.5, 13, 10); c.fillStyle = '#d9b64a'; c.fillRect(ox + 7, oy + 7, 2, 3); break; }
       case 'hay_top': { fillNoise('#c8a83a', '#b89830', '#d8b84a'); c.strokeStyle = '#8a6f20'; c.strokeRect(ox + 0.5, oy + 0.5, 15, 15); break; }
       case 'hay_side': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { f(x, y, (y % 5 === 4) ? '#8a6f20' : (r() < 0.5 ? '#c2a234' : '#d0b040')); } break;
-      case 'stone': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.25 ? '#6f6f6f' : t < 0.5 ? '#787878' : t < 0.78 ? '#828282' : '#8c8c8c'); } break;
+      case 'stone': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const patch = hash3(x >> 2, 5, y >> 2), t = r(); let col = patch < 0.3 ? '#747474' : patch < 0.7 ? '#7e7e7e' : '#868686'; if (t < 0.1) col = '#6b6b6b'; else if (t > 0.92) col = '#909090'; f(x, y, col); } break;   // V21-D6: MC식 저주파 얼룩 패치
       case 'dirt': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.25 ? '#6e4c34' : t < 0.55 ? '#7d573c' : t < 0.82 ? '#8a6044' : '#976b4d'); } break;
       case 'grass_top': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.3 ? '#5b9142' : t < 0.7 ? '#6aa84f' : '#7bbf5c'); } break;
       case 'grass_side': { fillNoise('#7d573c', '#6e4c34', '#8a6044'); for (let x = 0; x < 16; x++) { const gh = 3 + (r() < 0.33 ? 1 : 0); for (let y = 0; y < gh; y++) f(x, y, r() < 0.5 ? '#5b9142' : '#6aa84f'); } break; }
       case 'sand': fillNoise('#e0d6a0', '#d4c98e', '#ece2b0'); break;
       case 'sandstone': { fillNoise('#d9cda0', '#cabf90', '#e6dab0'); for (let y = 3; y < 16; y += 4) for (let x = 0; x < 16; x++) f(x, y, '#bcb080'); break; }
-      case 'cobble': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) f(x, y, (hash3(x * 3, 0, y * 3) < 0.18) ? '#5a5a5a' : (r() < 0.5 ? '#7d7d7d' : '#919191')); break;
+      case 'cobble': {   // V21-D6: 실제 MC 조약돌 — 둥근 돌 셀 + 어두운 몰탈 선(보로노이 근사)
+        const seeds = [[3, 2], [10, 2], [14, 5], [6, 6], [1, 8], [11, 9], [4, 12], [13, 13], [8, 15]];
+        for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+          let d1 = 99, d2 = 99, si = 0;
+          for (let i = 0; i < seeds.length; i++) { const dx0 = Math.min(Math.abs(x - seeds[i][0]), 16 - Math.abs(x - seeds[i][0])), dy0 = Math.min(Math.abs(y - seeds[i][1]), 16 - Math.abs(y - seeds[i][1])); const d = Math.hypot(dx0, dy0); if (d < d1) { d2 = d1; d1 = d; si = i; } else if (d < d2) d2 = d; }
+          const mortar = (d2 - d1) < 0.9;   // 셀 경계 = 몰탈
+          const shade = hash3(si, 3, 0);
+          f(x, y, mortar ? '#565656' : (shade < 0.33 ? '#7a7a7a' : shade < 0.66 ? '#858585' : '#929292'));
+        }
+        break;
+      }
       case 'stonebrick': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const e = (y % 8 === 0) || (x % 8 === (y < 8 ? 0 : 4)); f(x, y, e ? '#5a5a5a' : (r() < 0.5 ? '#7b7b7b' : '#888')); } break;
       case 'bricks': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const e = (y % 4 === 0) || ((x + (((y >> 2) % 2) ? 4 : 0)) % 8 === 0); f(x, y, e ? '#7a3527' : '#9a4f3f'); } break;
-      case 'planks': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { f(x, y, ((y >> 2) % 2) ? '#9c7a44' : '#b08a4f'); if (y % 4 === 0) f(x, y, '#7a5f34'); } break;
-      case 'birch_planks': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { f(x, y, ((y >> 2) % 2) ? '#c8b787' : '#d8c99a'); if (y % 4 === 0) f(x, y, '#b0a074'); } break;
-      case 'spruce_planks': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { f(x, y, ((y >> 2) % 2) ? '#5b4226' : '#6b4f2e'); if (y % 4 === 0) f(x, y, '#4a3720'); } break;
-      case 'dark_oak_planks': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { f(x, y, ((y >> 2) % 2) ? '#3a2a16' : '#432f19'); if (y % 4 === 0) f(x, y, '#281b0e'); } break;
-      case 'jungle_planks': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { f(x, y, ((y >> 2) % 2) ? '#9a6a44' : '#a9784f'); if (y % 4 === 0) f(x, y, '#7a5232'); } break;
-      case 'acacia_planks': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { f(x, y, ((y >> 2) % 2) ? '#a85526' : '#b8622f'); if (y % 4 === 0) f(x, y, '#8a4018'); } break;
+      case 'planks': plankTex(c, ox, oy, r, '#b08a4f', '#9c7a44', '#7a5f34'); break;
+      case 'birch_planks': plankTex(c, ox, oy, r, '#d8c99a', '#c8b787', '#b0a074'); break;
+      case 'spruce_planks': plankTex(c, ox, oy, r, '#6b4f2e', '#5b4226', '#4a3720'); break;
+      case 'dark_oak_planks': plankTex(c, ox, oy, r, '#432f19', '#3a2a16', '#281b0e'); break;
+      case 'jungle_planks': plankTex(c, ox, oy, r, '#a9784f', '#9a6a44', '#7a5232'); break;
+      case 'acacia_planks': plankTex(c, ox, oy, r, '#b8622f', '#a85526', '#8a4018'); break;
       case 'log_top': { fillNoise('#b59b6a', '#a78c5b', '#c4aa79'); for (let i = 2; i <= 7; i += 2) { c.strokeStyle = '#8a724a'; c.strokeRect(ox + 8 - i + .5, oy + 8 - i + .5, i * 2 - 1, i * 2 - 1); } break; }
       case 'log_side': { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) f(x, y, ((x + (r() < .3 ? 1 : 0)) % 5 === 0) ? '#5b472d' : (r() < 0.5 ? '#6b5436' : '#7c6342')); break; }
       case 'birch_side': { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.6 ? '#d7d3c8' : t < 0.85 ? '#e7e3d8' : '#c4c0b4'); } for (let i = 0; i < 5; i++) { const bx = (r() * 13) | 0, by = (r() * 14) | 0, bw = 2 + ((r() * 3) | 0); c.fillStyle = '#3a3a32'; c.fillRect(ox + bx, oy + by, bw, 1); } break; }
@@ -3815,7 +3889,14 @@
       case 'redstone_ore': oreTex(c, ox, oy, r, '#e8323b'); break;
       case 'diamond_ore': oreTex(c, ox, oy, r, '#5decd5'); break;
       case 'emerald_ore': oreTex(c, ox, oy, r, '#17a94f'); break;
-      case 'glass': { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) f(x, y, '#bfe6f2'); c.fillStyle = '#dff2f9'; c.fillRect(ox, oy, 16, 1); c.fillRect(ox, oy, 1, 16); break; }
+      case 'glass': {   // V21-D6: 실제 MC 유리 — 흰 테두리 프레임 + 좌상단 대각 광택 줄 2개 + 옅은 내부
+        for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) f(x, y, '#cdeaf4');
+        c.fillStyle = '#ffffff';
+        c.fillRect(ox, oy, 16, 1); c.fillRect(ox, oy + 15, 16, 1); c.fillRect(ox, oy, 1, 16); c.fillRect(ox + 15, oy, 1, 16);   // 테두리
+        for (let i = 0; i < 6; i++) { f(2 + i, 8 - i, '#f2fbff'); f(2 + i, 9 - i, '#f2fbff'); }   // 대각 광택 줄(굵음)
+        for (let i = 0; i < 4; i++) f(8 + i, 12 - i, '#eaf6fc');                                   // 대각 광택 줄(가늘게)
+        break;
+      }
       case 'bedrock': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.33 ? '#3a3a3a' : t < 0.66 ? '#565656' : '#6b6b6b'); } break;
       case 'water': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) f(x, y, r() < 0.5 ? '#3463cf' : '#3a6ee0'); break;
       case 'lava': { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) f(x, y, r() < 0.5 ? '#e8632a' : '#d2541f'); for (let i = 0; i < 5; i++) f((r() * 16) | 0, (r() * 16) | 0, '#f7a02a'); break; }
@@ -4041,8 +4122,16 @@
   // V12 크래시 수정: 거리 컬링을 "숨김(.visible=false)"이 아니라 "실제 메시 해제(VRAM 반환)"로 승격.
   //   원거리 청크 지오메트리를 dispose해 GPU 메모리를 비우고, 재접근하면 다시 빌드한다.
   //   지형은 world Uint8Array에 그대로 남아 재구성 안전 — 448² 허브 VRAM 소진→컨텍스트 손실→"튕김" 방지.
-  const VIEW_DIST = 96;           // 이 반경 안의 미빌드 청크는 큐잉해 복원
-  const CULL_DIST = 140;           // 이 밖의 청크 메시는 해제(히스테리시스로 스래싱 방지)
+  // V21-D7: 적응형 시야 거리 — 저사양(허브 448² 밀집 도시)에서 fps가 떨어지면 자동 축소, 여유 있으면 복원.
+  let VIEW_DIST = 96;             // 이 반경 안의 미빌드 청크는 큐잉해 복원(48~96 동적)
+  let CULL_DIST = 140;            // 이 밖의 청크 메시는 해제(히스테리시스로 스래싱 방지)
+  let _fpsAvg = 60, _adaptT = 0;
+  function tickAdaptiveView(dt) {
+    if (dt > 0) _fpsAvg = _fpsAvg * 0.95 + (1 / dt) * 0.05;
+    _adaptT += dt; if (_adaptT < 2.5) return; _adaptT = 0;
+    if (_fpsAvg < 26 && VIEW_DIST > 48) { VIEW_DIST -= 16; CULL_DIST = VIEW_DIST + 40; }        // 버벅임 → 시야 축소
+    else if (_fpsAvg > 52 && VIEW_DIST < 96) { VIEW_DIST += 16; CULL_DIST = VIEW_DIST + 44; }   // 여유 → 점진 복원
+  }
   let _cullT = 0;
   function chunkDistToPlayer(cx, cz) {
     const wx = cx * CHUNK + CHUNK / 2, wz = cz * CHUNK + CHUNK / 2;
@@ -4830,7 +4919,7 @@
     if (!b) return false;
     if (b.shape === 'door') return toggleDoor(t.x, t.y, t.z);
     if (b.key === 'crafting_table') { openPanelForZone('hub', 'craft'); return true; }
-    if (b.key === 'furnace') { openPanelForZone('hub', 'craft'); if (typeof toast === 'function') toast('화로: 제작대에서 제련 레시피를 사용하세요.', true); return true; }
+    if (b.key === 'furnace') { openPanelForZone('hub', 'craft'); if (typeof toast === 'function') toast('🔥 화로: 제작 탭의 [화로 제련]에서 제련하세요 (석탄 1 = 8회)', true); return true; }
     if (b.key === 'chest') { openPanelForZone('hub', 'inv'); return true; }
     if (b.key && b.key.indexOf('portal_') === 0) { warpTo(b.key.slice(7), false); return true; }
     // V21-D2: 파크 진행 게이트(울타리/발광석 우클릭 = 개방 시도)
@@ -6220,7 +6309,7 @@
         if (isTouch && worldMode !== 'visit' && lookT.id !== -1 && !lookT.acted && (lookT.moved || 0) < 10 && performance.now() - lookT.downT > 250) progressBreaking(dt);
         tickMobs(dt); tickFishing(); tickPlayerVitals(dt); tickWarpPads(dt); tickPartyDungeonSync(dt);
       }
-      tickRegen(); tickDmgTexts(dt); tickBuildQueue(); tickChunkCulling(dt);
+      tickRegen(); tickDmgTexts(dt); tickBuildQueue(); tickChunkCulling(dt); tickAdaptiveView(dt);
       _hpHudT += dt; if (_hpHudT > 0.5) { _hpHudT = 0; updateHpHud(); }
       if (isTouch) updateJoystick(dt);
       flushWorldEdits();   // 블록 편집 → 메시 리빌드(프레임당 1회로 병합, 더티 청크만)
@@ -6371,6 +6460,18 @@
   window.economy3dStart = start;
   window.economy3dClosePanel = () => { hidePanel(); };   // V11: 아레나 시작 시 패널 닫기
   window.economy3dRefreshHotbar = () => { try { updateHotbar(); } catch (e) {} };   // V12-D: 인벤토리에서 핫바 지정 후 3D 갱신
+  // V21-D8: 화로 근접 판정(반경 4) — economy.js 제련이 호출. 3D 미가동 시엔 true(2D 전용 환경 배려)
+  window.economy3dNearFurnace = () => {
+    try {
+      if (!running || !P) return true;
+      const px = Math.floor(P.x), py = Math.floor(P.y), pz = Math.floor(P.z);
+      for (let dx = -4; dx <= 4; dx++) for (let dy = -2; dy <= 3; dy++) for (let dz = -4; dz <= 4; dz++) {
+        const b = BLOCKS[getBlockLocal(px + dx, py + dy, pz + dz)];
+        if (b && b.key === 'furnace') return true;
+      }
+      return false;
+    } catch (e) { return true; }
+  };
   window.economy3dPlayerHomePos = () => (worldMode === 'home' ? { x: Math.round(P.x - 0.5), z: Math.round(P.z - 0.5) } : null);   // V13-A: 미니언을 서있는 위치에 배치
   window.economy3dRebuildMinions = () => { try { rebuildMinionVisuals(true); } catch (e) {} };
   window.__econ3dPlaceable = k => { try { return isPlaceable(k); } catch (e) { return false; } };   // V12-D
