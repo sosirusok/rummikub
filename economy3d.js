@@ -1732,6 +1732,7 @@
     if (mode === worldMode && !force) return;
     restoreAllRegen(); clearMobs(); stopFishing(); mouseHeld = false; useHeld = false; warpCharge = null;
     P._boat = false; removeBoatMesh();   // V21-E2: 월드 이동 시 보트 하선
+    P._fallPeak = null; P._air = 0; P._lavaT = 0;   // V22-K: 월드 이동 후 낙하/익사 계산 초기화
     if (worldMode === 'dungeon' && mode !== 'dungeon') { dungeonState = null; partyGuestMode = false; }
     if (world && worldMode !== 'visit' && worldMode !== 'dungeon') {   // 현재 월드 캐시(널 월드 금지)
       worldCache[worldMode] = { world, W, H, Dp, _at: (worldCache[worldMode] && worldCache[worldMode]._at || 0) + 1 };
@@ -4890,6 +4891,7 @@
     else if (worldMode !== 'hub') { const sp = (WORLD_DEFS[worldMode] || {}).spawn || [W >> 1, Dp >> 1]; P.x = sp[0] + 0.5; P.z = sp[1] + 0.5; P.y = surfaceTop(sp[0], sp[1]) + 0.02; }
     else { P.x = spawnX; P.y = spawnY; P.z = spawnZ; }
     P.vx = P.vy = P.vz = 0;
+    P._fallPeak = null; P._air = 0; P._lavaT = 0;   // V22-K: 텔레포트 후 낙하/익사 계산 초기화
     if (msg && typeof toast === 'function') toast(msg, false);
   }
   function collide(dt) {
@@ -4930,14 +4932,14 @@
       if (jumpEdge && P.onGround) { P.vy = 8.5; P.onGround = false; }
     }
     // V21-E2: 사다리 오르기(MC 표준) — 몸이 사다리 칸과 겹치면: 전진/점프=상승, 슬금=정지, 그 외 느린 하강
+    let onLadderNow = false;
     {
       const bx = Math.floor(P.x), bz = Math.floor(P.z);
-      let onLadder = false;
       for (const yy of [Math.floor(P.y + 0.1), Math.floor(P.y + 1)]) {
         const lb = BLOCKS[getBlockLocal(bx, yy, bz)];
-        if (lb && lb.climb) { onLadder = true; break; }
+        if (lb && lb.climb) { onLadderNow = true; break; }
       }
-      if (onLadder && !inWater) {
+      if (onLadderNow && !inWater) {
         if (mf > 0 || wantJump) P.vy = 3.4;
         else if (keys.ShiftLeft || keys.ShiftRight) P.vy = 0;
         else if (P.vy < -2.4) P.vy = -2.4;
@@ -4945,8 +4947,25 @@
     }
     moveAxis('x', P.vx * dt); moveAxis('z', P.vz * dt); P.onGround = false; moveAxis('y', P.vy * dt);
     if (P.onGround) P._djUsed = false;
-    if (feetInLava()) respawnAtHub('앗 뜨거워! 마을로 긴급 귀환했어요');
-    if (P.y < 1) respawnAtHub(worldMode === 'hub' ? '마을로 귀환했어요' : '공허에 떨어졌다! 섬으로 귀환');
+    // V22-K: 낙하 데미지(MC 표준: 3블럭 초과 낙하 시 블럭당 최대체력 5%) — 물/사다리/보트는 무효
+    if (inWater || onLadderNow || P._boat) P._fallPeak = null;
+    else if (!P.onGround) P._fallPeak = P._fallPeak == null ? P.y : Math.max(P._fallPeak, P.y);
+    else if (P._fallPeak != null) {
+      const fd = P._fallPeak - P.y; P._fallPeak = null;
+      if (fd > 3.5) { damagePlayer((fd - 3) * (php ? php.max : 100) * 0.05); if (typeof toast === 'function') toast('💥 낙하 데미지!', false); }
+    }
+    // V22-K: 익사(머리가 물속 15초 후 초당 최대체력 10%)
+    const headInWater = getBlockLocal(Math.floor(P.x), Math.floor(P.y + 1.5), Math.floor(P.z)) === ID.water;
+    if (headInWater && !P._boat) {
+      P._air = (P._air || 0) + dt;
+      if (P._air > 15) { P._drownT = (P._drownT || 0) + dt; if (P._drownT >= 1) { P._drownT = 0; damagePlayer((php ? php.max : 100) * 0.1); if (typeof toast === 'function') toast('🫧 숨이 막혀요! 물 밖으로!', false); } }
+    } else { P._air = 0; P._drownT = 0; }
+    // V22-K: 용암 = 진짜 데미지(0.5초당 최대체력 15%) — 기존 '무료 순간이동' 폐기
+    if (feetInLava()) {
+      P._lavaT = (P._lavaT || 0) + dt;
+      if (P._lavaT >= 0.5) { P._lavaT = 0; damagePlayer((php ? php.max : 100) * 0.15); if (typeof toast === 'function') toast('🔥 용암이다!!', false); }
+    } else P._lavaT = 0;
+    if (P.y < 1) { P._fallPeak = null; respawnAtHub(worldMode === 'hub' ? '마을로 귀환했어요' : '공허에 떨어졌다! 섬으로 귀환'); }
   }
   function resetPlayerToSpawn() {
     spawnX = 224.5; spawnZ = 232.5; spawnY = surfaceTop(224, 232) + 0.02;
@@ -4996,8 +5015,9 @@
     keys[e.code] = true;
     if (e.code === 'Space') e.preventDefault();
     if (e.code === 'Escape') hidePanel();
+    if (panelOpen()) { if (e.code === 'KeyE') hidePanel(); return; }   // V22-K: 패널 열림 중엔 게임 단축키(핫바/지도) 무시 — E는 닫기 토글 유지
     if (e.code === 'KeyM') toggleMinimapSize();
-    if (/^Digit[1-8]$/.test(e.code)) { selectedHotbar = +e.code.slice(5) - 1; updateHotbar(); }   // 숫자키 1~8 = 핫바 슬롯 선택
+    if (/^Digit[1-8]$/.test(e.code)) selectHotbarSlot(+e.code.slice(5) - 1);   // 숫자키 1~8 = 핫바 슬롯 선택
     if (e.code === 'Digit9') { openPanelForZone('hub', 'menu'); }   // V22-H2: 9 = 네더의 별 메뉴
     if (e.code === 'KeyE') {   // V13-A: E 토글(열림이면 닫기)
       if (panelOpen()) { hidePanel(); }
@@ -5015,7 +5035,7 @@
     const tb = raycastBlock();
     if (tb) {
       const bb = BLOCKS[getBlockLocal(tb.x, tb.y, tb.z)];
-      if (bb && bb.shape === 'door') { if (!repeat) toggleDoor(tb.x, tb.y, tb.z); return true; }
+      if (bb && bb.shape === 'door') { if (!repeat && worldMode !== 'visit') toggleDoor(tb.x, tb.y, tb.z); return true; }   // V22-K: 방문 중 남의 문 조작 금지
       if (!repeat && interactHomeBlock(tb)) return true;
     }
     // V21-E2: 보트 — 보트를 들고 물을 향해 우클릭 = 탑승(슬금 키로 하선)
@@ -5030,8 +5050,15 @@
         return true;
       }
     }
-    if (worldMode === 'home') return homePlaceBlock(!!repeat);
+    if (worldMode === 'home') {
+      // V22-K: 내 섬에서도 낚시 가능 — 낚싯대를 들고 물을 우클릭
+      const ak = activeHotbarKey();
+      if (!repeat && !fishing && ak && /rod/.test(ak) && startFishing()) return true;
+      if (fishing) return true;
+      return homePlaceBlock(!!repeat);
+    }
     if (fishing) return true;
+    if (worldMode === 'visit') { if (!repeat) openPanelForZone('hub', 'menu'); return true; }   // V22-K: 방문 = 구경만(남의 섬 낚시 금지)
     if (!repeat) { if (!startFishing()) openPanelForZone('hub', 'menu'); }   // 물 조준=낚시, 빈 우클릭=스카이블럭 메뉴
     return true;
   }
@@ -5067,7 +5094,7 @@
       if (e.button !== 0) return;
       if (fishing) { reelFishing(); return; }             // 낚시 중 좌클릭 = 낚아채기
       const mb = pickMob();
-      if (mb) { P._atkCd = 0.45; attackMobHit(mb); mouseHeld = true; return; }   // 몬스터 공격(꾹 누르면 연속)
+      if (mb) { if (!(P._atkCd > 0)) { P._atkCd = 0.45; attackMobHit(mb); } mouseHeld = true; return; }   // V22-K: 연타 쿨다운 적용(0.45s) — 광클 DPS 버그 수정
       const t = currentAim();
       if (t && t.type === 'node') { gathering = true; gatherZoneKey = t.ref.zone; mouseHeld = true; return; }   // 채집 노드는 파괴형 동작이므로 좌클릭 유지
       mouseHeld = true;                                    // 좌클릭 = 파괴/채집만(상호작용은 우클릭·E)
@@ -5103,23 +5130,35 @@
       // V12-D: 깨끗한 탭(회전 거의 없이 300ms 미만)만 행동으로 인정 — 회전 드래그는 무시.
       const cleanTap = !lookT.acted && !lookT.broke && (lookT.moved || 0) < 10 && performance.now() - lookT.downT < 300;
       if (cleanTap) {
-        const t = currentAim();
-        if (t && t.type !== 'node') doInteract(t);        // NPC/포탈/미니언 등 탭 상호작용
-        else if (worldMode === 'home') homePlaceBlock();   // 내 섬 빈 탭 = 블록 설치
+        const mb = pickMob();   // V22-K: 터치에서도 몹 공격 가능(깨끗한 탭 = 근접 공격)
+        if (mb) { if (!(P._atkCd > 0)) { P._atkCd = 0.45; attackMobHit(mb); } }
+        else {
+          const t = currentAim();
+          if (t && t.type !== 'node') doInteract(t);        // NPC/포탈/미니언 등 탭 상호작용
+          else if (worldMode === 'home') homePlaceBlock();   // 내 섬 빈 탭 = 블록 설치
+        }
       }
       lookT.id = -1;
     }
   }
+  // V22-K: 마우스 휠 = 핫바 슬롯 순환(실제 MC와 동일). 아래로 굴리면 다음 슬롯.
+  function onWheel(e) {
+    if (panelOpen()) return;
+    e.preventDefault();
+    const dir = e.deltaY > 0 ? 1 : -1;
+    selectHotbarSlot(((selectedHotbar + dir) % 8 + 8) % 8);   // 0~7 순환(8번=메뉴 별 제외)
+  }
   function bindInput() {
     document.addEventListener('keydown', onKey); document.addEventListener('keyup', onKeyUp);
     canvas.addEventListener('pointerdown', onDown); canvas.addEventListener('pointermove', onMove);
+    canvas.addEventListener('wheel', onWheel, { passive: false });
     window.addEventListener('pointerup', onUp); canvas.addEventListener('contextmenu', e => e.preventDefault());
     window.addEventListener('blur', clearInputState);
     document.addEventListener('pointerlockchange', onPLC);
   }
   function unbindInput() {
     document.removeEventListener('keydown', onKey); document.removeEventListener('keyup', onKeyUp);
-    if (canvas) { canvas.removeEventListener('pointerdown', onDown); canvas.removeEventListener('pointermove', onMove); }
+    if (canvas) { canvas.removeEventListener('pointerdown', onDown); canvas.removeEventListener('pointermove', onMove); canvas.removeEventListener('wheel', onWheel); }
     window.removeEventListener('pointerup', onUp);
     window.removeEventListener('blur', clearInputState);
     document.removeEventListener('pointerlockchange', onPLC);
@@ -5242,6 +5281,7 @@
     }
     if (b.shape === 'bed') {   // V21-E2: 침대 — 프라이빗 섬 전용, 수면=완전 회복+아침
       if (worldMode !== 'home') { if (typeof toast === 'function') toast('🔒 내 프라이빗 섬에서만 사용할 수 있어요', false); return true; }
+      if (dayFactor() > 0.35) { if (typeof toast === 'function') toast('🛏️ 밤이나 해질녘에만 잘 수 있어요 (실제 MC 규칙)', false); return true; }   // V22-K: 무한 힐 악용 방지
       if (php) php.hp = php.max;
       worldTime = DAY_LEN * 0.25;
       if (typeof toast === 'function') toast('🛏️ 푹 잤다! 체력이 모두 회복되고 아침이 밝았어요', true);
@@ -5274,19 +5314,27 @@
     const nx = t.x + t.face[0], ny = t.y + t.face[1], nz = t.z + t.face[2];
     if (!inBounds(nx, ny, nz) || nx < HOME_BOUNDS.x0 || nx > HOME_BOUNDS.x1 || nz < HOME_BOUNDS.z0 || nz > HOME_BOUNDS.z1) return false;
     if (getBlockLocal(nx, ny, nz) !== 0) return false;
-    // 플레이어 몸과 겹치면 설치 불가
-    const minX = P.x - P.w / 2, maxX = P.x + P.w / 2, minZ = P.z - P.w / 2, maxZ = P.z + P.w / 2, minY = P.y, maxY = P.y + P.h;
-    if (nx + 1 > minX && nx < maxX && nz + 1 > minZ && nz < maxZ && ny + 1 > minY && ny < maxY) return false;
+    // 플레이어 몸/주변 개체와 겹치면 설치 불가 (V22-K: 몹·NPC 겹침 검사 추가)
+    const cellHitsBody = cy => {
+      const minX = P.x - P.w / 2, maxX = P.x + P.w / 2, minZ = P.z - P.w / 2, maxZ = P.z + P.w / 2, minY = P.y, maxY = P.y + P.h;
+      if (nx + 1 > minX && nx < maxX && nz + 1 > minZ && nz < maxZ && cy + 1 > minY && cy < maxY) return true;
+      for (const m of mobs) {
+        if (m.dead) continue; const mp = m.mesh.position;
+        if (Math.abs(mp.x - (nx + 0.5)) < 0.9 && Math.abs(mp.z - (nz + 0.5)) < 0.9 && mp.y > cy - 1.6 && mp.y < cy + 1.2) return true;
+      }
+      return false;
+    };
+    if (cellHitsBody(ny)) return false;
     if (isDoorItem(key)) {   // V17-C: 문은 2칸(아래+위) 설치, 바라보는 방향으로
-      if (!inBounds(nx, ny + 1, nz) || getBlockLocal(nx, ny + 1, nz) !== 0) return false;
-      if (!api.takeItem || !api.takeItem(key, 1)) return false;
+      if (!inBounds(nx, ny + 1, nz) || getBlockLocal(nx, ny + 1, nz) !== 0 || cellHitsBody(ny + 1)) return false;
       const d = lookDir(); let f; if (Math.abs(d.x) > Math.abs(d.z)) f = d.x > 0 ? 1 : 3; else f = d.z > 0 ? 2 : 0;
       const did = ID[key + '_c_' + f];
+      if (!did) return false;   // V22-K: id 확정 후에만 아이템 소모
+      if (!api.takeItem || !api.takeItem(key, 1)) return false;
       world[widx(nx, ny, nz)] = did; world[widx(nx, ny + 1, nz)] = did;
       if (api.setHomeEdit) { api.setHomeEdit(nx, ny, nz, did); api.setHomeEdit(nx, ny + 1, nz, did); }
       markBlockDirty(nx, nz); _mapDirty = true; updateBuildHud(); return true;
     }
-    if (!api.takeItem || !api.takeItem(key, 1)) return false;   // 소모
     let id = PLACE_BLOCK[key];
     if (isStairsItem(key)) {   // V17: 계단은 바라보는 방향으로 높은 면 배치
       const d = lookDir(); let f;
@@ -5299,6 +5347,8 @@
       else { const d = lookDir(); f = Math.abs(d.x) > Math.abs(d.z) ? (d.x > 0 ? 3 : 1) : (d.z > 0 ? 0 : 2); }
       id = ID['ladder_' + f];
     }
+    if (!id) return false;   // V22-K: 블럭 id 확정 후에만 아이템 소모(실패 시 아이템 증발 방지)
+    if (!api.takeItem || !api.takeItem(key, 1)) return false;   // 소모
     world[widx(nx, ny, nz)] = id;
     if (api.setHomeEdit) api.setHomeEdit(nx, ny, nz, id);
     markBlockDirty(nx, nz); _mapDirty = true;
@@ -5360,27 +5410,41 @@
     if (k === 'glowstone' || /glass/.test(k)) return 0.28;             // 바닐라 0.3
     if (k === 'ice' || k === 'packed_ice') return 0.45;                // 바닐라 0.5
     if (k === 'magma' || k === 'soul_sand') return 0.45;               // 바닐라 0.5
-    if (/leaves|flower|tall_grass|sugar|wheat|carrot|potato|mushroom_red$|mushroom_brown$|nether_wart|torch/.test(k)) return 0.18;   // 즉시급
+    if (/leaves|flower|tall_grass|sugar|wheat|carrot|potato|mushroom_red_block|mushroom_brown_block|mushroom_stem|nether_wart|torch/.test(k)) return 0.18;   // 즉시급(V22-K: 버섯블럭 키 매칭 수정)
+    if (k === 'bed') return 0.2;                                       // 바닐라 0.2
+    if (/^ladder/.test(k)) return 0.4;                                 // 바닐라 0.4
+    if (k === 'pumpkin' || k === 'melon') return 0.85;                 // 바닐라 1.0
     if (/wool/.test(k)) return 0.68;                                   // 바닐라 0.8(가위 없이)
     if (/^snow/.test(k)) return 0.2;
     if (/dirt|grass|sand$|red_sand|gravel|mycelium|farmland|hay|clay/.test(k)) return 0.5;   // 바닐라 0.5~0.6(삽류)
+    // V22-K: 광물 블럭(바닐라 5.0/3.0) — 기존엔 기본값 0.7로 흙처럼 캐지던 버그
+    if (/iron_block|diamond_block|emerald_block|coal_block|redstone_block/.test(k)) return 4.2;
+    if (/gold_block|lapis_block/.test(k)) return 2.5;
     // 광석(바닐라 3.0) > 돌벽돌/조약돌(2.0) > 원석(1.5)
     if (/_ore$|ancient_debris/.test(k)) return 2.4;
+    if (/sandstone|quartz/.test(k)) return 0.7;                        // 바닐라 0.8(연질 석재)
     if (/cobble|brick|prismarine|purpur_pillar/.test(k)) return 1.7;
-    if (k === 'stone' || /quartz|purpur|sandstone|andesite|diorite|granite|terracotta|concrete/.test(k)) return 1.3;
+    if (/concrete/.test(k)) return 1.5;                                // 바닐라 1.8
+    if (/^stone|smooth_stone|purpur|andesite|diorite|granite|terracotta/.test(k)) return 1.3;   // V22-K: 반블럭/계단·smooth_stone 포함
     if (/bedrock/.test(k)) return 999;                                 // 파괴 불가(별도 차단도 있음)
     // 나무 계열(바닐라 2.0 — 도끼)
     if (/log|planks|fence|door|trapdoor|chest|crafting_table|bookshelf/.test(k)) return 1.6;
     if (k === 'furnace') return 2.9;                                   // 바닐라 3.5
     return 0.7;
   }
+  // V22-K1: 블럭별 요구 도구 티어(MC 표준) — 0=맨손 1=나무 2=돌 3=철 4=금 5=다이아 6=태초
+  function requiredTierFor(bk) {
+    if (/obsidian/.test(bk)) return 5;
+    if (/diamond_ore|emerald_ore|gold_ore|redstone_ore|gold_block|diamond_block|emerald_block|redstone_block/.test(bk)) return 3;
+    if (/iron_ore|lapis_ore|iron_block|lapis_block/.test(bk)) return 2;
+    if (/stone|cobble|brick|_ore$|sandstone|andesite|diorite|granite|quartz|purpur|prismarine|netherrack|end_stone|magma|furnace|concrete|terracotta|coal_block/.test(bk)) return 1;
+    return 0;
+  }
   function progressBreaking(dt) {
     if (worldMode === 'visit') return;   // 방문은 구경만
-    let hit = raycastBlock();
-    if (breaking && (!hit || breaking.x !== hit.x || breaking.y !== hit.y || breaking.z !== hit.z)) {
-      const id = getBlockLocal(breaking.x, breaking.y, breaking.z);
-      if (id) hit = { x: breaking.x, y: breaking.y, z: breaking.z, face: [0, 0, 0], id };
-    }
+    const hit = raycastBlock();
+    // V22-K1: 조준 대상이 바뀌면 진행률 0%부터 재시작(실제 MC) — 기존 '원래 블럭 계속 캐기'가
+    //   조준을 옮겨도 이전 블럭까지 부숴 "한 번에 두 개" 깨지던 문제의 원인이라 폐기.
     if (!hit) { breaking = null; return; }
     if (worldMode === 'home' && isPortalBlock(hit.x, hit.y, hit.z)) { breaking = null; return; }
     let g = worldMode === 'home' ? null : gatherBlocks()[hit.id];   // V21-C: 프라이빗 섬은 순수 바닐라(자원 재생 알고리즘 미적용)
@@ -5394,7 +5458,13 @@
     if (!breaking || breaking.x !== hit.x || breaking.y !== hit.y || breaking.z !== hit.z) {
       const api = econApi();
       const tp = api.toolPower ? api.toolPower(g.fam) : { speedMul: api.toolMul ? api.toolMul(g.fam) : 1 };
-      breaking = { x: hit.x, y: hit.y, z: hit.z, t: 0, need: g.hard / Math.max(0.4, tp.speedMul), tp };
+      // V22-K1: 도구 티어 게이팅(MC 표준) — 미달이면 3.3배 느리고 드롭 없음
+      const bk2 = BLOCKS[hit.id].key;
+      const reqT = g.fam === 'pickaxe' ? requiredTierFor(bk2) : 0;
+      const myT = api.bestToolTier ? api.bestToolTier(g.fam) : 6;
+      const under = reqT > 0 && myT < reqT;
+      breaking = { x: hit.x, y: hit.y, z: hit.z, t: 0, need: g.hard / Math.max(0.4, tp.speedMul) * (under ? 3.3 : 1), tp, noDrop: under };
+      if (g.hard <= 0.2) breaking.need = 0.001;   // V22-K1: 즉시 파괴 블럭(꽃/풀/작물/횃불/잎) = 1틱
     }
     breaking.t += dt;
     const cross = document.getElementById('econ3dCross');
@@ -5403,8 +5473,12 @@
     // 파괴 완료 → 자원 지급 + 블록 전환 + 재생 예약 (+ 광역 채집/트리캐피테이터)
     const api = econApi();
     const tp = breaking.tp || {};
+    const gated = !!(breaking && breaking.noDrop);   // V22-K1: 티어 미달 — 광역/트리캡 연쇄 드롭도 차단
+    if (gated) { g = Object.assign({}, g, { res: null, homeDrop: g.homeDrop !== undefined ? null : undefined }); if (typeof toast === 'function') toast('🔨 더 좋은 곡괭이가 필요해요 — 아이템이 나오지 않았어요', false); }
     doGatherBreak(hit.x, hit.y, hit.z, g, api);
-    if (tp.treecap && g.fam === 'axe' && g.to === 0) {
+    // V22-K: 광역/트리캡 연쇄도 월드 모드에 맞는 정의 사용 — 홈에서 허브 채집 정의(재생/원자재 드롭)를 쓰던 버그 수정
+    const chainG = id2 => worldMode === 'home' ? { res: null, homeDrop: blockDropKey(id2), fam: g.fam, to: 0 } : gatherBlocks()[id2];
+    if (!gated && tp.treecap && g.fam === 'axe' && g.to === 0) {
       // 트리캐피테이터: 연결된 원목 전체 벌목(BFS, 최대 48블록)
       const targetIds = [ID.oak_log, ID.birch_log, ID.spruce_log, ID.dark_oak_log, ID.jungle_log, ID.acacia_log];
       const q = [[hit.x, hit.y, hit.z]]; const seen = new Set(); let felled = 0;
@@ -5416,12 +5490,12 @@
           if (seen.has(k2)) continue; seen.add(k2);
           const id2 = getBlockLocal(nx, ny, nz);
           if (targetIds.indexOf(id2) < 0) continue;
-          const g2 = gatherBlocks()[id2];
+          const g2 = chainG(id2);
           if (g2) { doGatherBreak(nx, ny, nz, g2, api); q.push([nx, ny, nz]); felled++; }
         }
       }
       if (felled > 0 && typeof toast === 'function') toast(`🪓 트리캐피테이터! 원목 ${felled + 1}블록 통째 벌목`, true);
-    } else if (tp.area > 0) {
+    } else if (!gated && tp.area > 0) {
       // 광역 채집 인챈트: 주변 같은 종류 블록 +N개 동시 파괴
       let broke = 0;
       outer:
@@ -5430,7 +5504,7 @@
         const nx = hit.x + d2[0], ny = hit.y + d2[1], nz = hit.z + d2[2];
         const id2 = getBlockLocal(nx, ny, nz);
         if (id2 !== hit.id) continue;
-        const g2 = gatherBlocks()[id2];
+        const g2 = chainG(id2);
         if (g2) { doGatherBreak(nx, ny, nz, g2, api); broke++; }
       }
     }
@@ -5916,7 +5990,7 @@
     { name: '바다 방랑자', kind: 'tall', color: 0x2a6a8a, hp: 200, dmg: 12, xp: 45, coins: 40, speed: 2.8, scale: 1.0, weight: 24, minLv: 0, drops: [{ key: 'rawfish', n: 2 }] },
     { name: '밤 오징어', kind: 'quad', color: 0x1a1a3a, hp: 260, dmg: 15, xp: 60, coins: 60, speed: 3.0, scale: 0.95, weight: 14, minLv: 5, drops: [{ key: 'salmon', n: 3, chance: 0.7 }, { key: 'clownfish', n: 1, chance: 0.15 }] },
     { name: '바다 가디언', kind: 'quad', color: 0x3a8a7a, hp: 340, dmg: 18, xp: 80, coins: 75, speed: 2.4, scale: 1.1, weight: 12, minLv: 8, drops: [{ key: 'prismarine', n: 3 }] },
-    { name: '바다 마녀', kind: 'tall', color: 0x6a3a8a, hp: 400, dmg: 22, xp: 100, coins: 95, speed: 2.6, scale: 1.05, weight: 8, minLv: 12, books: ['luck'], drops: [{ key: 'potion_healing', n: 1, chance: 0.3 }, { key: 'spider_eye', n: 3 }] },
+    { name: '바다 마녀', kind: 'tall', color: 0x6a3a8a, hp: 400, dmg: 22, xp: 100, coins: 95, speed: 2.6, scale: 1.05, weight: 8, minLv: 12, books: ['looting'], drops: [{ key: 'potion_healing', n: 1, chance: 0.3 }, { key: 'spider_eye', n: 3 }] },
     { name: '심연의 기수', kind: 'tall', color: 0x2a2a4a, hp: 560, dmg: 28, xp: 140, coins: 130, speed: 3.2, scale: 1.2, weight: 6, minLv: 15, drops: [{ key: 'bone', n: 4 }, { key: 'rotten_flesh', n: 4 }] },
     { name: '가디언 수호병', kind: 'quad', color: 0x4aaa8a, hp: 760, dmg: 34, xp: 200, coins: 180, speed: 2.2, scale: 1.35, weight: 4, minLv: 18, equipSrc: 'fishing', equipSrcChance: 0.2, drops: [{ key: 'prismarine', n: 5 }, { key: 'sponge', n: 2, chance: 0.4 }] },
     { name: '물의 히드라', kind: 'dragon', color: 0x1a7a9a, hp: 1500, dmg: 44, xp: 320, coins: 320, speed: 2.4, scale: 1.5, weight: 1.5, minLv: 20, equipSrc: 'fishing', equipSrcChance: 0.35, books: ['giant_killer'], drops: [{ key: 'pufferfish', n: 4 }, { key: 'enchanted_prismarine', n: 1, chance: 0.15 }] },
@@ -5999,7 +6073,7 @@
           const defPct = api.defensePct ? api.defensePct(php && php.hp <= php.max * 0.3) : 0;
           const dealt = m.dmg * (0.85 + Math.random() * 0.3) * (1 - defPct);
           damagePlayer(dealt);
-          const th = api.traitSum ? api.traitSum('thorns') : 0;   // V11: 가시 — 받은 피해 반사
+          const th = (api.traitSum ? api.traitSum('thorns') : 0) + (api.enchThornsPct ? api.enchThornsPct() * 100 : 0);   // V22-K: 가시 — 특성 + 방어구 인챈트 합산 반사
           if (th > 0 && !m.ghost && !m.dead && mobs.indexOf(m) >= 0) {   // 사망→리스폰으로 몹이 정리됐으면 스킵
             m.hp -= dealt * th / 100;
             spawnDmgText(m.mesh.position, dealt * th / 100, false);
@@ -6044,11 +6118,13 @@
     for (const m of mobs) {
       if (m.dead) continue;
       const mp = m.mesh.position;
-      const vx = mp.x - P.x, vy = (mp.y + 1.0) - (P.y + P.eye), vz = mp.z - P.z;
+      const sc = (m.def && m.def.scale) || 1;   // V22-K: 몹 크기에 맞춘 조준 판정(큰 몹=큰 히트박스, 작은 몹=낮은 중심점)
+      const vx = mp.x - P.x, vy = (mp.y + 1.0 * sc) - (P.y + P.eye), vz = mp.z - P.z;
       const along = vx * d.x + vy * d.y + vz * d.z;
       if (along < 0.2 || along > 3.8) continue;
       const px = vx - d.x * along, py = vy - d.y * along, pz = vz - d.z * along;
-      if (Math.hypot(px, py, pz) < (m.def && m.def.miniboss ? 2.0 : m.elite ? 1.2 : 0.95) && along < bestAlong) { best = m; bestAlong = along; }
+      const rad = (m.def && m.def.miniboss ? 2.0 : m.elite ? 1.2 : 0.95) * Math.max(0.55, Math.min(1.8, sc));
+      if (Math.hypot(px, py, pz) < rad && along < bestAlong) { best = m; bestAlong = along; }
     }
     return best;
   }
@@ -6146,6 +6222,8 @@
       const api = econApi();
       if (api.playerDied) api.playerDied();
       php.hp = php.max;
+      php.lastHitAt = 0;   // V22-K: 사망 후 재생 타이머 초기화(구 타임스탬프 잔존 버그)
+      P._fallPeak = null; P._air = 0; P._lavaT = 0;
       if (worldMode === 'dungeon' && dungeonState) dungeonState.deaths++;
       respawnAtHub('');
     }
@@ -6594,6 +6672,7 @@
       <canvas id="econ3dMap" class="econ3d-map" width="140" height="140" data-act="econ3d_map"></canvas>
       <!-- V13-A: 핫바 밑 초록 체력바 제거 — 체력은 핫바 위 스탯 액션바에 표시 -->
       <div class="econ3d-statsrow" id="econ3dStats"></div>
+      <div class="econ3d-itemtitle" id="econ3dItemTitle"></div>
       <div class="econ3d-hotbar" id="econ3dHotbar">${Array.from({ length: 9 }, (_, i) => `<button class="econ3d-slot" data-act="econ3d_hotbar" data-i="${i}" id="econ3dSlot${i}"></button>`).join('')}</div>
       <div class="econ3d-buildbar" id="econ3dBuildBar" style="display:none"></div>
       <div class="econ3d-questhud" id="econ3dQuestHud" style="display:none"></div>
@@ -6748,7 +6827,7 @@
     while (P0.hotbar.length < 9) P0.hotbar.push(null);
     P0.hotbar[8] = null;   // V22-H2: 9번 칸은 네더의 별(메뉴) 전용
     // 보유하지 않게 된 아이템은 슬롯에서 비움
-    for (let i = 0; i < 9; i++) if (P0.hotbar[i] && (P0.inv[P0.hotbar[i]] || 0) <= 0 && !isToolKey(P0.hotbar[i])) P0.hotbar[i] = null;
+    for (let i = 0; i < 9; i++) if (P0.hotbar[i] && (P0.inv[P0.hotbar[i]] || 0) <= 0) P0.hotbar[i] = null;   // V22-K: 도구도 미보유면 비움(유령 도구 수정)
     if (P0.hotbar.every(x => !x)) {   // 완전히 비었으면 자동 채우기
       const fill = [];
       const D0 = window.ECON_DATA;
@@ -6759,10 +6838,30 @@
   }
   function isToolKey(k) { const D0 = window.ECON_DATA; for (const fam in D0.TOOLS) if (D0.TOOLS[fam].some(t => t.key === k)) return true; return false; }
   function activeHotbarKey() { const api = econApi(); const P0 = api.getP ? api.getP() : null; return P0 && P0.hotbar ? P0.hotbar[selectedHotbar] : null; }
+  // V22-K: 핫바 선택 변경 시 아이템 이름을 핫바 위에 표시(실제 MC 동작) — 등급색 적용, 1.6초 페이드
+  let _titleTimer = null;
+  function showHotbarTitle() {
+    const el = document.getElementById('econ3dItemTitle'); if (!el) return;
+    const k = activeHotbarKey();
+    if (!k) { el.style.opacity = '0'; return; }
+    const eco = window.__econ || {};
+    const sd = (eco.shopDef && eco.shopDef(k)) || null;
+    const tiers = (window.ECON_DATA && window.ECON_DATA.ITEM_TIERS) || [];
+    const tier = sd && sd.tierKey ? tiers.find(t => t.key === sd.tierKey) : null;
+    el.textContent = (sd && sd.name) || (eco.itemName ? eco.itemName(k) : k);
+    el.style.color = tier ? tier.colorHex : '#fff';
+    el.style.transition = 'none'; el.style.opacity = '1';
+    if (_titleTimer) clearTimeout(_titleTimer);
+    _titleTimer = setTimeout(() => { el.style.transition = 'opacity .6s'; el.style.opacity = '0'; }, 1600);
+  }
+  let _placeManual = false;   // V22-K: 건축바에서 직접 고른 블럭은 핫바 동기화가 덮어쓰지 않음
   function syncPlaceFromHotbar() {   // 활성 핫바 아이템이 설치가능 블럭이면 배치 대상으로
+    if (_placeManual && isPlaceable(selectedPlaceKey)) return;
+    _placeManual = false;
     const k = activeHotbarKey();
     selectedPlaceKey = isPlaceable(k) ? k : null;
   }
+  function selectHotbarSlot(i) { selectedHotbar = i; _placeManual = false; updateHotbar(); showHotbarTitle(); }
   function updateHotbar() {
     const api = econApi(); const P0 = api.getP ? api.getP() : null; if (!P0) return;
     ensureHotbar();
@@ -6789,14 +6888,14 @@
         const i = Number(el.dataset.i);
         if (i === 8) { openPanelForZone('hub', 'menu'); return true; }   // V22-H2: 네더의 별
         const P0 = econApi().getP ? econApi().getP() : null;
-        if (P0 && P0.hotbar && P0.hotbar[i]) { selectedHotbar = i; updateHotbar(); }
+        if (P0 && P0.hotbar && P0.hotbar[i]) selectHotbarSlot(i);
         else openPanelForZone('hub', 'inv');   // 빈 슬롯 클릭 = 인벤토리에서 아이템 지정
         return true;
       }
       case 'econ3d_jump': keys.Space = true; setTimeout(() => { keys.Space = false; }, 120); return true;
       case 'econ3d_panel_close': hidePanel(); return true;
       case 'econ3d_map': toggleMinimapSize(); return true;
-      case 'econ3d_block': selectedPlaceKey = el.dataset.key; updateBuildHud(); return true;
+      case 'econ3d_block': selectedPlaceKey = el.dataset.key; _placeManual = true; updateBuildHud(); return true;   // V22-K: 수동 선택 고정
     }
     return false;
   }
@@ -6845,6 +6944,7 @@
       travelTo, worldMode: () => worldMode, genHome, PORTALS, HOME_MINION_SLOTS, HOME_BOUNDS, HOME_CENTER, installPortalFrame,
       parkGateAt, tryOpenParkGate, parkGates: () => genPark._gates || [], agingPass,
       _testCrack: (b) => { breaking = b; tickCrackOverlay(); return { visible: !!(crackMesh && crackMesh.visible), stage: crackStage }; },
+      requiredTierFor, homeBlockHardness, showHotbarTitle,   // V22-K 검증용
       mobList: () => mobs.filter(m => !m.dead).map(m => ({ type: m.type, x: m.mesh.position.x, y: m.mesh.position.y, z: m.mesh.position.z })),   // V21-D9 공허 몹 감사용
       chunkMeshCount: () => Object.keys(chunkMeshes).length,   // V12 크래시 검증용
       buildQueueLen: () => buildQueue.length,

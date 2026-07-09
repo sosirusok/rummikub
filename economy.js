@@ -310,18 +310,27 @@
   // 북 등급(가격대)별 기본 요구 마법부여 레벨
   function enchantReqLevel(def) { return def.bookBasePrice >= 2000 ? 9 : def.bookBasePrice >= 1400 ? 6 : def.bookBasePrice >= 900 ? 3 : 0; }
   // ── 범용 인챈트 효과 엔진: 32종 인챈트의 fx 서술자를 종류별로 합산 ──
+  // V22-K: 조건부 얼티밋(소울이터/콤보/리전/페이탈템포)은 enchSum 합산에서 제외하고 enchCondMul에서 조건 실동작
+  const ENCH_COND_KEYS = { soul_eater: 1, combo_ult: 1, legion: 1, fatal_tempo: 1 };
   function enchSum(fxKey) {
     let s = 0;
+    const ofa = enchantLvl('weapon', 'one_for_all');   // V22-K: 원 포 올 — 다른 무기 인챈트 무효(설명대로)
     for (const def of D().ENCHANTS) {
       const v = def.fx && def.fx[fxKey]; if (!v) continue;
-      const lv = enchantLvl(def.target, def.key); if (lv) s += v * lv;
+      if (ENCH_COND_KEYS[def.key]) continue;
+      if (ofa && def.target === 'weapon' && def.key !== 'one_for_all') continue;
+      const lv = enchantLvl(def.target, def.key); if (!lv) continue;
+      const bowDilute = (def.key === 'power' || def.key === 'punch') ? 0.3 : 1;   // V22-K: 활 인챈트는 근접에 30%만(리포지 규칙과 동일)
+      s += v * lv * bowDilute;
     }
     return s;
   }
   function enchVsSum(slayerKey) {
     let s = 0;
+    const ofa = enchantLvl('weapon', 'one_for_all');
     for (const def of D().ENCHANTS) {
       if (!def.fx || def.fx.dmgVs !== slayerKey) continue;
+      if (ofa && def.key !== 'one_for_all') continue;
       const lv = enchantLvl(def.target, def.key); if (lv) s += (def.fx.v || 0) * lv;
     }
     return s;
@@ -337,6 +346,15 @@
     else pct += enchSum('dmgHigh');
     if (ctx.slayerKey) pct += enchVsSum(ctx.slayerKey);
     if (ctx.isBoss) pct += enchSum('dmgBoss');
+    // V22-K: 조건부 얼티밋 실동작(기존엔 무조건 적용되거나 죽은 데이터였음)
+    const ofa = enchantLvl('weapon', 'one_for_all');
+    if (!ofa) {
+      const eLv = k => enchantLvl('weapon', k);
+      if (eLv('soul_eater') && P._soulCharge) { pct += eLv('soul_eater') * 8; P._soulCharge = 0; }   // 처치 후 다음 타격 강화
+      if (eLv('fatal_tempo') && (ctx.hitIdx || 0) >= 3) pct += eLv('fatal_tempo') * 6;               // 연타 유지 시
+      if (eLv('legion') && window.econNet && window.econNet.party && window.econNet.party()) pct += eLv('legion') * 2;   // 협동 시
+      if (eLv('combo_ult')) pct += Math.min(ctx.hitIdx || 0, 6) * eLv('combo_ult') * 2;              // 누적 콤보(최대 6타)
+    }
     return 1 + pct / 100;
   }
   function enchHitHeal(dmg) { return dmg * enchSum('lifesteal') / 100 + enchSum('healHit'); }
@@ -942,6 +960,22 @@
       return ladder[i].mul;
     }
     return 0.5;   // 도구 없음 = 절반
+  }
+  // V22-K: 보유 최고 도구 등급(1=나무 2=돌 3=철 4=금 5=다이아 6=태초, 0=맨손) — 3D 채광 티어 게이트용
+  //   래더에는 생성 도구(g_t_*)도 섞여 있으므로 바닐라 접두사로 판정, 생성 도구는 배율로 환산
+  const TIER_PREFIX = ['wooden_', 'stone_', 'iron_', 'golden_', 'diamond_', 'ancient_'];
+  function bestToolTier(family) {
+    const ladder = D().TOOLS[family]; if (!ladder) return 0;
+    const lv = skillLevel(TOOL_SKILL[family] || 'mining');
+    let best = 0;
+    for (const t of ladder) {
+      if (!hasItem(t.key)) continue;
+      if ((t.req || 0) > lv) continue;
+      const i = TIER_PREFIX.findIndex(p => t.key.indexOf(p) === 0);
+      if (i >= 0) best = Math.max(best, i + 1);
+      else best = Math.max(best, t.mul >= 2.2 ? 6 : t.mul >= 1.75 ? 5 : t.mul >= 1.6 ? 4 : t.mul >= 1.45 ? 3 : t.mul >= 1.2 ? 2 : 1);
+    }
+    return best;
   }
   let _lastGatherAt = 0;
   function gather(zoneKey) {
@@ -1578,7 +1612,8 @@
     addItem(rk, n); addCollection(rk, n);
     let msg = `💰 보물 상자! ${itemName(rk)} ×${n}`;
     if (Math.random() < 0.10) {
-      const e = D().ENCHANTS[Math.floor(Math.random() * D().ENCHANTS.length)];
+      const pool = D().ENCHANTS.filter(x => !x.ultimate);   // V22-K: 얼티밋 북은 보물상자에서 제외(정점 보스 전용)
+      const e = pool[Math.floor(Math.random() * pool.length)];
       addItem(`enchant_book_${e.key}`, 1);
       msg += ` + 인챈트북(${e.name})!`;
     }
@@ -1714,7 +1749,7 @@
   function attackMob3d(ctx) {
     const crit = playerCritRoll();
     let dmg = playerAttackPower() * crit;
-    dmg *= enchCondMul({ hitIdx: ctx.hitIdx || 0, targetHp: ctx.hp, targetMaxHp: ctx.maxHp, isBoss: !!ctx.isBoss, slayerKey: ctx.slayerKey || null });
+    dmg *= enchCondMul({ hitIdx: ctx.hitIdx || 0, targetHp: ctx.hp, targetMaxHp: ctx.maxHp, isBoss: !!ctx.isBoss, slayerKey: ctx.slayerKey || (ctx.mobType && SLAYER_MOB_MAP[ctx.mobType]) || null });   // V22-K: 3D 몹 종 → 슬레이어 계열 매핑(스마이트/베인 등 특효 인챈트 실동작)
     dmg *= traitCtxMul(ctx);                              // V11: 특성 문맥 배율(처형/연격/특효/분노...)
     dmg += traitSum('shred');                             // V11: 파쇄(고정 추가 피해)
     let ds = false;
@@ -1735,6 +1770,7 @@
     addSkillXp('combat', xpGain);
     stat('kills');
     if (mob.boss) stat('bossKills');
+    if (enchantLvl('weapon', 'soul_eater')) P._soulCharge = 1;   // V22-K: 소울 이터 — 처치 후 다음 타격 강화 충전
     // V11: 파티 근접 사냥 XP 공유(절반)
     if (window.econNet && window.econNet.party && window.econNet.party() && window.econNet.partySendXp) window.econNet.partySendXp(Math.round(xpGain * 0.5));
     const lucky = traitSum('lucky');                            // V11: 행운(희귀 드롭 확률 증가)
@@ -2341,9 +2377,52 @@
   function ttAttr(keyOrDef) {
     const sdef = typeof keyOrDef === 'string' ? shopDef(keyOrDef) : keyOrDef;
     if (!sdef) return '';
+    // V22-K: shopDef로 다시 찾을 수 있는 아이템은 알록달록 HTML 툴팁(data-ttk)으로
+    if (sdef.key && shopDef(sdef.key)) return ` data-ttk="${escHtml(sdef.key)}"`;
     const lore = escHtml(itemLore(sdef));
     return ` data-tt="${lore}" title="${lore}"`;
   }
+  // V22-K: 알록달록 HTML 툴팁 — 등급색 이름 + 스탯별 색상/굵기(실제 스카이블럭 로어 스타일)
+  const TT_LINE_COLOR = [
+    [/^\[/, '#9aa0b4'],
+    [/^공격력/, '#ff5555'], [/^방어력/, '#55ff55'], [/^체력/, '#ff5555'],
+    [/^◈/, '#e0a6ff'], [/^✦/, '#ffe066'],
+    [/^장착 중|^✔/, '#7dff7d'],
+    [/^⚔|^⛏/, '#ff7b7b'], [/^채집 효율/, '#55ffff'], [/^판매가/, '#ffe066'],
+  ];
+  function tierColorOf(sdef) { const t = sdef && sdef.tierKey ? D().ITEM_TIERS.find(x => x.key === sdef.tierKey) : null; return t ? t.colorHex : '#ffffff'; }
+  function itemLoreHTML(sdef) {
+    if (!sdef) return '';
+    const tc = tierColorOf(sdef);
+    return itemLore(sdef).split('\n').map((ln, i) => {
+      if (i === 0) return `<div style="color:${tc};font-weight:900;font-size:14px;margin-bottom:3px">${escHtml(ln)}</div>`;
+      if (/^◆/.test(ln)) return `<div style="color:${tc};font-weight:900;margin-top:5px;letter-spacing:1px">${escHtml(ln)}</div>`;
+      if (/^"/.test(ln)) return `<div style="color:#8b8fa3;font-style:italic">${escHtml(ln)}</div>`;
+      for (const [re, c] of TT_LINE_COLOR) if (re.test(ln)) return `<div style="color:${c}">${escHtml(ln)}</div>`;
+      return `<div style="color:#c9cede">${escHtml(ln)}</div>`;
+    }).join('');
+  }
+  let _ttEl = null;
+  function richTTMove(x, y) {
+    if (!_ttEl || _ttEl.style.display === 'none') return;
+    const r = _ttEl.getBoundingClientRect();
+    let L = x + 14, T = y - r.height - 12;
+    if (L + r.width > window.innerWidth - 6) L = Math.max(6, window.innerWidth - r.width - 6);
+    if (T < 6) T = y + 20;
+    _ttEl.style.left = L + 'px'; _ttEl.style.top = T + 'px';
+  }
+  function richTTHide() { if (_ttEl) _ttEl.style.display = 'none'; }
+  document.addEventListener('mouseover', e => {
+    const t = e.target && e.target.closest ? e.target.closest('[data-ttk]') : null;
+    if (!t) { richTTHide(); return; }
+    const sdef = shopDef(t.dataset.ttk);
+    if (!sdef || !P) { richTTHide(); return; }
+    if (!_ttEl) { _ttEl = document.createElement('div'); _ttEl.className = 'econ-richtt'; document.body.appendChild(_ttEl); }
+    _ttEl.innerHTML = itemLoreHTML(sdef);
+    _ttEl.style.display = 'block';
+    richTTMove(e.clientX, e.clientY);
+  });
+  document.addEventListener('mousemove', e => { if (_ttEl && _ttEl.style.display === 'block') richTTMove(e.clientX, e.clientY); });
   function hubHTML() {
     return `<div class="econ-panel">
       ${hubTabBodyHTML()}
@@ -3486,15 +3565,17 @@
     },
     // 슈가 러시 등 이동속도 인챈트(%): economy3d.js가 매 프레임 참조
     moveSpeedPct: () => (P ? enchSum('speed') : 0),
+    enchThornsPct: () => (P ? enchThornsPct() : 0),   // V22-K: 방어구 가시 인챈트 — 3D 반사 데미지
     // 멀티(economy-net.js가 호출): 거래 검증/적용 + 파티 던전 훅
     tradeCanGive, tradeApply,
     partyStartDungeon, partyRemoteAttack, partyGuestReward,
     // 3D 인월드 게임플레이 브리지
     toolMul: fam => bestToolMul(fam),
+    bestToolTier: fam => bestToolTier(fam),   // V22-K: 채광 티어 게이트
     toolPower: fam => ({
-      speedMul: bestToolMul(fam) * (1 + enchantLvl('tool', 'efficiency') * 0.12) * (fam === 'pickaxe' && hasItem('stonk') ? 1.6 : 1)
+      speedMul: bestToolMul(fam) * (1 + enchantLvl('tool', 'efficiency') * (((enchantDef('efficiency') || {}).fx || {}).mineSpeed || 12) / 100) * (fam === 'pickaxe' && hasItem('stonk') ? 1.6 : 1)
         * (1 + (traitSum('gatherer') + (fam === 'pickaxe' ? traitSum('miner') : fam === 'axe' ? traitSum('lumber') : 0)) / 100),   // V11 특성
-      fortunePct: enchantLvl('tool', 'fortune') * 20,
+      fortunePct: enchantLvl('tool', 'fortune') * (((enchantDef('fortune') || {}).fx || {}).fortune || 20),   // V22-K: 데이터 fx값 연동
       area: enchantLvl('tool', 'area_mining'),
       treecap: fam === 'axe' && hasItem('treecapitator'),
     }),

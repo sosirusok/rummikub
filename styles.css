@@ -1425,12 +1425,20 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .econ-menutile:hover{border-color:#facc15; transform:translateY(-1px);}
 .econ-menuic{font-size:26px;}
 .econ-tt{position:relative;}
-.econ-tt:hover::after{content:attr(data-tt); position:absolute; left:8px; bottom:calc(100% + 6px); z-index:30;
+.econ-tt[data-tt]:hover::after{content:attr(data-tt); position:absolute; left:8px; bottom:calc(100% + 6px); z-index:30;
   background:linear-gradient(180deg,#160f24,#0d0a18); border:2px solid #6a3fb5; border-radius:8px; padding:9px 12px;
   color:#e8e2f8; font-size:12px; line-height:1.55; white-space:pre-line; min-width:180px; max-width:280px;
   box-shadow:0 8px 22px rgba(0,0,0,.6); pointer-events:none;}
 .mc-slot.econ-tt{overflow:visible; z-index:1;}
 .mc-slot.econ-tt:hover{z-index:40;}
+/* V22-K: 알록달록 HTML 아이템 툴팁(마우스 따라다님, 등급색/스탯색) */
+.econ-richtt{position:fixed; z-index:300; display:none; pointer-events:none;
+  background:linear-gradient(180deg,rgba(22,15,36,.96),rgba(13,10,24,.97)); border:2px solid #6a3fb5; border-radius:8px; padding:10px 13px;
+  font-size:12px; line-height:1.6; min-width:190px; max-width:300px; box-shadow:0 10px 26px rgba(0,0,0,.65);}
+/* V22-K: MC식 아이템 이름 타이틀 — 핫바 선택 변경 시 핫바 위에 뜨고 서서히 사라짐 */
+.econ3d-itemtitle{position:absolute; left:50%; transform:translateX(-50%); bottom:112px; z-index:5; opacity:0;
+  font-size:16px; font-weight:900; letter-spacing:.3px; pointer-events:none; white-space:nowrap;
+  text-shadow:1px 1px 0 #000,-1px 1px 0 #000,1px -1px 0 #000,-1px -1px 0 #000,0 2px 5px rgba(0,0,0,.7);}
 /* V15: 하이픽셀 액션바 스타일(핫바 위, 배경 없이 굵은 텍스트 + 검정 외곽선) */
 .econ3d-statsrow{position:absolute; left:50%; transform:translateX(-50%); bottom:86px; display:flex; gap:18px; z-index:5; font-size:15px; font-weight:900; letter-spacing:.2px; pointer-events:none; white-space:nowrap; font-family:'Segoe UI',system-ui,sans-serif;}
 .econ3d-statsrow .ab{text-shadow:1px 1px 0 #000,-1px 1px 0 #000,1px -1px 0 #000,-1px -1px 0 #000,0 2px 4px rgba(0,0,0,.6);}
