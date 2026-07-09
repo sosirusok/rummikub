@@ -4067,30 +4067,62 @@
     try {
       // 매니페스트 불요 — 아틀라스의 '모든' 타일명에 대해 resourcepack/<타일명>.png를 시도한다.
       // 파일이 있는 타일만 교체되고 없는 타일은 절차 텍스처 유지(404는 조용히 무시).
-      // 공식 MC 파일명 별칭 — 추출한 textures/block 폴더를 이름 변경 없이 통째로 넣어도 적용되게
+      // V22-J1: 공식 MC 파일명 완전 매핑 — 이름 규칙 차이(별칭) + 회색조 틴트 + 애니메이션 스트립까지
+      //   블럭 종류마다 리소스팩 이미지 형태가 다른 것을 전부 고려한다:
+      //   ① 이름 그대로(stone 등) ② 어순/명명 차이(wool_red→red_wool 등) ③ 회색조+틴트(잔디 윗면/잎/물)
+      //   ④ 세로 스트립 애니메이션(water_still/lava_still/magma — 프레임 순환) ⑤ 엔티티 텍스처(상자/침대)는 내장 유지
+      const RP_COLOR = { lightblue: 'light_blue', lightgray: 'light_gray' };
       const RP_ALIAS = {
         cobble: 'cobblestone', planks: 'oak_planks', log_side: 'oak_log', log_top: 'oak_log_top',
         grass_top: 'grass_block_top', grass_side: 'grass_block_side', glow: 'glowstone', stonebrick: 'stone_bricks',
         mossy_cobble: 'mossy_cobblestone', quartz: 'quartz_block_side', birch_side: 'birch_log', spruce_side: 'spruce_log',
         spruce_top: 'spruce_log_top', dark_oak_side: 'dark_oak_log', dark_oak_top: 'dark_oak_log_top',
         jungle_side: 'jungle_log', jungle_top: 'jungle_log_top', acacia_side: 'acacia_log', acacia_top: 'acacia_log_top',
-        leaves: 'azalea_leaves', water: 'blue_concrete', lava: 'magma',   // 잎/유체는 원본이 회색(틴트용)이거나 다중 프레임이라 근사 대체
+        leaves: 'oak_leaves', water: 'water_still', lava: 'lava_still', magma: 'magma',
         mycelium_top: 'mycelium_top', farmland_top: 'farmland', wheat_mature: 'wheat_stage7',
+        carrot_mature: 'carrots_stage3', potato_mature: 'potatoes_stage3',
+        flower_red: 'poppy', flower_yellow: 'dandelion', tall_grass: 'short_grass',
+        mushroom_red: 'red_mushroom', mushroom_brown: 'brown_mushroom',
+        hay_top: 'hay_block_top', hay_side: 'hay_block_side',
+        melon: 'melon_side', purpur: 'purpur_block', end_bricks: 'end_stone_bricks',
+        crafting_table_top: 'crafting_table_top', furnace_side: 'furnace_side',
+      };
+      for (const col of ['white', 'orange', 'magenta', 'lightblue', 'yellow', 'lime', 'pink', 'gray', 'lightgray', 'cyan', 'purple', 'blue', 'brown', 'green', 'red', 'black']) {
+        const oc = RP_COLOR[col] || col;
+        RP_ALIAS['wool_' + col] = oc + '_wool'; RP_ALIAS['concrete_' + col] = oc + '_concrete'; RP_ALIAS['terracotta_' + col] = oc + '_terracotta';
+      }
+      // 회색조 원본에 곱할 색(MC 바이옴 틴트) — 직접 일치/별칭 모두 적용
+      const RP_TINT = {
+        grass_top: '#7cbd6b', leaves: '#48b518', spruce_leaves: '#619961', dark_oak_leaves: '#48b518',
+        jungle_leaves: '#48b518', acacia_leaves: '#aea42a', tall_grass: '#7cbd6b', water: '#3f76e4',
+      };
+      const applyTint = (ctx, tx, ty, hex) => {
+        try {
+          const im = ctx.getImageData(tx, ty, 16, 16), dd = im.data;
+          const R = parseInt(hex.slice(1, 3), 16) / 255, G = parseInt(hex.slice(3, 5), 16) / 255, B = parseInt(hex.slice(5, 7), 16) / 255;
+          for (let i = 0; i < dd.length; i += 4) { dd[i] *= R; dd[i + 1] *= G; dd[i + 2] *= B; }
+          ctx.putImageData(im, tx, ty);
+        } catch (e) {}
       };
       let applied = 0, done = 0;
       const fin = () => { done++; if (done === list.length && applied > 0 && typeof toast === 'function') toast(`🎨 리소스팩 ${applied}개 타일 적용됨`, true); };
       list.forEach((nm, i) => {
         const paint2 = (img2) => {
           const tx = (i % cols) * 16, ty = ((i / cols) | 0) * 16;
-          c.clearRect(tx, ty, 16, 16); c.drawImage(img2, 0, 0, img2.width, Math.min(img2.height, img2.width), tx, ty, 16, 16);   // 애니메이션 스트립은 첫 프레임만
-          if (_fluidAnim) _fluidAnim.tiles = _fluidAnim.tiles.filter(t => t[0] !== nm);
+          const frames = img2.height > img2.width ? Math.floor(img2.height / img2.width) : 1;
+          c.clearRect(tx, ty, 16, 16); c.drawImage(img2, 0, 0, img2.width, img2.width, tx, ty, 16, 16);
+          if (RP_TINT[nm]) applyTint(c, tx, ty, RP_TINT[nm]);
+          if (_fluidAnim) {
+            _fluidAnim.tiles = _fluidAnim.tiles.filter(t => t[0] !== nm);   // 내장 절차 애니메이션 해제
+            if (frames > 1) _fluidAnim.strips = (_fluidAnim.strips || []).concat([{ img: img2, frames, tx, ty, tint: RP_TINT[nm] || null, f: 0 }]);   // 실제 MC 프레임 순환
+          }
           atlasTex.needsUpdate = true; applied++; fin();
         };
         const img2 = new Image();
         img2.onload = () => paint2(img2);
         img2.onerror = () => {
           const alias = RP_ALIAS[nm];
-          if (!alias) return fin();
+          if (!alias || alias === nm) return fin();
           const img3 = new Image();
           img3.onload = () => paint2(img3);
           img3.onerror = fin;
@@ -4276,21 +4308,39 @@
     _fluidT += dt; if (_fluidT < 0.18) return; _fluidT = 0;
     _fluidPhase = (_fluidPhase + 1) & 15;
     const c = _fluidAnim.c, ph = _fluidPhase;
+    // V22-J1: 리소스팩 애니메이션 스트립(물/용암/마그마 등) — 실제 MC 프레임 순환
+    if (_fluidAnim.strips) {
+      for (const st of _fluidAnim.strips) {
+        st.f = (st.f + 1) % st.frames;
+        c.clearRect(st.tx, st.ty, 16, 16);
+        c.drawImage(st.img, 0, st.f * st.img.width, st.img.width, st.img.width, st.tx, st.ty, 16, 16);
+        if (st.tint) {
+          try {
+            const im = c.getImageData(st.tx, st.ty, 16, 16), dd = im.data;
+            const R = parseInt(st.tint.slice(1, 3), 16) / 255, G = parseInt(st.tint.slice(3, 5), 16) / 255, B = parseInt(st.tint.slice(5, 7), 16) / 255;
+            for (let i = 0; i < dd.length; i += 4) { dd[i] *= R; dd[i + 1] *= G; dd[i + 2] *= B; }
+            c.putImageData(im, st.tx, st.ty);
+          } catch (e) {}
+        }
+      }
+      atlasTex.needsUpdate = true;
+    }
+    // 내장 절차 애니메이션(리소스팩 파일이 없는 유체만)
     for (const [nm, tx, ty] of _fluidAnim.tiles) {
       for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
-        const w = ((x + ph) & 15);   // 위상 이동으로 흐름 표현
+        const w = ((x + ph) & 15);
         let col;
         if (nm === 'water') {
           const band = (y * 2 + w + ((x * 7 + y * 13) % 3)) & 7;
-          col = band < 3 ? '#3463cf' : band < 5 ? '#3a6ee0' : band < 7 ? '#2f5ac0' : '#4a7ce8';   // 물결 밴드
+          col = band < 3 ? '#3463cf' : band < 5 ? '#3a6ee0' : band < 7 ? '#2f5ac0' : '#4a7ce8';
         } else {
           const band = (y + ((w * 3) >> 1) + ((x * 5 + y * 11) % 4)) & 7;
-          col = band < 3 ? '#d2541f' : band < 5 ? '#e8632a' : band < 7 ? '#b8431a' : '#f7a02a';   // 용암 맥동
+          col = band < 3 ? '#d2541f' : band < 5 ? '#e8632a' : band < 7 ? '#b8431a' : '#f7a02a';
         }
         px(c, tx + x, ty + y, col);
       }
     }
-    atlasTex.needsUpdate = true;
+    if (_fluidAnim.tiles.length) atlasTex.needsUpdate = true;
   }
   // V22-I1: 블럭 파괴 금 가기 오버레이 — MC destroy_stage 0~9와 동일 개념.
   //   resourcepack/destroy_stage_N.png가 있으면 그대로 사용, 없으면 자체 디자인 크랙 프레임.
