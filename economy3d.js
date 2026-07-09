@@ -5435,7 +5435,7 @@
   // V22-K1: 블럭별 요구 도구 티어(MC 표준) — 0=맨손 1=나무 2=돌 3=철 4=금 5=다이아 6=태초
   function requiredTierFor(bk) {
     if (/obsidian/.test(bk)) return 5;
-    if (/diamond_ore|emerald_ore|gold_ore|redstone_ore|gold_block|diamond_block|emerald_block|redstone_block/.test(bk)) return 3;
+    if (/diamond_ore|emerald_ore|gold_ore|redstone_ore|gold_block|diamond_block|emerald_block/.test(bk)) return 3;   // 레드스톤 블럭은 바닐라상 나무 곡괭이(아래 stone 매칭 → 1)
     if (/iron_ore|lapis_ore|iron_block|lapis_block/.test(bk)) return 2;
     if (/stone|cobble|brick|_ore$|sandstone|andesite|diorite|granite|quartz|purpur|prismarine|netherrack|end_stone|magma|furnace|concrete|terracotta|coal_block/.test(bk)) return 1;
     return 0;
