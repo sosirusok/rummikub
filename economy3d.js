@@ -361,7 +361,8 @@
   const lookS = { locked: false, lastAsk: 0 };
   const moveT = { active: false, id: -1, ox: 0, oy: 0, x: 0, y: 0 };
   const lookT = { id: -1, lx: 0, ly: 0 };
-  const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+  // V22-H1: 정밀 포인터(마우스)가 있으면 PC 모드 — 터치스크린 노트북이 터치 모드로 오인되던 버그 수정
+  const isTouch = (navigator.maxTouchPoints > 0) && !(window.matchMedia && window.matchMedia('(pointer: fine)').matches);
 
   function econApi() { return window.econApi || { getP: () => null, hasActiveEncounter: () => false, collectFairySoul: () => false, fairySoulCollected: () => false }; }
 
@@ -1666,7 +1667,7 @@
       const rr = baseR * (0.78 + 0.22 * Math.sin(ang * 2 + seed) + 0.12 * Math.sin(ang * 3 - seed) + (hash3(x, seed, z) - 0.5) * 0.28);
       const d = Math.hypot(x - cx, z - cz);
       if (d > rr) continue;
-      const surf = HOME_TOP + (hash3(x, seed + 7, z) < 0.18 ? 1 : 0);   // 표면 미세 기복
+      const surf = HOME_TOP;   // V22-H3: 실제 프라이빗 섬처럼 완전 평평 — 무작위 요철이 작은 섬을 조각나 보이게 하던 문제 수정
       const depth = 3 + Math.floor((rr - d) * 0.55 + (hash3(x, seed + 3, z)) * 2);   // 밑면 두께 변주(기복)
       for (let y = surf; y >= surf - depth; y--) {
         let id = ID.stone;
@@ -4800,7 +4801,7 @@
   function collide(dt) {
     let mf = 0, ms = 0;
     if (keys.KeyW) mf += 1; if (keys.KeyS) mf -= 1; if (keys.KeyA) ms -= 1; if (keys.KeyD) ms += 1;
-    if (moveT.active) { const dx = moveT.x - moveT.ox, dy = moveT.y - moveT.oy; if (Math.abs(dx) > 8) ms += dx > 0 ? 1 : -1; if (Math.abs(dy) > 8) mf += dy < 0 ? 1 : -1; }
+    // V22-H1: 조이스틱(가상 이동 드래그) 제거
     const inWater = feetInWater();
     if (mf <= 0) P._sprintLatch = false;                    // 전진을 멈추면 스프린트 해제
     const sprint = (P._sprintLatch || keys.ControlLeft || keys.ControlRight) && mf > 0 && !inWater;
@@ -4902,7 +4903,8 @@
     if (e.code === 'Space') e.preventDefault();
     if (e.code === 'Escape') hidePanel();
     if (e.code === 'KeyM') toggleMinimapSize();
-    if (/^Digit[1-9]$/.test(e.code)) { selectedHotbar = +e.code.slice(5) - 1; updateHotbar(); }   // 숫자키 1~9 = 핫바 슬롯 선택
+    if (/^Digit[1-8]$/.test(e.code)) { selectedHotbar = +e.code.slice(5) - 1; updateHotbar(); }   // 숫자키 1~8 = 핫바 슬롯 선택
+    if (e.code === 'Digit9') { openPanelForZone('hub', 'menu'); }   // V22-H2: 9 = 네더의 별 메뉴
     if (e.code === 'KeyE') {   // V13-A: E 토글(열림이면 닫기)
       if (panelOpen()) { hidePanel(); }
       else { const t = currentAim(); if (t) doInteract(t); else openPanelForZone('hub', 'inv'); }
@@ -4977,7 +4979,8 @@
       mouseHeld = true;                                    // 좌클릭 = 파괴/채집만(상호작용은 우클릭·E)
       return;
     }
-    if (p.x < cw * 0.4 && moveT.id === -1) { moveT.active = true; moveT.id = e.pointerId; moveT.ox = moveT.x = p.x; moveT.oy = moveT.y = p.y; }
+    // V22-H1: 조이스틱 제거 — 좌측 드래그 이동 폐지(모든 포인터는 시점/탭)
+    if (false) {}
     else if (lookT.id === -1) {
       lookT.id = e.pointerId; lookT.lx = p.x; lookT.ly = p.y; lookT.moved = 0; lookT.downT = performance.now(); lookT.broke = false;
       // V12-D 터치 수정: down 시엔 채집(노드 홀드)만 시작. NPC/포탈 등 즉시 상호작용은
@@ -4995,14 +4998,12 @@
     }
     const p = relPos(e);
     if (e.pointerId === lookT.id && (mouseHeld || gathering || breaking)) lookT.moved = -1000000;
-    if (e.pointerId === moveT.id) { moveT.x = p.x; moveT.y = p.y; }
     else if (e.pointerId === lookT.id) { const dx = p.x - lookT.lx, dy = p.y - lookT.ly; P.yaw -= dx * 0.005; P.pitch -= dy * 0.005; clampPitch(); lookT.lx = p.x; lookT.ly = p.y; lookT.moved = (lookT.moved || 0) + Math.abs(dx) + Math.abs(dy); if (lookT.moved > 10) { gathering = false; breaking = null; } }   // V12-D: 화면 회전 시작하면 채집/파괴 중단
   }
   function onUp(e) {
     if (e.button === 0) { mouseHeld = false; breaking = null; const cr = document.getElementById('econ3dCross'); if (cr && !fishing) cr.textContent = '+'; }
     if (e.button === 2) useHeld = false;
     if (!isTouch) { if (e.button === 0) gathering = false; return; }
-    if (e.pointerId === moveT.id) { moveT.active = false; moveT.id = -1; }
     else if (e.pointerId === lookT.id) {
       gathering = false;
       // V12-D: 깨끗한 탭(회전 거의 없이 300ms 미만)만 행동으로 인정 — 회전 드래그는 무시.
@@ -6074,17 +6075,6 @@
   let _hpHudT = 0;
   // V19-C: 터치 가상 조이스틱 시각 표시 — 손가락 드래그를 따라 노브 이동, 손 떼면 중앙 복귀. 힌트는 8초 후 페이드.
   let _joyHintT = 0;
-  function updateJoystick(dt) {
-    const knob = document.getElementById('econ3dJoyKnob');
-    if (knob) {
-      let kx = 0, ky = 0;
-      if (moveT.active) { kx = Math.max(-26, Math.min(26, moveT.x - moveT.ox)); ky = Math.max(-26, Math.min(26, moveT.y - moveT.oy)); }
-      knob.style.transform = `translate(calc(-50% + ${kx}px), calc(-50% + ${ky}px))`;
-      knob.style.opacity = moveT.active ? '0.95' : '0.55';
-    }
-    const hint = document.getElementById('econ3dTouchHint');
-    if (hint && hint.style.opacity !== '0') { _joyHintT += dt; if (_joyHintT > 8) hint.style.opacity = '0'; }
-  }
   function updateHpHud() {
     const bar = document.getElementById('econ3dHpFill'), txt = document.getElementById('econ3dHpTxt');
     if (bar && php) bar.style.width = Math.max(0, php.hp / php.max * 100) + '%';
@@ -6514,7 +6504,7 @@
       <div class="econ3d-buildbar" id="econ3dBuildBar" style="display:none"></div>
       <div class="econ3d-questhud" id="econ3dQuestHud" style="display:none"></div>
       <div class="econ3d-questbanner" id="econ3dQuestBanner" style="display:none"></div>
-      ${isTouch ? '<div class="econ3d-joy" id="econ3dJoy"><div class="econ3d-joy__knob" id="econ3dJoyKnob"></div></div><div class="econ3d-jump" data-act="econ3d_jump">⤒</div><div class="econ3d-touchhint" id="econ3dTouchHint">◀ 왼쪽 드래그 이동 · 오른쪽 드래그 시점 · 탭 공격/상호작용 · ⤒ 점프</div>' : '<div class="econ3d-controlhint">WASD 이동 · Space 점프 · W 더블탭 달리기 · 좌클릭 공격/꾹 눌러 채집 · 우클릭 설치/상호작용/낚시 · E 인벤토리 · M 지도</div>'}
+      ${isTouch ? '<div class="econ3d-jump" data-act="econ3d_jump">⤒</div>' : '<div class="econ3d-controlhint">WASD 이동 · Space 점프 · W 더블탭 달리기 · 좌클릭 공격/꾹 눌러 채집 · 우클릭 설치/상호작용/낚시 · E 인벤토리 · M 지도</div>'}
       <div class="econ3d-panelwrap" id="econ3dPanelWrap" style="display:none">
         <div class="econ3d-panelbar"><span id="econ3dPanelGold"></span><button class="btn btn--ghost btn--sm" data-act="econ3d_panel_close">✕ 닫기</button></div>
         <div id="econBody" class="econ-body econ3d-body"></div>
@@ -6557,7 +6547,6 @@
       }
       tickRegen(); tickDmgTexts(dt); tickBuildQueue(); tickChunkCulling(dt); tickAdaptiveView(dt); tickFluidAnim(dt);
       _hpHudT += dt; if (_hpHudT > 0.5) { _hpHudT = 0; updateHpHud(); }
-      if (isTouch) updateJoystick(dt);
       flushWorldEdits();   // 블록 편집 → 메시 리빌드(프레임당 1회로 병합, 더티 청크만)
       if (boatMesh && boatMesh.visible) { boatMesh.position.set(P.x, P.y - 0.35, P.z); boatMesh.rotation.y = P.yaw; if (!P._boat) removeBoatMesh(); }
       // V21-F2: 수중/용암 속 화면 틴트(머리가 잠긴 동안 색 오버레이 — MC식)
@@ -6663,14 +6652,15 @@
     if (!Array.isArray(P0.hotbar)) P0.hotbar = [];
     P0.hotbar = P0.hotbar.slice(0, 9);
     while (P0.hotbar.length < 9) P0.hotbar.push(null);
+    P0.hotbar[8] = null;   // V22-H2: 9번 칸은 네더의 별(메뉴) 전용
     // 보유하지 않게 된 아이템은 슬롯에서 비움
     for (let i = 0; i < 9; i++) if (P0.hotbar[i] && (P0.inv[P0.hotbar[i]] || 0) <= 0 && !isToolKey(P0.hotbar[i])) P0.hotbar[i] = null;
     if (P0.hotbar.every(x => !x)) {   // 완전히 비었으면 자동 채우기
       const fill = [];
       const D0 = window.ECON_DATA;
       ['pickaxe', 'axe', 'hoe', 'rod'].forEach(fam => { let best = null; (D0.TOOLS[fam] || []).forEach(t => { if ((P0.inv[t.key] || 0) > 0) best = t; }); if (best) fill.push(best.key); });
-      ownedPlaceableList().slice(0, 9 - fill.length).forEach(k => fill.push(k));
-      for (let i = 0; i < 9; i++) P0.hotbar[i] = fill[i] || null;
+      ownedPlaceableList().slice(0, 8 - fill.length).forEach(k => fill.push(k));
+      for (let i = 0; i < 8; i++) P0.hotbar[i] = fill[i] || null;
     }
   }
   function isToolKey(k) { const D0 = window.ECON_DATA; for (const fam in D0.TOOLS) if (D0.TOOLS[fam].some(t => t.key === k)) return true; return false; }
@@ -6684,7 +6674,10 @@
     ensureHotbar();
     const icon = k => (typeof window.econIcon === 'function' ? `<img src="${window.econIcon(k)}" alt="">` : '');
     const eco = window.__econ || {};
-    for (let i = 0; i < 9; i++) {
+    // V22-H2: 9번 칸 = 네더의 별(스카이블럭 메뉴) 고정 — 실제 하이픽셀과 동일
+    const star = document.getElementById('econ3dSlot8');
+    if (star) { star.innerHTML = '<span style="font-size:20px">⭐</span>'; star.title = '스카이블럭 메뉴 (9)'; star.classList.remove('is-active'); }
+    for (let i = 0; i < 8; i++) {
       const el = document.getElementById('econ3dSlot' + i); if (!el) continue;
       const k = P0.hotbar[i];
       const cnt = (k && !isToolKey(k)) ? (P0.inv[k] || 0) : 0;
@@ -6700,6 +6693,7 @@
     switch (a) {
       case 'econ3d_hotbar': {   // V12-D: 슬롯 클릭 = 선택(빈 슬롯/롱프레스는 인벤토리). 9번=메뉴.
         const i = Number(el.dataset.i);
+        if (i === 8) { openPanelForZone('hub', 'menu'); return true; }   // V22-H2: 네더의 별
         const P0 = econApi().getP ? econApi().getP() : null;
         if (P0 && P0.hotbar && P0.hotbar[i]) { selectedHotbar = i; updateHotbar(); }
         else openPanelForZone('hub', 'inv');   // 빈 슬롯 클릭 = 인벤토리에서 아이템 지정
