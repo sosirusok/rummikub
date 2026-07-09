@@ -122,6 +122,9 @@
       BLOCKS.push({ key: w + '_door_o_' + f, tex, shape: 'door', facing: f, open: true, opaque: false, solid: false });
     }
   });
+  // V21-F1: 바닐라 광물 저장 블록 7종(주괴 9 ↔ 블록 1)
+  [['iron_block', 'iron_block'], ['gold_block', 'gold_block'], ['diamond_block', 'diamond_block'], ['emerald_block', 'emerald_block'],
+   ['coal_block', 'coal_block'], ['redstone_block', 'redstone_block'], ['lapis_block', 'lapis_block']].forEach(([k, tex]) => BLOCKS.push({ key: k, tex }));
   // V21-E2: 사다리(4방향 벽 부착, 오르기 가능) + 침대(수면) + 보트(물 위 탈것)
   for (let f = 0; f < 4; f++) BLOCKS.push({ key: 'ladder_' + f, tex: 'ladder', shape: 'ladder', facing: f, opaque: false, solid: false, climb: true });
   BLOCKS.push({ key: 'bed', tex: { top: 'bed_top', side: 'bed_side', bottom: 'planks' }, shape: 'bed', opaque: false, interact: true });
@@ -2901,14 +2904,14 @@
   // birch, spruce, dark oak, jungle, then acacia in one progression chain.
   function genPark() {
     world = new Uint8Array(W * H * Dp);
-    const chain = [
-      { cx: 72, cz: 126, r: 15, plant: plantOak, count: 5 },
-      { cx: 72, cz: 108, r: 16, plant: plantOak, count: 9 },
-      { cx: 72, cz: 90, r: 16, plant: plantBirch, count: 9 },
-      { cx: 72, cz: 72, r: 16, plant: plantSpruce, count: 8 },
-      { cx: 72, cz: 54, r: 16, plant: plantDarkOak, count: 7 },
-      { cx: 72, cz: 36, r: 16, plant: plantJungle, count: 7 },
-      { cx: 72, cz: 20, r: 14, plant: plantAcacia, count: 7 },
+    const chain = [   // V21-F3: 섬 확대(r15~16→19~21) + 나무 밀도 증가 — "작고 허전한 숲" 지적 해소
+      { cx: 72, cz: 126, r: 18, plant: plantOak, count: 7 },
+      { cx: 72, cz: 108, r: 20, plant: plantOak, count: 13 },
+      { cx: 72, cz: 90, r: 21, plant: plantBirch, count: 13 },
+      { cx: 72, cz: 72, r: 21, plant: plantSpruce, count: 12 },
+      { cx: 72, cz: 54, r: 21, plant: plantDarkOak, count: 10 },
+      { cx: 72, cz: 36, r: 20, plant: plantJungle, count: 11 },
+      { cx: 72, cz: 20, r: 17, plant: plantAcacia, count: 9 },
     ];
     // V21-D2: 선형 진행 게이트 — 이전 수종 원목 컬렉션을 모아야 다음 섬 다리 개방(우클릭, 실제 스블 파크식)
     //   섬 체인(남→북): 입구(126) → 참나무(108) → 자작(90) → 가문비(72) → 짙은참나무(54) → 정글(36) → 아카시아(20)
@@ -2981,7 +2984,7 @@
     // 게이트 z 자동 보정: 트리하우스/정자 등 구조물이 걸친 줄은 피해 구조물 최소 줄 선택(타고 넘기 방지)
     const structCount = z => {
       let n = 0;
-      for (let x = 52; x <= 92; x++) for (let y = 18; y <= 30; y++) {   // y18~: 다리 발판(16)/난간(17)은 구조물로 안 침
+      for (let x = 48; x <= 96; x++) for (let y = 18; y <= 30; y++) {   // y18~: 다리 발판(16)/난간(17)은 구조물로 안 침
         const b0 = BLOCKS[getBlockLocal(x, y, z)];
         if (b0 && /planks|bricks|wool_|stairs|slab|glowstone/.test(b0.key)) n++;
       }
@@ -2996,7 +2999,7 @@
       if (gatesOpen[gi]) return;
       // 커튼 벽: 게이트 평면에서 가장 낮은 지면 위의 모든 공기 틈을 울타리로 봉인
       //   (부유 데크 밑 통로/나무 타기/구조물 위 우회 전부 차단 — 지형·구조물 블럭은 보존)
-      for (let x = 52; x <= 92; x++) {
+      for (let x = 48; x <= 96; x++) {
         let lowTop = 0;   // 가장 낮은 '위가 뚫린 바닥'(=걸을 수 있는 지면/다리 발판)
         for (let y = 4; y <= 30; y++) { if (getBlockLocal(x, y, g.z) && !getBlockLocal(x, y + 1, g.z)) { lowTop = y; break; } }
         if (!lowTop) continue;                                // 공허 기둥(지형·다리 없음)은 통행 불가 — 생략
@@ -3010,7 +3013,7 @@
   // V21-D2: 파크 게이트 상호작용 — 요구 컬렉션 충족 시 개방(영속)
   function parkGateAt(x, z) {
     const gates = genPark._gates || [];
-    for (let i = 0; i < gates.length; i++) if (Math.abs(z - gates[i].z) <= 1 && Math.abs(x - 72) <= 21) return i;
+    for (let i = 0; i < gates.length; i++) if (Math.abs(z - gates[i].z) <= 1 && Math.abs(x - 72) <= 25) return i;
     return -1;
   }
   function tryOpenParkGate(gi) {
@@ -3020,7 +3023,7 @@
     if (P0.parkGates[gi]) return true;
     const have = (P0.collections && P0.collections[g.need]) || 0;
     if (have < g.n) { if (typeof toast === 'function') toast(`🔒 게이트: ${g.name} 컬렉션 필요 (현재 ${have})`, false); return false; }
-    for (let x = 52; x <= 92; x++) for (let y = 14; y <= 34; y++) {
+    for (let x = 48; x <= 96; x++) for (let y = 14; y <= 34; y++) {
       const id = getBlockLocal(x, y, g.z);
       if (id === ID.oak_fence || id === ID.glowstone) { world[widx(x, y, g.z)] = 0; markBlockDirty(x, g.z); }
     }
@@ -3957,6 +3960,15 @@
       case 'snow': fillNoise('#eef4f7', '#e2eaef', '#f8fcff'); break;
       case 'ice': { fillNoise('#8fc0e8', '#7ab2e0', '#a8d2f0'); c.fillStyle = '#c8e8f8'; c.fillRect(ox + 2, oy + 2, 4, 1); c.fillRect(ox + 9, oy + 8, 4, 1); break; }
       case 'mycelium_top': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.3 ? '#6a5a70' : t < 0.65 ? '#7a6a80' : '#8a7690'); } break;
+      case 'iron_block': case 'gold_block': case 'diamond_block': case 'emerald_block': case 'coal_block': case 'redstone_block': case 'lapis_block': {
+        // V21-F1: 자체 디자인 광물 블록 — 본체 음영 + 밝은 테두리 + 모서리 리벳
+        const MB = { iron_block: '#d8d8d4', gold_block: '#f7d84a', diamond_block: '#5decd5', emerald_block: '#17a94f', coal_block: '#31313a', redstone_block: '#a01818', lapis_block: '#1a44a5' }[name];
+        const hxm = (fac) => hx(MB, fac);
+        for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) f(x, y, r() < 0.12 ? hxm(0.9) : (r() > 0.88 ? hxm(1.08) : MB));
+        for (let i2 = 0; i2 < 16; i2++) { f(i2, 0, hxm(1.18)); f(i2, 15, hxm(0.72)); f(0, i2, hxm(1.1)); f(15, i2, hxm(0.78)); }
+        for (const [sx, sy] of [[2, 2], [13, 2], [2, 13], [13, 13]]) f(sx, sy, hxm(0.6));
+        break;
+      }
       case 'ladder': {   // V21-E2: 자체 디자인 — 세로 레일 2 + 가로 발판 4(배경 투명)
         for (let y = 0; y < 16; y++) for (const x of [2, 3, 12, 13]) f(x, y, x === 2 || x === 12 ? '#8a6a3c' : '#a07c46');
         for (const ry of [2, 6, 10, 14]) for (let x = 4; x < 12; x++) { f(x, ry, '#9c7a44'); f(x, ry + 1, '#7a5f34'); }
@@ -4013,24 +4025,20 @@
     //   resourcepack/<타일명>.png(16×16)로 로드해 아틀라스에 덮어쓴다(없으면 절차 텍스처 유지).
     //   ※ 텍스처 파일은 사용자가 직접 로컬에 넣는다 — 저장소에는 포함하지 않는다(저작권).
     try {
-      fetch('resourcepack/manifest.json').then(r => (r.ok ? r.json() : null)).then(man => {
-        if (!man || !Array.isArray(man.tiles)) return;
-        let pending = 0;
-        man.tiles.forEach(nm => {
-          if (!atlasUV[nm]) return;
-          const i = list.indexOf(nm); if (i < 0) return;
-          pending++;
-          const img2 = new Image();
-          img2.onload = () => {
-            const tx = (i % cols) * 16, ty = ((i / cols) | 0) * 16;
-            c.clearRect(tx, ty, 16, 16); c.drawImage(img2, tx, ty, 16, 16);
-            atlasTex.needsUpdate = true;
-            if (--pending === 0 && typeof toast === 'function') toast('🎨 리소스팩 텍스처 적용됨', true);
-          };
-          img2.onerror = () => { pending--; };
-          img2.src = 'resourcepack/' + nm + '.png';
-        });
-      }).catch(() => {});
+      // 매니페스트 불요 — 아틀라스의 '모든' 타일명에 대해 resourcepack/<타일명>.png를 시도한다.
+      // 파일이 있는 타일만 교체되고 없는 타일은 절차 텍스처 유지(404는 조용히 무시).
+      let applied = 0, done = 0;
+      list.forEach((nm, i) => {
+        const img2 = new Image();
+        img2.onload = () => {
+          const tx = (i % cols) * 16, ty = ((i / cols) | 0) * 16;
+          c.clearRect(tx, ty, 16, 16); c.drawImage(img2, tx, ty, 16, 16);
+          atlasTex.needsUpdate = true; applied++; done++;
+          if (done === list.length && applied > 0 && typeof toast === 'function') toast(`🎨 리소스팩 ${applied}개 타일 적용됨`, true);
+        };
+        img2.onerror = () => { done++; if (done === list.length && applied > 0 && typeof toast === 'function') toast(`🎨 리소스팩 ${applied}개 타일 적용됨`, true); };
+        img2.src = 'resourcepack/' + nm + '.png';
+      });
     } catch (e) {}
     blockMat = new THREE.MeshBasicMaterial({ map: atlasTex, vertexColors: true });
     waterMat = new THREE.MeshBasicMaterial({ map: atlasTex, vertexColors: true, transparent: true, opacity: 0.72, depthWrite: false });
@@ -6411,6 +6419,7 @@
     return `<section class="screen econ3d-screen" data-econ3d="1">
       <div class="econ3d-sky" id="econ3dSky"></div>
       <canvas id="econ3dCanvas"></canvas>
+      <div id="econ3dTint" style="position:absolute;inset:0;pointer-events:none;display:none;z-index:3"></div>
       <div class="econ3d-cross" id="econ3dCross">+</div>
       <div class="econ3d-banner" id="econ3dBanner"></div>
       <div class="econ3d-top">
@@ -6471,6 +6480,15 @@
       if (isTouch) updateJoystick(dt);
       flushWorldEdits();   // 블록 편집 → 메시 리빌드(프레임당 1회로 병합, 더티 청크만)
       if (boatMesh && boatMesh.visible) { boatMesh.position.set(P.x, P.y - 0.35, P.z); boatMesh.rotation.y = P.yaw; if (!P._boat) removeBoatMesh(); }
+      // V21-F2: 수중/용암 속 화면 틴트(머리가 잠긴 동안 색 오버레이 — MC식)
+      {
+        const hb = getBlockLocal(Math.floor(P.x), Math.floor(P.y + P.eye), Math.floor(P.z));
+        const tintEl = document.getElementById('econ3dTint');
+        if (tintEl) {
+          const want = hb === ID.water ? 'rgba(18,54,150,0.34)' : (hb === ID.lava ? 'rgba(214,72,10,0.55)' : '');
+          if (tintEl._cur !== want) { tintEl._cur = want; tintEl.style.background = want; tintEl.style.display = want ? 'block' : 'none'; }
+        }
+      }
       camera.position.set(P.x, P.y + P.eye, P.z);
       const d = lookDir(); camera.lookAt(P.x + d.x, P.y + P.eye + d.y, P.z + d.z);
       updateAimHighlight();

@@ -749,6 +749,13 @@
       case 'diamond_hoe': return { rows: ['DD', ' S', ' S'], spec: { D: 'diamond', S: 'stick' }, mirror: true };
       case 'diamond_sword': return { rows: ['D', 'D', 'S'], spec: { D: 'diamond', S: 'stick' } };
       case 'fishing_rod': return { rows: ['  S', ' SF', 'S F'], spec: { S: 'stick', F: 'string' } };
+      case 'iron_block': return { rows: ['MMM', 'MMM', 'MMM'], spec: { M: 'iron' } };
+      case 'gold_block': return { rows: ['MMM', 'MMM', 'MMM'], spec: { M: 'gold' } };
+      case 'diamond_block': return { rows: ['MMM', 'MMM', 'MMM'], spec: { M: 'diamond' } };
+      case 'emerald_block': return { rows: ['MMM', 'MMM', 'MMM'], spec: { M: 'emerald' } };
+      case 'coal_block': return { rows: ['MMM', 'MMM', 'MMM'], spec: { M: 'coal' } };
+      case 'redstone_block': return { rows: ['MMM', 'MMM', 'MMM'], spec: { M: 'redstone' } };
+      case 'lapis_block': return { rows: ['MMM', 'MMM', 'MMM'], spec: { M: 'lapis' } };
       case 'ladder': return { rows: ['S S', 'SSS', 'S S'], spec: { S: 'stick' } };
       case 'bed': return { rows: ['WWW', 'PPP'], spec: { W: 'wool', P: 'planks' } };
       case 'boat': return { rows: ['P P', 'PPP'], spec: { P: 'planks' } };
