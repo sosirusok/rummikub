@@ -33,8 +33,8 @@
     { key: 'oak_log', tex: { top: 'log_top', side: 'log_side', bottom: 'log_top' } },
     { key: 'birch_log', tex: { top: 'log_top', side: 'birch_side', bottom: 'log_top' } },
     { key: 'spruce_log', tex: { top: 'spruce_top', side: 'spruce_side', bottom: 'spruce_top' } },
-    { key: 'oak_leaves', tex: 'leaves' },
-    { key: 'spruce_leaves', tex: 'spruce_leaves' },
+    { key: 'oak_leaves', tex: 'leaves', opaque: false },
+    { key: 'spruce_leaves', tex: 'spruce_leaves', opaque: false },
     { key: 'stone_bricks', tex: 'stonebrick' },
     { key: 'bricks', tex: 'bricks' },
     { key: 'obsidian', tex: 'obsidian' },
@@ -59,12 +59,13 @@
     { key: 'tall_grass', tex: 'tall_grass', opaque: false, solid: false, cross: true },
     { key: 'flower_red', tex: 'flower_red', opaque: false, solid: false, cross: true },
     { key: 'flower_yellow', tex: 'flower_yellow', opaque: false, solid: false, cross: true },
+    { key: 'torch', tex: 'torch', opaque: false, solid: false, cross: true },   /* V24-B: 횃불 설치 가능(십자 렌더) — 아이템만 있고 블럭이 없던 버그 */
     { key: 'dark_oak_log', tex: { top: 'dark_oak_top', side: 'dark_oak_side', bottom: 'dark_oak_top' } },
-    { key: 'dark_oak_leaves', tex: 'dark_oak_leaves' },
+    { key: 'dark_oak_leaves', tex: 'dark_oak_leaves', opaque: false },
     { key: 'jungle_log', tex: { top: 'jungle_top', side: 'jungle_side', bottom: 'jungle_top' } },
-    { key: 'jungle_leaves', tex: 'jungle_leaves' },
+    { key: 'jungle_leaves', tex: 'jungle_leaves', opaque: false },
     { key: 'acacia_log', tex: { top: 'acacia_top', side: 'acacia_side', bottom: 'acacia_top' } },
-    { key: 'acacia_leaves', tex: 'acacia_leaves' },
+    { key: 'acacia_leaves', tex: 'acacia_leaves', opaque: false },
     { key: 'netherrack', tex: 'netherrack' },
     { key: 'soul_sand', tex: 'soul_sand' },
     { key: 'nether_bricks', tex: 'nether_bricks' },
@@ -4272,7 +4273,7 @@
           const frames = img2.height > img2.width ? Math.floor(img2.height / img2.width) : 1;
           c.clearRect(tx, ty, 16, 16);
           // 잎처럼 투명 픽셀이 있는 '불투명 큐브' 타일은 어두운 배경 위에 합성(MC 빠른 그래픽 방식) — 투명 얼룩 방지
-          if (/leaves/.test(nm)) { c.fillStyle = '#3a3a3a'; c.fillRect(tx, ty, 16, 16); }
+          // V24-B: 잎 배경칠 제거 — 팬시 그래픽(알파컷 투명)으로 전환되어 불필요
           c.drawImage(img2, 0, 0, img2.width, img2.width, tx, ty, 16, 16);
           if (RP_TINT[nm]) applyTint(c, tx, ty, RP_TINT[nm]);
           if (_fluidAnim) {
@@ -4334,12 +4335,12 @@
 
   /* ---------------- 메싱(면 컬링 + AO, 전체 1회 빌드) ---------------- */
   const FACES = [
-    { dir: [1, 0, 0], corners: [[1, 0, 0], [1, 1, 0], [1, 1, 1], [1, 0, 1]], shade: 0.78 },
-    { dir: [-1, 0, 0], corners: [[0, 0, 1], [0, 1, 1], [0, 1, 0], [0, 0, 0]], shade: 0.78 },
+    { dir: [1, 0, 0], corners: [[1, 0, 0], [1, 1, 0], [1, 1, 1], [1, 0, 1]], shade: 0.6 },
+    { dir: [-1, 0, 0], corners: [[0, 0, 1], [0, 1, 1], [0, 1, 0], [0, 0, 0]], shade: 0.6 },
     { dir: [0, 1, 0], corners: [[0, 1, 1], [1, 1, 1], [1, 1, 0], [0, 1, 0]], shade: 1.0, n: 'top' },
     { dir: [0, -1, 0], corners: [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]], shade: 0.5, n: 'bottom' },
-    { dir: [0, 0, 1], corners: [[1, 0, 1], [1, 1, 1], [0, 1, 1], [0, 0, 1]], shade: 0.62 },
-    { dir: [0, 0, -1], corners: [[0, 0, 0], [0, 1, 0], [1, 1, 0], [1, 0, 0]], shade: 0.62 },
+    { dir: [0, 0, 1], corners: [[1, 0, 1], [1, 1, 1], [0, 1, 1], [0, 0, 1]], shade: 0.8 },
+    { dir: [0, 0, -1], corners: [[0, 0, 0], [0, 1, 0], [1, 1, 0], [1, 0, 0]], shade: 0.8 },
   ];
   FACES.forEach(f => { if (!f.n) f.n = 'side'; const na = f.dir.findIndex(v => v !== 0); f.ax = [0, 1, 2].filter(i => i !== na); });
   const AO_MUL = [0.45, 0.62, 0.82, 1.0];
@@ -4606,6 +4607,7 @@
         if (opaqueAt(nx, ny, nz)) continue;
         const nid = getBlockLocal(nx, ny, nz);
         if (liq && nid === id) continue;
+        if (!b.opaque && !liq && nid === id) continue;   // V24-B: 동종 투명 블럭(유리/잎) 내부 면 컬링(바닐라)
         if (liq && f.n === 'bottom' && ny < 0) continue;
         const tn = faceTexName(b, f.n); const u = atlasUV[tn] || atlasUV.stone;
         const T = b.lava ? Lv : liq ? Wt : (!b.opaque ? Pl : B);   // V24: 유리 등 비불투명 큐브는 알파컷 재질(진짜 투명)
@@ -5068,6 +5070,7 @@
     if (window.econApi && window.econApi.moveSpeedPct) speed *= 1 + window.econApi.moveSpeedPct() / 100;
     let dx = (-sin * mf + cos * ms), dz = (-cos * mf - sin * ms);
     const len = Math.hypot(dx, dz); if (len > 0) { dx /= len; dz /= len; }
+    P._sprinting = sprint;   // V24-B: 스프린트 FOV용
     P.vx = dx * speed; P.vz = dz * speed;
     // V24: 넉백 잔류 속도(피격 시 부여) — 입력 속도에 더해지고 지수 감쇠
     if (P._kbx || P._kbz) {
@@ -5117,18 +5120,18 @@
     else if (!P.onGround) P._fallPeak = P._fallPeak == null ? P.y : Math.max(P._fallPeak, P.y);
     else if (P._fallPeak != null) {
       const fd = P._fallPeak - P.y; P._fallPeak = null;
-      if (fd > 3.5) { damagePlayer((fd - 3) * (php ? php.max : 100) * 0.05); if (typeof toast === 'function') toast('💥 낙하 데미지!', false); }
+      if (fd > 3.5) { damagePlayer((fd - 3) * 5); if (typeof toast === 'function') toast('💥 낙하 데미지!', false); }   // V24-B: 고정 데미지(블럭당 5)
     }
     // V22-K: 익사(머리가 물속 15초 후 초당 최대체력 10%)
     const headInWater = getBlockLocal(Math.floor(P.x), Math.floor(P.y + 1.5), Math.floor(P.z)) === ID.water;
     if (headInWater && !P._boat) {
       P._air = (P._air || 0) + dt;
-      if (P._air > 15) { P._drownT = (P._drownT || 0) + dt; if (P._drownT >= 1) { P._drownT = 0; damagePlayer((php ? php.max : 100) * 0.1); if (typeof toast === 'function') toast('🫧 숨이 막혀요! 물 밖으로!', false); } }
+      if (P._air > 15) { P._drownT = (P._drownT || 0) + dt; if (P._drownT >= 1) { P._drownT = 0; damagePlayer(10); if (typeof toast === 'function') toast('🫧 숨이 막혀요! 물 밖으로!', false); } }
     } else { P._air = 0; P._drownT = 0; }
     // V22-K: 용암 = 진짜 데미지(0.5초당 최대체력 15%) — 기존 '무료 순간이동' 폐기
     if (feetInLava()) {
       P._lavaT = (P._lavaT || 0) + dt;
-      if (P._lavaT >= 0.5) { P._lavaT = 0; damagePlayer((php ? php.max : 100) * 0.15); if (typeof toast === 'function') toast('🔥 용암이다!!', false); }
+      if (P._lavaT >= 0.5) { P._lavaT = 0; damagePlayer(15); if (typeof toast === 'function') toast('🔥 용암이다!!', false); }
     } else P._lavaT = 0;
     if (P.y < 1) { P._fallPeak = null; respawnAtHub(worldMode === 'hub' ? '마을로 귀환했어요' : '공허에 떨어졌다! 섬으로 귀환'); }
   }
@@ -5266,8 +5269,7 @@
       return;
     }
     // V22-H1: 조이스틱 제거 — 좌측 드래그 이동 폐지(모든 포인터는 시점/탭)
-    if (false) {}
-    else if (lookT.id === -1) {
+    if (lookT.id === -1) {
       lookT.id = e.pointerId; lookT.lx = p.x; lookT.ly = p.y; lookT.moved = 0; lookT.downT = performance.now(); lookT.broke = false;
       // V12-D 터치 수정: down 시엔 채집(노드 홀드)만 시작. NPC/포탈 등 즉시 상호작용은
       //   화면 회전과 구분하려고 탭(up)에서 처리 — "회전만 하려는데 강제 상호작용" 버그 해결.
@@ -6323,6 +6325,15 @@
         if (distP > 1.5) { mvx = dx / distP; mvz = dz / distP; }
         m.atkCd -= dt;
         if (distP < 1.8 && m.atkCd <= 0) {
+          // V24-B: 시야선 검사 — 벽 너머/바닥 관통 공격 방지
+          let blocked = false;
+          for (let si = 1; si <= 3; si++) {
+            const t = si / 4;
+            const sx = mp.x + (P.x - mp.x) * t, sy = (mp.y + 1) + ((P.y + 1.2) - (mp.y + 1)) * t, sz = mp.z + (P.z - mp.z) * t;
+            const sb = BLOCKS[getBlockLocal(Math.floor(sx), Math.floor(sy), Math.floor(sz))];
+            if (sb && sb.solid && sb.opaque) { blocked = true; break; }
+          }
+          if (blocked) { m.atkCd = 0.4; continue; }
           m.atkCd = 1.3;
           const defPct = api.defensePct ? api.defensePct(php && php.hp <= php.max * 0.3) : 0;
           const dealt = m.dmg * (0.85 + Math.random() * 0.3) * (1 - defPct);
@@ -6369,12 +6380,11 @@
         for (let li = 0; li < m.legs.length; li++) m.legs[li].rotation.x = (li % 2 ? sw : -sw);
       }
       // 블레이즈 막대 공전 + 드래곤 날개 퍼덕임(항상)
+      if (m._hitFx > 0) { m._hitFx -= dt; const pu = 1 + Math.max(0, m._hitFx) * 0.9; m.mesh.scale.setScalar(((m.def && m.def.scale) || 1) * pu); }
       m.walkT += dt * 2;
       if (m.rods) for (let ri = 0; ri < m.rods.length; ri++) { const a = m.walkT * 1.5 + ri / 6 * Math.PI * 2; m.rods[ri].position.x = Math.cos(a) * 0.55; m.rods[ri].position.z = Math.sin(a) * 0.55; }
       if (m.wings) { const fl = Math.sin(m.walkT * 3) * 0.5; m.wings[0].rotation.z = fl; m.wings[1].rotation.z = -fl; }
       if (m.auraRing) { const pu = 1 + Math.sin(m.walkT * 2.2) * 0.12; m.auraRing.scale.setScalar(pu); m.auraRing.rotation.z += dt * 1.2; }
-      if (false) {
-      }
     }
   }
   // 시선 광선으로 몬스터 조준(가까운 순)
@@ -6407,6 +6417,7 @@
     const r = api.attackMob({ hitIdx: m.hitIdx, hp: m.hp, maxHp: m.maxHp, isBoss: isBossGrade, mobType: m.type, phpPct: php ? php.hp / php.max : 1 });
     m.hitIdx++;
     m.hp -= r.dmg;
+    m._hitFx = 0.15;   // V24-B: 피격 반응(스케일 펀치)
     if (php && r.heal) { php.hp = Math.min(php.max, php.hp + r.heal); }
     spawnDmgText(m.mesh.position, r.dmg, r.crit);
     // V24: 넉백 — 순간이동식(0.7블럭 즉시) 대신 실제 MC처럼 밀려나는 관성(감쇠 속도)
@@ -6481,6 +6492,8 @@
   let _hurtT = 0;   // V24: 피격 붉은 플래시 타이머
   function damagePlayer(dmg) {
     if (!php) return;
+    if (performance.now() - (P._lastDmgAt || 0) < 500) return;   // V24-B: 무적 프레임 0.5초(다중 몹 중첩 타격 방지, 바닐라)
+    P._lastDmgAt = performance.now();
     const apiG = econApi();
     if (apiG.guardPct) dmg *= (1 - apiG.guardPct());   // V11: 수호 특성(받는 피해 감소)
     php.hp -= dmg; php.lastHitAt = performance.now();
@@ -6843,7 +6856,7 @@
     const P0 = econApi().getP(); if (!P0) return;
     const g = document.getElementById('econ3dGold'); if (g) g.textContent = '💰 ' + P0.gold.toLocaleString('ko-KR') + 'G';
     const pg = document.getElementById('econ3dPanelGold'); if (pg) pg.textContent = '💰 ' + P0.gold.toLocaleString('ko-KR') + 'G · 🏦 ' + (P0.bank || 0).toLocaleString('ko-KR') + 'G';
-    const fs = document.getElementById('econ3dSouls'); if (fs) fs.textContent = '✨ ' + (P0.fairySouls ? P0.fairySouls.length : 0) + '/12';
+    const fs = document.getElementById('econ3dSouls'); if (fs) fs.textContent = '✨ ' + (P0.fairySouls ? P0.fairySouls.length : 0) + '/' + ((window.ECON_DATA && window.ECON_DATA.FAIRY_SOULS && window.ECON_DATA.FAIRY_SOULS.total) || 24);
   }
   // V13-B: 우측 중앙 위치기반 퀘스트 HUD(진행 중 퀘스트 + 근처 NPC 수락 제안)
   let _lastQuestOffer = '';
@@ -6940,7 +6953,7 @@
       <div class="econ3d-banner" id="econ3dBanner"></div>
       <div class="econ3d-top">
         <div class="econ3d-gold" id="econ3dGold">💰 0G</div>
-        <div class="econ3d-zone" id="econ3dSouls">✨ 0/12</div>
+        <div class="econ3d-zone" id="econ3dSouls">✨ 0/24</div>
         <button class="btn btn--ghost" data-act="backHome">✕</button>
       </div>
       <canvas id="econ3dMap" class="econ3d-map" width="140" height="140" data-act="econ3d_map"></canvas>
@@ -7009,6 +7022,9 @@
           if (tintEl._cur !== want) { tintEl._cur = want; tintEl.style.background = want; tintEl.style.display = want ? 'block' : 'none'; }
         }
       }
+      // V24-B: 스프린트 FOV(72→79 부드럽게) — 달리기 속도감
+      const wantFov = P._sprinting ? 79 : 72;
+      if (Math.abs(camera.fov - wantFov) > 0.1) { camera.fov += (wantFov - camera.fov) * Math.min(1, dt * 8); camera.updateProjectionMatrix(); }
       camera.position.set(P.x, P.y + P.eye, P.z);
       const d = lookDir(); camera.lookAt(P.x + d.x, P.y + P.eye + d.y, P.z + d.z);
       updateAimHighlight();
