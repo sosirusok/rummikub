@@ -3834,6 +3834,7 @@
       treecap: fam === 'axe' && hasItem('treecapitator'),
     }),
     toolPowerHeld,   // V27-D: 손에 든 도구 기반(MC 정확)
+    isBowKey: k => !!(k && D().EQUIPMENT.weapons.find(x => x.key === k && (x.wclass === 'bow' || x.slot === 'bow'))),   // V29-B: 활 발사 판정
     hasTool: fam => (D().TOOLS[fam] || []).some(t => hasItem(t.key)),
     // V12 블럭 경제: 파괴 시 지급 / 설치 시 소모 / 보유 확인
     giveItem: (k, n) => { addItem(k, n || 1); addCollection(k, n || 1); if (running) renderZone(); },

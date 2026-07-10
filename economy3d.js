@@ -5564,6 +5564,8 @@
       if (bb && bb.shape === 'door') { if (!repeat && worldMode !== 'visit') toggleDoor(tb.x, tb.y, tb.z); return true; }   // V22-K: 방문 중 남의 문 조작 금지
       if (!repeat && interactHomeBlock(tb)) return true;
     }
+    // V29-B: 활을 들었으면 우클릭 = 발사(스블/MC)
+    { const api2 = econApi(); if (api2.isBowKey && api2.isBowKey(activeHotbarKey())) { if (!repeat) shootArrow(); return true; } }
     // V21-E2: 보트 — 보트를 들고 물을 향해 우클릭 = 탑승(슬금 키로 하선)
     if (!repeat && !P._boat && activeHotbarKey() === 'boat') {
       const d = lookDir(); const wx = Math.floor(P.x + d.x * 2.2), wz = Math.floor(P.z + d.z * 2.2);
@@ -5587,6 +5589,37 @@
     if (worldMode === 'visit') { if (!repeat) openPanelForZone('hub', 'menu'); return true; }   // V22-K: 방문 = 구경만(남의 섬 낚시 금지)
     if (!repeat) { if (!startFishing()) openPanelForZone('hub', 'menu'); }   // 물 조준=낚시, 빈 우클릭=스카이블럭 메뉴
     return true;
+  }
+  // V29-B: 활 투사체 — 활을 들고 우클릭 발사. 중력 낙하/블럭 충돌/몹 명중 시 원거리 피해(든 활의 데미지)
+  let arrows = [];
+  function shootArrow() {
+    const now = performance.now();
+    if (P._bowCd && now - P._bowCd < 550) return;   // 재장전(MC 감각)
+    P._bowCd = now;
+    const d = lookDir();
+    const m = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.55), new THREE.MeshBasicMaterial({ color: 0xd8cfc0 }));
+    m.position.set(P.x + d.x * 0.6, P.y + P.eye - 0.08 + d.y * 0.6, P.z + d.z * 0.6);
+    scene.add(m);
+    arrows.push({ m, vx: d.x * 42, vy: d.y * 42, vz: d.z * 42, t: 0 });
+    if (arrows.length > 12) { scene.remove(arrows[0].m); arrows.shift(); }
+  }
+  function tickArrows(dt) {
+    for (let i = arrows.length - 1; i >= 0; i--) {
+      const a = arrows[i]; a.t += dt;
+      a.vy -= 20 * dt;   // MC 화살 중력
+      const p = a.m.position;
+      p.x += a.vx * dt; p.y += a.vy * dt; p.z += a.vz * dt;
+      a.m.lookAt(p.x + a.vx, p.y + a.vy, p.z + a.vz);
+      let done = a.t > 4 || p.y < 1 || solidAt(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z));
+      if (!done) for (const mb of mobs) {
+        if (mb.dead || mb.ghost) continue;
+        const mp = mb.mesh.position, sc = (mb.def && mb.def.scale) || 1;
+        if (Math.abs(p.x - mp.x) < 0.75 * sc && Math.abs(p.z - mp.z) < 0.75 * sc && p.y > mp.y - 0.1 && p.y < mp.y + 2.1 * sc) {
+          attackMobHit(mb); done = true; break;
+        }
+      }
+      if (done) { scene.remove(a.m); arrows.splice(i, 1); }
+    }
   }
   // V21-E2: 보트 메시(자체 디자인 — 선체 + 좌석)
   let boatMesh = null;
@@ -7653,7 +7686,7 @@
         if (isTouch && worldMode !== 'visit' && lookT.id !== -1 && !lookT.acted && (lookT.moved || 0) < 10 && performance.now() - lookT.downT > 250) progressBreaking(dt);
         tickMobs(dt); tickFishing(); tickPlayerVitals(dt); tickWarpPads(dt); tickPortalStand(dt); tickPartyDungeonSync(dt);
       }
-      tickRegen(); tickFluids(); tickParticles(dt); tickDmgTexts(dt); tickBuildQueue(); tickChunkCulling(dt); tickAdaptiveView(dt); tickFluidAnim(dt); tickCrackOverlay(); tickCelestials(dt);
+      tickRegen(); tickFluids(); tickParticles(dt); tickDmgTexts(dt); tickBuildQueue(); tickChunkCulling(dt); tickAdaptiveView(dt); tickFluidAnim(dt); tickCrackOverlay(); tickCelestials(dt); tickArrows(dt);
       _hpHudT += dt; if (_hpHudT > 0.5) { _hpHudT = 0; updateHpHud(); }
       updatePrompt(dt);   // V26: 상호작용 안내
       flushWorldEdits();   // 블록 편집 → 메시 리빌드(프레임당 1회로 병합, 더티 청크만)
@@ -7899,6 +7932,7 @@
       requiredTierFor, homeBlockHardness, blockToolClass, showHotbarTitle,   // V22-K/V27-D 검증용
       scheduleFluidAround, tickFluids, portalOpenY, tickPortalStand, _setW: setW,   // V23-A 검증용
       spawnBreakParticles, tickParticles, _particleCount: () => particles.length,   // V24-C 검증용
+      shootArrow, tickArrows, _arrowCount: () => arrows.length,   // V29-B 검증용
       tileColor, collapseAbove, _outline: () => outlineMesh ? { v: outlineMesh.visible, s: [+outlineMesh.scale.x.toFixed(2), +outlineMesh.scale.y.toFixed(2), +outlineMesh.scale.z.toFixed(2)] } : null,   // V26-B 검증용
       mobList: () => mobs.filter(m => !m.dead).map(m => ({ type: m.type, x: m.mesh.position.x, y: m.mesh.position.y, z: m.mesh.position.z })),   // V21-D9 공허 몹 감사용
       chunkMeshCount: () => Object.keys(chunkMeshes).length,   // V12 크래시 검증용
