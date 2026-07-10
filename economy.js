@@ -791,6 +791,11 @@
       case 'furnace': return { rows: ['CCC', 'C C', 'CCC'], spec: { C: 'cobblestone' } };
       case 'torch': return { rows: ['C', 'S'], spec: { C: 'coal', S: 'stick' } };
       case 'wooden_pickaxe': return { rows: ['PPP', ' S ', ' S '], spec: { P: 'planks', S: 'stick' } };
+      case 'wooden_shovel': return { rows: [' P ', ' S ', ' S '], spec: { P: 'planks', S: 'stick' } };
+      case 'stone_shovel': return { rows: [' C ', ' S ', ' S '], spec: { C: 'cobblestone', S: 'stick' } };
+      case 'iron_shovel': return { rows: [' I ', ' S ', ' S '], spec: { I: 'iron', S: 'stick' } };
+      case 'golden_shovel': return { rows: [' G ', ' S ', ' S '], spec: { G: 'gold', S: 'stick' } };
+      case 'diamond_shovel': return { rows: [' D ', ' S ', ' S '], spec: { D: 'diamond', S: 'stick' } };
       case 'wooden_axe': return { rows: ['PP', 'PS', ' S'], spec: { P: 'planks', S: 'stick' }, mirror: true };
       case 'wooden_hoe': return { rows: ['PP', ' S', ' S'], spec: { P: 'planks', S: 'stick' }, mirror: true };
       case 'wooden_sword': return { rows: ['P', 'P', 'S'], spec: { P: 'planks', S: 'stick' } };
@@ -994,7 +999,7 @@
     saveNow(); renderZone(); return true;
   }
 
-  const TOOL_SKILL = { pickaxe: 'mining', axe: 'foraging', hoe: 'farming', rod: 'fishing' };
+  const TOOL_SKILL = { pickaxe: 'mining', axe: 'foraging', hoe: 'farming', shovel: 'mining', rod: 'fishing' };   // V27-D: 삽=채광 스킬
   function bestToolMul(family) {
     const ladder = D().TOOLS[family]; if (!ladder) return 1;
     const lv = skillLevel(TOOL_SKILL[family] || 'mining');
@@ -1020,6 +1025,44 @@
       else best = Math.max(best, t.mul >= 2.2 ? 6 : t.mul >= 1.75 ? 5 : t.mul >= 1.6 ? 4 : t.mul >= 1.45 ? 3 : t.mul >= 1.2 ? 2 : 1);
     }
     return best;
+  }
+  // V27-D: 손에 든 도구 기반 채굴(MC 정확) — 블럭의 도구 클래스와 든 도구가 일치할 때만 배속.
+  //   배속은 실제 MC 도구 속도(나무2/돌4/철6/금12/다이아8/태초(네더라이트)9).
+  const MC_TIER_SPEED = [1, 2, 4, 6, 12, 8, 9];
+  function toolFamilyOfKey(k) {
+    if (!k) return null;
+    for (const fam in D().TOOLS) if ((D().TOOLS[fam] || []).some(t => t.key === k)) return fam;
+    const m = /^(wooden|stone|iron|golden|diamond|netherite|ancient)_(pickaxe|axe|shovel|hoe)$/.exec(k);
+    return m ? m[2] : null;
+  }
+  function heldToolTier(k, fam) {
+    const ladder = D().TOOLS[fam] || [];
+    const t = ladder.find(x => x.key === k);
+    const lv = skillLevel(TOOL_SKILL[fam] || 'mining');
+    if (t) {
+      if ((t.req || 0) > lv) return 0;   // 요구 스킬 미달 = 맨손 취급
+      const i = TIER_PREFIX.findIndex(p => t.key.indexOf(p) === 0);
+      if (i >= 0) return i + 1;
+      return t.mul >= 2.2 ? 6 : t.mul >= 1.75 ? 5 : t.mul >= 1.6 ? 4 : t.mul >= 1.45 ? 3 : t.mul >= 1.2 ? 2 : 1;
+    }
+    const i = TIER_PREFIX.findIndex(p => (k || '').indexOf(p) === 0);
+    return i >= 0 ? i + 1 : 0;
+  }
+  function toolPowerHeld(heldKey, fam) {
+    if (!fam) return { match: true, tier: 6, speedMul: 1, fortunePct: 0, area: 0, treecap: false };   // 클래스 없는 블럭: 맨손=정상
+    const fk = toolFamilyOfKey(heldKey);
+    if (fk !== fam) return { match: false, tier: 0, speedMul: 1, fortunePct: 0, area: 0, treecap: false };
+    const tier = heldToolTier(heldKey, fam);
+    if (tier <= 0) return { match: false, tier: 0, speedMul: 1, fortunePct: 0, area: 0, treecap: false };
+    return {
+      match: true, tier,
+      speedMul: MC_TIER_SPEED[tier] * (1 + enchantLvl('tool', 'efficiency') * (((enchantDef('efficiency') || {}).fx || {}).mineSpeed || 12) / 100)
+        * (fam === 'pickaxe' && hasItem('stonk') ? 1.6 : 1)
+        * (1 + (traitSum('gatherer') + (fam === 'pickaxe' ? traitSum('miner') : fam === 'axe' ? traitSum('lumber') : 0)) / 100),
+      fortunePct: enchantLvl('tool', 'fortune') * (((enchantDef('fortune') || {}).fx || {}).fortune || 20),
+      area: enchantLvl('tool', 'area_mining'),
+      treecap: fam === 'axe' && hasItem('treecapitator'),
+    };
   }
   let _lastGatherAt = 0;
   function gather(zoneKey) {
@@ -3743,6 +3786,7 @@
       area: enchantLvl('tool', 'area_mining'),
       treecap: fam === 'axe' && hasItem('treecapitator'),
     }),
+    toolPowerHeld,   // V27-D: 손에 든 도구 기반(MC 정확)
     hasTool: fam => (D().TOOLS[fam] || []).some(t => hasItem(t.key)),
     // V12 블럭 경제: 파괴 시 지급 / 설치 시 소모 / 보유 확인
     giveItem: (k, n) => { addItem(k, n || 1); addCollection(k, n || 1); if (running) renderZone(); },

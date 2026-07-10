@@ -164,6 +164,13 @@
     px(c, -2, -10, 12, 4, col);
     c.restore();
   }
+  function drawShovel(c, col) {   // V27-D: 삽 — 대각 자루 + 둥근 날
+    c.save(); c.translate(20, 20); c.rotate(-Math.PI / 4);
+    c.fillStyle = '#8a6a3a'; c.fillRect(-2, -4, 4, 20);   // 자루
+    c.fillStyle = col; c.fillRect(-5, -14, 10, 11);        // 날
+    c.fillRect(-3, -16, 6, 3);
+    c.restore();
+  }
   function drawRod(c, col) {
     c.save(); c.translate(20, 22); c.rotate(Math.PI / 5);
     px(c, -1, -16, 3, 26, '#8a6a3a');
@@ -327,6 +334,7 @@
     if (/pickaxe/.test(key)) return 'pickaxe';
     if (/axe$/.test(key)) return 'axe';
     if (/hoe$/.test(key)) return 'hoe';
+    if (/shovel$/.test(key)) return 'shovel';   // V27-D: 삽
     if (/rod$/.test(key)) return 'rod';
     if (/^reforge_stone|essence_reforge_stone/.test(key)) return 'stone';
     if (/^minion_fuel/.test(key)) return 'flame';
@@ -483,6 +491,7 @@
       case 'pickaxe': drawPickaxe(c, col); break;
       case 'axe': drawAxe(c, col); break;
       case 'hoe': drawHoe(c, col); break;
+      case 'shovel': drawShovel(c, col); break;
       case 'rod': drawRod(c, col); break;
       case 'stone': drawStone(c, col); break;
       case 'flame': drawFlame(c); break;

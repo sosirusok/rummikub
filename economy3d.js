@@ -5902,41 +5902,54 @@
   let useHeld = false, useRepeatT = 0;
   // V13-A: 블럭별 채굴 경도(홈 건축 블럭용) — MC식 상대 경도. 도구 배율로 나눠 시간 산출.
   // V21-D: 블럭별 채굴 경도 — 바닐라 경도값 비례(스케일 ~0.85). 도구 배율로 나눠 시간 산출.
+  // V27-D: 진짜 바닐라 경도(minecraft.wiki 값 그대로) — 파괴시간 = 경도 × (수확가능 1.5 / 불가 5) ÷ 도구배속
   function homeBlockHardness(id) {
     const b = BLOCKS[id]; if (!b) return 0.6;
     const k = b.key;
-    // 특수 블럭(바닐라 고유값)
-    if (k === 'obsidian') return 6.5;                                  // 바닐라 50(최장) — 다이아 곡괭이로도 오래 걸림
-    if (k === 'netherrack') return 0.35;                               // 바닐라 0.4(곡괭이로 순삭)
-    if (k === 'end_stone') return 2.6;                                 // 바닐라 3.0
-    if (k === 'glowstone' || /glass/.test(k)) return 0.28;             // 바닐라 0.3
-    if (k === 'ice' || k === 'packed_ice') return 0.45;                // 바닐라 0.5
-    if (k === 'magma' || k === 'soul_sand') return 0.45;               // 바닐라 0.5
-    if (/leaves|flower|tall_grass|sugar|wheat|carrot|potato|mushroom_red_block|mushroom_brown_block|mushroom_stem|nether_wart|torch/.test(k)) return 0.18;   // 즉시급(V22-K: 버섯블럭 키 매칭 수정)
-    if (k === 'bed') return 0.2;                                       // 바닐라 0.2
-    if (/^ladder/.test(k)) return 0.4;                                 // 바닐라 0.4
-    if (k === 'pumpkin' || k === 'melon') return 0.85;                 // 바닐라 1.0
-    if (/wool/.test(k)) return 0.68;                                   // 바닐라 0.8(가위 없이)
+    if (/bedrock/.test(k)) return 999;
+    if (/flower|tall_grass|^sugar_cane|wheat|carrot|potato|nether_wart|torch|sapling|mushroom_red$|mushroom_brown$/.test(k)) return 0;   // 즉시 파괴
+    if (/leaves/.test(k)) return 0.2;
+    if (k === 'obsidian') return 50;
+    if (k === 'ancient_debris') return 30;
+    if (k === 'netherrack') return 0.4;
+    if (k === 'end_stone') return 3;
+    if (k === 'glowstone' || /glass/.test(k)) return 0.3;
+    if (k === 'ice' || k === 'packed_ice') return 0.5;
+    if (k === 'magma' || k === 'soul_sand') return 0.5;
+    if (k === 'bed') return 0.2;
+    if (/^ladder/.test(k)) return 0.4;
+    if (k === 'pumpkin' || k === 'melon' || /mushroom_(red|brown)_block|mushroom_stem/.test(k)) return 1.0;
+    if (/wool/.test(k)) return 0.8;
     if (/^snow/.test(k)) return 0.2;
-    if (/dirt|grass|sand$|red_sand|gravel|mycelium|farmland|hay|clay/.test(k)) return 0.5;   // 바닐라 0.5~0.6(삽류)
-    // V22-K: 광물 블럭(바닐라 5.0/3.0) — 기존엔 기본값 0.7로 흙처럼 캐지던 버그
-    if (/iron_block|diamond_block|emerald_block|coal_block|redstone_block/.test(k)) return 4.2;
-    if (/gold_block|lapis_block/.test(k)) return 2.5;
-    // V23-C: 딥슬레이트(바닐라: 원석 3.0/조각·벽돌 3.5/광석 4.5 — 지상 돌의 2배 감성) + 구리
-    if (/^deepslate_.*_ore$/.test(k)) return 3.7;
-    if (/deepslate/.test(k)) return k === 'deepslate' ? 2.5 : 2.9;
-    if (/copper_block|cut_copper|chiseled_copper|exposed_copper|weathered_copper|oxidized_copper|raw_copper_block/.test(k)) return 2.5;   // 바닐라 3.0
-    // 광석(바닐라 3.0) > 돌벽돌/조약돌(2.0) > 원석(1.5)
-    if (/_ore$|ancient_debris/.test(k)) return 2.4;
-    if (/sandstone|quartz/.test(k)) return 0.7;                        // 바닐라 0.8(연질 석재)
-    if (/cobble|brick|prismarine|purpur_pillar/.test(k)) return 1.7;
-    if (/concrete/.test(k)) return 1.5;                                // 바닐라 1.8
-    if (/^stone|smooth_stone|purpur|andesite|diorite|granite|terracotta/.test(k)) return 1.3;   // V22-K: 반블럭/계단·smooth_stone 포함
-    if (/bedrock/.test(k)) return 999;                                 // 파괴 불가(별도 차단도 있음)
-    // 나무 계열(바닐라 2.0 — 도끼)
-    if (/log|planks|fence|door|trapdoor|chest|crafting_table|bookshelf/.test(k)) return 1.6;
-    if (k === 'furnace') return 2.9;                                   // 바닐라 3.5
+    if (/^sand$|red_sand$|^dirt|farmland|^clay/.test(k)) return 0.5;
+    if (/^grass$|gravel|mycelium|podzol/.test(k)) return 0.6;
+    if (/hay/.test(k)) return 0.5;
+    if (/iron_block|diamond_block|emerald_block|coal_block|redstone_block/.test(k)) return 5;
+    if (/gold_block|lapis_block/.test(k)) return 3;
+    if (/^deepslate_.*_ore$/.test(k)) return 4.5;
+    if (/deepslate/.test(k)) return k === 'deepslate' ? 3 : 3.5;
+    if (/copper_block|cut_copper|chiseled_copper|exposed_copper|weathered_copper|oxidized_copper|raw_copper_block/.test(k)) return 3;
+    if (/_ore$/.test(k)) return 3;
+    if (/sandstone|quartz/.test(k)) return 0.8;
+    if (/cobble|brick|prismarine|purpur_pillar/.test(k)) return 2;
+    if (/concrete/.test(k)) return 1.8;
+    if (/terracotta/.test(k)) return 1.25;
+    if (/smooth_stone/.test(k)) return 2;
+    if (/^stone|purpur|andesite|diorite|granite/.test(k)) return 1.5;
+    if (/door/.test(k)) return 3;
+    if (/chest|crafting_table/.test(k)) return 2.5;
+    if (/bookshelf/.test(k)) return 1.5;
+    if (/log|planks|fence|trapdoor/.test(k)) return 2;
+    if (k === 'furnace') return 3.5;
     return 0.7;
+  }
+  // V27-D: 블럭 → 올바른 도구 클래스(MC) — 이 클래스의 도구를 '손에 들어야' 배속이 적용된다
+  function blockToolClass(k) {
+    if (/leaves|hay|sponge|nether_wart_block/.test(k)) return 'hoe';
+    if (/log|planks|fence|door|trapdoor|chest$|crafting_table|bookshelf|^ladder|bamboo|melon$|pumpkin|mushroom_(red|brown)_block|mushroom_stem|bed$/.test(k)) return 'axe';
+    if (/stone|cobble|brick|_ore$|deepslate|granite|diorite|andesite|obsidian|netherrack|quartz|purpur|prismarine|concrete|terracotta|magma|glowstone|ice|copper|iron_block|gold_block|diamond_block|emerald_block|coal_block|lapis_block|furnace|ancient_debris|anvil/.test(k)) return 'pickaxe';
+    if (/^sand$|red_sand$|^dirt|^grass$|gravel|mycelium|podzol|farmland|^clay|^snow|soul_sand/.test(k)) return 'shovel';
+    return null;   // 유리/양털/침대 등 — 도구 무관 정상 속도
   }
   // V22-K1: 블럭별 요구 도구 티어(MC 표준) — 0=맨손 1=나무 2=돌 3=철 4=금 5=다이아 6=태초
   function requiredTierFor(bk) {
@@ -5957,20 +5970,26 @@
     if (!g && worldMode === 'home') {   // 홈: 모든 블럭 바닐라 채굴 — 부수면 아이템 드롭, 재생 없음
       const b = BLOCKS[hit.id];
       if (!b || b.key === 'bedrock' || b.liquid) { breaking = null; return; }
-      const bk = BLOCKS[hit.id].key; const fam = /log|planks|leaves|fence|door|trapdoor/.test(bk) ? 'axe' : /dirt|grass|sand|gravel/.test(bk) ? 'pickaxe' : 'pickaxe';
+      const bk = BLOCKS[hit.id].key; const fam = blockToolClass(bk) || 'pickaxe';
       g = { res: null, homeDrop: blockDropKey(hit.id), fam, hard: homeBlockHardness(hit.id), to: 0, door: BLOCKS[hit.id].shape === 'door' };   // V17-C: 문은 짝 칸도 제거
     }
     if (!g) { breaking = null; return; }
     if (!breaking || breaking.x !== hit.x || breaking.y !== hit.y || breaking.z !== hit.z) {
       const api = econApi();
-      const tp = api.toolPower ? api.toolPower(g.fam) : { speedMul: api.toolMul ? api.toolMul(g.fam) : 1 };
-      // V22-K1: 도구 티어 게이팅(MC 표준) — 미달이면 3.3배 느리고 드롭 없음
+      // V27-D: 실제 MC 파괴 공식 — 손에 든 도구가 블럭의 도구 클래스와 일치할 때만 배속(나무2/돌4/철6/금12/다이아8/태초9).
+      //   시간 = 경도 × (수확가능 1.5 / 불가 5) ÷ 배속. 곡괭이류 블럭은 곡괭이(+요구 티어) 없으면 드롭 없음.
       const bk2 = BLOCKS[hit.id].key;
-      const reqT = g.fam === 'pickaxe' ? requiredTierFor(bk2) : 0;
-      const myT = api.bestToolTier ? api.bestToolTier(g.fam) : 6;
-      const under = reqT > 0 && myT < reqT;
-      breaking = { x: hit.x, y: hit.y, z: hit.z, t: 0, need: g.hard / Math.max(0.4, tp.speedMul) * (under ? 3.3 : 1), tp, noDrop: under };
-      if (g.hard <= 0.2) breaking.need = 0.001;   // V22-K1: 즉시 파괴 블럭(꽃/풀/작물/횃불/잎) = 1틱
+      const tclass = blockToolClass(bk2);
+      const heldK = typeof activeHotbarKey === 'function' ? activeHotbarKey() : null;
+      const tp = api.toolPowerHeld ? api.toolPowerHeld(heldK, tclass)
+        : (api.toolPower ? api.toolPower(g.fam) : { speedMul: 1, match: true, tier: 6 });
+      const H = homeBlockHardness(hit.id);
+      const reqT = tclass === 'pickaxe' ? requiredTierFor(bk2) : 0;
+      const canHarvest = tclass !== 'pickaxe' || (tp.match && tp.tier >= reqT);
+      const speed = tp.match ? Math.max(1, tp.speedMul) : 1;
+      g.fam = tclass || g.fam;   // 연쇄(광역/트리캡) 판정도 실제 클래스 기준
+      breaking = { x: hit.x, y: hit.y, z: hit.z, t: 0, need: H * (canHarvest ? 1.5 : 5) / speed, tp, noDrop: !canHarvest };
+      if (H <= 0.01) breaking.need = 0.001;   // 즉시 파괴(꽃/풀/작물/횃불)
     }
     breaking.t += dt;
     const cross = document.getElementById('econ3dCross');
@@ -5980,11 +5999,11 @@
     const api = econApi();
     const tp = breaking.tp || {};
     const gated = !!(breaking && breaking.noDrop);   // V22-K1: 티어 미달 — 광역/트리캡 연쇄 드롭도 차단
-    if (gated) { g = Object.assign({}, g, { res: null, homeDrop: g.homeDrop !== undefined ? null : undefined }); if (typeof toast === 'function') toast('🔨 더 좋은 곡괭이가 필요해요 — 아이템이 나오지 않았어요', false); }
+    if (gated) { g = Object.assign({}, g, { res: null, homeDrop: g.homeDrop !== undefined ? null : undefined }); if (typeof toast === 'function') toast('⛏️ 곡괭이(요구 티어)를 손에 들어야 아이템이 나와요', false); }
     doGatherBreak(hit.x, hit.y, hit.z, g, api);
     // V22-K: 광역/트리캡 연쇄도 월드 모드에 맞는 정의 사용 — 홈에서 허브 채집 정의(재생/원자재 드롭)를 쓰던 버그 수정
     const chainG = id2 => worldMode === 'home' ? { res: null, homeDrop: blockDropKey(id2), fam: g.fam, to: 0 } : gatherBlocks()[id2];
-    if (!gated && tp.treecap && g.fam === 'axe' && g.to === 0) {
+    if (!gated && tp.treecap && tp.match && g.fam === 'axe' && g.to === 0) {   // V27-D: 도끼를 들고 있을 때만
       // 트리캐피테이터: 연결된 원목 전체 벌목(BFS, 최대 48블록)
       const targetIds = [ID.oak_log, ID.birch_log, ID.spruce_log, ID.dark_oak_log, ID.jungle_log, ID.acacia_log];
       const q = [[hit.x, hit.y, hit.z]]; const seen = new Set(); let felled = 0;
@@ -7217,13 +7236,63 @@
     dungeon: { light: 0.45, sky: ['#0c0808', '#181010', '#281c1c'], fog: '#1c1414' },
   };
   // V27-B: 월드별 고정 시간대에 맞는 천체 배치(environment/sun.png·moon_phases.png·clouds.png·end_sky.png)
+  // V27-D: 월드별 고정 시간대의 천체 '방향'(정규화 전) — 씬에 실제로 떠 있어 화면을 돌리면 함께 돈다(MC 동일)
   const WORLD_CELESTIAL = {
-    hub: { kind: 'sun', x: '50%', y: '9%' }, home: { kind: 'sun', x: '50%', y: '9%' }, visit: { kind: 'sun', x: '50%', y: '9%' },
-    barn: { kind: 'sun', x: '38%', y: '14%' }, park: { kind: 'sun', x: '55%', y: '11%' },
-    gold: { kind: 'sun', x: '74%', y: '34%' }, mushroom: { kind: 'sun', x: '50%', y: '55%' },
-    spider: { kind: 'moon', x: '50%', y: '13%' }, dungeonhub: { kind: 'moon', x: '62%', y: '11%' },
+    hub: { kind: 'sun', dir: [0.35, 0.85, 0.2] }, home: { kind: 'sun', dir: [0.35, 0.85, 0.2] }, visit: { kind: 'sun', dir: [0.35, 0.85, 0.2] },
+    barn: { kind: 'sun', dir: [-0.45, 0.75, 0.3] }, park: { kind: 'sun', dir: [0.5, 0.8, -0.25] },
+    gold: { kind: 'sun', dir: [-0.75, 0.42, 0.25] }, mushroom: { kind: 'sun', dir: [0.85, 0.28, 0.1] },
+    spider: { kind: 'moon', dir: [0.3, 0.8, -0.3] }, dungeonhub: { kind: 'moon', dir: [-0.4, 0.85, 0.2] },
     end: { kind: 'endsky' },
   };
+  let _celGroup = null, _celSun = null, _celClouds = null, _celMode = null;
+  const _celTexCache = {};
+  function _celTex(src) {
+    if (_celTexCache[src]) return _celTexCache[src];
+    const t = new THREE.TextureLoader().load(src);
+    t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; t.generateMipmaps = false;
+    return (_celTexCache[src] = t);
+  }
+  function buildCelestials3d() {
+    if (_celMode === worldMode || !scene) return;
+    _celMode = worldMode;
+    if (_celGroup) { scene.remove(_celGroup); _celGroup = null; _celSun = null; _celClouds = null; }
+    const cel = WORLD_CELESTIAL[worldMode];
+    if (!cel || cel.kind === 'endsky') return;
+    _celGroup = new THREE.Group();
+    // 해/달 — MC 크기감(시야각 약 8~9도), 가산 블렌딩으로 검정 배경 제거, 안개 미적용
+    const tex = _celTex(cel.kind === 'sun' ? 'environment/sun.png' : 'environment/moon_phases.png');
+    if (cel.kind === 'moon') { tex.repeat.set(0.25, 0.5); tex.offset.set(0, 0.5); }   // 4×2 시트의 보름달 셀
+    const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+    _celSun = new THREE.Mesh(new THREE.PlaneGeometry(58, 58), mat);
+    _celSun.userData.dir = new THREE.Vector3(cel.dir[0], cel.dir[1], cel.dir[2]).normalize();
+    _celSun.renderOrder = -2;
+    _celGroup.add(_celSun);
+    // 구름층 — MC처럼 하늘 높이(y≈108)에 수평 평면으로 떠서 흐른다(화면 고정 밴드 아님)
+    if (cel.kind === 'sun') {
+      const ct = _celTex('environment/clouds.png');
+      // MC 실측: 구름 텍스처 1픽셀 = 12블럭 → 256px 시트가 3072블럭을 덮는다(반복 1). 과밀 픽셀 노이즈 방지.
+      ct.wrapS = ct.wrapT = THREE.RepeatWrapping; ct.repeat.set(1, 1);
+      const cmat = new THREE.MeshBasicMaterial({ map: ct, transparent: true, opacity: 0.5, depthWrite: false, fog: false, side: THREE.DoubleSide });
+      _celClouds = new THREE.Mesh(new THREE.PlaneGeometry(3072, 3072), cmat);
+      _celClouds.rotation.x = -Math.PI / 2;
+      _celClouds.position.y = 108;
+      _celClouds.renderOrder = -1;
+      _celGroup.add(_celClouds);
+    }
+    scene.add(_celGroup);
+  }
+  function tickCelestials(dt) {
+    if (!_celGroup) return;
+    if (_celSun) {
+      const d = _celSun.userData.dir;
+      _celSun.position.set(P.x + d.x * 380, P.y + d.y * 380, P.z + d.z * 380);
+      _celSun.lookAt(P.x, P.y, P.z);
+    }
+    if (_celClouds) {
+      _celClouds.position.x = P.x; _celClouds.position.z = P.z;
+      const m = _celClouds.material.map; if (m) m.offset.x = (m.offset.x + dt * 0.0004) % 1;   // 천천히 흐름(MC)
+    }
+  }
   function worldAmbience() { return WORLD_AMBIENCE[worldMode] || WORLD_AMBIENCE.hub; }
   function dayFactor() { return worldAmbience().light; }
   let _lastSkyKey = '';
@@ -7235,14 +7304,11 @@
     const el = document.getElementById('econ3dSky');
     if (el) {
       el.style.background = `linear-gradient(${A.sky[0]} 0%, ${A.sky[1]} 55%, ${A.sky[2]} 100%)`;
-      // V27-B: 실제 MC 해/달/구름/엔드 하늘 스프라이트(파일 없으면 그라디언트만 유지)
       const cel = WORLD_CELESTIAL[worldMode];
-      let inner = '';
-      if (cel && cel.kind === 'sun') inner = `<div class="econ3d-cel" style="left:${cel.x};top:${cel.y};background-image:url('environment/sun.png')"></div><div class="econ3d-clouds"></div>`;
-      else if (cel && cel.kind === 'moon') inner = `<div class="econ3d-cel econ3d-cel--moon" style="left:${cel.x};top:${cel.y};background-image:url('environment/moon_phases.png')"></div>`;
-      else if (cel && cel.kind === 'endsky') { el.style.background = `#0c0714 url('environment/end_sky.png') repeat`; el.style.backgroundSize = '256px'; }
-      el.innerHTML = inner;
+      if (cel && cel.kind === 'endsky') { el.style.background = `#0c0714 url('environment/end_sky.png') repeat`; el.style.backgroundSize = '256px'; }
+      el.innerHTML = '';
     }
+    buildCelestials3d();   // V27-D: 해/달/구름은 씬 안의 천체(화면 고정 아님)
     const nv = Math.max(0.6, A.light);   // V20-U: 밝기 하한 완화 → 어두운 섬(딥/엔드/네더)이 실제로 무겁고 고유한 분위기
     if (blockMat) blockMat.color.setScalar(nv);
     if (waterMat) waterMat.color.setScalar(nv);
@@ -7511,7 +7577,7 @@
         if (isTouch && worldMode !== 'visit' && lookT.id !== -1 && !lookT.acted && (lookT.moved || 0) < 10 && performance.now() - lookT.downT > 250) progressBreaking(dt);
         tickMobs(dt); tickFishing(); tickPlayerVitals(dt); tickWarpPads(dt); tickPortalStand(dt); tickPartyDungeonSync(dt);
       }
-      tickRegen(); tickFluids(); tickParticles(dt); tickDmgTexts(dt); tickBuildQueue(); tickChunkCulling(dt); tickAdaptiveView(dt); tickFluidAnim(dt); tickCrackOverlay();
+      tickRegen(); tickFluids(); tickParticles(dt); tickDmgTexts(dt); tickBuildQueue(); tickChunkCulling(dt); tickAdaptiveView(dt); tickFluidAnim(dt); tickCrackOverlay(); tickCelestials(dt);
       _hpHudT += dt; if (_hpHudT > 0.5) { _hpHudT = 0; updateHpHud(); }
       updatePrompt(dt);   // V26: 상호작용 안내
       flushWorldEdits();   // 블록 편집 → 메시 리빌드(프레임당 1회로 병합, 더티 청크만)
@@ -7582,6 +7648,7 @@
       } catch (err) { console.error('econ3d ctx restore', err); }
     }, false);
     scene = new THREE.Scene(); scene.background = null; scene.fog = new THREE.Fog(0xbfe0f5, 48, 108);
+    _celMode = null; _celGroup = null; _celSun = null; _celClouds = null;   // V27-D: 씬 재생성 시 천체 재구축
     camera = new THREE.PerspectiveCamera(72, 1, 0.1, 500);
     buildAtlas();
     buildClouds();
@@ -7748,7 +7815,7 @@
       travelTo, worldMode: () => worldMode, genHome, PORTALS, HOME_MINION_SLOTS, HOME_BOUNDS, HOME_CENTER, installPortalFrame,
       parkGateAt, tryOpenParkGate, parkGates: () => genPark._gates || [], agingPass,
       _testCrack: (b) => { breaking = b; tickCrackOverlay(); return { visible: !!(crackMesh && crackMesh.visible), stage: crackStage }; },
-      requiredTierFor, homeBlockHardness, showHotbarTitle,   // V22-K 검증용
+      requiredTierFor, homeBlockHardness, blockToolClass, showHotbarTitle,   // V22-K/V27-D 검증용
       scheduleFluidAround, tickFluids, portalOpenY, tickPortalStand, _setW: setW,   // V23-A 검증용
       spawnBreakParticles, tickParticles, _particleCount: () => particles.length,   // V24-C 검증용
       tileColor, collapseAbove, _outline: () => outlineMesh ? { v: outlineMesh.visible, s: [+outlineMesh.scale.x.toFixed(2), +outlineMesh.scale.y.toFixed(2), +outlineMesh.scale.z.toFixed(2)] } : null,   // V26-B 검증용

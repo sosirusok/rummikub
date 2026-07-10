@@ -133,7 +133,7 @@
   const TOOL_TIER_NAMES = ['나무', '돌', '철', '금', '다이아', '태초의'];
   const TOOL_MULS = [1.0, 1.2, 1.45, 1.6, 1.75, 2.2];
   const TOOL_PRICES = [0, 0, 0, 0, 0, 0];   // V7: 도구는 조합 전용(무화폐 구매 경제)
-  const TOOL_FAMILY_NAMES = { pickaxe: '곡괭이', hoe: '괭이', axe: '도끼', rod: '낚싯대' };
+  const TOOL_FAMILY_NAMES = { pickaxe: '곡괭이', hoe: '괭이', axe: '도끼', shovel: '삽', rod: '낚싯대' };   // V27-D: 삽(흙/모래/자갈 클래스)
   const TOOL_TIER_KEYS = ['wooden', 'stone', 'iron', 'golden', 'diamond', 'ancient'];
   const TOOL_REQS = [0, 1, 3, 4, 6, 10];   // V7: 티어별 요구 스킬 레벨(곡괭이=채광 등)
   const TOOLS = {};   // family -> [{key,name,mul,price,req}] 낮은 티어부터
