@@ -4446,8 +4446,8 @@
     // V21-G1: 유체 애니메이션 준비 — 물/용암 타일 위치를 기억해 매 틱 자체 디자인 프레임으로 다시 그린다
     _fluidAnim = { c, tiles: [] };
     ['water', 'lava'].forEach(nm => { const i = list.indexOf(nm); if (i >= 0) _fluidAnim.tiles.push([nm, (i % cols) * 16, ((i / cols) | 0) * 16]); });
-    // V26: 원거리 텍스처 일렁임(시머링)·과쨍함 수정 — MC와 동일하게 밉맵(가까이 네어리스트/멀리 밉맵 보간) + 이방성 4
-    atlasTex = new THREE.CanvasTexture(cv); atlasTex.magFilter = THREE.NearestFilter; atlasTex.minFilter = THREE.NearestMipmapLinearFilter; atlasTex.generateMipmaps = true; atlasTex.anisotropy = 4;
+    // V26-B: 밉맵 원상복구 — 근거리까지 뭉개져 보인다는 리포트로 픽셀 선명(Nearest) 복귀
+    atlasTex = new THREE.CanvasTexture(cv); atlasTex.magFilter = THREE.NearestFilter; atlasTex.minFilter = THREE.NearestFilter; atlasTex.generateMipmaps = false;
     atlasTex.flipY = false; atlasTex.needsUpdate = true;
     // V21-E4: 사용자 리소스팩 오버레이 — resourcepack/manifest.json에 나열된 타일명을
     //   resourcepack/<타일명>.png(16×16)로 로드해 아틀라스에 덮어쓴다(없으면 절차 텍스처 유지).
@@ -5290,12 +5290,14 @@
     if (keys.KeyW) mf += 1; if (keys.KeyS) mf -= 1; if (keys.KeyA) ms -= 1; if (keys.KeyD) ms += 1;
     // V22-H1: 조이스틱(가상 이동 드래그) 제거
     const inWater = feetInWater();
+    const inLava = !inWater && feetInLava();   // V26-B: 용암 수영(느린 침강/승강, MC)
     if (mf <= 0) P._sprintLatch = false;                    // 전진을 멈추면 스프린트 해제
     const sprint = (P._sprintLatch || ((keys.ControlLeft || keys.ControlRight) && _kbLocked)) && mf > 0 && !inWater;   // V26: 더블탭 W + (전체화면 키보드 잠금 시) Ctrl 달리기
     P._sneaking = !!(keys.ShiftLeft || keys.ShiftRight) && P.onGround && !inWater;   // V12 Sneak 상태
     const sin = Math.sin(P.yaw), cos = Math.cos(P.yaw);
     let speed = P._sneaking ? 1.295 : (sprint ? 5.612 : 4.317);   // V26: 실제 MC 실측치(걷기 4.317/달리기 5.612/슬금 1.295 m/s)
     if (inWater) speed *= (P._boat ? 1.8 : 0.55);   // V21-E2: 보트는 물에서 빠르게 활주
+    else if (inLava) speed *= 0.25;   // V26-B: 용암은 훨씬 느림(MC)
     // 슈가 러시 인챈트 이동속도 보너스
     if (window.econApi && window.econApi.moveSpeedPct) speed *= 1 + window.econApi.moveSpeedPct() / 100;
     let dx = (-sin * mf + cos * ms), dz = (-cos * mf - sin * ms);
@@ -5328,6 +5330,11 @@
       const headWater = getBlockLocal(Math.floor(P.x), Math.floor(P.y + 1.1), Math.floor(P.z)) === ID.water;
       if (wantJump && !headWater) P.vy = 8.5;
       }
+    }
+    else if (inLava) {   // V26-B: 용암 유체 물리 — 천천히 가라앉고 점프키로 허우적 상승
+      P.vy -= 6 * dt; if (wantJump) P.vy += 18 * dt;
+      if (P.vy < -1.6) P.vy = -1.6; if (P.vy > 1.6) P.vy = 1.6;
+      P._djUsed = false;
     }
     else {
       P.vy -= 32 * dt; if (P.vy < -78) P.vy = -78;
@@ -5662,6 +5669,7 @@
     const drop = blockDropKey(t.id);
     if (drop && econApi().giveItem) econApi().giveItem(drop, 1);   // 파괴 = 아이템 획득
     spawnBreakParticles(t.x, t.y, t.z, t.id); if (drop) spawnPickupFx(t.x, t.y, t.z, drop);   // V24-C
+    collapseAbove(t.x, t.y, t.z, econApi());   // V26-B: 지지 붕괴
     scheduleFluidAround(t.x, t.y, t.z);   // V23-A: 빈 자리로 주변 물/용암 확산
     updateBuildHud();
     return true;
@@ -5951,7 +5959,7 @@
     let col = 0x9a9a9a;
     try {
       const u = atlasUV[tn], cvs = atlasTex.image, ctx2 = cvs.getContext('2d');
-      const px = ctx2.getImageData(Math.floor((u.x0 + u.x1) / 2 * cvs.width), Math.floor((1 - (u.y0 + u.y1) / 2) * cvs.height), 1, 1).data;
+      const px = ctx2.getImageData(Math.floor((u.x0 + u.x1) / 2 * cvs.width), Math.floor((u.y0 + u.y1) / 2 * cvs.height), 1, 1).data;   // V26-B: flipY=false — v 그대로(거울행 샘플로 돌이 빨간 파편 튀던 버그)
       col = (px[0] << 16) | (px[1] << 8) | px[2];
     } catch (e) {}
     return (_tileColCache[tn] = col);
@@ -5993,6 +6001,25 @@
     }
   }
   function clearParticles() { particles.forEach(q => scene && scene.remove(q.spr)); pickups.forEach(q => scene && scene.remove(q.spr)); particles = []; pickups = []; }
+  // V26-B: 지지 붕괴 — 아래 블럭이 사라지면 위의 지지 필요 블럭(꽃/풀/작물/사탕수수/횃불/문/침대)도 파괴(홈=드롭)
+  function collapseAbove(x, y, z, api) {
+    for (let step = 0; step < 12; step++) {   // 사탕수수 스택 연쇄
+      const uy = y + 1 + step;
+      const ub = BLOCKS[getBlockLocal(x, uy, z)];
+      if (!ub) return;
+      const needsSupport = ub.cross || ub.shape === 'door' || ub.shape === 'bed';
+      if (!needsSupport) return;
+      const uid = getBlockLocal(x, uy, z);
+      setW(x, uy, z, 0); markBlockDirty(x, z);
+      spawnBreakParticles(x, uy, z, uid);
+      if (worldMode === 'home') {
+        const drop = blockDropKey(uid);
+        if (drop && api && api.giveItem) { api.giveItem(drop, 1); spawnPickupFx(x, uy, z, drop); }
+        if (api && api.setHomeEdit) api.setHomeEdit(x, uy, z, 0);
+      }
+      if (ub.shape === 'door' || ub.shape === 'bed') return;   // 문/침대는 1칸만
+    }
+  }
   function doGatherBreak(x, y, z, g, api) {
     const _pid = getBlockLocal(x, y, z);   // V24-C: 파괴 파티클용(교체 전 블럭)
     if (g.res && (g.chance == null || Math.random() < g.chance) && api.gatherBlock) api.gatherBlock(g.res, g.fam);
@@ -6014,6 +6041,7 @@
     spawnBreakParticles(x, y, z, _pid);   // V24-C: 블럭 파편 파티클
     const _pk = g.homeDrop !== undefined ? g.homeDrop : g.res;
     if (_pk) spawnPickupFx(x, y, z, _pk);   // V24-C: 아이템 흡수 이펙트
+    if (!g.to) collapseAbove(x, y, z, api);   // V26-B: 지지 붕괴
   }
   function tickRegen() {
     if (!regenQueue.length) return;
@@ -7068,8 +7096,21 @@
     if (worldMode === 'home' && outlineMesh) {
       const b = raycastBlock();
       if (b) {
-        outlineMesh.visible = true; outlineMesh.scale.set(1.01, 1.01, 1.01);
-        outlineMesh.position.set(b.x + 0.5, b.y + 0.5, b.z + 0.5);
+        // V26-B: 윤곽선을 실제 히트박스(셰이프 박스 합집합)에 맞춤 — 꽃/문/반블럭이 정육면체로 보이던 문제
+        const bb = BLOCKS[b.id];
+        const boxes = bb && bb.cross
+          ? [{ x0: b.x + 0.3, y0: b.y, z0: b.z + 0.3, x1: b.x + 0.7, y1: b.y + 0.7, z1: b.z + 0.7 }]   // V26-B: 꽃/횃불은 MC식 소형 선택 박스
+          : blockLocalBoxes(bb, b.x, b.y, b.z, true);
+        if (boxes.length) {
+          let x0 = 1e9, y0 = 1e9, z0 = 1e9, x1 = -1e9, y1 = -1e9, z1 = -1e9;
+          for (const bx of boxes) { x0 = Math.min(x0, bx.x0); y0 = Math.min(y0, bx.y0); z0 = Math.min(z0, bx.z0); x1 = Math.max(x1, bx.x1); y1 = Math.max(y1, bx.y1); z1 = Math.max(z1, bx.z1); }
+          outlineMesh.visible = true;
+          outlineMesh.scale.set((x1 - x0) + 0.01, (y1 - y0) + 0.01, (z1 - z0) + 0.01);
+          outlineMesh.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+        } else {
+          outlineMesh.visible = true; outlineMesh.scale.set(1.01, 1.01, 1.01);
+          outlineMesh.position.set(b.x + 0.5, b.y + 0.5, b.z + 0.5);
+        }
         if (cross) cross.classList.add('is-active');
         return;
       }
@@ -7614,6 +7655,7 @@
       requiredTierFor, homeBlockHardness, showHotbarTitle,   // V22-K 검증용
       scheduleFluidAround, tickFluids, portalOpenY, tickPortalStand, _setW: setW,   // V23-A 검증용
       spawnBreakParticles, tickParticles, _particleCount: () => particles.length,   // V24-C 검증용
+      tileColor, collapseAbove, _outline: () => outlineMesh ? { v: outlineMesh.visible, s: [+outlineMesh.scale.x.toFixed(2), +outlineMesh.scale.y.toFixed(2), +outlineMesh.scale.z.toFixed(2)] } : null,   // V26-B 검증용
       mobList: () => mobs.filter(m => !m.dead).map(m => ({ type: m.type, x: m.mesh.position.x, y: m.mesh.position.y, z: m.mesh.position.z })),   // V21-D9 공허 몹 감사용
       chunkMeshCount: () => Object.keys(chunkMeshes).length,   // V12 크래시 검증용
       buildQueueLen: () => buildQueue.length,

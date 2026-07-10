@@ -125,6 +125,7 @@
   function stat(k, n) { if (!P) return; if (!P.stats) P.stats = {}; P.stats[k] = (P.stats[k] || 0) + (n == null ? 1 : n); }
   function statMax(k, v) { if (!P) return; if (!P.stats) P.stats = {}; if (v > (P.stats[k] || 0)) P.stats[k] = v; }
   function addItem(k, n) {
+    if ((n == null || n > 0)) { if (!P.gained) P.gained = {}; P.gained[k] = (P.gained[k] || 0) + (n == null ? 1 : n); }   // V26-B: 퀘스트용 총 획득 카운터
     if (n <= 0) return;
     P.inv[k] = (P.inv[k] || 0) + n; rollItemStat(k); bumpInv();
     const sd = shopDef(k);
@@ -1981,7 +1982,7 @@
   function questNpcDef(npcKey) { return (D().QUEST_NPCS || []).find(n => n.key === npcKey); }
   function questMetric(obj) {
     switch (obj.type) {
-      case 'gather': return (P.collections[obj.target] || 0);
+      case 'gather': return resourceDef(obj.target) ? (P.collections[obj.target] || 0) : ((P.gained && P.gained[obj.target]) || 0);   // V26-B: 조약돌 등 비컬렉션 아이템도 집계
       case 'kill': return statValue('kills');
       case 'killBoss': return statValue('bossKills');
       case 'mine': return statValue('blocksMined');
