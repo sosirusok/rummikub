@@ -476,6 +476,20 @@
   function armorPieces() { return ['helmet', 'chest', 'leggings', 'boots'].map(equippedPiece).filter(Boolean); }
   function equippedAll() { return EQUIP_SLOTS.map(equippedPiece).filter(Boolean); }
   function hpbOf(key) { return (P.hpb || {})[key] || 0; }
+  // V27-A: 바닐라 도구 공격력(MC Java 실수치) — 검이 없을 때 손에 든 도구가 약한 피해를 준다
+  const VANILLA_TOOL_DMG = {
+    sword:   { wooden: 4, golden: 4, stone: 5, iron: 6, diamond: 7, netherite: 8 },
+    axe:     { wooden: 7, golden: 7, stone: 9, iron: 9, diamond: 9, netherite: 10 },
+    pickaxe: { wooden: 2, golden: 2, stone: 3, iron: 4, diamond: 5, netherite: 6 },
+    shovel:  { wooden: 2.5, golden: 2.5, stone: 3.5, iron: 4.5, diamond: 5.5, netherite: 6.5 },
+    hoe:     { wooden: 1, golden: 1, stone: 1, iron: 1, diamond: 1, netherite: 1 },
+  };
+  function vanillaToolDmg(key) {
+    if (!key) return 0;
+    const m = /^(wooden|stone|iron|golden|diamond|netherite)_(pickaxe|axe|shovel|hoe|sword)$/.exec(key);
+    if (!m) return 0;
+    return (VANILLA_TOOL_DMG[m[2]] && VANILLA_TOOL_DMG[m[2]][m[1]]) || 0;
+  }
   function equippedWeaponDmg() {
     const w = equippedWeapon(); if (!w) return 0;
     let d = (rolledStat(w.key, w.dmg) + (P.reforgeBonus[w.key] || 0) + hpbOf(w.key) * D().HPB.weaponDmgPerBook) * recombMul(w.key);   // V20: 리컴 +18%
@@ -604,9 +618,9 @@
   function playerStr() { return playerStats().strength; }
   // V17 실제 하이픽셀 공식: 피해 = (5 + 무기공격) × (1 + 힘/100) × 가산배수 × (1 + 광포/100) × 어빌리티 × 마력
   //   (힘은 배수로만 기여 — 0.11.5에서 '힘의 20% 플랫뎀' 삭제됨. 크리티컬은 타격마다 별도 굴림)
-  function playerAttackPower() {
+  function playerAttackPower(heldKey) {
     const st = playerStats();
-    const flat = 5 + equippedWeaponDmg();
+    const flat = 5 + (equippedWeaponDmg() || vanillaToolDmg(heldKey));
     const additive = 1 + skillLevel('combat') * 0.04 + enchSum('dmg') / 100 + bestiaryBonusPct() / 100
       + (reforgeOf('weapon').dmgPct || 0) / 100 + (reforgeOf('bow').dmgPct || 0) * 0.3 / 100
       + starAtkPct() / 100 + setStat('dmgPct') / 100;
@@ -1762,7 +1776,7 @@
   // 3D 전투: 한 타격의 피해 계산(크리/조건부 인챈트/흡혈 포함)
   function attackMob3d(ctx) {
     const crit = playerCritRoll();
-    let dmg = playerAttackPower() * crit;
+    let dmg = playerAttackPower(ctx.heldKey) * crit;
     dmg *= enchCondMul({ hitIdx: ctx.hitIdx || 0, targetHp: ctx.hp, targetMaxHp: ctx.maxHp, isBoss: !!ctx.isBoss, slayerKey: ctx.slayerKey || (ctx.mobType && SLAYER_MOB_MAP[ctx.mobType]) || null });   // V22-K: 3D 몹 종 → 슬레이어 계열 매핑(스마이트/베인 등 특효 인챈트 실동작)
     dmg *= traitCtxMul(ctx);                              // V11: 특성 문맥 배율(처형/연격/특효/분노...)
     dmg += traitSum('shred');                             // V11: 파쇄(고정 추가 피해)
@@ -1797,17 +1811,17 @@
       addItem(d.key, n); addCollection(d.key, n);
       if ((d.chance == null ? 1 : d.chance) <= 0.25) msgs.push(`✨ ${itemName(d.key)} ×${n}`);
     }
-    if (Math.random() < 0.03 * (1 + traitSum('lucky') / 100)) {   // 희귀: 드롭 전용 장비(V11: field 풀 우선)
+    if (Math.random() < 0.004 * (1 + traitSum('lucky') / 100)) {   // V27-A: 장비 드롭 1/250(기존 3%는 디아블로식 템 세례)
       const bonus = equipDropFromSrc('field', Math.min(8, (mob.tierCap == null ? 2 : mob.tierCap) + (mob.rewardMul >= 3 ? 2 : 0))) || randomEquipDrop(Math.min(6, mob.tierCap == null ? 2 : mob.tierCap));
       if (bonus) msgs.push(`🎁 ${bonus.name}`);
     }
     // V11: 미니보스/지옥 보스 전용 풀
-    if (mob.equipSrc && Math.random() < (mob.equipSrcChance || 0.25)) {
+    if (mob.equipSrc && Math.random() < (mob.equipSrcChance || 0.08)) {   // V27-A: 전용 풀 기본 25%→8%
       const sp = equipDropFromSrc(mob.equipSrc, 8);
       if (sp) msgs.push(`🌟 ${sp.name}`);
     }
     // V7: 몹별 인챈트북 드롭(몹마다 다른 북 — 정예는 3배 확률)
-    if (mob.books && mob.books.length && Math.random() < (mob.elite ? 0.06 : 0.02)) {
+    if (mob.books && mob.books.length && Math.random() < (mob.elite ? 0.03 : 0.015)) {   // V27-A: 인챈트북도 하향
       const bk = mob.books[Math.floor(Math.random() * mob.books.length)];
       addItem(`enchant_book_${bk}`, 1);
       const bdef = enchantDef(bk);
