@@ -215,19 +215,24 @@
   }
   // V23-B: 컬렉션 티어 보상(실제 스카이블럭식 진행 보상) — 골드 + 해당 카테고리 스킬 경험치 + 레시피 해금(RECIPES) + 미니언 생산 +2%
   function collectionCategoryKey(resKey) { for (const c of D().COLLECTIONS) if (c.resources.some(r => r.key === resKey)) return c.key; return 'mining'; }
-  function collectionTierReward(t) { return { gold: 150 * t * t, xp: 200 * t }; }
+  // V30: 실제 위키 보상 구조 — 매 티어 +4 스카이블럭 XP(코인 없음) + 레시피 해금 + 일부 고티어는 스킬 XP 보너스
+  function collectionTierReward(t, maxT) {
+    const skillXp = (maxT >= 8 && t === maxT - 1) ? 10000 : 0;   // 위키식: 최상위 부근 티어에 +10,000 스킬 XP
+    return { sbXp: 4, skillXp };
+  }
   function addCollection(key, n) {
     if (!resourceDef(key)) return;
     P.collections[key] = (P.collections[key] || 0) + n;
     const before = P.collectionTier[key] || 0, after = collectionTierIdx(key);
     if (after > before) {
       P.collectionTier[key] = after;
-      let gold = 0, xp = 0;
-      for (let t = before + 1; t <= after; t++) { const rw = collectionTierReward(t); gold += rw.gold; xp += rw.xp; }
-      addGold(gold);
+      const maxT = (resourceDef(key).tierThresholds || []).length;
+      let sb = 0, sk = 0;
+      for (let t = before + 1; t <= after; t++) { const rw = collectionTierReward(t, maxT); sb += rw.sbXp; sk += rw.skillXp; }
+      P.sbXp = (P.sbXp || 0) + sb;
       const cat = collectionCategoryKey(key);
-      addSkillXp(cat, xp);
-      toastFn(`📚 ${resourceDef(key).name} 컬렉션 티어 ${after} 달성! +${fmtGold(gold)} · ${cat} XP +${xp}`, true);
+      if (sk) addSkillXp(cat, sk);
+      toastFn(`📚 ${resourceDef(key).name} 컬렉션 ${after}티어! +${sb} 스카이블럭 XP${sk ? ` · ${cat} XP +${sk.toLocaleString()}` : ''} · 레시피 해금`, true);
     }
   }
 
@@ -3341,11 +3346,12 @@
       const t = i + 1;
       const done = tier >= t;
       const recipes = D().RECIPES.filter(rc => rc.unlock && rc.unlock.resource === r.key && rc.unlock.tier === t).map(rc => itemName(rc.key));
-      const rw = collectionTierReward(t);
+      const rw = collectionTierReward(t, r.tierThresholds.length);
       const parts = [];
       if (t === 1 && minions.length) parts.push(`⚙️ ${minions.join('·')} 해금`);
       if (recipes.length) parts.push(`⚒️ 레시피: ${recipes.join(', ')}`);
-      parts.push(`💰 ${fmtGold(rw.gold)}`, `✨ ${collectionCategoryKey(r.key)} XP +${rw.xp}`, `생산 +2%`);
+      parts.push(`✦ +${rw.sbXp} 스카이블럭 XP`);
+      if (rw.skillXp) parts.push(`✨ ${collectionCategoryKey(r.key)} XP +${rw.skillXp.toLocaleString()}`);
       return `<div class="econ-colrow" style="${done ? 'opacity:.92' : 'opacity:.62'}">
         <span style="min-width:88px">${done ? '✅' : '🔒'} <b>티어 ${t}</b></span>
         <span style="min-width:110px">${fmtNum(th)}개${done ? '' : cur >= (r.tierThresholds[i - 1] || 0) && tier === t - 1 ? ` <span class="muted">(${fmtNum(cur)}/${fmtNum(th)})</span>` : ''}</span>
@@ -3363,7 +3369,7 @@
       const prev = tier > 0 ? r.tierThresholds[tier - 1] : 0;
       const pct = next ? Math.min(100, Math.max(0, (cur - prev) / (next - prev) * 100)) : 100;
       const nextRecipes = next ? D().RECIPES.filter(rc => rc.unlock && rc.unlock.resource === r.key && rc.unlock.tier === tier + 1).map(rc => itemName(rc.key)) : [];
-      const rewardTxt = next ? `T${tier + 1} 보상: ${nextRecipes.length ? `레시피 ${nextRecipes.slice(0, 2).join('·')}${nextRecipes.length > 2 ? ` 외 ${nextRecipes.length - 2}` : ''} · ` : ''}💰${fmtGold(collectionTierReward(tier + 1).gold)}` : 'MAX 달성!';
+      const rewardTxt = next ? `T${tier + 1} 보상: ${nextRecipes.length ? `레시피 ${nextRecipes.slice(0, 2).join('·')}${nextRecipes.length > 2 ? ` 외 ${nextRecipes.length - 2}` : ''} · ` : ''}✦ +4 SB XP` : 'MAX 달성!';
       return `<div class="econ-colrow" data-act="econ_col_detail" data-key="${r.key}" style="cursor:pointer" title="클릭 = 전체 티어 보상 보기"><span>${colDetailKey === r.key ? '▼' : '▶'} ${r.name} <b>T${tier}</b><span class="muted">/${maxT}</span></span>
         <span class="econ-hpbar" style="flex:1;height:12px"><span class="econ-hpbar__fill" style="width:${pct.toFixed(0)}%;background:linear-gradient(90deg,#7a5cff,#b28dff)"></span></span>
         <span class="muted">${fmtNum(cur)}${next ? `/${fmtNum(next)}` : ''} · ${rewardTxt}</span></div>${colDetailKey === r.key ? collectionDetailHTML(r) : ''}`;
@@ -3374,6 +3380,7 @@
     const st = playerStats();
     return `<h4>📊 내 스탯 (실제 스카이블럭 공식)</h4>
       <div class="econ-colgrid">
+        <div class="econ-colrow"><span>✦ 스카이블럭 XP</span><span>${(P.sbXp || 0).toLocaleString()}</span><span class="muted">컬렉션 티어마다 +4 (실제 위키 구조)</span></div>
         <div class="econ-colrow"><span>❤ 체력</span><span>${st.hp}</span><span class="muted">기본 100 + 농사/낚시/인챈트/부적/펫</span></div>
         <div class="econ-colrow"><span>🛡 방어</span><span>${st.defense}</span><span class="muted">피해 감소 ${(playerDefensePct() * 100).toFixed(1)}% = 방어/(방어+100)</span></div>
         <div class="econ-colrow"><span>💪 힘</span><span>${st.strength}</span><span class="muted">피해 ×(1+힘/100)</span></div>
