@@ -1549,3 +1549,18 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .econ3d-clouds{position:absolute; left:0; right:0; top:12%; height:120px; pointer-events:none; opacity:.35;
   background:url('environment/clouds.png') repeat 0 0/512px 512px; image-rendering:pixelated;
   animation:econ3d-clouddrift 240s linear infinite;}
+/* V27-C: 진짜 슬롯 인벤토리 — 클릭 이동 커서, 상세 ⓘ, 상자형 메뉴 */
+.mc-slot.mc-empty2{cursor:pointer; background:#8b8b8b;}
+.mc-slot .mc-info{position:absolute; right:0; top:0; width:15px; height:15px; padding:0; border:none; border-radius:0 0 0 4px;
+  background:rgba(0,0,0,.45); color:#ffe066; font-size:10px; line-height:15px; z-index:2; opacity:0; transition:opacity .12s;}
+.mc-slot:hover .mc-info{opacity:1;}
+.mc-grid{margin-bottom:8px;}
+.mc-hotbar{margin-top:2px;}
+#econInvCursor{position:fixed; z-index:340; width:38px; height:38px; pointer-events:none; transform:translate(-30%,-40%); display:none;}
+#econInvCursor img{width:100%; height:100%; image-rendering:pixelated; filter:drop-shadow(0 3px 5px rgba(0,0,0,.6));}
+.mc-chest{padding:10px; background:#c6c6c6; border:3px solid; border-color:#f7f7f7 #555 #555 #f7f7f7; border-radius:3px;}
+.mc-chesttitle{font-weight:900; color:#3f3f3f; margin-bottom:6px; font-size:14px;}
+.mc-menuslot{font-size:20px; cursor:pointer;}
+.mc-menuslot span{pointer-events:none;}
+.mc-menuslot.mc-locked{opacity:.55;}
+.mc-carry b{color:#2d2d2d;}
