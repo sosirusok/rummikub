@@ -5058,13 +5058,23 @@
     return Object.assign({ skin: 0xe0ac7e, hair: 0x3b2a1a, pants: shade(L.shirt || fallbackColor || 0x808080, 0.6) }, L);
   }
   function questNpcList() { return ((window.ECON_DATA || {}).QUEST_NPCS) || []; }
+  // V27-A: NPC 발밑 지면 — 잎/통나무(나무)는 지면으로 치지 않아 캐노피 위에 서던 버그 수정
+  function npcGroundY(x, z) {
+    for (let y = H - 1; y >= 1; y--) {
+      const b = BLOCKS[getBlockLocal(x, y, z)];
+      if (!b || !b.solid) continue;
+      if (b.key && (b.key.indexOf('leaves') >= 0 || b.key.indexOf('log') >= 0)) continue;
+      return y + 1;
+    }
+    return surfaceTop(x, z);
+  }
   function buildNpcMeshes() {
     npcGroup = new THREE.Group(); scene.add(npcGroup);
     // 서비스 NPC(상점/은행/…) — 현재 월드 소속만
     NPCS.forEach(n => {
       if ((n.world || 'hub') !== worldMode) return;
       const h = buildHumanoid(npcLook(n.key, n.color), { merged: true });
-      n._y = surfaceTop(n.x, n.z);
+      n._y = npcGroundY(n.x, n.z);
       h.group.position.set(n.x + 0.5, n._y, n.z + 0.5);
       h.group.rotation.y = hash3(n.x, 5, n.z) * Math.PI * 2;
       const label = makeLabel(n.name); label.position.set(0, 2.2, 0); h.group.add(label);
@@ -5074,7 +5084,7 @@
     questNpcList().forEach(n => {
       if ((n.world || 'hub') !== worldMode) return;
       const h = buildHumanoid(npcLook(n.key, n.color), { merged: true });
-      n._y = surfaceTop(n.x, n.z);
+      n._y = npcGroundY(n.x, n.z);
       h.group.position.set(n.x + 0.5, n._y, n.z + 0.5);
       h.group.rotation.y = hash3(n.x, 9, n.z) * Math.PI * 2;
       const label = makeLabel('❗ ' + n.name); label.position.set(0, 2.35, 0); h.group.add(label);
@@ -5292,14 +5302,34 @@
       for (const box of boxes) {
         if (minX >= box.x1 || maxX <= box.x0 || minY >= box.y1 || maxY <= box.y0 || minZ >= box.z1 || maxZ <= box.z0) continue;
         if (ax === 'y') { if (amt > 0) { P.y = box.y0 - P.h - 0.0001; P.vy = 0; } else { P.y = box.y1 + 0.0001; P.vy = 0; P.onGround = true; } return; }
-        if (ax === 'x') { if (amt > 0) P.x = box.x0 - P.w / 2 - 0.0001; else P.x = box.x1 + P.w / 2 + 0.0001; P.vx = 0; return; }
-        if (ax === 'z') { if (amt > 0) P.z = box.z0 - P.w / 2 - 0.0001; else P.z = box.z1 + P.w / 2 + 0.0001; P.vz = 0; return; }
+        if (ax === 'x') { if (amt > 0) P.x = box.x0 - P.w / 2 - 0.0001; else P.x = box.x1 + P.w / 2 + 0.0001; P.vx = 0; P._hColl = true; return; }
+        if (ax === 'z') { if (amt > 0) P.z = box.z0 - P.w / 2 - 0.0001; else P.z = box.z1 + P.w / 2 + 0.0001; P.vz = 0; P._hColl = true; return; }
       }
     }
     if ((ax === 'x' || ax === 'z') && P._sneaking && P.onGround && wouldFallOffEdge()) { P[ax] = before; P['v' + ax] = 0; }
   }
   function respawnAtHub(msg) {
-    if (worldMode === 'home' || worldMode === 'visit') { P.x = 96.5; P.z = 104.5; P.y = surfaceTop(96, 104) + 0.02; }   // V13-A: 스폰섬
+    if (worldMode === 'home' || worldMode === 'visit') {   // V13-A: 스폰섬
+      let sy = surfaceTop(96, 104);
+      if (sy <= 2) {   // V27-A: 스폰 기둥을 다 캐낸 경우 — 무한 낙사 루프 방지
+        let fx = null, fz = null;
+        for (let r = 1; r <= 20 && fx == null; r++) for (let a = 0; a < 16 && fx == null; a++) {
+          const cx = 96 + Math.round(Math.cos(a / 16 * Math.PI * 2) * r), cz = 104 + Math.round(Math.sin(a / 16 * Math.PI * 2) * r);
+          if (surfaceTop(cx, cz) > 2) { fx = cx; fz = cz; }
+        }
+        if (fx != null) { P.x = fx + 0.5; P.z = fz + 0.5; P.y = surfaceTop(fx, fz) + 0.02; }
+        else {   // 밟을 곳이 하나도 없음 — 하이픽셀식 '구조 발판'(3×3 조약돌, 홈 영속)
+          const api0 = econApi();
+          for (let ox = -1; ox <= 1; ox++) for (let oz = -1; oz <= 1; oz++) {
+            world[widx(96 + ox, 18, 104 + oz)] = ID.cobblestone;
+            if (worldMode === 'home' && api0.setHomeEdit) api0.setHomeEdit(96 + ox, 18, 104 + oz, ID.cobblestone);
+            markBlockDirty(96 + ox, 104 + oz);
+          }
+          P.x = 96.5; P.z = 104.5; P.y = 19.02;
+          if (typeof toast === 'function') toast('🪨 구조 발판이 생성되었어요', true);
+        }
+      } else { P.x = 96.5; P.z = 104.5; P.y = sy + 0.02; }
+    }
     else if (worldMode !== 'hub') { const sp = (WORLD_DEFS[worldMode] || {}).spawn || [W >> 1, Dp >> 1]; P.x = sp[0] + 0.5; P.z = sp[1] + 0.5; P.y = surfaceTop(sp[0], sp[1]) + 0.02; }
     else { P.x = spawnX; P.y = spawnY; P.z = spawnZ; }
     P.vx = P.vy = P.vz = 0;
@@ -5329,13 +5359,8 @@
     const accel = inWater ? 5 : P.onGround ? 11 : 2.6;
     P.vx += (tvx - P.vx) * Math.min(1, dt * accel);
     P.vz += (tvz - P.vz) * Math.min(1, dt * accel);
-    // V24: 넉백 잔류 속도(피격 시 부여) — 입력 속도에 더해지고 지수 감쇠
-    if (P._kbx || P._kbz) {
-      P.vx += P._kbx; P.vz += P._kbz;
-      const dec = Math.max(0, 1 - dt * 5);
-      P._kbx *= dec; P._kbz *= dec;
-      if (Math.abs(P._kbx) < 0.05 && Math.abs(P._kbz) < 0.05) P._kbx = P._kbz = 0;
-    }
+    // V27-A: 넉백 = 1회성 속도 임펄스(MC) — 기존 '매 프레임 재적용'은 수십 블럭을 날려보내는 버그였다
+    if (P._kbx || P._kbz) { P.vx += P._kbx; P.vz += P._kbz; P._kbx = P._kbz = 0; }
     // V23-A: 점프 — Space를 꾹 누르고 있으면 착지할 때마다 자동 재점프(실제 MC 동작)
     const wantJump = !!keys.Space;
     P._prevJump = wantJump;
@@ -5347,9 +5372,10 @@
         if (keys.ShiftLeft || keys.ShiftRight) { P._boat = false; removeBoatMesh(); if (typeof toast === 'function') toast('🛶 하선했어요', true); }
       } else {
       P.vy -= 9 * dt; if (wantJump) P.vy += 26 * dt; if (P.vy < -4) P.vy = -4; if (P.vy > 5) P.vy = 5; P._djUsed = false;
-      // 수면 근처에서 점프하면 뭍으로 뛰어오를 수 있게(허우적대다 못 나오는 문제 해결)
+      // V27-A: 물 표면 '블럭 밟기' 착취 제거 — 탈출 점프(8.5)는 벽에 밀착했을 때만(MC 동일).
+      //   열린 수면에선 상승 속도를 제한해 수면을 지면처럼 밟고 달릴 수 없다.
       const headWater = getBlockLocal(Math.floor(P.x), Math.floor(P.y + 1.1), Math.floor(P.z)) === ID.water;
-      if (wantJump && !headWater) P.vy = 8.5;
+      if (wantJump && !headWater) { if (P._hColl) P.vy = 8.5; else if (P.vy > 2.2) P.vy = 2.2; }
       }
     }
     else if (inLava) {   // V26-B: 용암 유체 물리 — 천천히 가라앉고 점프키로 허우적 상승
@@ -5378,6 +5404,7 @@
         if (mf > 0 && !(headLb && headLb.climb)) P.vy = Math.max(P.vy, 4.4);
       }
     }
+    P._hColl = false;
     moveAxis('x', P.vx * dt); moveAxis('z', P.vz * dt); P.onGround = false; moveAxis('y', P.vy * dt);
     if (P.onGround) P._djUsed = false;
     // V22-K: 낙하 데미지(MC 표준: 3블럭 초과 낙하 시 블럭당 최대체력 5%) — 물/사다리/보트는 무효
@@ -6690,9 +6717,10 @@
       let mvx = 0, mvz = 0;
       if (m.state === 'flee' && distP > 0.1) { mvx = -dx / distP; mvz = -dz / distP; m.walkT += dt * 5; }
       else if (m.state === 'chase') {
-        if (distP > 1.5) { mvx = dx / distP; mvz = dz / distP; }
+        const reach = 2.0 * Math.max(1, ((m.def && m.def.scale) || 1) * 0.85);   // V27-A: 공격 사거리 = MC ~2블럭, 대형 몹은 몸집만큼
+        if (distP > reach * 0.75) { mvx = dx / distP; mvz = dz / distP; }
         m.atkCd -= dt;
-        if (distP < 1.8 && m.atkCd <= 0) {
+        if (distP < reach && Math.abs(P.y - mp.y) < 3 && m.atkCd <= 0) {
           // V24-B: 시야선 검사 — 벽 너머/바닥 관통 공격 방지
           let blocked = false;
           for (let si = 1; si <= 3; si++) {
@@ -6707,7 +6735,7 @@
           const dealt = m.dmg * (0.85 + Math.random() * 0.3) * (1 - defPct);
           damagePlayer(dealt);
           // V24: 넉백(실제 MC) — 몹 반대 방향으로 밀려나고 살짝 뜬다
-          const kd = Math.max(0.001, distP); P._kbx = (P.x - mp.x) / kd * 7.5; P._kbz = (P.z - mp.z) / kd * 7.5;
+          const kd = Math.max(0.001, distP); P._kbx = (P.x - mp.x) / kd * 5.2; P._kbz = (P.z - mp.z) / kd * 5.2;   // V27-A: 1회성 임펄스 기준 ~1.5블럭(MC)
           if (P.onGround) P.vy = Math.max(P.vy, 4.6);
           const th = (api.traitSum ? api.traitSum('thorns') : 0) + (api.enchThornsPct ? api.enchThornsPct() * 100 : 0);   // V22-K: 가시 — 특성 + 방어구 인챈트 합산 반사
           if (th > 0 && !m.ghost && !m.dead && mobs.indexOf(m) >= 0) {   // 사망→리스폰으로 몹이 정리됐으면 스킵
@@ -6737,9 +6765,15 @@
           const gy = groundBelow(Math.floor(nx), Math.floor(nz), 44) + 5.5 + Math.sin(m.walkT * 0.7) * 1.2;
           mp.x = nx; mp.z = nz; mp.y += (gy - mp.y) * Math.min(1, dt * 2);
         } else {
-        const ny = groundBelow(Math.floor(nx), Math.floor(nz), mp.y + 1.8);
+        let ny = groundBelow(Math.floor(nx), Math.floor(nz), mp.y + 1.8);
         const floorOk = solidAt(Math.floor(nx), Math.floor(ny - 0.05), Math.floor(nz));
-        if (floorOk && ny - mp.y < 1.6 && ny - mp.y > -6 && ny > 2) { mp.x = nx; mp.z = nz; mp.y += (ny - mp.y) * Math.min(1, dt * 8); }
+        if (floorOk) {   // V27-A: 지지 블럭의 실제 충돌 높이(울타리/담장 1.5) — 펜스를 1블럭 계단처럼 뛰어넘던 탈출 버그 방지
+          const sbb = BLOCKS[getBlockLocal(Math.floor(nx), Math.floor(ny - 0.05), Math.floor(nz))];
+          if (sbb) { const bxs = blockLocalBoxes(sbb, Math.floor(nx), Math.floor(ny - 0.05), Math.floor(nz), false); for (const bx of bxs) if (bx.y1 > ny) ny = bx.y1; }
+        }
+        // V27-A: 몸통 클리어런스(2칸 공기) — 창틀/벽을 통과해 걸어다니던 버그 방지
+        const bodyClear = !solidAt(Math.floor(nx), Math.floor(ny + 0.05), Math.floor(nz)) && !solidAt(Math.floor(nx), Math.floor(ny + 1.05), Math.floor(nz));
+        if (floorOk && bodyClear && ny - mp.y < 1.05 && ny - mp.y > -6 && ny > 2) { mp.x = nx; mp.z = nz; mp.y += (ny - mp.y) * Math.min(1, dt * 8); }
         else if ((kbdx || kbdz) && ny > 2) { mp.x = nx; mp.z = nz; mp.y += (ny - mp.y) * Math.min(1, dt * 6); }   // V24-E(#10): 넉백은 절벽 아래로도 밀려남
         else if ((kbdx || kbdz) && ny <= 2) {   // 공허로 밀려 떨어짐 — 조용히 제거(보상 없음, MC 공허사)
           m.dead = true; scene.remove(m.mesh); disposeGroup(m.mesh);
@@ -6788,7 +6822,8 @@
       return;
     }
     const isBossGrade = !!(m.isBoss || m.def.miniboss || m.def.hellBoss || m.def.kind === 'dragon' || m.type === 'arachne' || m.type === 'broodmother');
-    const r = api.attackMob({ hitIdx: m.hitIdx, hp: m.hp, maxHp: m.maxHp, isBoss: isBossGrade, mobType: m.type, phpPct: php ? php.hp / php.max : 1 });
+    const heldK = (api.getP && api.getP() && api.getP().hotbar) ? api.getP().hotbar[selectedHotbar] : null;   // V27-A: 손에 든 도구의 바닐라 공격력 반영
+    const r = api.attackMob({ hitIdx: m.hitIdx, hp: m.hp, maxHp: m.maxHp, isBoss: isBossGrade, mobType: m.type, phpPct: php ? php.hp / php.max : 1, heldKey: heldK });
     m.hitIdx++;
     m.hp -= r.dmg;
     m._hitFx = 0.15;   // V24-B: 피격 반응(스케일 펀치)
@@ -7667,7 +7702,7 @@
       scene: () => scene, camera: () => camera,
       world: () => world, W, H, D: Dp, SEA,
       setGathering: (v, zk) => { gathering = v; gatherZoneKey = zk; },
-      collide, moveAxis, dayFactor, ambientMobs: () => ambientMobs,
+      collide, moveAxis, dayFactor, ambientMobs: () => ambientMobs, keys,   // V27-A: 입력 시뮬 검증용
       ID, BLOCKS,
       // V3: 프라이빗 섬/건축/이동
       travelTo, worldMode: () => worldMode, genHome, PORTALS, HOME_MINION_SLOTS, HOME_BOUNDS, HOME_CENTER, installPortalFrame,

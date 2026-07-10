@@ -1524,3 +1524,6 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .econ-ownedonly summary{cursor:pointer; font-weight:800; color:#f5d76a; margin-bottom:8px;}
 .econ3d-body .econ-ownedonly{color:#30343b;}
 .econ3d-body .econ-ownedonly summary{color:#3b2f19;}
+/* V27-A: 게임/패널 UI 텍스트 드래그 선택 방지 — 툴팁·패널 글자에 파란 선택 하이라이트가 끼던 문제 */
+.econ3d-screen, .econ-panel, .econ-richtt, .mc-slot, .econ3d-prompt, .econ3d-itemtitle, .modal-body .econ-panel{
+  user-select:none; -webkit-user-select:none;}
