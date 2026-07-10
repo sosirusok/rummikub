@@ -497,6 +497,14 @@
       }
     }
     decorateWilds();
+    // V28-C: 순환로 가로등(약 40블럭 간격) + 길가 생울타리 — 존 사이 개활지에 리듬감
+    for (let a = 0; a < 24; a++) {
+      const ang = a / 24 * Math.PI * 2;
+      const x = Math.round(224 + Math.cos(ang) * 154), z = Math.round(224 + Math.sin(ang) * 154);
+      const t = surfaceTop(x, z);
+      if (getBlockLocal(x, t - 1, z) === ID.grass || getBlockLocal(x, t - 1, z) === ID.dirt) lampPost(x, z);
+      if (a % 3 === 0) { const hx = Math.round(224 + Math.cos(ang + 0.06) * 158), hz = Math.round(224 + Math.sin(ang + 0.06) * 158); const ht = surfaceTop(hx, hz); if (getBlockLocal(hx, ht - 1, hz) === ID.grass) for (let i = 0; i < 4; i++) setW(hx + i, surfaceTop(hx + i, hz), hz, ID.oak_leaves); }
+    }
     buildWilderness();
     buildHubRealign();   // V25-A: 딥서치(위키 좌표) 기반 실제 허브 정합 — 터번/플라워하우스/커뮤니티센터/시리우스 오두막/침몰 크립트   // V24: 허허벌판 채우기 — 풍차/코티지/과수원/정자/캠프/목장(손 배치)
     buildHubPortal();
@@ -515,12 +523,27 @@
       const wild = zoneAt(x, z) === 'wild';
       const r = hash3(x, 111, z);
       const field = smoothNoise(x, z, 26);                              // 저주파 → 꽃 색이 지역별로 뭉쳐 예쁜 색밭
-      if (wild && r < 0.012) plantOak(x, z);
-      else if (wild && r < 0.017) plantBirch(x, z);
-      else if (wild && r < 0.024 && field > 0.6) setW(x, y, z, ID.oak_leaves);                            // 덤불(야생)
+      // V28-C: 나무는 '숲 군락(grove)'에만 — 아무 데나 심던 균일 산포 폐기(실제 스블 허브처럼 개활지와 숲이 구분)
+      const grove = smoothNoise(x + 137, z + 59, 17) > 0.66;
+      // 밭 보호: 주변 3칸에 작물/사탕수수/경작지가 있으면 나무·덤불 금지(사탕수수밭 자작나무 버그)
+      const nearCrop = () => {
+        for (let dx = -3; dx <= 3; dx++) for (let dz = -3; dz <= 3; dz++) {
+          const b = getBlockLocal(x + dx, surfaceTop(x + dx, z + dz) - 0, z + dz), g2 = getBlockLocal(x + dx, surfaceTop(x + dx, z + dz) - 1, z + dz);
+          if (b === ID.sugar_cane || b === ID.wheat_ripe || g2 === ID.farmland) return true;
+        }
+        return false;
+      };
+      if (wild && grove && r < 0.045 && !nearCrop()) { (r < 0.032 ? plantOak : plantBirch)(x, z); }        // 군락 내 밀도 높은 숲
+      else if (wild && grove && r < 0.055) setW(x, y, z, ID.oak_leaves);                                    // 군락 덤불
+      else if (wild && !grove && r < 0.0012 && !nearCrop()) plantOak(x, z);                                 // 개활지 고독한 나무(아주 드묾)
+      else if (wild && r >= 0.997 && !nearCrop()) {                                                         // V28-C: 쓰러진 통나무(1.21.5) — 그루터기+가로 원목+버섯
+        const horiz = hash3(x, 77, z) < 0.5, len = 3 + (hash3(x, 78, z) * 3 | 0);
+        setW(x, y, z, ID.oak_log);
+        for (let i = 1; i <= len; i++) { const lx = x + (horiz ? i + 1 : 0), lz = z + (horiz ? 0 : i + 1); const ly = surfaceTop(lx, lz); if (getBlockLocal(lx, ly - 1, lz) === ID.grass) setW(lx, ly, lz, ID.oak_log); if (i === 2 && hash3(lx, 79, lz) < 0.6) setW(lx, ly + 1, lz, ID.mushroom_brown != null ? ID.mushroom_brown : ID.mushroom_red); }
+      }
       else if (r < 0.30) setW(x, y, z, ID.tall_grass);                                                    // 풍성한 잔디(전역)
       else if (r < 0.42) setW(x, y, z, field < 0.34 ? ID.flower_yellow : field < 0.68 ? ID.flower_red : ID.tall_grass);   // 색 군집 꽃밭(전역)
-      else if (r < 0.423) { setW(x, y, z, ID.mossy_cobblestone); if (r < 0.421) setW(x, y + 1, z, ID.mossy_cobblestone); }  // 이끼 바위
+      else if (r < 0.425) { setW(x, y, z, ID.mossy_cobblestone); if (r < 0.4215) { setW(x, y + 1, z, ID.mossy_cobblestone); setW(x + 1, y, z, ID.cobblestone); } }  // 바위 군집
     }
   }
 
@@ -1203,6 +1226,16 @@
     stall(222, 252, true, ID.dark_oak_planks != null ? ID.dark_oak_planks : ID.bricks, [ID.iron_ore, ID.gold_ore, ID.iron_ore], ID.cobblestone);   // 도구·광물(갈색 차양)
     stall(234, 254, false, ID.purpur, [ID.glass, ID.wool_purple != null ? ID.wool_purple : ID.purpur, ID.glass], ID.bookshelf != null ? ID.bookshelf : ID.oak_planks);   // 물약(보라 차양)
     stall(210, 252, true, ID.wool_yellow != null ? ID.wool_yellow : ID.quartz_block, [ID.emerald_ore, ID.gold_ore, ID.emerald_ore], ID.chest != null ? ID.chest : ID.oak_planks);   // 장신구(노란 차양)
+    // V28-C: 시장 완성 — 노점 3개 추가(빵집/양털·염색/서적) + 거리 등불 아치 + 현수막 기둥
+    stall(202, 254, false, ID.wool_orange != null ? ID.wool_orange : ID.bricks, [ID.hay_block, ID.pumpkin, ID.hay_block], ID.hay_block);            // 빵집(주황 차양)
+    stall(226, 254, false, ID.wool_lime != null ? ID.wool_lime : ID.oak_planks, [ID.wool_white, ID.wool_red, ID.wool_blue], ID.wool_white);          // 양털·염색(연두 차양)
+    stall(238, 252, true, ID.wool_cyan != null ? ID.wool_cyan : ID.prismarine, [ID.bookshelf, ID.glass, ID.bookshelf], ID.bookshelf);                // 서적(청록 차양)
+    for (const ax of [206, 220, 236]) {   // 등불 아치(거리 가로지름)
+      for (let z = 250; z <= 256; z++) setW(ax, 24, z, fence);
+      setW(ax, 20, 250, fence); setW(ax, 21, 250, fence); setW(ax, 22, 250, fence); setW(ax, 23, 250, fence);
+      setW(ax, 20, 256, fence); setW(ax, 21, 256, fence); setW(ax, 22, 256, fence); setW(ax, 23, 256, fence);
+      setW(ax, 23, 253, glow);
+    }
     // 거리 가로등 + 화분(잎) + 벤치
     for (const x of [200, 216, 232, 242]) { setW(x, 20, 249, fence); setW(x, 21, 249, glow); }
     setW(205, 20, 257, stair(0)); setW(206, 20, 257, slab); setW(207, 20, 257, stair(0));   // 벤치
