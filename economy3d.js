@@ -6052,6 +6052,27 @@
     } catch (e) {}
     return (_tileColCache[tn] = col);
   }
+  // V27-E: 실제 MC 파티클 스프라이트(particle/ 폴더) — 크리티컬 별/스윕/불꽃
+  const _pTexCache = {};
+  function particleTex(name) {
+    if (_pTexCache[name] !== undefined) return _pTexCache[name];
+    const t = new THREE.TextureLoader().load('particle/' + name + '.png', undefined, undefined, () => { _pTexCache[name] = null; });
+    t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; t.generateMipmaps = false;
+    return (_pTexCache[name] = t);
+  }
+  function spawnCritParticles(pos) {
+    if (!scene || particles.length > 220) return;
+    const tex = particleTex('critical_hit');
+    for (let i = 0; i < 5; i++) {
+      const mat = tex ? new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false })
+        : new THREE.SpriteMaterial({ color: 0xffe08a, transparent: true, depthWrite: false });
+      const sp = new THREE.Sprite(mat);
+      sp.scale.setScalar(0.28);
+      sp.position.set(pos.x + (Math.random() - 0.5) * 0.9, pos.y + 1.0 + Math.random() * 0.8, pos.z + (Math.random() - 0.5) * 0.9);
+      scene.add(sp);
+      particles.push({ spr: sp, t: 0.5 + Math.random() * 0.25, vx: (Math.random() - 0.5) * 3, vy: 1.5 + Math.random() * 2.5, vz: (Math.random() - 0.5) * 3 });
+    }
+  }
   function spawnBreakParticles(x, y, z, id) {
     const b = BLOCKS[id]; if (!b || !scene) return;
     const col = tileColor(b);
@@ -6870,6 +6891,7 @@
     if (m.def && m.def.passive) { m.state = 'flee'; m._fleeT = 4; }   // V24-D: 동물은 도망
     if (php && r.heal) { php.hp = Math.min(php.max, php.hp + r.heal); }
     spawnDmgText(m.mesh.position, r.dmg, r.crit);
+    if (r.crit) spawnCritParticles(m.mesh.position);   // V27-E: MC 크리티컬 별(particle/critical_hit.png)
     // V24: 넉백 — 순간이동식(0.7블럭 즉시) 대신 실제 MC처럼 밀려나는 관성(감쇠 속도)
     const dx = m.mesh.position.x - P.x, dz = m.mesh.position.z - P.z; const l = Math.hypot(dx, dz) || 1;
     const kbPow = m.def && (m.def.miniboss || m.def.hellBoss || m.isBoss) ? 2.5 : 6.5;   // 보스급은 덜 밀림
