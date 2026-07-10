@@ -1141,6 +1141,15 @@
       for (let dx = -1; dx <= 5; dx++) for (let dz = -1; dz <= 5; dz++) S(sx + dx, sy + 3, sz + dz, ID.dark_oak_planks != null ? ID.dark_oak_planks : ID.spruce_planks);
       S(sx + 2, sy + 4, sz + 2, ID.glowstone);
     }
+    // ── 4.5) V26-C: 천문대 내부(264,200) — 망원경/성도 테이블/서가/관측 의자(가구 6개뿐이던 빈 껍데기 해소) ──
+    {
+      const ox = 264, oz = 200, oy = 20;
+      S(ox - 2, oy, oz - 2, ID.bookshelf); S(ox - 2, oy + 1, oz - 2, ID.bookshelf); S(ox - 1, oy, oz - 2, ID.bookshelf);
+      S(ox + 1, oy, oz, ID.oak_fence); const os = slabIdFor(ID.birch_planks); if (os != null) S(ox + 1, oy + 1, oz, os);
+      S(ox + 2, oy, oz + 1, ID.spruce_log); S(ox + 2, oy + 1, oz + 1, ID.spruce_log); S(ox + 2, oy + 2, oz + 1, ID.quartz_block);
+      const oc = stairIdFor(ID.spruce_planks, 1); if (oc != null) S(ox, oy, oz + 2, oc);
+      S(ox - 1, oy + 3, oz, ID.glowstone);
+    }
     // ── 5) 침몰 크립트 입구(묘지 168,306): 실제 카타콤처럼 지하로 내려가는 계단 갱도 + 아치 ──
     {
       const cx = 168, cz = 306, gy = surfaceTop(cx, cz);
@@ -2446,13 +2455,25 @@
       B(0, 1, 0, ID.spruce_log); B(0, 2, 0, glow);
     }
   }
+  // V26-C: 테마 월드 산장/전초기지 표준 인테리어 — 침대/상자/제작대/화로or서가/러그/조명(빈 껍데기 해소)
+  function furnishThemeLodge(cx, cz, mode) {
+    const gy = surfaceTop(cx, cz);
+    const put = (dx, dy, dz, id) => { if (id != null && getBlockLocal(cx + dx, gy + dy, cz + dz) === 0) setW(cx + dx, gy + dy, cz + dz, id); };
+    put(-1, 0, -1, ID.bed);
+    put(1, 0, -1, ID.chest);
+    put(1, 0, 1, ID.crafting_table);
+    put(-1, 0, 1, mode === 'gold' ? ID.furnace : ID.bookshelf);
+    put(0, 2, 0, ID.glowstone);
+    const rug = ID.wool_red != null ? ID.wool_red : null;
+    if (rug != null && getBlockLocal(cx, gy - 1, cz) !== 0) setW(cx, gy - 1, cz, rug);
+  }
   function buildThemeStructures(mode) {
     const ok = (x, z) => surfaceTop(x, z) > 3;
     const base = (x, z) => surfaceTop(x, z) + 1;
     buildArrivalPlaza(mode);   // V20-AH: 섬마다 고유 컨셉 포탈 도착 광장(손 배치)
-    if (mode === 'park' && ok(70, 100)) { buildHouse(67, 97, 7, 6, base(70, 100), ID.spruce_planks, ID.oak_planks, ID.oak_log); buildParkCenter(); buildOtherDetail('park'); }   // 삼림 산장 + V24: 중앙 파빌리온(죽은 코드였음, 감사 #20) + 디테일
+    if (mode === 'park' && ok(70, 100)) { buildHouse(67, 97, 7, 6, base(70, 100), ID.spruce_planks, ID.oak_planks, ID.oak_log); furnishThemeLodge(70, 100, 'park'); buildParkCenter(); buildOtherDetail('park'); }   // 삼림 산장 + V24: 중앙 파빌리온(죽은 코드였음, 감사 #20) + 디테일
     else if (mode === 'barn' && ok(58, 100)) { buildBarnEstate(); buildOtherDetail('barn'); }   // V20-AB 대형 농장 + V20-BA(6차) 디테일
-    else if (mode === 'gold' && ok(50, 90)) { buildGoldOutpost(); buildGoldDetail(); buildGoldLandmarks(); }   // V20-W 전초기지 + V20-AX 디테일 + V20-BG(7차) 노란림 플랫폼/딥캐번 포탈/용암류
+    else if (mode === 'gold' && ok(50, 90)) { buildGoldOutpost(); buildGoldDetail(); buildGoldLandmarks(); furnishThemeLodge(50, 90, 'gold'); }   // V20-W 전초기지 + V20-AX 디테일 + V20-BG(7차) 노란림 플랫폼/딥캐번 포탈/용암류
     else if (mode === 'deep' && ok(48, 80)) buildDeepDepot();   // V20-X: 손 배치 지하 크리스탈 채광 정거장
     else if (mode === 'spider' && ok(74, 88)) { buildSpiderNest(); buildSpiderRegions(); buildMonsterDetail('spider'); }   // V20-AA 거미굴 + V20-BD(7차) 실제 6구역 + V20-AZ 디테일
     else if (mode === 'nether' && ok(62, 78)) { buildNetherKeep(); buildCrimsonRegions(); buildMonsterDetail('nether'); }   // V20-Y 네더 요새 + V21-D4 크림슨 구역 + V20-AZ 디테일
