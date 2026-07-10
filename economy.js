@@ -3348,6 +3348,8 @@
       const recipes = D().RECIPES.filter(rc => rc.unlock && rc.unlock.resource === r.key && rc.unlock.tier === t).map(rc => itemName(rc.key));
       const rw = collectionTierReward(t, r.tierThresholds.length);
       const parts = [];
+      const wikiRw = (D().COL_TIER_REWARDS || {})[r.key];
+      if (wikiRw && wikiRw[i]) parts.push(`🏅 ${wikiRw[i]}`);   // V31-A: 위키 실보상명(수작업 표)
       if (t === 1 && minions.length) parts.push(`⚙️ ${minions.join('·')} 해금`);
       if (recipes.length) parts.push(`⚒️ 레시피: ${recipes.join(', ')}`);
       parts.push(`✦ +${rw.sbXp} 스카이블럭 XP`);
