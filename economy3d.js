@@ -4500,10 +4500,11 @@
         const oc = RP_COLOR[col] || col;
         RP_ALIAS['wool_' + col] = oc + '_wool'; RP_ALIAS['concrete_' + col] = oc + '_concrete'; RP_ALIAS['terracotta_' + col] = oc + '_terracotta';
       }
-      // 회색조 원본에 곱할 색(MC 바이옴 틴트) — 직접 일치/별칭 모두 적용
+      // 회색조 원본에 곱할 색(MC 바이옴 틴트) — 기본값은 실제 MC 평원 수치(잔디 #91bd59 / 잎 #77ab2f).
+      //   colormap/grass.png·foliage.png가 있으면 실제 컬러맵의 평원 좌표(51,173)를 샘플링해 대체(V27-B).
       const RP_TINT = {
-        grass_top: '#7cbd6b', leaves: '#48b518', spruce_leaves: '#619961', dark_oak_leaves: '#48b518',
-        jungle_leaves: '#48b518', acacia_leaves: '#aea42a', tall_grass: '#7cbd6b', water: '#3f76e4',
+        grass_top: '#91bd59', leaves: '#77ab2f', spruce_leaves: '#619961', dark_oak_leaves: '#77ab2f',
+        jungle_leaves: '#77ab2f', acacia_leaves: '#aea42a', tall_grass: '#91bd59', water: '#3f76e4',
       };
       const applyTint = (ctx, tx, ty, hex) => {
         try {
@@ -4515,7 +4516,27 @@
       };
       let applied = 0, done = 0;
       const fin = () => { done++; if (done === list.length && applied > 0 && typeof toast === 'function') toast(`🎨 리소스팩 ${applied}개 타일 적용됨`, true); };
-      list.forEach((nm, i) => {
+      // V27-B: colormap 샘플링을 먼저 끝낸 뒤 타일 오버레이 실행(틴트가 페인트 시점에 결정되므로)
+      let _cmPend = 2;
+      const cmDone = () => { if (--_cmPend <= 0) runOverlay(); };
+      const sampleCm = (src, cb) => {
+        const im = new Image();
+        im.onload = () => {
+          try {
+            const c2 = document.createElement('canvas'); c2.width = im.width; c2.height = im.height;
+            const x2 = c2.getContext('2d'); x2.drawImage(im, 0, 0);
+            const px = Math.round(51 / 256 * im.width), py = Math.round(173 / 256 * im.height);
+            const d = x2.getImageData(px, py, 1, 1).data;
+            cb('#' + [d[0], d[1], d[2]].map(v => v.toString(16).padStart(2, '0')).join(''));
+          } catch (e) {}
+          cmDone();
+        };
+        im.onerror = cmDone;
+        im.src = src;
+      };
+      sampleCm('colormap/grass.png', h => { RP_TINT.grass_top = h; RP_TINT.tall_grass = h; });
+      sampleCm('colormap/foliage.png', h => { RP_TINT.leaves = h; RP_TINT.dark_oak_leaves = h; RP_TINT.jungle_leaves = h; });
+      const runOverlay = () => list.forEach((nm, i) => {
         const paint2 = (img2) => {
           const tx = (i % cols) * 16, ty = ((i / cols) | 0) * 16;
           const frames = img2.height > img2.width ? Math.floor(img2.height / img2.width) : 1;
@@ -7195,6 +7216,14 @@
     dungeonhub: { light: 0.50, sky: ['#0a0e18', '#141c2c', '#243048'], fog: '#1c2436' }, // 항상 자정
     dungeon: { light: 0.45, sky: ['#0c0808', '#181010', '#281c1c'], fog: '#1c1414' },
   };
+  // V27-B: 월드별 고정 시간대에 맞는 천체 배치(environment/sun.png·moon_phases.png·clouds.png·end_sky.png)
+  const WORLD_CELESTIAL = {
+    hub: { kind: 'sun', x: '50%', y: '9%' }, home: { kind: 'sun', x: '50%', y: '9%' }, visit: { kind: 'sun', x: '50%', y: '9%' },
+    barn: { kind: 'sun', x: '38%', y: '14%' }, park: { kind: 'sun', x: '55%', y: '11%' },
+    gold: { kind: 'sun', x: '74%', y: '34%' }, mushroom: { kind: 'sun', x: '50%', y: '55%' },
+    spider: { kind: 'moon', x: '50%', y: '13%' }, dungeonhub: { kind: 'moon', x: '62%', y: '11%' },
+    end: { kind: 'endsky' },
+  };
   function worldAmbience() { return WORLD_AMBIENCE[worldMode] || WORLD_AMBIENCE.hub; }
   function dayFactor() { return worldAmbience().light; }
   let _lastSkyKey = '';
@@ -7204,7 +7233,16 @@
     const A = worldAmbience();
     if (scene.fog) scene.fog.color.set(A.fog);
     const el = document.getElementById('econ3dSky');
-    if (el) el.style.background = `linear-gradient(${A.sky[0]} 0%, ${A.sky[1]} 55%, ${A.sky[2]} 100%)`;
+    if (el) {
+      el.style.background = `linear-gradient(${A.sky[0]} 0%, ${A.sky[1]} 55%, ${A.sky[2]} 100%)`;
+      // V27-B: 실제 MC 해/달/구름/엔드 하늘 스프라이트(파일 없으면 그라디언트만 유지)
+      const cel = WORLD_CELESTIAL[worldMode];
+      let inner = '';
+      if (cel && cel.kind === 'sun') inner = `<div class="econ3d-cel" style="left:${cel.x};top:${cel.y};background-image:url('environment/sun.png')"></div><div class="econ3d-clouds"></div>`;
+      else if (cel && cel.kind === 'moon') inner = `<div class="econ3d-cel econ3d-cel--moon" style="left:${cel.x};top:${cel.y};background-image:url('environment/moon_phases.png')"></div>`;
+      else if (cel && cel.kind === 'endsky') { el.style.background = `#0c0714 url('environment/end_sky.png') repeat`; el.style.backgroundSize = '256px'; }
+      el.innerHTML = inner;
+    }
     const nv = Math.max(0.6, A.light);   // V20-U: 밝기 하한 완화 → 어두운 섬(딥/엔드/네더)이 실제로 무겁고 고유한 분위기
     if (blockMat) blockMat.color.setScalar(nv);
     if (waterMat) waterMat.color.setScalar(nv);
@@ -7625,6 +7663,8 @@
     selectedPlaceKey = isPlaceable(k) ? k : null;
   }
   function selectHotbarSlot(i) { selectedHotbar = i; _placeManual = false; updateHotbar(); showHotbarTitle(); }
+  // V27-B: 실제 MC 아이템 텍스처(item/*.png)가 비동기 로드되면 핫바 아이콘 갱신
+  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') window.addEventListener('econIconReady', () => { try { updateHotbar(); updateBuildHud(); } catch (e) {} });
   function updateHotbar() {
     const api = econApi(); const P0 = api.getP ? api.getP() : null; if (!P0) return;
     ensureHotbar();

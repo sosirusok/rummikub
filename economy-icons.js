@@ -367,8 +367,69 @@
     return '#9aa2ad';
   }
 
+  // ── V27-B: 실제 MC 아이템 텍스처(item/<이름>.png) 우선 사용 ──
+  //   사용자가 item/ 폴더에 1.21.4 아이템 PNG를 넣으면 자동 반영(없으면 절차 아이콘 유지).
+  //   생성형 장비 키(sw_* 등)는 시도하지 않도록 바닐라 아이템만 화이트리스트 + 별칭.
+  const RP_ITEM_ALIAS = {
+    iron: 'iron_ingot', gold: 'gold_ingot', copper: 'copper_ingot', lapis: 'lapis_lazuli',
+    rawfish: 'cod', clownfish: 'tropical_fish', sugarcane: 'sugar_cane', melon: 'melon_slice',
+    slimeball: 'slime_ball', bone_meal: 'bone_meal', enderpearl: 'ender_pearl',
+  };
+  const MC_ITEM_SET = new Set(['coal', 'charcoal', 'diamond', 'emerald', 'quartz', 'stick', 'wheat', 'carrot', 'potato',
+    'baked_potato', 'bread', 'apple', 'golden_apple', 'melon_slice', 'pumpkin_pie', 'sugar', 'egg', 'feather', 'leather',
+    'rotten_flesh', 'bone', 'string', 'spider_eye', 'gunpowder', 'ender_pearl', 'ender_eye', 'blaze_rod', 'blaze_powder',
+    'slime_ball', 'snowball', 'arrow', 'bow', 'fishing_rod', 'book', 'paper', 'flint', 'flint_and_steel', 'shears', 'bucket',
+    'water_bucket', 'lava_bucket', 'milk_bucket', 'iron_ingot', 'gold_ingot', 'copper_ingot', 'netherite_ingot',
+    'raw_iron', 'raw_gold', 'raw_copper', 'redstone', 'lapis_lazuli', 'amethyst_shard', 'cod', 'salmon', 'tropical_fish',
+    'pufferfish', 'cooked_cod', 'cooked_salmon', 'beef', 'cooked_beef', 'porkchop', 'cooked_porkchop', 'chicken',
+    'cooked_chicken', 'mutton', 'cooked_mutton', 'nether_star', 'ghast_tear', 'magma_cream', 'nether_wart',
+    'glowstone_dust', 'prismarine_shard', 'prismarine_crystals', 'ink_sac', 'honeycomb', 'sweet_berries', 'glow_berries',
+    'wheat_seeds', 'pumpkin_seeds', 'melon_seeds', 'saddle', 'name_tag', 'experience_bottle', 'totem_of_undying',
+    'trident', 'shield', 'elytra', 'compass', 'clock', 'map', 'clay_ball', 'brick', 'ender_chest', 'ghast_spawn_egg']);
+  function mcItemName(key) {
+    let k = key, ench = false;
+    if (/^enchanted_/.test(k)) { k = k.slice(10); ench = true; }
+    if (RP_ITEM_ALIAS[k]) k = RP_ITEM_ALIAS[k];
+    if (MC_ITEM_SET.has(k)) return k;
+    if (/^(wooden|stone|iron|golden|diamond|netherite)_(sword|pickaxe|axe|shovel|hoe)$/.test(k)) return k;
+    if (/^(leather|chainmail|iron|golden|diamond|netherite)_(helmet|chestplate|leggings|boots)$/.test(k)) return k;
+    if (/^enchant_book_/.test(key)) return 'enchanted_book';
+    return null;
+  }
+  const _itemImg = {};   // key -> 'loading' | 'none' | HTMLImageElement
+  let _iconRefreshT = null;
+  function kickItemImg(key) {
+    const nm = mcItemName(key);
+    if (!nm || _itemImg[key]) return;
+    _itemImg[key] = 'loading';
+    const im = new Image();
+    im.onload = () => {
+      _itemImg[key] = im; delete cache[key];   // 다음 렌더부터 PNG 사용
+      clearTimeout(_iconRefreshT);
+      _iconRefreshT = setTimeout(() => { try { window.dispatchEvent(new Event('econIconReady')); } catch (e) {} }, 120);
+    };
+    im.onerror = () => { _itemImg[key] = 'none'; };
+    im.src = 'item/' + nm + '.png';
+  }
+  function drawItemPng(key) {
+    const im = _itemImg[key];
+    if (!im || im === 'loading' || im === 'none') return null;
+    const cv = document.createElement('canvas'); cv.width = cv.height = S;
+    const c = cv.getContext('2d'); if (!c) return null;
+    c.imageSmoothingEnabled = false;   // 픽셀 그대로 확대(MC)
+    c.drawImage(im, 2, 2, S - 4, S - 4);
+    if (/^enchanted_/.test(key) || /^enchant_book_/.test(key)) {   // 인챈트 보라 광택
+      c.fillStyle = 'rgba(190,120,255,0.30)'; c.globalCompositeOperation = 'source-atop'; c.fillRect(0, 0, S, S);
+      c.globalCompositeOperation = 'source-over';
+    }
+    return cv.toDataURL();
+  }
   function econIcon(key) {
     if (cache[key]) return cache[key];
+    // V27-B: 실제 MC 아이템 텍스처 최우선(로드 완료 시) — 미로드면 비동기 킥 후 폴백 아이콘
+    const png = drawItemPng(key);
+    if (png) return (cache[key] = png);
+    kickItemImg(key);
     trySheet();
     // V21-B: 블럭 아이템은 월드와 '같은 텍스처'의 등축 큐브 아이콘 우선 — 인벤토리에서 실제 생김새로 구분
     if (typeof window.econBlockIcon === 'function') {
