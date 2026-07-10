@@ -454,12 +454,22 @@
   function pieceScore(it) { return it.dmg != null ? it.dmg : (it.defense || 0) * 2 + (it.hp || 0) * 0.5; }
   let _equipCacheAt = 0;
   function equippedPiece(slot) {
-    const key = _invRev + ':' + Object.keys(P.inv).length + ':' + skillLevel('combat') + ':' + JSON.stringify(P.equipPin || {});   // 키 수 = 직접 변조 감지
+    const key = _invRev + ':' + Object.keys(P.inv).length + ':' + skillLevel('combat') + ':' + JSON.stringify(P.equipPin || {}) + ':' + (P._heldIdx || 0) + ':' + (Array.isArray(P.hotbar) ? (P.hotbar[P._heldIdx || 0] || '') : '');   // V28-A: 손에 든 슬롯/아이템 포함
     const now = Date.now();
     // 캐시는 500ms TTL — 클라우드 로드/직접 인벤 변조처럼 bumpInv를 우회하는 경로도 안전
     if (!_equipCache || _equipCacheKey !== key || now - _equipCacheAt > 500) { _equipCache = {}; _equipCacheKey = key; _equipCacheAt = now; }
     if (slot in _equipCache) return _equipCache[slot];
     const cl = skillLevel('combat');
+    // V28-A: 착용식 무기/활 폐기 — '손에 든' 아이템이 무기일 때만 그 무기가 적용된다(MC/스카이블럭 동일)
+    if (slot === 'weapon' || slot === 'bow') {
+      const hk = Array.isArray(P.hotbar) ? (P.hotbar[P._heldIdx || 0] || null) : null;
+      let it = hk ? (D().EQUIPMENT.weapons.find(x => x.key === hk) || null) : null;
+      if (it && !hasItem(it.key)) it = null;
+      if (it && (it.reqCombat || 0) > cl) it = null;   // 요구 전투 레벨 미달 = 사용 불가
+      const isBow = !!(it && (it.wclass === 'bow' || it.slot === 'bow'));
+      const out = slot === 'bow' ? (isBow ? it : null) : (it && !isBow ? it : null);
+      return (_equipCache[slot] = out);
+    }
     let best = null, bestScore = -1;
     const pin = (P.equipPin || {})[slot];
     if (pin === '__none__') { _equipCache[slot] = null; return null; }   // V27-C: 슬롯 비움 고정
@@ -507,17 +517,14 @@
     return (VANILLA_TOOL_DMG[m[2]] && VANILLA_TOOL_DMG[m[2]][m[1]]) || 0;
   }
   function equippedWeaponDmg() {
-    const w = equippedWeapon(); if (!w) return 0;
-    let d = (rolledStat(w.key, w.dmg) + (P.reforgeBonus[w.key] || 0) + hpbOf(w.key) * D().HPB.weaponDmgPerBook) * recombMul(w.key);   // V20: 리컴 +18%
-    const b = equippedBow();
-    if (b) d += Math.round((rolledStat(b.key, b.dmg) + hpbOf(b.key) * D().HPB.weaponDmgPerBook) * recombMul(b.key) * 0.3);   // 활 보조 기여 30%
-    return d;
+    const w = equippedWeapon() || equippedBow();   // V28-A: 손에 든 무기(검이든 활이든 든 것 하나)
+    if (!w) return 0;
+    return (rolledStat(w.key, w.dmg) + (P.reforgeBonus[w.key] || 0) + hpbOf(w.key) * D().HPB.weaponDmgPerBook) * recombMul(w.key);
   }
   // V17: 무기 부가 스탯(힘/치명피해/광포/지력) — 주무기 기준 + 활 보조 30%
   function weaponStat(k) {
-    const w = equippedWeapon(); let v = w ? (w[k] || 0) : 0;
-    const b = equippedBow(); if (b && b[k]) v += Math.round(b[k] * 0.3);
-    return v;
+    const w = equippedWeapon() || equippedBow();   // V28-A: 손에 든 무기 하나
+    return w ? (w[k] || 0) : 0;
   }
   /* ---- V11 특성(트레잇) 엔진: 정적 합산 + 세트 보너스 ---- */
   const SET_TRAIT_MAP = { minerPct: 'miner', anglerPct: 'angler', gathererPct: 'gatherer', lifestealPct: 'lifesteal', regenFlat: 'regeneration' };
@@ -1845,6 +1852,33 @@
     const heal = enchHitHeal(dmg) + dmg * traitSum('lifesteal') / 100;   // V11: 흡혈
     return { dmg, crit: crit > 1 || ds, heal };
   }
+  // V28-B: 전 장비 개별 드롭 — 아이템마다 '고유 드롭 몹' 1종(키 해시로 결정, 세션 불변) +
+  //   고유 확률(티어 기준 × 0.6~1.5 개별 편차). 몹마다 자기만의 드롭 테이블이 생긴다.
+  function _fnv(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+  const EQUIP_TIER_DROP = { common: 1 / 40, uncommon: 1 / 90, rare: 1 / 280, epic: 1 / 900, legendary: 1 / 3000, mythic: 1 / 9000, ancient: 1 / 25000 };
+  let _mobDropTables = null;
+  function mobTypeListSafe() { return (typeof window !== 'undefined' && typeof window.economy3dMobTypes === 'function') ? window.economy3dMobTypes() : []; }
+  function equipDropMobOf(itemKey) {
+    const mobs = mobTypeListSafe(); if (!mobs.length) return null;
+    return mobs[_fnv(itemKey) % mobs.length];
+  }
+  function equipDropChanceOf(itemKey, tierKey) {
+    const h = _fnv(itemKey);
+    return (EQUIP_TIER_DROP[tierKey] || 1 / 500) * (0.6 + ((h >>> 8) % 1000) / 1000 * 0.9);
+  }
+  function mobDropTable(mobType) {
+    if (!_mobDropTables) _mobDropTables = {};
+    if (_mobDropTables[mobType]) return _mobDropTables[mobType];
+    const mobs = mobTypeListSafe();
+    const items = (typeof window !== 'undefined' && window.ECON_EQUIP && window.ECON_EQUIP.items) || [];
+    if (!mobs.length) return [];
+    const table = [];
+    for (const it of items) {
+      if (mobs[_fnv(it.key) % mobs.length] !== mobType) continue;
+      table.push({ key: it.key, name: it.name, chance: equipDropChanceOf(it.key, it.tierKey) });
+    }
+    return (_mobDropTables[mobType] = table);
+  }
   function mobKilled3d(mob) {
     if (!P) return 0;
     const msgs = [];
@@ -1870,9 +1904,14 @@
       addItem(d.key, n); addCollection(d.key, n);
       if ((d.chance == null ? 1 : d.chance) <= 0.25) msgs.push(`✨ ${itemName(d.key)} ×${n}`);
     }
-    if (Math.random() < 0.004 * (1 + traitSum('lucky') / 100)) {   // V27-A: 장비 드롭 1/250(기존 3%는 디아블로식 템 세례)
-      const bonus = equipDropFromSrc('field', Math.min(8, (mob.tierCap == null ? 2 : mob.tierCap) + (mob.rewardMul >= 3 ? 2 : 0))) || randomEquipDrop(Math.min(6, mob.tierCap == null ? 2 : mob.tierCap));
-      if (bonus) msgs.push(`🎁 ${bonus.name}`);
+    // V28-B: 이 몹 '고유' 드롭 테이블 — 아이템별 고유 확률(디아블로식 공용 풀 폐기)
+    if (mob.type) {
+      const luckMul = 1 + traitSum('lucky') / 100;
+      for (const de of mobDropTable(mob.type)) {
+        if (Math.random() >= de.chance * luckMul) continue;
+        addItem(de.key, 1);
+        msgs.push(`🎁 ${de.name}`);
+      }
     }
     // V11: 미니보스/지옥 보스 전용 풀
     if (mob.equipSrc && Math.random() < (mob.equipSrcChance || 0.08)) {   // V27-A: 전용 풀 기본 25%→8%
@@ -2422,6 +2461,14 @@
     if (!sdef) return '';
     const lines = [sdef.name];
     if (sdef.slot) lines.push(`[${SLOT_NAMES[sdef.slot] || sdef.slot}]${(P.equipPin || {})[sdef.slot] === sdef.key ? ' 📌 고정 장착' : ''}${(P.locked || {})[sdef.key] ? ' 🔒' : ''}`);
+    // V28-B: 개별 획득처 — 이 아이템만의 드롭 몹과 확률
+    if (sdef.slot && sdef.tierKey && (sdef.dmg != null || sdef.defense != null)) {
+      const dm = equipDropMobOf(sdef.key);
+      if (dm) {
+        const nm = (typeof window !== 'undefined' && window.economy3dMobName) ? window.economy3dMobName(dm) : dm;
+        lines.push(`획득: ${nm} 처치 (${(equipDropChanceOf(sdef.key, sdef.tierKey) * 100).toFixed(2)}%)`);
+      }
+    }
     if (sdef.dmg) lines.push(`공격력: +${hasItem(sdef.key) ? rolledStat(sdef.key, sdef.dmg) : sdef.dmg}${hpbOf(sdef.key) ? ` (🥔+${hpbOf(sdef.key) * D().HPB.weaponDmgPerBook})` : ''}`);
     if (sdef.defense) lines.push(`방어력: +${hasItem(sdef.key) ? rolledStat(sdef.key, sdef.defense) : sdef.defense}${hpbOf(sdef.key) ? ` (🥔+${hpbOf(sdef.key) * D().HPB.armorDefPerBook})` : ''}`);
     if (sdef.hp) lines.push(`체력: +${sdef.hp}`);
@@ -2709,7 +2756,7 @@
     return `<h4>🎒 인벤토리</h4>
       <div class="mc-invtop">
         <div class="mc-armorcol">${armorSlot('helmet', '🪖')}${armorSlot('chest', '🛡')}${armorSlot('leggings', '👖')}${armorSlot('boots', '🥾')}</div>
-        <div class="mc-charhint"><div class="mc-slot mc-armor"${wpn ? ttAttr(wpn) : ' title="무기(자동 장착)"'}>${wpn ? iconImg(wpn.key) : '⚔️'}</div><div class="mc-slot mc-armor"${bow ? ttAttr(bow) : ' title="활(자동 장착)"'}>${bow ? iconImg(bow.key) : '🏹'}</div><span class="muted">방어구: 클릭 장착/해제<br>무기·활: 자동(📌 고정 가능)</span></div>
+        <div class="mc-charhint"><div class="mc-slot mc-armor"${wpn ? ttAttr(wpn) : ' title="무기(자동 장착)"'}>${wpn ? iconImg(wpn.key) : '⚔️'}</div><div class="mc-slot mc-armor"${bow ? ttAttr(bow) : ' title="활(자동 장착)"'}>${bow ? iconImg(bow.key) : '🏹'}</div><span class="muted">방어구: 클릭 장착/해제<br>무기·활: 손에 든 것(핫바 선택)</span></div>
       </div>
       <div class="mc-grid">${grid.join('')}</div>
       <div class="mc-hotbar">${hotRow.join('')}</div>

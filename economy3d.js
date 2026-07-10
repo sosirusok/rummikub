@@ -7237,6 +7237,11 @@
     if (cross) cross.classList.remove('is-active');
   }
 
+  // V28-B: 개별 드롭 시스템용 — 몹 타입 목록(순서 고정)과 이름 노출
+  if (typeof window !== 'undefined') {
+    window.economy3dMobTypes = () => Object.keys(MOB_TYPES);
+    window.economy3dMobName = t => (MOB_TYPES[t] || {}).name || t;
+  }
   /* ---------------- 낮밤/하늘 ---------------- */
   function mixHex(a, b, t) { t = Math.max(0, Math.min(1, t)); const ca = hx(a), cb = hx(b); return `rgb(${Math.round(ca[0] + (cb[0] - ca[0]) * t)},${Math.round(ca[1] + (cb[1] - ca[1]) * t)},${Math.round(ca[2] + (cb[2] - ca[2]) * t)})`; }
   function hx(c) { c = c.replace('#', ''); return [parseInt(c.slice(0, 2), 16), parseInt(c.slice(2, 4), 16), parseInt(c.slice(4, 6), 16)]; }
@@ -7751,11 +7756,16 @@
     const k = activeHotbarKey();
     selectedPlaceKey = isPlaceable(k) ? k : null;
   }
-  function selectHotbarSlot(i) { selectedHotbar = i; _placeManual = false; updateHotbar(); showHotbarTitle(); }
+  function selectHotbarSlot(i) {
+    selectedHotbar = i; _placeManual = false;
+    const p0 = econApi().getP ? econApi().getP() : null; if (p0) p0._heldIdx = i;   // V28-A: 손에 든 슬롯 동기화(무기 판정)
+    updateHotbar(); showHotbarTitle();
+  }
   // V27-B: 실제 MC 아이템 텍스처(item/*.png)가 비동기 로드되면 핫바 아이콘 갱신
   if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') window.addEventListener('econIconReady', () => { try { updateHotbar(); updateBuildHud(); } catch (e) {} });
   function updateHotbar() {
     const api = econApi(); const P0 = api.getP ? api.getP() : null; if (!P0) return;
+    P0._heldIdx = selectedHotbar;   // V28-A
     ensureHotbar();
     const icon = k => (typeof window.econIcon === 'function' ? `<img src="${window.econIcon(k)}" alt="">` : '');
     const eco = window.__econ || {};

@@ -394,14 +394,22 @@
     'glowstone_dust', 'prismarine_shard', 'prismarine_crystals', 'ink_sac', 'honeycomb', 'sweet_berries', 'glow_berries',
     'wheat_seeds', 'pumpkin_seeds', 'melon_seeds', 'saddle', 'name_tag', 'experience_bottle', 'totem_of_undying',
     'trident', 'shield', 'elytra', 'compass', 'clock', 'map', 'clay_ball', 'brick', 'ender_chest', 'ghast_spawn_egg']);
+  // V28-A: item/_list.json 로드 — 업로드된 646종 전부를 대상(화이트리스트는 로드 전 폴백)
+  let _itemList = null;
+  if (typeof fetch === 'function') fetch('item/_list.json').then(r => r.json()).then(j => {
+    _itemList = new Set((j.files || []).filter(f => /\.png$/.test(f)).map(f => f.slice(0, -4)));
+    for (const k in cache) delete cache[k];
+    try { window.dispatchEvent(new Event('econIconReady')); } catch (e) {}
+  }).catch(() => { _itemList = false; });
   function mcItemName(key) {
-    let k = key, ench = false;
-    if (/^enchanted_/.test(k)) { k = k.slice(10); ench = true; }
+    let k = key;
+    if (/^enchanted_/.test(k)) k = k.slice(10);
+    if (/^enchant_book_/.test(key)) return 'enchanted_book';
     if (RP_ITEM_ALIAS[k]) k = RP_ITEM_ALIAS[k];
+    if (_itemList) return _itemList.has(k) ? k : null;
     if (MC_ITEM_SET.has(k)) return k;
     if (/^(wooden|stone|iron|golden|diamond|netherite)_(sword|pickaxe|axe|shovel|hoe)$/.test(k)) return k;
     if (/^(leather|chainmail|iron|golden|diamond|netherite)_(helmet|chestplate|leggings|boots)$/.test(k)) return k;
-    if (/^enchant_book_/.test(key)) return 'enchanted_book';
     return null;
   }
   const _itemImg = {};   // key -> 'loading' | 'none' | HTMLImageElement
@@ -466,7 +474,18 @@
       return (cache[key] = cv.toDataURL());
     }
     const cat = categoryOf(key);
-    const col = baseColorOf(key, cat);
+    let col = baseColorOf(key, cat);
+    // V28-B: 개별 디자인 — 생성 장비는 키 해시로 고유 색조 편차(같은 등급이라도 아이템마다 다른 외형)
+    let _h = 0;
+    if (/^(sw|bw|hm|lg|bt|ch|st)_|^g_t_/.test(key)) {
+      for (let i = 0; i < key.length; i++) { _h = ((_h << 5) - _h + key.charCodeAt(i)) | 0; }
+      _h = Math.abs(_h);
+      const cc = parseInt(col.slice(1), 16);
+      let r = (cc >> 16) & 255, gg = (cc >> 8) & 255, b = cc & 255;
+      const sh = (_h % 90) - 45;   // ±45 채널 시프트
+      r = Math.max(30, Math.min(255, r + sh)); gg = Math.max(30, Math.min(255, gg + ((_h >> 7) % 70) - 35)); b = Math.max(30, Math.min(255, b + ((_h >> 13) % 70) - 35));
+      col = '#' + ((r << 16) | (gg << 8) | b).toString(16).padStart(6, '0');
+    }
     const shop = findShop(key);
     // 티어 배경 광채 + 슬롯 테두리
     const tc = shop && shop.tierKey ? tierColor(shop.tierKey) : null;
