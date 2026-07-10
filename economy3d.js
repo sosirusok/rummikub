@@ -6341,15 +6341,15 @@
     // ── 허브 ──  books: 이 몹이 떨어뜨리는 인챈트북(V7: 북은 몹 드롭 전용)
     zombie: { name: '좀비', kind: 'humanoid', color: 0x3a7d3a, hp: 100, dmg: 20, xp: 6, coins: 1, speed: 1.7, books: ['sharpness', 'smite'], drops: [{ key: 'rotten_flesh', n: 1 }, { key: 'potato', n: 1, chance: 0.08 }, { key: 'carrot', n: 1, chance: 0.08 }], tierCap: 1 },
     skeleton: { name: '스켈레톤', kind: 'humanoid', color: 0xcccccc, hp: 90, dmg: 15, xp: 7, coins: 1, speed: 1.8, books: ['critical', 'prosecute'], drops: [{ key: 'bone', n: 1 }, { key: 'bone', n: 2, chance: 0.4 }], tierCap: 1 },
-    crypt_ghoul: { name: '크립트 구울', kind: 'humanoid', color: 0x5a8a5a, hp: 180, dmg: 31, xp: 25, coins: 15, speed: 2.2, books: ['giant_killer', 'execute'], drops: [{ key: 'rotten_flesh', n: 3 }, { key: 'gold', n: 1, chance: 0.25 }], tierCap: 3 },
-    golden_ghoul: { name: '골든 구울', kind: 'humanoid', color: 0xd8b23a, hp: 320, dmg: 45, xp: 45, coins: 60, speed: 2.3, books: ['looting'], drops: [{ key: 'gold', n: 3 }, { key: 'talisman_wealth_rune', n: 1, chance: 0.02 }], tierCap: 4 },
+    crypt_ghoul: { name: '크립트 구울', kind: 'humanoid', color: 0x5a8a5a, hp: 2000, dmg: 31, gear: { sword: 0xf7d84a }, xp: 25, coins: 15, speed: 2.2, books: ['giant_killer', 'execute'], drops: [{ key: 'rotten_flesh', n: 3 }, { key: 'gold', n: 1, chance: 0.25 }], tierCap: 3 },
+    golden_ghoul: { name: '골든 구울', kind: 'humanoid', color: 0xd8b23a, hp: 4500, dmg: 45, gear: { helmet: 0xf7d84a, sword: 0xf7d84a }, xp: 45, coins: 60, speed: 2.3, books: ['looting'], drops: [{ key: 'gold', n: 3 }, { key: 'talisman_wealth_rune', n: 1, chance: 0.02 }], tierCap: 4 },
     wraith: { name: '레이스', kind: 'tall', color: 0x8a94b8, hp: 250, dmg: 38, xp: 30, coins: 10, speed: 2.6, books: ['life_steal'], drops: [{ key: 'gunpowder', n: 1 }, { key: 'bone', n: 2 }, { key: 'lapis', n: 2, chance: 0.3 }], tierCap: 3 },
     rat: { name: '쥐', kind: 'quad', color: 0x6a6258, hp: 40, dmg: 8, xp: 3, coins: 1, speed: 3.0, scale: 0.45, books: [], drops: [{ key: 'rawfish', n: 1, chance: 0.3 }], tierCap: 0 },
     wolf: { name: '늑대', kind: 'quad', color: 0x9a9a9a, hp: 160, dmg: 20, xp: 10, coins: 4, speed: 2.8, books: ['first_strike', 'looting'], drops: [{ key: 'bone', n: 2 }, { key: 'talisman_wolf_claw', n: 1, chance: 0.015 }], tierCap: 2 },
     old_wolf: { name: '올드 울프', kind: 'quad', color: 0x5a5a62, hp: 900, dmg: 80, xp: 60, coins: 25, speed: 3.0, scale: 1.4, books: ['first_strike', 'experience'], drops: [{ key: 'bone', n: 4 }], tierCap: 4 },
     slime: { name: '슬라임', kind: 'slime', color: 0x5ac26a, hp: 120, dmg: 14, xp: 8, coins: 2, speed: 1.4, books: ['magnet', 'big_brain'], drops: [{ key: 'emerald', n: 1, chance: 0.08 }], tierCap: 2 },
-    miner_zombie: { name: '광부 좀비', kind: 'humanoid', color: 0x7a6a4a, hp: 200, dmg: 28, xp: 15, coins: 5, speed: 1.8, books: ['efficiency'], drops: [{ key: 'iron', n: 1, chance: 0.4 }, { key: 'coal', n: 2, chance: 0.5 }], tierCap: 2 },
-    lapis_zombie: { name: '청금석 좀비', kind: 'humanoid', color: 0x2a4fc0, hp: 260, dmg: 32, xp: 18, coins: 6, speed: 1.8, books: ['fortune'], drops: [{ key: 'lapis', n: 3 }], tierCap: 3 },
+    miner_zombie: { name: '광부 좀비', kind: 'humanoid', color: 0x7a6a4a, hp: 200, dmg: 28, gear: { helmet: 0xd8d8d4, tool: 0x9c7a44 }, xp: 15, coins: 5, speed: 1.8, books: ['efficiency'], drops: [{ key: 'iron', n: 1, chance: 0.4 }, { key: 'coal', n: 2, chance: 0.5 }], tierCap: 2 },
+    lapis_zombie: { name: '청금석 좀비', kind: 'humanoid', color: 0x2a4fc0, hp: 260, dmg: 32, gear: { helmet: 0x1f4fc0, chest: 0x1f4fc0 }, xp: 18, coins: 6, speed: 1.8, books: ['fortune'], drops: [{ key: 'lapis', n: 3 }], tierCap: 3 },
     // V11: 지옥 난이도 전용 필드 보스 5종(hellOnly 구역 — 전용 장비 풀 hell_boss)
     hell_reaper: { name: '지옥 사신 카론', kind: 'tall', color: 0x1a0a0a, hp: 5200, dmg: 60, xp: 400, coins: 500, speed: 2.6, scale: 2.0, fixedLv: 88, hellBoss: true, equipSrc: 'hell_boss', equipSrcChance: 0.6, books: ['giant_killer', 'execute'], drops: [{ key: 'fuming_potato_book', n: 1, chance: 0.3 }, { key: 'ender_shard', n: 4 }], tierCap: 8 },
     hell_broodmatron: { name: '지옥 모충 니드호그', kind: 'spider', color: 0x3a0a14, hp: 4400, dmg: 52, xp: 360, coins: 450, speed: 3.0, scale: 1.9, fixedLv: 82, hellBoss: true, equipSrc: 'hell_boss', equipSrcChance: 0.6, books: ['venomous', 'triple_strike'], drops: [{ key: 'spider_eye', n: 6 }, { key: 'hot_potato_book', n: 1, chance: 0.4 }], tierCap: 8 },
@@ -6361,7 +6361,7 @@
     gold_golem: { name: '⛏ 골드 골렘', kind: 'tall', color: 0xd8b23a, hp: 2200, dmg: 29, xp: 130, coins: 240, speed: 1.6, scale: 1.7, fixedLv: 35, miniboss: true, books: ['fortune', 'efficiency'], drops: [{ key: 'golem_core', n: 1, chance: 0.34 }, { key: 'gold', n: 6 }, { key: 'emerald', n: 2, chance: 0.4 }], tierCap: 5 },
     mushroom_king: { name: '🍄 무쉬룸 킹', kind: 'quad', color: 0xa83232, hp: 1500, dmg: 21, xp: 90, coins: 120, speed: 2.0, scale: 1.8, fixedLv: 25, miniboss: true, books: ['growth', 'magnet'], drops: [{ key: 'mushroom_crown', n: 1, chance: 0.34 }, { key: 'pumpkin', n: 4 }, { key: 'melon', n: 5 }], tierCap: 4 },
     redstone_pigman: { name: '레드스톤 피그맨', kind: 'humanoid', color: 0xc86a6a, hp: 400, dmg: 42, xp: 24, coins: 8, speed: 2.0, books: ['fortune', 'efficiency'], drops: [{ key: 'redstone', n: 3 }], tierCap: 3 },
-    diamond_zombie: { name: '다이아 좀비', kind: 'humanoid', color: 0x5decd5, hp: 700, dmg: 60, xp: 40, coins: 12, speed: 2.0, books: ['area_mining'], drops: [{ key: 'diamond', n: 1, chance: 0.5 }], tierCap: 4 },
+    diamond_zombie: { name: '다이아 좀비', kind: 'humanoid', color: 0x5decd5, hp: 700, dmg: 60, gear: { helmet: 0x5decd5, chest: 0x5decd5, sword: 0x5decd5 }, xp: 40, coins: 12, speed: 2.0, books: ['area_mining'], drops: [{ key: 'diamond', n: 1, chance: 0.5 }], tierCap: 4 },
     diamond_skeleton: { name: '다이아 스켈레톤', kind: 'humanoid', color: 0x8aeade, hp: 650, dmg: 65, xp: 40, coins: 12, speed: 2.1, books: ['area_mining', 'critical'], drops: [{ key: 'diamond', n: 1, chance: 0.5 }], tierCap: 4 },
     spider: { name: '거미', kind: 'spider', color: 0x3a3040, hp: 80, dmg: 11, xp: 6, coins: 2, speed: 2.4, books: ['bane_of_arthropods', 'triple_strike'], drops: [{ key: 'spider_eye', n: 1 }, { key: 'string', n: 1 }, { key: 'string', n: 2, chance: 0.35 }], tierCap: 1 },
     gravel_skeleton: { name: '자갈 스켈레톤', kind: 'humanoid', color: 0x7d7873, hp: 220, dmg: 30, xp: 16, coins: 5, speed: 1.9, books: ['prosecute'], drops: [{ key: 'gunpowder', n: 1 }, { key: 'bone', n: 2 }, { key: 'string', n: 2, chance: 0.3 }, { key: 'arachne_crystal', n: 1, chance: 1 / 120 }], tierCap: 2 },
@@ -6513,16 +6513,24 @@
     return spr;
   }
   function drawMobLabel(mob) {
+    // V29-A: 실제 스카이블럭 네임태그 규격 — 한 줄 "[Lv N] 이름 HP/최대❤"
+    //   [Lv] 회색 · 이름 적색(적대)/초록(소극) · 현재 HP 초록 · ❤ 빨강. 체력바 없음(실제와 동일)
     const c = mob.labelCv.getContext('2d');
     c.clearRect(0, 0, 256, 64);
-    c.fillStyle = 'rgba(0,0,0,0.55)'; c.fillRect(0, 0, 256, 40);
-    c.textAlign = 'center'; c.font = 'bold 22px sans-serif';
-    c.fillStyle = mob.elite ? '#ff7ad9' : '#aefda6';
-    c.fillText(`${mob.elite ? '★ ' : ''}[Lv ${mob.lv}] ${mob.def.name}`, 128, 21);
-    c.fillStyle = '#222'; c.fillRect(28, 44, 200, 12);
-    c.fillStyle = '#e5484d'; c.fillRect(28, 44, Math.max(2, 200 * mob.hp / mob.maxHp), 12);
-    c.fillStyle = '#fff'; c.font = 'bold 12px sans-serif';
-    c.fillText(`❤ ${Math.max(0, Math.ceil(mob.hp))}/${mob.maxHp}`, 128, 54);
+    const fmt = n => Math.max(0, Math.ceil(n)).toLocaleString('en-US');
+    const segs = [];
+    if (mob.elite) segs.push(['★ ', '#ff7ad9']);
+    segs.push([`[Lv${mob.lv}] `, '#aaaaaa']);
+    segs.push([mob.def.name + ' ', mob.def.passive ? '#55ff55' : '#ff5555']);
+    segs.push([`${fmt(mob.hp)}/${fmt(mob.maxHp)}`, '#55ff55']);
+    segs.push(['❤', '#ff5555']);
+    c.font = 'bold 19px sans-serif'; c.textAlign = 'left';
+    let total = 0; for (const [t] of segs) total += c.measureText(t).width;
+    const scale = total > 244 ? 244 / total : 1;
+    if (scale < 1) { c.font = `bold ${Math.floor(19 * scale)}px sans-serif`; total = 0; for (const [t] of segs) total += c.measureText(t).width; }
+    let x = 128 - total / 2;
+    c.fillStyle = 'rgba(0,0,0,0.45)'; c.fillRect(x - 6, 8, total + 12, 30);
+    for (const [t, col] of segs) { c.fillStyle = col; c.fillText(t, x, 30); x += c.measureText(t).width; }
     mob.label.material.map.needsUpdate = true;
   }
   function addEyes(g, y, z, col, gap) {
@@ -6594,6 +6602,14 @@
     }
     else if (def.kind === 'tall') { h = buildHumanoid(def.color); h.group.scale.set(1, 1.45, 1); addEyes(h.group, 1.85, 0.16, def.color === 0x1a1a22 || def.color === 0x2a1a3a ? 0xb04ae8 : 0xe5484d); }
     else { h = buildHumanoid(def.color); addEyes(h.group, 1.85, 0.16, 0x1a1a1a); }
+    // V29-A: 장비 착용 변형(실제 스블 방식 — 같은 좀비도 투구/흉갑/무기로 구분)
+    if (def.gear && h && h.group && (def.kind === 'humanoid' || def.kind === 'tall' || !def.kind)) {
+      const g2 = def.gear;
+      if (g2.helmet != null) h.group.add(mkBox(0.56, 0.2, 0.56, g2.helmet, 0, 1.92, 0));
+      if (g2.chest != null) h.group.add(mkBox(0.58, 0.46, 0.36, g2.chest, 0, 1.14, 0));
+      if (g2.sword != null) { const sw = mkBox(0.09, 0.62, 0.13, g2.sword, 0.4, 0.98, 0.28); sw.rotation.x = -0.7; h.group.add(sw); }
+      if (g2.tool != null) { const tl = mkBox(0.12, 0.5, 0.12, g2.tool, -0.4, 0.98, 0.26); tl.rotation.x = -0.5; h.group.add(tl); }
+    }
     if (def.scale) h.group.scale.multiplyScalar(def.scale);
     if (elite) h.group.scale.multiplyScalar(1.25);
     return h;
