@@ -1435,6 +1435,13 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .econ-richtt{position:fixed; z-index:300; display:none; pointer-events:none;
   background:linear-gradient(180deg,rgba(22,15,36,.96),rgba(13,10,24,.97)); border:2px solid #6a3fb5; border-radius:8px; padding:10px 13px;
   font-size:12px; line-height:1.6; min-width:190px; max-width:300px; box-shadow:0 10px 26px rgba(0,0,0,.65);}
+/* V26: 상호작용 안내(십자선 아래) + 패널 전환 애니메이션 */
+.econ3d-prompt{position:absolute; left:50%; top:calc(50% + 28px); transform:translateX(-50%); z-index:5; pointer-events:none;
+  font-size:13px; font-weight:800; color:#ffe9a8; background:rgba(8,10,18,.55); border:1px solid rgba(255,255,255,.16);
+  border-radius:8px; padding:3px 10px; white-space:nowrap;
+  text-shadow:1px 1px 0 #000;}
+@keyframes econ3d-panelin{ from{opacity:0; transform:translateY(10px) scale(.985);} to{opacity:1; transform:translateY(0) scale(1);} }
+.econ3d-panelwrap{animation:econ3d-panelin .16s ease-out;}
 /* V24-E: XP 바 — 핫바 바로 위 얇은 초록 진행 바(실제 MC 위치) */
 .econ3d-xpbar{position:absolute; left:50%; transform:translateX(-50%); bottom:30px; width:388px; max-width:80vw; height:5px;
   background:rgba(10,14,24,.72); border:1px solid rgba(255,255,255,.22); border-radius:3px; z-index:5; pointer-events:none;}
