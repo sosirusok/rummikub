@@ -6609,7 +6609,34 @@
     [[-1, 1], [1, 1], [-1, -1], [1, -1]].forEach(o => g.add(mkBox(0.25, 0.6, 0.25, dark, o[0] * 0.5, 0.3, o[1] * 0.8)));
     return { group: g, legs: [], wings: [wingL, wingR] };
   }
-  function buildMobMesh(def, elite) {
+  // V29-C: 실제 MC 엔티티 스킨(entity/ 폴더) — 얼굴/정면 크롭을 머리 앞면 평면으로(스킨 파일 있는 몹부터)
+  const MOB_FACE_SKIN = {
+    cow: { src: 'entity/cow/cow.png', c: [6, 6, 8, 8], p: [0, 0.62, 0.62], s: [0.42, 0.42] },
+    mushroom_cow: { src: 'entity/cow/red_mooshroom.png', c: [6, 6, 8, 8], p: [0, 0.62, 0.62], s: [0.42, 0.42] },
+    chicken: { src: 'entity/chicken.png', c: [2, 3, 4, 6], p: [0, 0.62, 0.62], s: [0.3, 0.42] },
+    enderman: { src: 'entity/enderman/enderman.png', c: [8, 8, 8, 8], p: [0, 1.76, 0.17], s: [0.5, 0.5] },
+    ghast: { src: 'entity/ghast/ghast.png', c: [16, 16, 16, 16], p: [0, 1.6, 0.67], s: [1.26, 1.26] },
+    blaze: { src: 'entity/blaze.png', c: [8, 8, 8, 8], p: [0, 1.45, 0.34], s: [0.6, 0.6] },
+  };
+  const _faceSkinTex = {};
+  function faceSkinPlane(spec) {
+    const key = spec.src + spec.c.join(',');
+    let tex = _faceSkinTex[key];
+    if (!tex) {
+      tex = new THREE.TextureLoader().load(spec.src, t => {
+        const W2 = t.image.width, H2 = t.image.height;
+        t.repeat.set(spec.c[2] / W2, spec.c[3] / H2);
+        t.offset.set(spec.c[0] / W2, 1 - (spec.c[1] + spec.c[3]) / H2);
+        t.needsUpdate = true;
+      });
+      tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestFilter; tex.generateMipmaps = false;
+      _faceSkinTex[key] = tex;
+    }
+    const pl = new THREE.Mesh(new THREE.PlaneGeometry(spec.s[0], spec.s[1]), new THREE.MeshBasicMaterial({ map: tex, transparent: true }));
+    pl.position.set(spec.p[0], spec.p[1], spec.p[2]);
+    return pl;
+  }
+  function buildMobMesh(def, elite, typeKey) {
     let h;
     if (def.kind === 'spider') h = buildSpiderMesh(def.color);
     else if (def.kind === 'blaze') h = buildBlazeMesh(def.color);
@@ -6643,6 +6670,8 @@
       if (g2.sword != null) { const sw = mkBox(0.09, 0.62, 0.13, g2.sword, 0.4, 0.98, 0.28); sw.rotation.x = -0.7; h.group.add(sw); }
       if (g2.tool != null) { const tl = mkBox(0.12, 0.5, 0.12, g2.tool, -0.4, 0.98, 0.26); tl.rotation.x = -0.5; h.group.add(tl); }
     }
+    const fs2 = typeKey && MOB_FACE_SKIN[typeKey];
+    if (fs2 && h && h.group) h.group.add(faceSkinPlane(fs2));   // V29-C: 실스킨 얼굴
     if (def.scale) h.group.scale.multiplyScalar(def.scale);
     if (elite) h.group.scale.multiplyScalar(1.25);
     return h;
@@ -6688,7 +6717,7 @@
       state: 'wander', tx: x, tz: z, atkCd: 0, hitIdx: 0, area, walkT: Math.random() * 6,
     };
     mob.hp = mob.maxHp;
-    const h = buildMobMesh(def, elite);
+    const h = buildMobMesh(def, elite, typeKey);
     mob.mesh = h.group; mob.legs = h.legs || []; mob.legL = h.legL; mob.legR = h.legR; mob.rods = h.rods; mob.wings = h.wings;
     if (elite || def.miniboss) {   // V10 ⑲: 정예·미니보스 발밑 오라 링
       const ring = new THREE.Mesh(
