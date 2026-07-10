@@ -6617,6 +6617,18 @@
     enderman: { src: 'entity/enderman/enderman.png', c: [8, 8, 8, 8], p: [0, 1.76, 0.17], s: [0.5, 0.5] },
     ghast: { src: 'entity/ghast/ghast.png', c: [16, 16, 16, 16], p: [0, 1.6, 0.67], s: [1.26, 1.26] },
     blaze: { src: 'entity/blaze.png', c: [8, 8, 8, 8], p: [0, 1.45, 0.34], s: [0.6, 0.6] },
+    // V31-C: 업로드 예정 스킨 선매핑 — entity/ 하위에 파일이 올라오면 즉시 자동 적용(없으면 무시)
+    zombie: { src: 'entity/zombie/zombie.png', c: [8, 8, 8, 8], p: [0, 1.76, 0.17], s: [0.5, 0.5] },
+    crypt_ghoul: { src: 'entity/zombie/zombie.png', c: [8, 8, 8, 8], p: [0, 1.76, 0.17], s: [0.5, 0.5] },
+    golden_ghoul: { src: 'entity/zombie/zombie.png', c: [8, 8, 8, 8], p: [0, 1.76, 0.17], s: [0.5, 0.5] },
+    miner_zombie: { src: 'entity/zombie/zombie.png', c: [8, 8, 8, 8], p: [0, 1.76, 0.17], s: [0.5, 0.5] },
+    lapis_zombie: { src: 'entity/zombie/zombie.png', c: [8, 8, 8, 8], p: [0, 1.76, 0.17], s: [0.5, 0.5] },
+    diamond_zombie: { src: 'entity/zombie/zombie.png', c: [8, 8, 8, 8], p: [0, 1.76, 0.17], s: [0.5, 0.5] },
+    skeleton: { src: 'entity/skeleton/skeleton.png', c: [8, 8, 8, 8], p: [0, 1.76, 0.17], s: [0.5, 0.5] },
+    spider: { src: 'entity/spider/spider.png', c: [40, 12, 8, 8], p: [0, 0.62, 0.66], s: [0.44, 0.4] },
+    pig: { src: 'entity/pig/pig.png', c: [8, 8, 8, 8], p: [0, 0.62, 0.62], s: [0.42, 0.42] },
+    sheep: { src: 'entity/sheep/sheep.png', c: [8, 8, 6, 6], p: [0, 0.62, 0.62], s: [0.38, 0.38] },
+    wolf: { src: 'entity/wolf/wolf.png', c: [4, 4, 6, 6], p: [0, 0.62, 0.62], s: [0.36, 0.36] },
   };
   const _faceSkinTex = {};
   function faceSkinPlane(spec) {
@@ -7430,6 +7442,15 @@
       _celClouds.position.x = P.x; _celClouds.position.z = P.z;
       const m = _celClouds.material.map; if (m) m.offset.x = (m.offset.x + dt * 0.0004) % 1;   // 천천히 흐름(MC)
     }
+    // V31-B: 네더 포탈 텍스처 프레임 순환(세로 스트립)
+    if (portalMarker && portalMarker.userData.fill && portalMarker.userData.fill.userData.portalAnim) {
+      const m2 = portalMarker.userData.fill.material.map;
+      if (m2 && m2.image && m2.image.height > m2.image.width) {
+        const frames = Math.floor(m2.image.height / m2.image.width);
+        m2.repeat.set(1, 1 / frames);
+        m2.offset.y = 1 - ((Math.floor(performance.now() / 90) % frames) + 1) / frames;
+      }
+    }
   }
   function worldAmbience() { return WORLD_AMBIENCE[worldMode] || WORLD_AMBIENCE.hub; }
   function dayFactor() { return worldAmbience().light; }
@@ -7639,8 +7660,11 @@
     const y = portalOpenY(p);
     const g = new THREE.Group();
     // 포탈 이펙트를 프레임 개구부(가로2×세로3) 안에 정확히 배치. 목적지별 이펙트 색.
-    const fillCol = (p.fx != null) ? p.fx : 0xb04ae8;
-    const fill = new THREE.Mesh(new THREE.PlaneGeometry(1.86, 2.86), new THREE.MeshBasicMaterial({ color: fillCol, transparent: true, opacity: 0.62, side: THREE.DoubleSide }));
+    const fillCol = (p.fx != null) ? p.fx : 0xffffff;   // V31-B: 실제 nether_portal.png 위에 목적지 색 틴트
+    const ptex = _celTex('resourcepack/nether_portal.png');
+    ptex.wrapS = ptex.wrapT = THREE.RepeatWrapping;
+    const fill = new THREE.Mesh(new THREE.PlaneGeometry(1.86, 2.86), new THREE.MeshBasicMaterial({ map: ptex, color: fillCol, transparent: true, opacity: 0.85, side: THREE.DoubleSide }));
+    fill.userData.portalAnim = true;
     fill.position.set(p.x + 1.0, y + 1.5, p.z + 0.5);   // V23-A: 개구부 두 칸(x~x+2)의 중심 x+1.0, 바닥 y부터 3칸
     g.add(fill);
     const label = makeLabel(p.label); label.position.set(p.x + 1.0, y + 3.8, p.z + 0.5); g.add(label);
