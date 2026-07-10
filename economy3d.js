@@ -1056,6 +1056,12 @@
       }
       setW(x0 + 3, base + 2, z0 + 2, ID.glowstone);   // 1층 조명
       setW(x0 + 3, base + 6, z0 + 2, ID.glowstone);   // 2층 조명
+      // V26: 인테리어 — 1층 러그+테이블, 2층 침대+책장
+      const rugA = ID.wool_red != null ? ID.wool_red : ID.oak_planks, rugB = ID.wool_white != null ? ID.wool_white : ID.oak_planks;
+      for (let dx = 2; dx <= 4; dx++) for (let dz = 2; dz <= 3; dz++) setW(x0 + dx, base - 1, z0 + dz, ((dx + dz) & 1) ? rugA : rugB);
+      setW(x0 + 3, base, z0 + 2, ID.oak_fence); const ts = slabIdFor(ID.oak_planks); if (ts != null) setW(x0 + 3, base + 1, z0 + 2, ts);
+      setW(x0 + 2, base + 4, z0 + 2, ID.bed);
+      setW(x0 + 4, base + 4, z0 + 1, ID.bookshelf); setW(x0 + 5, base + 4, z0 + 1, ID.bookshelf);
     };
     townhouse(252, 240, ID.oak_planks); townhouse(262, 240, ID.birch_planks);
     townhouse(272, 240, ID.spruce_planks); townhouse(282, 240, ID.oak_planks);
@@ -1101,6 +1107,12 @@
     // ── 1) 터번(Tavern, 광장 서측 176,210): 다크오크 + 입구 술통(통나무 더미) + 처마 랜턴 ──
     buildHouse(176, 208, 8, 7, surfaceTop(180, 211), ID.dark_oak_planks != null ? ID.dark_oak_planks : ID.spruce_planks, ID.spruce_planks, ID.dark_oak_log != null ? ID.dark_oak_log : ID.oak_log);
     { const by = surfaceTop(186, 217); S(186, by, 217, ID.oak_log); S(187, by, 217, ID.oak_log); S(186, by + 1, 217, ID.oak_log); S(185, by, 218, ID.hay_block); }
+    { // V26: 터번 인테리어 — 바 카운터(반블럭 상판) + 스툴(울타리) + 뒷선반(책장)
+      const ty = surfaceTop(180, 211), bs = slabIdFor(ID.dark_oak_planks != null ? ID.dark_oak_planks : ID.spruce_planks);
+      for (let dx = 0; dx < 4; dx++) { S(178 + dx, ty, 210, ID.spruce_planks); if (bs != null) S(178 + dx, ty + 1, 210, bs); }
+      for (let dx = 0; dx < 3; dx++) S(178 + dx, ty, 212, ID.oak_fence);
+      S(178, ty, 209, ID.bookshelf); S(179, ty, 209, ID.bookshelf); S(178, ty + 1, 209, ID.bookshelf);
+    }
     // ── 2) 플라워 하우스(198,194): 흰 벽(석영) + 잎 트림 + 창가 꽃 화단 + 지붕 꽃밭 ──
     {
       buildHouse(196, 192, 6, 5, surfaceTop(199, 194), ID.quartz_block, ID.birch_planks, ID.birch_log != null ? ID.birch_log : ID.oak_log);
@@ -4410,7 +4422,9 @@
     const names = new Set();
     BLOCKS.forEach(b => { if (!b.tex) return; if (typeof b.tex === 'string') names.add(b.tex); else { names.add(b.tex.top); names.add(b.tex.side); names.add(b.tex.bottom); } });
     const list = Array.from(names); const cols = 8, rows = Math.ceil(list.length / cols);
-    const cv = document.createElement('canvas'); cv.width = cols * 16; cv.height = rows * 16; const c = cv.getContext('2d'); c.imageSmoothingEnabled = false;
+    const cv = document.createElement('canvas'); cv.width = cols * 16;
+    { let potH = 16; while (potH < rows * 16) potH <<= 1; cv.height = potH; }   // V26: 밉맵용 2의 거듭제곱 패딩
+    const c = cv.getContext('2d'); c.imageSmoothingEnabled = false;
     list.forEach((nm, i) => { const cx = (i % cols) * 16, cy = ((i / cols) | 0) * 16; paintTile(c, cx, cy, nm); });
     // V20-U: 전역 컬러 그레이드 — 유치원식 과밝음 탈피. 대비·채도↑, 밝기 소폭↓ → 모든 블럭 픽셀 색을 깊고 찬란하게.
     try {
@@ -4427,11 +4441,13 @@
       c.putImageData(img, 0, 0);
     } catch (e) {}
     atlasUV = {};
-    list.forEach((nm, i) => { const cx = (i % cols), cy = ((i / cols) | 0); const e = 0.01; atlasUV[nm] = { x0: (cx + e) / cols, x1: (cx + 1 - e) / cols, y0: (cy + e) / rows, y1: (cy + 1 - e) / rows }; });
+    const vRows = cv.height / 16;   // V26: 패딩 반영 v 좌표
+    list.forEach((nm, i) => { const cx = (i % cols), cy = ((i / cols) | 0); const e = 0.01; atlasUV[nm] = { x0: (cx + e) / cols, x1: (cx + 1 - e) / cols, y0: (cy + e) / vRows, y1: (cy + 1 - e) / vRows }; });
     // V21-G1: 유체 애니메이션 준비 — 물/용암 타일 위치를 기억해 매 틱 자체 디자인 프레임으로 다시 그린다
     _fluidAnim = { c, tiles: [] };
     ['water', 'lava'].forEach(nm => { const i = list.indexOf(nm); if (i >= 0) _fluidAnim.tiles.push([nm, (i % cols) * 16, ((i / cols) | 0) * 16]); });
-    atlasTex = new THREE.CanvasTexture(cv); atlasTex.magFilter = THREE.NearestFilter; atlasTex.minFilter = THREE.NearestFilter; atlasTex.generateMipmaps = false;
+    // V26: 원거리 텍스처 일렁임(시머링)·과쨍함 수정 — MC와 동일하게 밉맵(가까이 네어리스트/멀리 밉맵 보간) + 이방성 4
+    atlasTex = new THREE.CanvasTexture(cv); atlasTex.magFilter = THREE.NearestFilter; atlasTex.minFilter = THREE.NearestMipmapLinearFilter; atlasTex.generateMipmaps = true; atlasTex.anisotropy = 4;
     atlasTex.flipY = false; atlasTex.needsUpdate = true;
     // V21-E4: 사용자 리소스팩 오버레이 — resourcepack/manifest.json에 나열된 타일명을
     //   resourcepack/<타일명>.png(16×16)로 로드해 아틀라스에 덮어쓴다(없으면 절차 텍스처 유지).
@@ -5275,17 +5291,21 @@
     // V22-H1: 조이스틱(가상 이동 드래그) 제거
     const inWater = feetInWater();
     if (mf <= 0) P._sprintLatch = false;                    // 전진을 멈추면 스프린트 해제
-    const sprint = P._sprintLatch && mf > 0 && !inWater;   // V23-A: Ctrl 달리기 제거 — Ctrl+W가 브라우저 탭 닫기(튕김)와 충돌. 더블탭 W만 사용
+    const sprint = (P._sprintLatch || ((keys.ControlLeft || keys.ControlRight) && _kbLocked)) && mf > 0 && !inWater;   // V26: 더블탭 W + (전체화면 키보드 잠금 시) Ctrl 달리기
     P._sneaking = !!(keys.ShiftLeft || keys.ShiftRight) && P.onGround && !inWater;   // V12 Sneak 상태
     const sin = Math.sin(P.yaw), cos = Math.cos(P.yaw);
-    let speed = P._sneaking ? 1.3 : (sprint ? 5.8 : 4.3);   // V12: 슬금 = 걷기 30%(위키)
+    let speed = P._sneaking ? 1.295 : (sprint ? 5.612 : 4.317);   // V26: 실제 MC 실측치(걷기 4.317/달리기 5.612/슬금 1.295 m/s)
     if (inWater) speed *= (P._boat ? 1.8 : 0.55);   // V21-E2: 보트는 물에서 빠르게 활주
     // 슈가 러시 인챈트 이동속도 보너스
     if (window.econApi && window.econApi.moveSpeedPct) speed *= 1 + window.econApi.moveSpeedPct() / 100;
     let dx = (-sin * mf + cos * ms), dz = (-cos * mf - sin * ms);
     const len = Math.hypot(dx, dz); if (len > 0) { dx /= len; dz /= len; }
     P._sprinting = sprint;   // V24-B: 스프린트 FOV용
-    P.vx = dx * speed; P.vz = dz * speed;
+    // V26: 관성 — 목표 속도로 지수 수렴(지상 가속 빠름/공중 제어 약함, MC 감각). 즉시 세팅의 '미끄럽지 않은' 이질감 제거
+    const tvx = dx * speed, tvz = dz * speed;
+    const accel = inWater ? 5 : P.onGround ? 11 : 2.6;
+    P.vx += (tvx - P.vx) * Math.min(1, dt * accel);
+    P.vz += (tvz - P.vz) * Math.min(1, dt * accel);
     // V24: 넉백 잔류 속도(피격 시 부여) — 입력 속도에 더해지고 지수 감쇠
     if (P._kbx || P._kbz) {
       P.vx += P._kbx; P.vz += P._kbz;
@@ -5389,7 +5409,19 @@
     moveT.active = false; moveT.id = -1; lookT.id = -1;
     for (const k in keys) keys[k] = false;
   }
+  // V26: 전체화면 + 키보드 잠금(Chromium Keyboard Lock) — 전체화면에서 Ctrl+W/W 예약어를 게임이 가로챔
+  let _kbLocked = false;
+  async function toggleFullscreen() {
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
+        if (navigator.keyboard && navigator.keyboard.lock) { await navigator.keyboard.lock(['ControlLeft', 'ControlRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD']); _kbLocked = true; if (typeof toast === 'function') toast('⛶ 전체화면 — 이제 Ctrl+W 달리기도 안전해요 (Esc 길게 = 해제)', true); }
+      } else { await document.exitFullscreen(); }
+    } catch (e2) {}
+  }
+  document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) { _kbLocked = false; try { if (navigator.keyboard && navigator.keyboard.unlock) navigator.keyboard.unlock(); } catch (e2) {} } });
   function onKey(e) {
+    if (e.ctrlKey && e.code === 'KeyW' && _kbLocked) e.preventDefault();   // V26: 잠금 중 탭 닫기 차단
     if (!panelOpen() && e.code !== 'Escape' && e.code !== 'KeyE') requestLookLock(false);
     // 더블탭 W = 스프린트(마인크래프트 방식 — Ctrl+W는 브라우저와 충돌하므로)
     if (e.code === 'KeyW' && !keys.KeyW) {
@@ -7150,6 +7182,36 @@
     const d = lookDir();
     c.strokeStyle = '#ff3333'; c.beginPath(); c.moveTo(pxx, pzz); c.lineTo(pxx + d.x * 8, pzz + d.z * 8); c.stroke();
   }
+  // V26: 조준 대상별 상호작용 안내 멘트(십자선 아래) — 실제 게임처럼 '[E] 대화' 등
+  let _promptT = 0, _promptLast = '';
+  function updatePrompt(dt) {
+    _promptT += dt; if (_promptT < 0.15) return; _promptT = 0;
+    const el = document.getElementById('econ3dPrompt'); if (!el) return;
+    let msg = '';
+    const t = currentAim();
+    if (t) {
+      if (t.type === 'npc' || t.type === 'questnpc') msg = '💬 [E] 또는 클릭 — 대화';
+      else if (t.type === 'portal') msg = '🌀 들어가면 1초 뒤 자동 이동 · [E] 즉시 이동';
+      else if (t.type === 'minion') msg = '⚙️ [E] — 미니언 회수/관리';
+      else if (t.type === 'fairy') msg = '✨ [E] — 요정의 소울 수집';
+      else if (t.type === 'node') msg = '⛏️ 좌클릭 꾹 — 채집';
+      else if (t.type === 'arachneAltar') msg = '🕷️ [E] — 아라크네 소환';
+      else msg = '[E] — 상호작용';
+    } else {
+      const tb = raycastBlock();
+      if (tb) {
+        const bk = BLOCKS[tb.id] ? BLOCKS[tb.id].key : '';
+        if (bk === 'crafting_table') msg = '⚒️ [우클릭] — 제작대';
+        else if (bk === 'furnace') msg = '🔥 [우클릭] — 화로 제련';
+        else if (bk === 'chest') msg = '📦 [우클릭] — 상자 열기';
+        else if (BLOCKS[tb.id] && BLOCKS[tb.id].shape === 'door') msg = '🚪 [우클릭] — 문 여닫기';
+        else if (BLOCKS[tb.id] && BLOCKS[tb.id].shape === 'bed') msg = '🛏️ [우클릭] — 수면(회복)';
+        else if (bk.indexOf('portal_') === 0) msg = '🌀 [우클릭] — 워프';
+        else if (worldMode === 'park' && (bk === 'oak_fence' || bk === 'glowstone') && parkGateAt(tb.x, tb.z) >= 0) msg = '🚧 [우클릭] — 게이트 개방 시도';
+      }
+    }
+    if (msg !== _promptLast) { _promptLast = msg; el.textContent = msg; el.style.display = msg ? 'block' : 'none'; }
+  }
   function updateHud() {
     const P0 = econApi().getP(); if (!P0) return;
     const g = document.getElementById('econ3dGold'); if (g) g.textContent = '💰 ' + P0.gold.toLocaleString('ko-KR') + 'G';
@@ -7256,10 +7318,12 @@
       <canvas id="econ3dCanvas"></canvas>
       <div id="econ3dTint" style="position:absolute;inset:0;pointer-events:none;display:none;z-index:3"></div>
       <div class="econ3d-cross" id="econ3dCross">+</div>
+      <div class="econ3d-prompt" id="econ3dPrompt" style="display:none"></div>
       <div class="econ3d-banner" id="econ3dBanner"></div>
       <div class="econ3d-top">
         <div class="econ3d-gold" id="econ3dGold">💰 0G</div>
         <div class="econ3d-zone" id="econ3dSouls">✨ 0/24</div>
+        <button class="btn btn--ghost" data-act="econ3d_fs" title="전체화면 (Ctrl 달리기 가능)">⛶</button>
         <button class="btn btn--ghost" data-act="backHome">✕</button>
       </div>
       <canvas id="econ3dMap" class="econ3d-map" width="140" height="140" data-act="econ3d_map"></canvas>
@@ -7314,6 +7378,7 @@
       }
       tickRegen(); tickFluids(); tickParticles(dt); tickDmgTexts(dt); tickBuildQueue(); tickChunkCulling(dt); tickAdaptiveView(dt); tickFluidAnim(dt); tickCrackOverlay();
       _hpHudT += dt; if (_hpHudT > 0.5) { _hpHudT = 0; updateHpHud(); }
+      updatePrompt(dt);   // V26: 상호작용 안내
       flushWorldEdits();   // 블록 편집 → 메시 리빌드(프레임당 1회로 병합, 더티 청크만)
       if (boatMesh && boatMesh.visible) { boatMesh.position.set(P.x, P.y - 0.35, P.z); boatMesh.rotation.y = P.yaw; if (!P._boat) removeBoatMesh(); }
       // V21-F2: 수중/용암 속 화면 틴트 + V24: 피격 붉은 플래시 / 저체력(25%↓) 상시 경고 비네트 — MC식
@@ -7496,6 +7561,7 @@
       case 'econ3d_jump': keys.Space = true; setTimeout(() => { keys.Space = false; }, 120); return true;
       case 'econ3d_panel_close': hidePanel(); return true;
       case 'econ3d_map': toggleMinimapSize(); return true;
+      case 'econ3d_fs': toggleFullscreen(); return true;   // V26
       case 'econ3d_block': selectedPlaceKey = el.dataset.key; _placeManual = true; updateBuildHud(); return true;   // V22-K: 수동 선택 고정
     }
     return false;
