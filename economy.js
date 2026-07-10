@@ -127,7 +127,13 @@
   function addItem(k, n) {
     if ((n == null || n > 0)) { if (!P.gained) P.gained = {}; P.gained[k] = (P.gained[k] || 0) + (n == null ? 1 : n); }   // V26-B: 퀘스트용 총 획득 카운터
     if (n <= 0) return;
+    const isNew = !(P.inv[k] > 0);
     P.inv[k] = (P.inv[k] || 0) + n; rollItemStat(k); bumpInv();
+    // V27-C: 슬롯 배치 레이어 — 새 키는 첫 빈 슬롯으로(그리드 우선, 없으면 핫바 빈칸)
+    if (isNew && Array.isArray(P.invSlots) && P.invSlots.indexOf(k) < 0) {
+      let i = P.invSlots.indexOf(null, 9); if (i < 0) i = P.invSlots.indexOf(null);
+      if (i >= 0) { P.invSlots[i] = k; if (i < 9 && Array.isArray(P.hotbar)) P.hotbar[i] = k; }
+    }
     const sd = shopDef(k);
     if (sd && (sd.category === '무기' || sd.category === '방어구') && !(P.equipLog || {})[k]) {
       if (!P.equipLog) P.equipLog = {};
@@ -152,7 +158,16 @@
   function rolledStat(k, base) { return P.itemRolls[k] !== undefined ? P.itemRolls[k] : base; }
   function rollRangeText(base) { const pct = D().ITEM_ROLL.pct; return `${Math.max(1, Math.round(base * (1 - pct)))}~${Math.round(base * (1 + pct))}`; }
   function hasItem(k, n) { return (P.inv[k] || 0) >= (n || 1); }
-  function removeItem(k, n) { n = n || 1; if (!hasItem(k, n)) return false; P.inv[k] -= n; if (P.inv[k] <= 0) delete P.inv[k]; bumpInv(); return true; }
+  function removeItem(k, n) {
+    n = n || 1; if (!hasItem(k, n)) return false;
+    P.inv[k] -= n;
+    if (P.inv[k] <= 0) {
+      delete P.inv[k];
+      if (Array.isArray(P.invSlots)) for (let i = 0; i < P.invSlots.length; i++) if (P.invSlots[i] === k) P.invSlots[i] = null;   // V27-C: 빈 슬롯 정리
+      if (Array.isArray(P.hotbar)) for (let i = 0; i < P.hotbar.length; i++) if (P.hotbar[i] === k) P.hotbar[i] = null;
+    }
+    bumpInv(); return true;
+  }
   function addGold(n) { P.gold = Math.max(0, P.gold + n); if (n > 0) stat('goldEarned', n); }
 
   /* ---------------- 스킬 레벨 ---------------- */
@@ -447,6 +462,7 @@
     const cl = skillLevel('combat');
     let best = null, bestScore = -1;
     const pin = (P.equipPin || {})[slot];
+    if (pin === '__none__') { _equipCache[slot] = null; return null; }   // V27-C: 슬롯 비움 고정
     for (const it of equipListFor(slot)) {
       const isBow = it.wclass === 'bow';
       if (slot === 'weapon' && isBow) continue;
@@ -2329,6 +2345,7 @@
 
   function renderZone() {
     const body = document.getElementById('econBody'); if (!body) return;
+    if (invCursor && hubTab !== 'inv') { invCursor = null; invCursorGhost(); }   // V27-C: 커서 아이템은 자동 회수(ensureInvSlots가 재배치)
     if (activeCombat) { body.innerHTML = combatHTML(); return; }
     if (dungeonRun) { body.innerHTML = dungeonRoomHTML(); return; }
     body.innerHTML = selfMenuHTML() + zoneBodyHTML(zone);
@@ -2441,12 +2458,18 @@
   }
   function richTTHide() { if (_ttEl) _ttEl.style.display = 'none'; }
   document.addEventListener('mouseover', e => {
-    const t = e.target && e.target.closest ? e.target.closest('[data-ttk]') : null;
+    const t = e.target && e.target.closest ? e.target.closest('[data-ttk],[data-ttn]') : null;
     if (!t) { richTTHide(); return; }
-    const sdef = shopDef(t.dataset.ttk);
-    if (!sdef || !P) { richTTHide(); return; }
+    let html = '';
+    if (t.dataset.ttk) {
+      const sdef = shopDef(t.dataset.ttk);
+      if (!sdef || !P) { richTTHide(); return; }
+      html = itemLoreHTML(sdef);
+    } else {   // V27-C: 커스텀 이름/설명 툴팁(메뉴 슬롯 등)
+      html = `<div style="color:#ffe066;font-weight:900;font-size:14px;margin-bottom:3px">${t.dataset.ttn}</div>${t.dataset.ttd ? `<div style="color:#c9cede">${t.dataset.ttd}</div>` : ''}`;
+    }
     if (!_ttEl) { _ttEl = document.createElement('div'); _ttEl.className = 'econ-richtt'; document.body.appendChild(_ttEl); }
-    _ttEl.innerHTML = itemLoreHTML(sdef);
+    _ttEl.innerHTML = html;
     _ttEl.style.display = 'block';
     richTTMove(e.clientX, e.clientY);
   });
@@ -2504,13 +2527,21 @@
       ['halloffame', '🏆', '명예의 전당', '전 시스템 기록·마일스톤'],
     ];
     const worlds = (typeof window.economy3dWorlds === 'function') ? window.economy3dWorlds() : [];
-    return `<h4>✦ 스카이블럭 메뉴</h4>
-      <div class="econ-menugrid">${tiles.map(t => `<button class="econ-menutile" data-act="econ_menu" data-key="${t[0]}"><span class="econ-menuic">${t[1]}</span><b>${t[2]}</b><span class="muted">${t[3]}</span></button>`).join('')}</div>
-      <h4>🚀 빠른 이동 (워프)</h4>
-      <div class="econ-tierbtns">${worlds.map(w => {
-        const locked = w.req && skillLevel(w.req.sk) < w.req.lv;
-        return `<button class="btn btn--sm ${locked ? 'btn--ghost' : ''}" data-act="econ_warp" data-key="${w.key}">${locked ? '🔒 ' : ''}${w.name}${w.req ? `<br><span class="muted">${w.req.name} Lv${w.req.lv}${locked ? ` (현재 ${skillLevel(w.req.sk)})` : ' ✓'}</span>` : ''}</button>`;
-      }).join('') || '<span class="muted">3D 월드에서 사용 가능</span>'}</div>
+    // V27-C: 실제 스카이블럭 메뉴 = 상자(체스트) UI — 슬롯 그리드에 아이콘, 설명은 호버 툴팁
+    const slot = (t) => `<div class="mc-slot mc-menuslot" data-act="econ_menu" data-key="${t[0]}" data-ttn="${escHtml(t[2])}" data-ttd="${escHtml(t[3])}"><span>${t[1]}</span></div>`;
+    const pad = (arr) => { const out = arr.slice(); while (out.length % 9) out.push('<div class="mc-slot mc-empty2"></div>'); return out; };
+    const warpSlots = worlds.map(w => {
+      const locked = w.req && skillLevel(w.req.sk) < w.req.lv;
+      const desc = w.req ? `${w.req.name} Lv${w.req.lv} 필요${locked ? ` (현재 ${skillLevel(w.req.sk)})` : ' ✓'}` : '바로 이동';
+      return `<div class="mc-slot mc-menuslot ${locked ? 'mc-locked' : ''}" data-act="econ_warp" data-key="${w.key}" data-ttn="${escHtml(w.name)}" data-ttd="${escHtml(desc)}"><span>${locked ? '🔒' : '🌀'}</span></div>`;
+    });
+    return `<div class="mc-chest">
+        <div class="mc-chesttitle">✦ 스카이블럭 메뉴</div>
+        <div class="mc-grid">${pad(tiles.map(slot)).join('')}</div>
+        <div class="mc-chesttitle" style="margin-top:10px">🚀 빠른 이동 (워프)</div>
+        <div class="mc-grid">${warpSlots.length ? pad(warpSlots).join('') : ''}</div>
+        ${warpSlots.length ? '' : '<p class="muted">3D 월드에서 사용 가능</p>'}
+      </div>
       <p class="muted">상점·은행·인챈트·강화·리포지·특가는 마을의 해당 NPC에게 직접 찾아가세요!</p>`;
   }
   function bestiaryHTML() {
@@ -2559,6 +2590,7 @@
       const old = P.hotbar.indexOf(key);
       if (old >= 0) P.hotbar[old] = null;
       P.hotbar[slot] = key;
+      if (Array.isArray(P.invSlots)) for (let i = 0; i < 9; i++) P.invSlots[i] = P.hotbar[i];   // V27-C
       saveNow(); renderZone();
       if (typeof window.economy3dRefreshHotbar === 'function') window.economy3dRefreshHotbar();
       return;
@@ -2566,46 +2598,81 @@
     const at = P.hotbar.indexOf(key);
     if (at >= 0) { P.hotbar[at] = null; }        // 이미 있으면 해제(토글)
     else { let i = P.hotbar.indexOf(null); if (i < 0) i = 0; P.hotbar[i] = key; }
+    if (Array.isArray(P.invSlots)) for (let i = 0; i < 9; i++) P.invSlots[i] = P.hotbar[i];   // V27-C: 슬롯 레이어 동기화
     saveNow(); renderZone();
     if (typeof window.economy3dRefreshHotbar === 'function') window.economy3dRefreshHotbar();
   }
-  // V12-D: 실제 마인크래프트 인벤토리 — 방어구 4슬롯 + 9×4 그리드 + 핫바 9칸
-  function invHTML() {
-    const all = Object.keys(P.inv).filter(k => (P.inv[k] || 0) > 0).sort((a, b) => {
+  // V27-C: 진짜 슬롯 배치 레이어 — 핫바 9칸(0~8) + 그리드 27칸(9~35)이 '한' 인벤토리(MC 동일).
+  //   P.invSlots[36]에 아이템 키를 배치(개수는 P.inv). 장착 중 방어구는 몸에 있으므로 그리드에서 제외.
+  let invCursor = null;   // 커서에 든 아이템(클릭-집기/클릭-놓기)
+  function ensureInvSlots() {
+    if (!Array.isArray(P.invSlots)) P.invSlots = [];
+    P.invSlots = P.invSlots.slice(0, 36); while (P.invSlots.length < 36) P.invSlots.push(null);
+    if (!P._slotsInit) {   // 최초 이관: 기존 핫바 지정을 0~8로
+      for (let i = 0; i < 9; i++) if (!P.invSlots[i] && Array.isArray(P.hotbar) && P.hotbar[i]) P.invSlots[i] = P.hotbar[i];
+      P._slotsInit = 1;
+    }
+    const wornSet = new Set();
+    for (const sl of ARMOR_SLOTS) { const p = equippedPiece(sl); if (p) wornSet.add(p.key); }
+    const seen = new Set(invCursor ? [invCursor] : []);
+    for (let i = 0; i < 36; i++) {
+      const k = P.invSlots[i];
+      if (!k) continue;
+      if ((P.inv[k] || 0) <= 0 || seen.has(k) || wornSet.has(k)) { P.invSlots[i] = null; continue; }
+      seen.add(k);
+    }
+    const unplaced = Object.keys(P.inv).filter(k => (P.inv[k] || 0) > 0 && !seen.has(k) && !wornSet.has(k)).sort((a, b) => {
       const ca = invCatOf(a, shopDef(a)), cb = invCatOf(b, shopDef(b));
       return ca < cb ? -1 : ca > cb ? 1 : (a < b ? -1 : 1);
     });
-    const cell = (k) => {
-      if (!k) return `<div class="mc-slot mc-empty"></div>`;
-      const sd = shopDef(k); const n = P.inv[k] || 0;
-      const border = sd && sd.tierKey ? tierColorByKey(sd.tierKey) : 'rgba(255,255,255,.14)';
-      const inHot = (P.hotbar || []).indexOf(k) >= 0;
-      const canHot = isPlaceableOrTool(k);
-      return `<div class="mc-slot econ-tt ${inHot ? 'is-hot' : ''}" style="border-color:${border}"${ttAttr(sd || { key: k, name: itemName(k) })} data-act="econ_invcell" data-key="${k}">
-        ${iconImg(k)}${n > 1 ? `<span class="mc-cnt">${n > 9999 ? fmtNum(n) : n}</span>` : ''}${inHot ? '<span class="mc-hotmark">▸</span>' : ''}${canHot ? `<button class="mc-hotquick" data-act="econ_assign_hotbar" data-key="${k}" title="${inHot ? '핫바에서 빼기' : '핫바에 넣기'}">${inHot ? '−' : '+'}</button>` : ''}</div>`;
+    const overflow = [];
+    for (const k of unplaced) {
+      let i = P.invSlots.indexOf(null, 9); if (i < 0) i = P.invSlots.indexOf(null);
+      if (i < 0) { overflow.push(k); continue; }
+      P.invSlots[i] = k;
+    }
+    P.hotbar = P.invSlots.slice(0, 9);
+    return overflow;
+  }
+  function invCursorGhost(x, y) {
+    let g = document.getElementById('econInvCursor');
+    if (!invCursor) { if (g) g.style.display = 'none'; return; }
+    if (!g) { g = document.createElement('div'); g.id = 'econInvCursor'; document.body.appendChild(g); }
+    if (g.dataset.k !== invCursor) { g.dataset.k = invCursor; g.innerHTML = iconImg(invCursor); }
+    g.style.display = 'block';
+    if (x != null) { g.style.left = x + 'px'; g.style.top = y + 'px'; }
+  }
+  if (typeof document !== 'undefined') document.addEventListener('mousemove', e => invCursorGhost(e.clientX, e.clientY));
+  // V12-D: 실제 마인크래프트 인벤토리 — 방어구 4슬롯 + 9×4 그리드 + 핫바 9칸
+  function invHTML() {
+    const overflow = ensureInvSlots();
+    const slotCell = (i) => {
+      const k = P.invSlots[i];
+      if (!k) return `<div class="mc-slot mc-empty2 ${i < 9 ? 'mc-hot' : ''}" data-act="econ_inv_slot" data-i="${i}">${i < 9 ? `<span class="mc-slotnum">${i + 1}</span>` : ''}</div>`;
+      const sd = shopDef(k) || { key: k, name: itemName(k) };
+      const n = P.inv[k] || 0;
+      const border = sd.tierKey ? tierColorByKey(sd.tierKey) : null;
+      return `<div class="mc-slot ${i < 9 ? 'mc-hot' : ''}"${border ? ` style="box-shadow:inset 0 0 0 1px ${border}"` : ''}${ttAttr(sd)} data-act="econ_inv_slot" data-i="${i}">
+        ${iconImg(k)}${n > 1 ? `<span class="mc-cnt">${n > 9999 ? fmtNum(n) : n}</span>` : ''}
+        <button class="mc-info" data-act="econ_invcell" data-key="${k}" title="상세(판매/분해/잠금)">ⓘ</button></div>`;
     };
-    const GRID = 36;
-    const gridCells = []; for (let i = 0; i < GRID; i++) gridCells.push(cell(all[i]));
-    const overflow = all.slice(GRID);
-    // 방어구 4슬롯(자동 장착 표시)
-    const armorSlot = (sl, emoji) => { const p = equippedPiece(sl); return `<div class="mc-slot mc-armor" title="${SLOT_NAMES[sl]}">${p ? iconImg(p.key) : `<span class="mc-armormark">${emoji}</span>`}</div>`; };
+    const armorSlot = (sl, emoji) => {
+      const p = equippedPiece(sl);
+      return `<div class="mc-slot mc-armor" data-act="econ_inv_armor" data-slot="${sl}"${p ? ttAttr(p) : ` title="${SLOT_NAMES[sl]} 칸 — 장비를 커서에 들고 클릭하면 장착"`}>${p ? iconImg(p.key) : `<span class="mc-armormark">${emoji}</span>`}</div>`;
+    };
     const wpn = equippedPiece('weapon'), bow = equippedPiece('bow');
-    // 핫바 9칸(1~8 지정 + 9 메뉴)
-    const hot = (P.hotbar || [null, null, null, null, null, null, null, null, null]);
-    const hotRow = Array.from({ length: 9 }, (_, i) => {
-      const k = hot[i];
-      return `<div class="mc-slot mc-hot ${k ? '' : 'mc-empty'}" data-act="${k ? 'econ_assign_hotbar' : (invDetailKey ? 'econ_assign_hotbar_slot' : '')}" data-key="${k || invDetailKey || ''}" data-slot="${i}" title="핫바 ${i + 1}">${k ? `${iconImg(k)}${(P.inv[k] || 0) > 1 ? `<span class="mc-cnt">${P.inv[k]}</span>` : ''}` : `<span class="mc-slotnum">${i + 1}</span>`}</div>`;
-    }).join('');
+    const grid = []; for (let i = 9; i < 36; i++) grid.push(slotCell(i));
+    const hotRow = []; for (let i = 0; i < 9; i++) hotRow.push(slotCell(i));
     return `<h4>🎒 인벤토리</h4>
       <div class="mc-invtop">
         <div class="mc-armorcol">${armorSlot('helmet', '🪖')}${armorSlot('chest', '🛡')}${armorSlot('leggings', '👖')}${armorSlot('boots', '🥾')}</div>
-        <div class="mc-charhint"><div class="mc-slot mc-armor" title="무기">${wpn ? iconImg(wpn.key) : '⚔️'}</div><div class="mc-slot mc-armor" title="활">${bow ? iconImg(bow.key) : '🏹'}</div><span class="muted">방어구/무기는<br>자동 장착</span></div>
+        <div class="mc-charhint"><div class="mc-slot mc-armor"${wpn ? ttAttr(wpn) : ' title="무기(자동 장착)"'}>${wpn ? iconImg(wpn.key) : '⚔️'}</div><div class="mc-slot mc-armor"${bow ? ttAttr(bow) : ' title="활(자동 장착)"'}>${bow ? iconImg(bow.key) : '🏹'}</div><span class="muted">방어구: 클릭 장착/해제<br>무기·활: 자동(📌 고정 가능)</span></div>
       </div>
-      <div class="mc-grid">${gridCells.join('')}</div>
-      <div class="mc-hotbar-label">핫바 9칸 (숫자키 1~9 선택 · 아이템 클릭 → 핫바 지정)</div>
-      <div class="mc-hotbar">${hotRow}</div>
-      ${overflow.length ? `<p class="muted">+ ${overflow.length}칸 초과(정리 필요) — 아이템을 팔거나 써서 공간을 확보하세요</p>` : ''}
-      <p class="muted">아이템을 클릭하면 상세(판매/장착/분해/핫바지정)가 열려요.</p>
+      <div class="mc-grid">${grid.join('')}</div>
+      <div class="mc-hotbar">${hotRow.join('')}</div>
+      <p class="mc-hint">클릭: 집기/놓기/맞바꾸기 · Shift+클릭: 방어구 즉시 장착 · ⓘ: 상세 — 핫바(아래 9칸)와 인벤토리는 하나입니다</p>
+      ${invCursor ? `<p class="mc-carry">커서에 들고 있음: ${iconImg(invCursor)} <b>${itemName(invCursor)}</b> — 빈 칸을 클릭해 놓으세요</p>` : ''}
+      ${overflow.length ? `<details class="econ-ownedonly"><summary>보관함 초과분 ${overflow.length}종</summary><div class="mc-grid">${overflow.map(k => { const sd = shopDef(k) || { key: k, name: itemName(k) }; return `<div class="mc-slot"${ttAttr(sd)} data-act="econ_invcell" data-key="${k}">${iconImg(k)}${(P.inv[k] || 0) > 1 ? `<span class="mc-cnt">${fmtNum(P.inv[k])}</span>` : ''}</div>`; }).join('')}</div></details>` : ''}
       ${invDetailKey ? invCellActions(invDetailKey) : ''}`;
   }
   function invCellActions(k) {
@@ -3457,9 +3524,50 @@
       case 'minion_fuel': useMinionFuel(el.dataset.key); break;
       case 'minion_collect_all': collectAllMinions(); break;
       case 'inv_filter': invFilter = el.dataset.key; renderZone(); break;
-      case 'invcell': {   // V21-B: Shift+클릭 = MC식 즉시 핫바 이동/해제, 일반 클릭 = 상세
-        if (window.__shiftDown && isPlaceableOrTool(el.dataset.key)) { assignHotbar(el.dataset.key); break; }
+      case 'invcell': {   // V27-C: ⓘ 상세(판매/분해/잠금)
         invDetailKey = (invDetailKey === el.dataset.key ? null : el.dataset.key); renderZone(); break;
+      }
+      case 'inv_slot': {   // V27-C: MC식 클릭-집기/놓기/맞바꾸기 (+Shift=방어구 즉시 장착)
+        ensureInvSlots();
+        const i = Number(el.dataset.i);
+        if (!(i >= 0 && i < 36)) break;
+        const k = P.invSlots[i];
+        if (window.__shiftDown && !invCursor && k) {   // Shift: 방어구면 즉시 장착
+          const sd = shopDef(k) || equipItemDef(k);
+          if (sd && ARMOR_SLOTS.indexOf(sd.slot) >= 0) {
+            const old = equippedPiece(sd.slot);
+            if (!P.equipPin) P.equipPin = {};
+            P.equipPin[sd.slot] = k;
+            P.invSlots[i] = old ? old.key : null;
+            bumpInv(); toastFn(`🛡 ${sd.name} 장착!`, true);
+          } else { invDetailKey = (invDetailKey === k ? null : k); }
+        }
+        else if (!invCursor && k) { invCursor = k; P.invSlots[i] = null; }         // 집기
+        else if (invCursor) { P.invSlots[i] = invCursor; invCursor = k || null; }  // 놓기/맞바꾸기
+        P.hotbar = P.invSlots.slice(0, 9);
+        invCursorGhost(); saveNow(); renderZone();
+        if (typeof window.economy3dRefreshHotbar === 'function') window.economy3dRefreshHotbar();
+        break;
+      }
+      case 'inv_armor': {   // V27-C: 장비칸 — 커서 장비 장착(맞바꾸기) / 빈 커서면 벗기
+        ensureInvSlots();
+        const sl = el.dataset.slot;
+        if (ARMOR_SLOTS.indexOf(sl) < 0) break;
+        const cur = equippedPiece(sl);
+        if (!P.equipPin) P.equipPin = {};
+        if (invCursor) {
+          const sd = shopDef(invCursor) || equipItemDef(invCursor);
+          if (!sd || sd.slot !== sl) { toastFn(`이 칸에는 ${SLOT_NAMES[sl]}만 장착할 수 있어요`, false); break; }
+          P.equipPin[sl] = invCursor;
+          invCursor = cur ? cur.key : null;   // 입고 있던 장비는 커서로
+          toastFn(`🛡 ${sd.name} 장착!`, true);
+        } else if (cur) {
+          invCursor = cur.key;
+          P.equipPin[sl] = '__none__';   // 벗은 상태 고정(자동 재장착 방지)
+          toastFn(`${SLOT_NAMES[sl]} 해제 — 커서에 들었어요`, true);
+        }
+        bumpInv(); invCursorGhost(); saveNow(); renderZone();
+        break;
       }
       case 'assign_hotbar': assignHotbar(el.dataset.key); break;
       case 'assign_hotbar_slot': assignHotbar(el.dataset.key, Number(el.dataset.slot)); break;
