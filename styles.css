@@ -1338,8 +1338,11 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .econ3d-sky{position:absolute; inset:0; z-index:0; background:linear-gradient(#3f7fc8,#9fd0ea 55%,#dff0f8);}
 #econ3dCanvas{position:absolute; inset:0; width:100%; height:100%; z-index:1; background:transparent; cursor:none;}
 #econ3dCanvas.is-pointerlocked{cursor:none;}
-.econ3d-cross{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); color:#fff; font-size:22px; opacity:.55; pointer-events:none; text-shadow:0 0 2px #000; z-index:3; transition:opacity .1s,color .1s;}
-.econ3d-cross.is-active{opacity:1; color:#ffe066;}
+/* V27-B: 실제 MC 십자선(gui/sprites/hud/crosshair.png, difference 블렌딩) — 파일 없으면 + 텍스트 폴백 유지 */
+.econ3d-cross{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); color:#fff; font-size:22px; opacity:.85; pointer-events:none; text-shadow:0 0 2px #000; z-index:3; transition:opacity .1s,color .1s;
+  width:30px; height:30px; line-height:30px; text-align:center;
+  background:url('gui/sprites/hud/crosshair.png') no-repeat center/30px 30px; image-rendering:pixelated; mix-blend-mode:difference; font-size:0;}
+.econ3d-cross.is-active{opacity:1; filter:drop-shadow(0 0 3px #ffe066);}
 .econ3d-top{position:absolute; top:0; left:0; right:0; display:flex; justify-content:space-between; align-items:center; padding:8px 10px; z-index:5; pointer-events:none; gap:8px;}
 .econ3d-top .btn{pointer-events:auto; margin-left:auto;}
 .econ3d-gold{font-weight:800; font-size:15px; color:#facc15; filter:drop-shadow(0 1px 1px #000); background:rgba(0,0,0,.35); padding:4px 10px; border-radius:10px;}
@@ -1412,9 +1415,14 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .econ3d-hpfill{height:100%; width:100%; background:linear-gradient(90deg,#16a34a,#4ade80); transition:width .15s;}
 .econ3d-hptxt{font-size:12px; font-weight:800; color:#fff; text-shadow:0 1px 2px #000;}
 /* V6: 핫바 + 스카이블럭 메뉴 + 아이템 로어 툴팁 */
-.econ3d-hotbar{position:absolute; left:50%; transform:translateX(-50%); bottom:38px; display:flex; gap:3px; z-index:5;}
-.econ3d-slot{width:42px; height:42px; border-radius:8px; border:2px solid rgba(255,255,255,.28); background:rgba(10,14,24,.62); padding:3px; cursor:pointer;}
-.econ3d-slot.is-active{border-color:#ffe066; box-shadow:0 0 10px rgba(255,224,102,.7); transform:translateY(-3px);}
+/* V27-B: 실제 MC 핫바 스킨 — gui/sprites/hud/hotbar.png(182×22)를 2배로. 슬롯 9칸 = 40px 간격 */
+.econ3d-hotbar{position:absolute; left:50%; transform:translateX(-50%); bottom:34px; display:flex; gap:0; z-index:5;
+  width:364px; height:44px; padding:2px; box-sizing:border-box;
+  background:rgba(10,14,24,.35) url('gui/sprites/hud/hotbar.png') no-repeat center/364px 44px; image-rendering:pixelated; border-radius:2px;}
+.econ3d-slot{width:40px; height:40px; border-radius:0; border:none; background:transparent; padding:5px; cursor:pointer;}
+.econ3d-slot.is-active{filter:brightness(1.18);}
+.econ3d-slot.is-active::after{content:''; position:absolute; left:-2px; top:-3px; width:48px; height:46px;
+  background:url('gui/sprites/hud/hotbar_selection.png') no-repeat center/48px 46px; image-rendering:pixelated; pointer-events:none;}
 .econ3d-slot{position:relative;}
 .econ3d-slotcount{position:absolute; right:2px; bottom:0; font-size:12px; font-weight:800; color:#fff; text-shadow:0 0 3px #000,0 0 3px #000; pointer-events:none;}
 .econ3d-slot img{width:100%; height:100%; image-rendering:pixelated;}
@@ -1443,9 +1451,12 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 @keyframes econ3d-panelin{ from{opacity:0; transform:translateY(10px) scale(.985);} to{opacity:1; transform:translateY(0) scale(1);} }
 .econ3d-panelwrap{animation:econ3d-panelin .16s ease-out;}
 /* V24-E: XP 바 — 핫바 바로 위 얇은 초록 진행 바(실제 MC 위치) */
-.econ3d-xpbar{position:absolute; left:50%; transform:translateX(-50%); bottom:30px; width:388px; max-width:80vw; height:5px;
-  background:rgba(10,14,24,.72); border:1px solid rgba(255,255,255,.22); border-radius:3px; z-index:5; pointer-events:none;}
-.econ3d-xpbar i{display:block; height:100%; width:0; background:linear-gradient(90deg,#69d84f,#a6f26a); border-radius:2px; transition:width .3s;}
+/* V27-B: 실제 MC 경험치 바 스프라이트(182×5 → 364×10) */
+.econ3d-xpbar{position:absolute; left:50%; transform:translateX(-50%); bottom:22px; width:364px; max-width:80vw; height:10px;
+  background:url('gui/sprites/hud/experience_bar_background.png') no-repeat left center/364px 10px; image-rendering:pixelated;
+  border:none; border-radius:0; z-index:5; pointer-events:none;}
+.econ3d-xpbar i{display:block; height:100%; width:0; border-radius:0; transition:width .3s;
+  background:url('gui/sprites/hud/experience_bar_progress.png') no-repeat left center/364px 10px; image-rendering:pixelated;}
 .econ3d-xpbar span{position:absolute; left:50%; transform:translateX(-50%); top:-15px; font-size:11px; font-weight:800; color:#b8f29a;
   text-shadow:1px 1px 0 #000,-1px 1px 0 #000,1px -1px 0 #000,-1px -1px 0 #000; white-space:nowrap;}
 /* V23-A: 포탈 통과 울렁임(외곡) — 실제 지옥문처럼 화면이 일렁이며 1초 뒤 자동 이동 */
@@ -1527,3 +1538,14 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 /* V27-A: 게임/패널 UI 텍스트 드래그 선택 방지 — 툴팁·패널 글자에 파란 선택 하이라이트가 끼던 문제 */
 .econ3d-screen, .econ-panel, .econ-richtt, .mc-slot, .econ3d-prompt, .econ3d-itemtitle, .modal-body .econ-panel{
   user-select:none; -webkit-user-select:none;}
+
+/* V27-B: 하늘 천체(해/달) + 구름 — environment/ 리소스팩 */
+.econ3d-sky{overflow:hidden;}
+.econ3d-cel{position:absolute; width:110px; height:110px; transform:translate(-50%,-50%);
+  background-repeat:no-repeat; background-size:100% 100%; image-rendering:pixelated; pointer-events:none; opacity:.95;
+  mix-blend-mode:screen;}  /* MC 해/달 텍스처는 검정 배경(가산 블렌딩용) — screen으로 배경 제거 */
+.econ3d-cel--moon{background-size:400% 200%; background-position:0 0;}  /* moon_phases 4×2 중 보름달 셀 */
+@keyframes econ3d-clouddrift{from{background-position-x:0;}to{background-position-x:512px;}}
+.econ3d-clouds{position:absolute; left:0; right:0; top:12%; height:120px; pointer-events:none; opacity:.35;
+  background:url('environment/clouds.png') repeat 0 0/512px 512px; image-rendering:pixelated;
+  animation:econ3d-clouddrift 240s linear infinite;}
