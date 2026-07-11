@@ -5322,6 +5322,43 @@
       const bottom = d < 0.75 ? 3 : Math.round(3 + (d - 0.75) * 60);
       for (let y = bottom; y <= 30; y++) setW(x, y, z, ID.end_stone);
     }
+    // ── V72: 실사(The_End.png) — 방사형 흑요석 가시 왕관 + 상판 보라 발광 균열 맥 ──
+    {
+      // 1) 림 가시 왕관: 둘레 24기 원뿔 스파이크(흑요석 + 퍼퍼 반점), 안쪽 몇 기는 낮게
+      for (let a = 0; a < 24; a++) {
+        const th = a / 24 * Math.PI * 2;
+        const rr = a % 3 === 2 ? 40 + hash3(a, 1021, 1) * 6 : 50 + hash3(a, 1021, 2) * 5;
+        const sx = Math.round(64 + Math.cos(th) * rr), sz = Math.round(64 + Math.sin(th) * rr);
+        if (Math.hypot(sx - 64, sz - 100) < 8) continue;   // 스폰 지대는 비움
+        const g = surfaceTop(sx, sz);
+        if (g < 10) continue;
+        const sh = 8 + Math.floor(hash3(sx, 1022, sz) * 10), sr = 2 + Math.floor(hash3(sx, 1023, sz) * 2);
+        for (let y = 0; y < sh; y++) {
+          const rr2 = Math.max(0, Math.round(sr * (1 - y / sh)));
+          for (let dx = -rr2; dx <= rr2; dx++) for (let dz = -rr2; dz <= rr2; dz++) {
+            if (Math.hypot(dx, dz) > rr2 + 0.3) continue;
+            setW(sx + dx, g + y, sz + dz, hash3(sx + dx, 1024 + y, sz + dz) < 0.12 ? ID.purpur : ID.obsidian);
+          }
+        }
+        setW(sx, g + sh, sz, ID.obsidian);
+      }
+      // 2) 보라 발광 균열 맥: 상판(y30)을 가로지르는 랜덤워크 균열 6줄 — 퍼퍼/마젠타 + 발광 코어
+      const MAG = ID.wool_magenta != null ? ID.wool_magenta : ID.purpur;
+      for (let v = 0; v < 6; v++) {
+        let vx = 64 + (hash3(v, 1025, 1) - 0.5) * 60, vz = 64 + (hash3(v, 1025, 2) - 0.5) * 60;
+        let dir = hash3(v, 1026, 1) * Math.PI * 2;
+        for (let st2 = 0; st2 < 55; st2++) {
+          dir += (hash3(v, 1027, st2) - 0.5) * 0.9;
+          vx += Math.cos(dir); vz += Math.sin(dir);
+          const ix = Math.round(vx), iz = Math.round(vz);
+          if (Math.hypot(ix - 64, iz - 64) > 52 || Math.hypot(ix - 64, iz - 100) < 7) continue;
+          if (getBlockLocal(ix, 30, iz) !== ID.end_stone) continue;
+          const glowCore = st2 % 5 === 0;
+          setW(ix, 30, iz, glowCore ? ID.glowstone : (hash3(ix, 1028, iz) < 0.5 ? ID.purpur : MAG));
+          if (hash3(ix, 1029, iz) < 0.4 && getBlockLocal(ix + 1, 30, iz) === ID.end_stone) setW(ix + 1, 30, iz, ID.purpur);   // 폭 변주
+        }
+      }
+    }
     // 드래곤 둥지: 최하부 대형 공동(y5~14, 반경 30)
     for (let x = 24; x <= 104; x++) for (let z = 24; z <= 104; z++) {
       const d = Math.hypot(x - 64, z - 64);
