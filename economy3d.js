@@ -3754,7 +3754,7 @@
     buildArrivalPlaza(mode);   // V20-AH: 섬마다 고유 컨셉 포탈 도착 광장(손 배치)
     if (mode === 'park' && ok(70, 100)) { buildHouse(67, 97, 7, 6, base(70, 100), ID.spruce_planks, ID.oak_planks, ID.oak_log); furnishThemeLodge(70, 100, 'park'); buildParkCenter(); buildOtherDetail('park'); }   // 삼림 산장 + V24: 중앙 파빌리온(죽은 코드였음, 감사 #20) + 디테일
     else if (mode === 'barn' && ok(58, 100)) { buildBarnEstate(); buildOtherDetail('barn'); }   // V20-AB 대형 농장 + V20-BA(6차) 디테일
-    else if (mode === 'gold' && ok(50, 90)) { buildGoldOutpost(); buildGoldDetail(); buildGoldLandmarks(); furnishThemeLodge(50, 90, 'gold'); }   // V20-W 전초기지 + V20-AX 디테일 + V20-BG(7차) 노란림 플랫폼/딥캐번 포탈/용암류
+    else if (mode === 'gold' && ok(50, 90)) { buildGoldOutpost(); buildGoldDetail(); buildGoldLandmarks(); buildGoldGate(); furnishThemeLodge(50, 90, 'gold'); }   // V67: 실사(Gold_Mine.png) 대문/광장   // V20-W 전초기지 + V20-AX 디테일 + V20-BG(7차) 노란림 플랫폼/딥캐번 포탈/용암류
     else if (mode === 'deep' && ok(48, 80)) buildDeepDepot();   // V20-X: 손 배치 지하 크리스탈 채광 정거장
     else if (mode === 'spider' && ok(74, 88)) { buildSpiderNest(); buildSpiderRegions(); buildMonsterDetail('spider'); }   // V20-AA 거미굴 + V20-BD(7차) 실제 6구역 + V20-AZ 디테일
     else if (mode === 'nether' && ok(62, 78)) { buildNetherKeep(); buildCrimsonRegions(); buildMonsterDetail('nether'); }   // V20-Y 네더 요새 + V21-D4 크림슨 구역 + V20-AZ 디테일
@@ -3996,6 +3996,66 @@
     }
   }
   // V20-BG 7차: 골드마인 시그니처(리서치 반영) — 수직 노란림 채굴 플랫폼(높이 차등) + 딥캐번 포탈 + 좌측 산 용암류.
+  // V67: 실사(Gold_Mine.png) — 갱도 위 대형 조각 대문(금 트림 + 어두운 플레어 지붕 + 금 초승달 장식) +
+  //   헥스 석재 광장 + 보급 궤짝 더미 + 파랑/빨강 텐트 + 수직 갱(피트)
+  function buildGoldGate() {
+    const S = (x, y, z, id) => { if (id != null) setW(x, y, z, id); };
+    const yel = ID.wool_yellow != null ? ID.wool_yellow : ID.gold_ore;
+    const DKP = ID.dark_oak_planks != null ? ID.dark_oak_planks : ID.spruce_planks;
+    const AND3 = ID.polished_andesite != null ? ID.polished_andesite : ID.stone;
+    const CH3 = ID.chiseled_stone_bricks != null ? ID.chiseled_stone_bricks : ID.stone_bricks;
+    const gy = surfaceTop(56, 73);
+    // 1) 대문: 갱도 입구(x54~58, z~72) 좌우 필라스터 탑 + 금 밴드 + 상부 아키트레이브 + 플레어 지붕 + 금 초승달
+    for (const gx of [51, 61]) {   // 필라스터 탑 2기(3×3)
+      for (let dx = 0; dx < 3; dx++) for (let dz = 0; dz < 3; dz++) for (let y = 0; y < 9; y++) {
+        const edge = dx === 0 || dx === 2 || dz === 0 || dz === 2;
+        S(gx + dx, gy + y, 70 + dz, edge ? (y === 3 || y === 7 ? yel : (dx === 1 && dz === 0 ? CH3 : ID.stone_bricks)) : 0);
+      }
+      for (let dx = -1; dx <= 3; dx++) for (let dz = -1; dz <= 3; dz++) S(gx + dx, gy + 9, 70 + dz, DKP);   // 탑 플레어 처마
+      for (let dx = 0; dx < 3; dx++) for (let dz = 0; dz < 3; dz++) S(gx + dx, gy + 10, 70 + dz, DKP);
+      S(gx + 1, gy + 11, 71, yel);   // 지붕 금 정점
+    }
+    for (let x = 52; x <= 60; x++) { S(x, gy + 6, 71, ID.stone_bricks); S(x, gy + 7, 71, yel); S(x, gy + 8, 71, ID.stone_bricks); }   // 아키트레이브(금 밴드)
+    for (let x = 53; x <= 59; x++) S(x, gy + 9, 71, DKP);   // 상부 어두운 지붕 라인
+    // 금 초승달 장식(아키트레이브 위 중앙)
+    S(55, gy + 9, 70, yel); S(57, gy + 9, 70, yel); S(54, gy + 10, 70, yel); S(58, gy + 10, 70, yel); S(55, gy + 11, 70, yel); S(56, gy + 11, 70, yel); S(57, gy + 11, 70, yel);
+    S(54, gy + 2, 70, ID.glowstone); S(58, gy + 2, 70, ID.glowstone);   // 입구 등
+    // 2) 헥스 석재 광장(대문 앞): 매끈돌/안산암 패치
+    for (let x = 46; x <= 66; x++) for (let z = 75; z <= 88; z++) {
+      if (x >= 47 && x <= 54 && z >= 86) continue;   // 로지(50,90) 앞마당 보존
+      const g = surfaceTop(x, z);
+      const b = getBlockLocal(x, g - 1, z);
+      if (b !== ID.stone && b !== ID.gravel && b !== AND3) continue;
+      const r = hash3(x, 971, z);
+      if (r < 0.30) setW(x, g - 1, z, ID.smooth_stone != null ? ID.smooth_stone : ID.stone_bricks);
+      else if (r < 0.5) setW(x, g - 1, z, AND3);
+    }
+    // 3) 보급 궤짝 더미(서측) — 오크 상자 + 건초 덮개
+    for (const [bx, bz, hh] of [[45, 82, 2], [47, 83, 1], [45, 85, 1], [48, 81, 1]]) {
+      const g = surfaceTop(bx, bz);
+      for (let y = 0; y < hh; y++) S(bx, g + y, bz, ID.oak_planks);
+      if (hh === 2) S(bx, g + 2, bz, ID.hay_block);
+    }
+    // 4) 텐트: 파랑(서) / 빨강(동) — 3×3 박공(양털)
+    const tent = (tx, tz, col) => {
+      const g = surfaceTop(tx + 1, tz + 1);
+      for (let dz = 0; dz < 3; dz++) { S(tx, g, tz + dz, col); S(tx + 2, g, tz + dz, col); S(tx, g + 1, tz + dz, col); S(tx + 2, g + 1, tz + dz, col); }
+      for (let dz = 0; dz < 3; dz++) S(tx + 1, g + 2, tz + dz, col);
+      S(tx + 1, g, tz + 1, ID.glowstone);   // 내부 등
+    };
+    tent(49, 77, ID.wool_blue != null ? ID.wool_blue : ID.wool_white);
+    tent(62, 79, ID.wool_red);
+    // 5) 수직 갱(피트, 남동): 3×3 어두운 구멍 + 울타리 난간
+    {
+      const px2 = 63, pz2 = 86, g = surfaceTop(px2, pz2);
+      for (let dx = 0; dx < 3; dx++) for (let dz = 0; dz < 2; dz++) for (let y = 1; y <= 5; y++) setW(px2 + dx, g - y, pz2 + dz, 0);
+      for (let dx = -1; dx <= 3; dx++) { S(px2 + dx, g, pz2 - 1, ID.oak_fence); S(px2 + dx, g, pz2 + 2, ID.oak_fence); }
+      S(px2 - 1, g, pz2, ID.oak_fence); S(px2 - 1, g, pz2 + 1, ID.oak_fence);
+      S(px2 + 3, g, pz2, ID.oak_fence); S(px2 + 3, g, pz2 + 1, ID.oak_fence);
+    }
+    // 6) 대문 뒤 능선 용암 낙류 1줄(참조의 산비탈 용암)
+    { const lx = 60, lz = 44, g2 = surfaceTop(lx, lz); for (let j = 0; j <= 8; j++) setW(lx, g2 - j, lz, ID.lava); }
+  }
   function buildGoldLandmarks() {
     const gold = ID.gold_ore, iron = ID.iron_ore, coal = ID.coal_ore, yel = ID.wool_yellow != null ? ID.wool_yellow : gold;
     const sb = ID.stone_bricks, and_ = ID.polished_andesite != null ? ID.polished_andesite : ID.stone, glow = ID.glowstone, obs = ID.obsidian, lava = ID.lava, fence = ID.oak_fence, mag = ID.magma_block != null ? ID.magma_block : lava;
