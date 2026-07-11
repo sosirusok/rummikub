@@ -3035,24 +3035,25 @@
       ${chestNavRow('menu')}</div>`;
   }
   function enchantHTML() {
-    return `<h4>✨ 인챈트 탑 — 북으로 상한까지, 그 위는 혼돈의 마법부여(운빨 돌파!)</h4>
-      <div class="econ-shopgrid">${D().ENCHANTS.map(e => {
-        const cur = enchantLvl(e.target, e.key); const book = `enchant_book_${e.key}`;
-        const fee = e.bookBasePrice * cur;
-        const hardCap = enchantHardCap(e);
-        const isOver = cur >= e.maxLvl;
-        const overBtn = isOver && cur < hardCap
-          ? `<button class="btn btn--sm econ-chaosbtn" data-act="econ_chaos" data-key="${e.key}" ${hasItem(book) ? '' : 'disabled'}>🌀 혼돈 ${Math.round(chaosRate(e, cur) * 100)}% (${fmtGold(chaosCost(e, cur))})</button>`
-          : '';
-        return `<div class="econ-shopitem">
-          ${iconImg(book)}<span>${e.name} <b class="${cur > e.maxLvl ? 'econ-overcap' : ''}">${cur}</b>/${e.maxLvl}${cur > e.maxLvl ? `<span class="econ-overcap">+${cur - e.maxLvl}</span>` : ''} <span class="muted">(${e.target === 'weapon' ? '무기' : '방어구'})</span></span>
-          <span class="muted">${e.desc} · 북 보유 ${P.inv[book] || 0}</span>
-          ${!isOver ? `<button class="btn btn--sm" data-act="econ_enchant" data-key="${e.key}" ${hasItem(book) ? '' : 'disabled'}>부여${fee > 0 ? `(${fmtGold(fee)})` : '(무료)'}</button>` : ''}
-          ${overBtn}
-        </div>`;
-      }).join('')}</div>`;
+    // V37: 상자 GUI — 인챈트북 슬롯(현재 레벨 뱃지), 호버=효과/비용/보유, 클릭=부여, 상한 도달 시 클릭=혼돈 돌파
+    const pad9 = (arr) => { const out = arr.slice(); while (out.length % 9) out.push('<div class="mc-slot mc-empty2"></div>'); return out.join(''); };
+    const slots = D().ENCHANTS.map(e => {
+      const cur = enchantLvl(e.target, e.key); const book = `enchant_book_${e.key}`;
+      const fee = e.bookBasePrice * cur;
+      const hardCap = enchantHardCap(e);
+      const isOver = cur >= e.maxLvl;
+      const canChaos = isOver && cur < hardCap;
+      const act = !isOver ? `data-act="econ_enchant" data-key="${e.key}"` : (canChaos ? `data-act="econ_chaos" data-key="${e.key}"` : '');
+      const desc = `${e.desc} (${e.target === 'weapon' ? '무기' : '방어구'}) · 북 보유 ${P.inv[book] || 0} · ` +
+        (!isOver ? `클릭: 부여 ${fee > 0 ? fmtGold(fee) : '무료'}` : (canChaos ? `클릭: 🌀 혼돈 돌파 ${Math.round(chaosRate(e, cur) * 100)}% (${fmtGold(chaosCost(e, cur))})` : 'MAX'));
+      return `<div class="mc-slot mc-menuslot ${!hasItem(book) ? 'mc-locked' : ''}" ${hasItem(book) ? act : ''} data-ttn="${escHtml(e.name)} ${cur}/${e.maxLvl}${cur > e.maxLvl ? ` (+${cur - e.maxLvl} 혼돈)` : ''}" data-ttd="${escHtml(desc)}">${iconImg(book)}${cur > 0 ? `<span class="mc-cnt">${cur}</span>` : ''}</div>`;
+    });
+    return `<div class="mc-chest"><div class="mc-chesttitle">✨ 인챈트 탑 — 북으로 상한까지, 그 위는 혼돈의 마법부여</div>
+      <div class="mc-grid">${pad9(slots)}</div>
+      <p class="muted">잠긴 슬롯 = 해당 인챈트북 미보유(몹 드롭으로 획득). 상한 도달 후 클릭 = 혼돈 돌파(운빨).</p>
+      ${chestNavRow('menu')}</div>`;
   }
-  // V20-J: 명예의 전당 — 전 시스템 개인 기록 + 마일스톤 등급(순수 표시, 밸런스 무관)
+  // V20-J: 명예의 전당  // V20-J: 명예의 전당 — 전 시스템 개인 기록 + 마일스톤 등급(순수 표시, 밸런스 무관)
   function hofTier(v, thresholds) { let t = 0; for (const th of thresholds) { if (v >= th) t++; else break; } return t; }   // 0~5
   function hofBadge(t) { return ['⬜', '🥉', '🥈', '🥇', '💎', '👑'][Math.min(5, t)]; }
   function hallOfFameHTML() {
@@ -3095,9 +3096,9 @@
         <span class="muted">${t >= 5 ? '👑 완전 정복!' : `다음 ${hofBadge(t + 1)} @ ${r.fmt(nextTh)}`}</span>
       </div>`;
     }).join('');
-    return `<h4>🏆 명예의 전당 — 나의 기록</h4>
-      <p class="econ-note">전 시스템 개인 기록과 마일스톤 등급(⬜→🥉→🥈→🥇→💎→👑). 명예 점수 <b>${totalTier}/${maxTier}</b>.</p>
-      <div class="econ-colgrid">${rows}</div>`;
+    return `<div class="mc-chest"><div class="mc-chesttitle">🏆 명예의 전당 — 나의 기록 (명예 점수 ${totalTier}/${maxTier})</div>
+      <div class="econ-colgrid">${rows}</div>
+      ${chestNavRow('menu')}</div>`;
   }
   function starForceHTML() {
     const SF = D().STARFORCE;
@@ -3121,7 +3122,7 @@
         <p class="muted">2연속 하락 시 다음 강화는 찬스 타임(100% 성공) — 메이플 방식</p>`}
       </div>`;
     }).join('');
-    return `<h4>⭐ 스타포스 강화(메이플식 체계) — V11: 6슬롯 개별 강화</h4>${rows}`;
+    return `<div class="mc-chest"><div class="mc-chesttitle">⭐ 스타포스 강화 — 6슬롯 개별 강화</div>${rows}${chestNavRow('menu')}</div>`;
   }
   function reforgeHTML() {
     const row = (slot, label, eq) => {
@@ -3150,7 +3151,8 @@
       ${EQUIP_SLOTS.map(sl => row(sl, `${SLOT_EMOJI[sl]} ${SLOT_NAMES[sl]}`, equippedPiece(sl))).join('')}
       <p class="muted">보유 리포지 스톤(희귀): ${P.inv.reforge_stone_rare || 0}</p>
       <h4>🥔 핫 포테이토 북 — 장비당 최대 15권(10권부터 퓨밍 필요)</h4>
-      <div class="econ-shopgrid">${hpbRows || '<p class="muted">장착 중인 장비가 없어요</p>'}</div>`;
+      <div class="econ-shopgrid">${hpbRows || '<p class="muted">장착 중인 장비가 없어요</p>'}</div>
+      ${chestNavRow('menu')}`;
   }
   // V12: 보유 아이템 기반 추천 제작(재료 보유율 높은 순, 지금 제작 가능 우선)
   function craftRecommendations() {
