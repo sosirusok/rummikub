@@ -4838,6 +4838,67 @@
     const bhy = surfaceTop(70, 62); for (let x = 66; x <= 76; x++) for (let z = 58; z <= 68; z++) { const fy = surfaceTop(x, z); for (let y = Math.min(fy, bhy) + 1; y <= Math.max(fy, bhy); y++) setW(x, y, z, ID.dirt); setW(x, bhy, z, ID.grass); }
     buildHouse(66, 60, 9, 8, bhy + 1, ID.wool_red, ID.spruce_planks);   // 보조 헛간(평탄 부지 위)
     lampPost(64, 90); lampPost(90, 64);
+    // ── V68: 실사(The_Barn.png) — 섬을 도는 강 링 + 절벽 폭포 + 설캡 크래그 림 + 남측 모래밭 + 링 다리 ──
+    {
+      const CX = 72, CZ = 72;
+      // 1) 강 링(r≈46, 폭 3): 채널 파고 물 2단 채움
+      for (let x = 12; x < W - 12; x++) for (let z = 12; z < Dp - 12; z++) {
+        const d = Math.hypot(x - CX, z - CZ);
+        if (Math.abs(d - 46) > 1.4) continue;
+        const fy = surfaceTop(x, z);
+        if (fy < 8) continue;
+        for (let y = fy - 2; y <= fy + 5; y++) setW(x, y, z, 0);
+        setW(x, fy - 3, z, ID.stone);
+        setW(x, fy - 2, z, ID.water); setW(x, fy - 1, z, ID.water);
+      }
+      // 링 다리 4개(십자로가 강을 건너는 지점) — 판자 3폭
+      for (const [bx, bz, ax2, az2] of [[72, 26, 1, 0], [72, 118, 1, 0], [26, 72, 0, 1], [118, 72, 0, 1]]) {
+        for (let o = -3; o <= 3; o++) for (let w2 = -1; w2 <= 1; w2++) {
+          const x = bx + (ax2 ? w2 : o), z = bz + (ax2 ? o : w2);
+          setW(x, 13, z, ID.oak_planks);
+          if (Math.abs(o) === 3 && w2 !== 0) setW(x, 14, z, ID.oak_fence);
+        }
+      }
+      // 2) 배수 폭포(북동): 링 → 섬 가장자리로 스필 채널 + 절벽 물기둥
+      {
+        let px2 = Math.round(CX + Math.cos(-0.5) * 46), pz2 = Math.round(CZ + Math.sin(-0.5) * 46);
+        for (let i = 0; i <= 16; i++) {
+          const x = Math.round(px2 + Math.cos(-0.5) * i), z = Math.round(pz2 + Math.sin(-0.5) * i);
+          const fy = surfaceTop(x, z);
+          if (fy < 5) break;
+          for (let y = fy - 1; y <= fy + 4; y++) setW(x, y, z, 0);
+          setW(x, fy - 2, z, ID.stone); setW(x, fy - 1, z, ID.water);
+          if (Math.hypot(x - CX, z - CZ) > 58) { for (let y = fy - 2; y >= 4; y--) setW(x, y, z, ID.water); break; }   // 절벽 낙수
+        }
+      }
+      // 3) 크래그 림(남측 스폰/포탈 섹터 제외): 바위 봉우리 + 설캡
+      for (let a = 0; a < 30; a++) {
+        const th = a / 30 * Math.PI * 2;
+        if (Math.abs(th - Math.PI / 2) < 0.55) continue;   // 남쪽(+z, 스폰 72,128) 열어둠
+        if (a % 2) continue;
+        const mx = Math.round(CX + Math.cos(th) * 55), mz = Math.round(CZ + Math.sin(th) * 55);
+        const g = surfaceTop(mx, mz);
+        if (g < 8) continue;
+        const ph = 7 + Math.floor(hash3(mx, 981, mz) * 8), pr = 3 + Math.floor(hash3(mx, 982, mz) * 3);
+        for (let dx = -pr; dx <= pr; dx++) for (let dz = -pr; dz <= pr; dz++) {
+          const dd = Math.hypot(dx, dz) / pr;
+          if (dd >= 1) continue;
+          const hh = Math.round(ph * (1 - dd * dd));
+          for (let y = 0; y < hh; y++) {
+            const x = mx + dx, z = mz + dz;
+            if (Math.hypot(x - CX, z - CZ) > 61) continue;
+            setW(x, g + y, z, (y >= hh - 2 && ph >= 10) ? ID.snow_block : (hash3(x, 983 + y, z) < 0.2 ? (ID.polished_andesite != null ? ID.polished_andesite : ID.stone) : ID.stone));
+          }
+        }
+      }
+      // 4) 남측 모래밭(스폰 앞 해변 느낌)
+      for (let x = 58; x <= 88; x++) for (let z = 104; z <= 122; z++) {
+        if (Math.hypot(x - CX, z - CZ) > 58) continue;
+        if (hash3(x, 984, z) > 0.55 - smoothNoise(x, z, 8) * 0.3) continue;
+        const fy = surfaceTop(x, z);
+        if (getBlockLocal(x, fy - 1, z) === ID.grass) setW(x, fy - 1, z, ID.sand);
+      }
+    }
     buildBarnExtras();   // V46: 곡물 사일로 + 가축 목장(울타리/건초/물통)
     buildWarpPads();
   }
