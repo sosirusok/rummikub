@@ -485,6 +485,12 @@
     const amp = 3.6 * Math.max(0, Math.min(1, (dc - 70) / 150));
     top += Math.round((smoothNoise(x, z, 34) - 0.5) * 2 * amp);
     if (f < 0.16) top -= Math.round((0.16 - Math.max(0, f)) * 24);   // V44: 해안 사면 — 대륙 가장자리로 3~4칸 내려가는 벼랑/해변 느낌
+    // V54: 마을 둘레 강(현행 허브 0.23+ 탑뷰) — 노이즈 링 채널로 지형을 물높이 아래로 깎음
+    const rDist = Math.hypot(x - HUB_C, z - HUB_C);
+    const rRing = 62 + (smoothNoise(x + 71, z + 23, 44) - 0.5) * 12;
+    const rBand = Math.abs(rDist - rRing);
+    if (rBand < 3.2) top = Math.min(top, 16);                          // 강바닥
+    else if (rBand < 4.6) top = Math.min(top, 18);                     // 강둑 경사
     return { y: Math.min(H - 6, top), f };
   }
   function zoneAt(x, z) {
@@ -520,6 +526,14 @@
         } else if (y >= top - 3) id = top >= 34 ? ID.stone : ID.dirt;
         setW(x, y, z, id);
       }
+      // V54: 강 채널에 물 채우기(수면 y18) + 강둑 모래/자갈
+      {
+        const rDist = Math.hypot(x - HUB_C, z - HUB_C);
+        const rRing = 62 + (smoothNoise(x + 71, z + 23, 44) - 0.5) * 12;
+        const rBand = Math.abs(rDist - rRing);
+        if (rBand < 3.2 && top <= 16) { setW(x, 17, z, ID.water); setW(x, 18, z, ID.water); setW(x, 16, z, hash3(x, 701, z) < 0.4 ? ID.gravel : ID.sand); }
+        else if (rBand < 5.4 && top <= 20) { const g = getBlockLocal(x, top, z); if (g === ID.grass || g === ID.dirt) setW(x, top, z, hash3(x, 702, z) < 0.55 ? ID.sand : ID.gravel); }
+      }
     }
     buildVillage();
     buildVillageDetail();
@@ -536,6 +550,7 @@
     buildShrineV6();
     // 광장 → 각 구역 대로(자갈길)
     [[224, 92], [110, 208], [156, 314], [326, 224], [146, 136], [318, 318], [224, 348], [318, 124], [294, 372]].forEach(t => pathTo(224, 224, t[0], t[1]));
+    buildRiverBridges();   // V54: 대로가 강을 건너는 지점의 목조 다리 9기(난간/교각/등불)
     // V24-C(건축 #4): 반경 150 순환로 — 외곽 존들을 잇는 자갈/조약돌 링(잔디/흙 위만 포장)
     for (let a = 0; a < 900; a++) {
       const ang = a / 900 * Math.PI * 2;
@@ -815,6 +830,30 @@
   }
 
 
+
+
+  // V54: 강 다리 — 각 대로 방향으로 강 링(r≈62)을 건너는 3폭 목조 다리(판자 상판/울타리 난간/교각/등불)
+  function buildRiverBridges() {
+    const targets = [[224, 92], [110, 208], [156, 314], [326, 224], [146, 136], [318, 318], [224, 348], [318, 124], [294, 372]];
+    for (const [tx, tz] of targets) {
+      const ang = Math.atan2(tz - HUB_C, tx - HUB_C);
+      const ux = Math.cos(ang), uz = Math.sin(ang);
+      for (let r = 53; r <= 73; r++) {
+        const x = Math.round(HUB_C + ux * r), z = Math.round(HUB_C + uz * r);
+        const horiz = Math.abs(ux) >= Math.abs(uz);
+        for (let o = -1; o <= 1; o++) {
+          const px = horiz ? x : x + o, pz = horiz ? z + o : z;
+          // 강/강둑 위만 상판(주변 지면이 이미 y19면 그대로 이어짐)
+          if (surfaceTop(px, pz) <= 19) {
+            setW(px, 18, pz, ID.oak_planks);
+            if (Math.abs(o) === 1 && r % 2 === 0) setW(px, 19, pz, ID.oak_fence);   // 난간
+          }
+        }
+        if (r % 6 === 0 && surfaceTop(x, z) <= 19) { for (let y = 15; y <= 17; y++) setW(x, y, z, ID.oak_log); }   // 교각
+        if (r === 63) { const lx = horiz ? x : x + 2, lz = horiz ? z + 2 : z; if (surfaceTop(lx, lz) <= 19) { setW(lx, 19, lz, ID.oak_fence); setW(lx, 20, lz, ID.glowstone); } }   // 다리 등불
+      }
+    }
+  }
 
   // V53: 마을 벽면 잎 트림 — 건물 외벽(석재/판자)에 잎을 낮은 확률로 부착해 '덩굴 낀 마을' 질감(Bazaar_Alley.png)
   function leafTrimPass() {
