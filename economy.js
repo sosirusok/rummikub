@@ -3544,46 +3544,46 @@
   }
 
   function slayerZoneHTML() {
+    // V38: 상자 GUI — 계열별 티어 슬롯(호버=보스 HP/공격/보상/조건, 클릭=의뢰 시작), 전투Lv 미달=잠금
     const q = P.slayerQuest;
-    return `<div class="econ-panel"><h4>💀 슬레이어(마덕스식 의뢰)</h4>
-      ${q ? `<div class="econ-note">진행 중: <b>${slayerDef(q.key).name} T${q.tier}</b> — 게이지 <b>${q.kills}/${q.needed}</b><br>해당 계열 몬스터를 월드에서 처치하면 게이지가 차고, 완충 시 보스가 소환됩니다!</div>`
-        : '<p class="econ-note">의뢰를 시작하고 해당 계열 몬스터를 처치해 게이지를 채우세요. 완충되면 슬레이어 보스가 나타납니다!</p>'}
-      ${D().SLAYERS.map(sd => {
-        const lv = slayerLevel(sd.key), xp = slayerXpOf(sd.key);
-        const T = D().SLAYER_XP_LEVELS; const next = lv < T.length ? T[lv] : null;
-        return `<div class="econ-slayercard">
-          <h4>${sd.name} <span style="color:#f6c945">Lv.${lv}</span> <span class="muted">${next ? `${xp}/${next} XP` : 'MAX'}</span></h4>
-          <p class="muted">${sd.flavor} · 최고 처치 T${P.slayerBest[sd.key] || 0} · Lv3 보상: 전용 부적</p>
-          <div class="econ-tierbtns">${sd.tiers.map(t => {
-            const recAtk = Math.max(20, Math.round(t.hp / 60));
-            const okLv = skillLevel('combat') >= t.minCombatLevel;
-            return `<button class="btn btn--sm ${okLv ? '' : 'btn--ghost'}" data-act="econ_slayer_quest" data-key="${sd.key}" data-tier="${t.tier}" ${q ? 'disabled' : ''} title="보스 HP ${fmtNum(t.hp)} · 보스 공격 ${fmtNum(t.dmg)}">T${t.tier} 의뢰(${fmtGold(t.turnInGold)} · ${D().SLAYER_QUEST.killsNeeded[t.tier - 1]}마리)<br><span class="muted">HP ${fmtNum(t.hp)} · 전투Lv${t.minCombatLevel}+ · 권장⚔${fmtNum(recAtk)}</span></button>`;
-          }).join('')}</div>
-          <p class="muted">현재 내 공격력 ⚔${playerAttackPower().toFixed(0)} — 권장⚔ 이상이면 도전할 만해요${sd.uniqueDrop ? ` · T2+ 유니크: ${itemName(sd.uniqueDrop)} (12%)` : ''}</p>
-        </div>`;
-      }).join('')}
-    </div>`;
+    const pad9 = (arr) => { const out = arr.slice(); while (out.length % 9) out.push('<div class="mc-slot mc-empty2"></div>'); return out.join(''); };
+    const fams = D().SLAYERS.map(sd => {
+      const lv = slayerLevel(sd.key), xp = slayerXpOf(sd.key);
+      const T = D().SLAYER_XP_LEVELS; const next = lv < T.length ? T[lv] : null;
+      const slots = sd.tiers.map(t => {
+        const okLv = skillLevel('combat') >= t.minCombatLevel;
+        const recAtk = Math.max(20, Math.round(t.hp / 60));
+        const desc = `보스 HP ${fmtNum(t.hp)} · 공격 ${fmtNum(t.dmg)} · 처치 ${D().SLAYER_QUEST.killsNeeded[t.tier - 1]}마리 → ${fmtGold(t.turnInGold)} · 전투Lv${t.minCombatLevel}+ · 권장⚔${fmtNum(recAtk)}${q ? ' — 진행 중 의뢰 완료 후 가능' : ' — 클릭: 의뢰 시작'}`;
+        return `<div class="mc-slot mc-menuslot ${okLv && !q ? '' : 'mc-locked'}" ${okLv && !q ? `data-act="econ_slayer_quest" data-key="${sd.key}" data-tier="${t.tier}"` : ''} data-ttn="${escHtml(sd.name)} T${t.tier}" data-ttd="${escHtml(desc)}">${iconImg(sd.dropResource)}<span class="mc-cnt">${t.tier}</span></div>`;
+      });
+      return `<div class="mc-chesttitle" style="margin-top:8px">${sd.name} <span style="color:#f6c945">Lv.${lv}</span> <span class="muted">${next ? `${xp}/${next} XP` : 'MAX'} · 최고 T${P.slayerBest[sd.key] || 0}</span></div><div class="mc-grid">${pad9(slots)}</div>`;
+    }).join('');
+    return `<div class="mc-chest"><div class="mc-chesttitle">💀 슬레이어 의뢰</div>
+      ${q ? `<div class="econ-note">진행 중: <b>${slayerDef(q.key).name} T${q.tier}</b> — 게이지 <b>${q.kills}/${q.needed}</b> (해당 계열 몹 처치로 충전, 완충 시 보스 소환)</div>` : '<p class="muted">티어 슬롯 클릭 = 의뢰 시작. 내 공격력 ⚔' + playerAttackPower().toFixed(0) + '</p>'}
+      ${fams}
+      ${chestNavRow('menu')}</div>`;
   }
-
   function dungeonZoneHTML() {
+    // V38: 상자 GUI — 층 슬롯(뱃지=층, 호버=보스/HP/정수/최고 등급, 클릭=입장), 마스터/지옥은 별도 행
     const MM = D().MASTER_MODE;
     const masterUnlocked = !!P.dungeonBest[MM.unlockFloor] && P.dungeonBest[MM.unlockFloor] !== 'F';
-    return `<div class="econ-panel"><h4>🗝️ 카타콤 — 총 18개 난이도(입구 + 층 7 + 마스터 7 + ☠☠지옥 3)</h4>
-      <p class="muted">던전 클래스: ${D().DUNGEON_CLASSES.map(c => `<button class="btn btn--sm ${P.dungeonClass === c.key ? '' : 'btn--ghost'}" data-act="econ_dungeon_class" data-key="${c.key}">${c.emoji} ${c.name}</button>`).join(' ')}</p>
-      <div class="econ-shopgrid">${D().DUNGEON.floors.map(fd => {
-        const ok = canEnterFloor(fd.floor);
-        const best = P.dungeonBest[fd.floor];
-        return `<div class="econ-floorcard">
-          <h4>${fd.floor === 0 ? '🚪 입구(F0)' : fd.hell ? `☠☠ 지옥 M${fd.floor}` : `F${fd.floor}`} — ${fd.bossName}</h4>
-          <p class="muted">보스 HP ${fmtNum(fd.bossHp)} · 정수 +${fd.essenceReward} · 최고 등급 ${best || '-'}${fd.hell ? ' · <b style="color:#ff5470">극악 난이도</b>' : ''}</p>
-          <button class="btn btn--sm" data-act="econ_dungeon_start" data-floor="${fd.floor}" ${ok ? '' : 'disabled'}>${ok ? '입장' : fd.hell ? 'M7 클리어 필요' : '이전 층 클리어 필요'}</button>
-          ${fd.floor >= 1 && !fd.hell ? `<button class="btn btn--sm btn--ghost" data-act="econ_dungeon_start" data-floor="${fd.floor}" data-master="1" ${masterUnlocked ? '' : 'disabled'} title="F7 클리어 시 해금">☠ M${fd.floor} (몹 ×${MM.hpMul} · 보상 ×${MM.rewardMul})</button>` : ''}
-        </div>`;
-      }).join('')}</div>
-      <p class="muted">☠ 마스터 모드: F7 클리어 후 해금 — 모든 몹이 강화되고 보상 ${MM.rewardMul}배</p>
-    </div>`;
+    const pad9 = (arr) => { const out = arr.slice(); while (out.length % 9) out.push('<div class="mc-slot mc-empty2"></div>'); return out.join(''); };
+    const norm = D().DUNGEON.floors.filter(fd => !fd.hell);
+    const hells = D().DUNGEON.floors.filter(fd => fd.hell);
+    const slot = (fd, master) => {
+      const ok = master ? masterUnlocked : canEnterFloor(fd.floor);
+      const best = P.dungeonBest[fd.floor];
+      const label = fd.floor === 0 ? '입구 F0' : fd.hell ? `☠☠ 지옥 M${fd.floor}` : master ? `☠ 마스터 M${fd.floor}` : `F${fd.floor}`;
+      const desc = `${fd.bossName} · 보스 HP ${fmtNum(fd.bossHp)}${master ? ` ×${MM.hpMul}` : ''} · 정수 +${fd.essenceReward}${master ? ` ×${MM.rewardMul}` : ''} · 최고 등급 ${best || '-'} — ${ok ? '클릭: 입장' : (fd.hell ? 'M7 클리어 필요' : master ? 'F7 클리어 필요' : '이전 층 클리어 필요')}`;
+      return `<div class="mc-slot mc-menuslot ${ok ? '' : 'mc-locked'}" ${ok ? `data-act="econ_dungeon_start" data-floor="${fd.floor}"${master ? ' data-master="1"' : ''}` : ''} data-ttn="${escHtml(label)}" data-ttd="${escHtml(desc)}"><span>${fd.hell ? '☠' : master ? '💀' : '🗝️'}</span><span class="mc-cnt">${fd.floor}</span></div>`;
+    };
+    return `<div class="mc-chest"><div class="mc-chesttitle">🗝️ 카타콤 — 층 슬롯 클릭 = 입장 (총 18개 난이도)</div>
+      <p class="muted">클래스: ${D().DUNGEON_CLASSES.map(c => `<button class="btn btn--sm ${P.dungeonClass === c.key ? '' : 'btn--ghost'}" data-act="econ_dungeon_class" data-key="${c.key}">${c.emoji} ${c.name}</button>`).join(' ')}</p>
+      <div class="mc-chesttitle" style="margin-top:8px">일반 층</div><div class="mc-grid">${pad9(norm.map(fd => slot(fd, false)))}</div>
+      <div class="mc-chesttitle" style="margin-top:8px">☠ 마스터 모드 (F7 클리어 해금 · 몹 ×${MM.hpMul} · 보상 ×${MM.rewardMul})</div><div class="mc-grid">${pad9(norm.filter(fd => fd.floor >= 1).map(fd => slot(fd, true)))}</div>
+      ${hells.length ? `<div class="mc-chesttitle" style="margin-top:8px">☠☠ 지옥</div><div class="mc-grid">${pad9(hells.map(fd => slot(fd, false)))}</div>` : ''}
+      ${chestNavRow('menu')}</div>`;
   }
-
   function combatHTML() {
     const c = activeCombat;
     return `<div class="econ-panel econ-combat">
