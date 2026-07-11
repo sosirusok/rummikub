@@ -606,6 +606,83 @@
   }
 
   // V45: 광산 남사면 계단식 노천 채석장 — 테라스 3단(석재/자갈), 갱목 지지대, 광석 노출면, 수레길
+  // V46: 디 엔드 — 흑요석 기둥 8기(높이 차등) + 정상 엔드 크리스탈(유리 케이지+발광) — 실제 엔드 100% 상징
+  function buildEndPillars() {
+    for (let n = 0; n < 8; n++) {
+      const a = n / 8 * Math.PI * 2 + 0.3;
+      const x = Math.round(64 + Math.cos(a) * 36), z = Math.round(64 + Math.sin(a) * 36);
+      const y0 = surfaceTop(x, z);
+      if (y0 < 8) continue;
+      const h = 8 + ((n * 37) % 11);   // 8~18 차등(실제 기둥 높이 차등)
+      for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) {
+        if (Math.abs(dx) + Math.abs(dz) === 2) continue;   // 십자 단면(둥근 기둥 느낌)
+        for (let y = 0; y < h; y++) setW(x + dx, y0 + y, z + dz, ID.obsidian);
+      }
+      // 정상 크리스탈: 기반암 대용 퍼퍼 + 발광 코어 + 유리 케이지(짝수 기둥만 — 실제도 일부만 케이지)
+      setW(x, y0 + h, z, ID.purpur);
+      setW(x, y0 + h + 1, z, ID.glowstone);
+      if (n % 2 === 0) { for (const [gx, gz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) setW(x + gx, y0 + h + 1, z + gz, ID.glass); setW(x, y0 + h + 2, z, ID.glass); }
+    }
+  }
+  // V46: 더 반 — 곡물 사일로(원통+원뿔 캡) + 가축 목장(울타리 패덕/건초 더미/물통)
+  function buildBarnExtras() {
+    const sx = 90, sz = 82, sy = surfaceTop(sx, sz);
+    for (let y = 0; y < 11; y++) for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) {
+      const d = Math.hypot(dx, dz);
+      if (d > 2.4 || d < 1.4) continue;
+      setW(sx + dx, sy + y, sz + dz, ID.cobblestone);
+    }
+    for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) if (Math.hypot(dx, dz) <= 2.4) setW(sx + dx, sy + 11, sz + dz, ID.spruce_planks);
+    setW(sx, sy + 12, sz, ID.spruce_planks); setW(sx, sy + 13, sz, ID.glowstone);
+    for (let y = 0; y < 4; y++) setW(sx, sy + y, sz - 3, 0);   // 투입구
+    setW(sx, sy + 2, sz - 3, ID.hay_block);
+    // 목장: 울타리 패덕 14×9 + 건초 더미 + 물통 + 출입구
+    const px0 = 34, pz0 = 84, pw = 14, pd = 9;
+    for (let i = 0; i <= pw; i++) for (const dz of [0, pd]) { const t = surfaceTop(px0 + i, pz0 + dz); if (t >= 4 && i !== 7) setW(px0 + i, t, pz0 + dz, ID.oak_fence); }
+    for (let j = 0; j <= pd; j++) for (const dx of [0, pw]) { const t = surfaceTop(px0 + dx, pz0 + j); if (t >= 4) setW(px0 + dx, t, pz0 + j, ID.oak_fence); }
+    const hy = surfaceTop(px0 + 4, pz0 + 4);
+    setW(px0 + 4, hy, pz0 + 4, ID.hay_block); setW(px0 + 5, hy, pz0 + 4, ID.hay_block); setW(px0 + 4, hy + 1, pz0 + 4, ID.hay_block);
+    setW(px0 + 10, surfaceTop(px0 + 10, pz0 + 6) - 1, pz0 + 6, ID.water);   // 물통(웅덩이)
+    lampPost(px0 + 7, pz0 - 2);
+  }
+  // V46: 더 파크 — 찰리의 캠프(참나무 섬 76,112): A자 텐트 + 모닥불 링 + 통나무 의자
+  function buildParkCamp() {
+    const cx = 78, cz = 114, cy = surfaceTop(cx, cz);
+    for (let dx = -3; dx <= 3; dx++) for (let dz = -3; dz <= 3; dz++) for (let y = cy; y <= cy + 4; y++) setW(cx + dx, y, cz + dz, 0);   // 캠프 공터
+    // A자 텐트(양털 경사 지붕 + 안쪽 침낭)
+    for (let dz2 = -2; dz2 <= 0; dz2++) {
+      setW(cx - 2, cy, cz + dz2, ID.wool_white); setW(cx, cy, cz + dz2, ID.wool_white);   // 양쪽 벽
+      setW(cx - 1, cy + 1, cz + dz2, ID.wool_white);                                       // 마루
+      if (dz2 === -2) setW(cx - 1, cy, cz + dz2, ID.wool_white);                           // 뒷벽 막기
+    }
+    setW(cx - 1, cy - 1, cz - 1, ID.wool_red);   // 침낭
+    // 모닥불 링(조약돌 링 + 중심 마그마 + 발광)
+    setW(cx + 2, cy - 1, cz + 1, ID.magma_block != null ? ID.magma_block : ID.glowstone);
+    for (const [gx, gz] of [[1, 1], [3, 1], [2, 0], [2, 2]]) setW(cx + gx, cy, cz + gz - 0, ID.cobblestone);
+    setW(cx + 2, cy, cz + 1, ID.glowstone);
+    // 통나무 의자 2개
+    setW(cx + 2, cy, cz + 3, ID.oak_log); setW(cx, cy, cz + 3, ID.oak_log);
+  }
+  // V46: 스파이더 덴 — 알 둥지 군집(양털 알 + 점액) + 절벽에서 늘어진 거미줄 가닥
+  function buildSpiderNests() {
+    const nests = [[48, 78], [80, 52], [58, 44]];
+    for (const [nx, nz] of nests) {
+      const ny = surfaceTop(nx, nz);
+      for (let dx = 0; dx <= 2; dx++) for (let dz = 0; dz <= 2; dz++) if ((dx + dz) % 2 === 0) setW(nx + dx, ny, nz + dz, ID.wool_white);
+      setW(nx + 1, ny + 1, nz + 1, ID.wool_white);
+      setW(nx + 2, ny, nz + 1, ID.slime_block != null ? ID.slime_block : ID.mossy_cobblestone);
+    }
+    // 절벽 거미줄 가닥: 산 중턱에서 아래로 3~6칸 늘어진 흰 줄
+    for (let n = 0; n < 8; n++) {
+      const a = n / 8 * Math.PI * 2 + 0.7, rr = 16 + (n % 3) * 5;
+      const x = Math.round(64 + Math.cos(a) * rr), z = Math.round(64 + Math.sin(a) * rr);
+      const t = surfaceTop(x, z);
+      if (t < 18) continue;
+      const len = 3 + (n % 4);
+      for (let j = 1; j <= len; j++) if (getBlockLocal(x, t + 6 - j, z) === 0) setW(x, t + 6 - j, z, ID.wool_white);
+    }
+  }
+
   function buildMineQuarry() {
     const cx = 88, cz = 230;   // 광산 언덕 남사면
     for (let ring = 0; ring < 3; ring++) {
@@ -3737,6 +3814,7 @@
         }
       }
     });
+    buildParkCamp();     // V46: 찰리의 캠프(텐트/모닥불/통나무 의자)
     buildWarpPads();
   }
   // V21-D2: 진행 게이트 벽 설치 — 모든 구조물 빌더 이후(마지막)에 호출해야 덮어써지지 않는다.
@@ -3859,6 +3937,7 @@
     const bhy = surfaceTop(70, 62); for (let x = 66; x <= 76; x++) for (let z = 58; z <= 68; z++) { const fy = surfaceTop(x, z); for (let y = Math.min(fy, bhy) + 1; y <= Math.max(fy, bhy); y++) setW(x, y, z, ID.dirt); setW(x, bhy, z, ID.grass); }
     buildHouse(66, 60, 9, 8, bhy + 1, ID.wool_red, ID.spruce_planks);   // 보조 헛간(평탄 부지 위)
     lampPost(64, 90); lampPost(90, 64);
+    buildBarnExtras();   // V46: 곡물 사일로 + 가축 목장(울타리/건초/물통)
     buildWarpPads();
   }
   // ⛏️ 골드 광산: 노천 금광 산
@@ -4063,6 +4142,7 @@
       const y = surfaceTop(x, z);
       setW(x, y, z, ID.nether_bricks); if (a % 3 === 0) setW(x, y + 1, z, ID.glowstone);
     }
+    buildSpiderNests();  // V46: 알 둥지 군집 + 절벽 거미줄 가닥
     buildWarpPads();
   }
   // 🔥 블레이징 포트리스 V6: 던전 컨셉 — 용암 바다 위 붉은 요새(복도망·블레이즈 첨탑·위더 홀·마그마 분지)
@@ -4229,6 +4309,7 @@
       if (Math.abs(dx) + Math.abs(dz) <= 3) setW(64 + dx, y2, 98 + dz, edge ? ID.end_bricks : 0);
     }
     setW(64, vy + 12, 98, ID.glowstone);
+    buildEndPillars();   // V46: 흑요석 기둥 8기 + 엔드 크리스탈(실제 엔드 상징)
     buildWarpPads();
   }
   // 🍄 버섯 사막 V6: 서쪽 균사체 버섯 숲 + 동쪽 사막(실제 Mushroom Desert 반반 구성)
