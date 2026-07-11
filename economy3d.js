@@ -574,6 +574,8 @@
     beautifyHub();   // V20-L: 광장 미화(분수·정원·벤치·현수막) — 마지막에 얹어 덮이지 않게
     buildHubInteriors();   // V21-D5: 명명 건물 인테리어(은행 창구/도서관/경매 전시대/게시판) — 대로·미화 이후 최후 배치(덮어쓰기 방지)
     buildShopInteriors();  // V51: 소형 상점 인테리어(잡화점/펫 상점/플라워 하우스/커뮤니티 센터) — 공기 칸만 채움
+    leafTrimPass();        // V53: 마을 벽면 잎/덩굴 트림(실제 바자 골목 질감)
+    boulderPass();         // V53: 야생 대형 바위 군집 10곳(실제 탑뷰 대조)
     agingPass(70, 260, 110, 300, 0.5);    // V22-G2: 폐허 구역 — 석재 벽돌 절반을 이끼/금 간 변형으로(고대 유적 질감)
     agingPass(126, 296, 176, 336, 0.28);  // V22-G2: 묘지 구역 — 은은한 노후화
   }
@@ -812,6 +814,38 @@
     for (const [hx, hz] of [[X - 4, Z + 2], [X + Wd + 3, Z + 4]]) { const t = surfaceTop(hx, hz); setW(hx, t, hz, ID.hay_block); setW(hx + 1, t, hz, ID.hay_block); setW(hx, t + 1, hz, ID.hay_block); }
   }
 
+
+
+  // V53: 마을 벽면 잎 트림 — 건물 외벽(석재/판자)에 잎을 낮은 확률로 부착해 '덩굴 낀 마을' 질감(Bazaar_Alley.png)
+  function leafTrimPass() {
+    const wallLike = id => { if (!id) return false; const k = BLOCKS[id].key; return /stone_bricks|planks|cobblestone|sandstone|log/.test(k) && !/slab|stairs|fence/.test(k); };
+    for (let x = 196; x <= 252; x++) for (let z = 196; z <= 258; z++) {
+      const g = surfaceTop(x, z);
+      for (let y = g + 1; y <= g + 5; y++) {
+        if (getBlockLocal(x, y, z) !== 0) continue;
+        if (hash3(x, y + 611, z) > 0.045) continue;
+        // 이웃에 벽이 있고, 위가 트여 있으면(실내 아님) 잎 부착
+        const nWall = wallLike(getBlockLocal(x + 1, y, z)) || wallLike(getBlockLocal(x - 1, y, z)) || wallLike(getBlockLocal(x, y, z + 1)) || wallLike(getBlockLocal(x, y, z - 1));
+        if (!nWall) continue;
+        let open = 0; for (let dy = 1; dy <= 5; dy++) if (getBlockLocal(x, y + dy, z) === 0) open++;
+        if (open >= 4) setW(x, y, z, ID.oak_leaves);
+      }
+    }
+  }
+  // V53: 야생 대형 바위 군집 — 실제 탑뷰의 회색 바위 무리(반구형, 돌/조약돌/이끼 혼합)
+  function boulderPass() {
+    const spots = [[168, 178], [282, 176], [176, 262], [268, 282], [136, 200], [306, 250], [204, 300], [252, 156], [300, 300], [160, 236]];
+    for (const [bx, bz] of spots) {
+      if (zoneAt(bx, bz) !== 'wild') continue;
+      const r = 2 + (hash3(bx, 621, bz) * 2 | 0);
+      const by = surfaceTop(bx, bz) - 1;
+      for (let dx = -r; dx <= r; dx++) for (let dz = -r; dz <= r; dz++) for (let dy = 0; dy <= r; dy++) {
+        if (Math.hypot(dx, dy, dz) > r + (hash3(bx + dx, 622, bz + dz) - 0.5)) continue;
+        const m = hash3(bx + dx, by + dy, bz + dz);
+        setW(bx + dx, by + dy, bz + dz, m < 0.25 ? ID.mossy_cobblestone : m < 0.55 ? ID.cobblestone : ID.stone);
+      }
+    }
+  }
 
   // V51: 소형 상점 인테리어 — 기존 건물 내부의 '공기 칸'만 채우는 안전 배치(벽/기둥 훼손 없음)
   function buildShopInteriors() {
@@ -1856,7 +1890,13 @@
   }
   function buildMarketStalls() {
     flattenSite(196, 248, 244, 258, 19);
-    for (let x = 197; x <= 243; x++) for (let z = 250; z <= 256; z++) setW(x, 19, z, ((x + z) % 5 === 0) ? ID.quartz_block : ID.stone_bricks);   // 포장 거리
+    for (let x = 197; x <= 243; x++) for (let z = 250; z <= 256; z++) setW(x, 19, z, ((x + z) % 5 === 0) ? (ID.polished_andesite != null ? ID.polished_andesite : ID.stone) : hash3(x, 602, z) < 0.25 ? ID.cobblestone : ID.stone_bricks);   // V53: 회색 패치워크(실제 바자 골목)
+    // V53: 머리 위 청록 차양 스트립 + 매달린 등불(Bazaar_Alley.png) — 거리 가로질러 4곳
+    for (const ax of [204, 216, 228, 240]) {
+      for (let z = 249; z <= 257; z++) if ((z + ax) % 2 === 0) setW(ax, 25, z, ID.wool_cyan != null ? ID.wool_cyan : ID.wool_blue);
+      setW(ax, 24, 251, ID.oak_fence); setW(ax, 23, 251, ID.glowstone);
+      setW(ax, 24, 255, ID.oak_fence); setW(ax, 23, 255, ID.glowstone);
+    }
     const S = (x, y, z, id) => { if (id != null) setW(x, y, z, id); };
     const log = ID.spruce_log, slab = ID.oak_planks_slab != null ? ID.oak_planks_slab : ID.oak_planks, glow = ID.glowstone, fence = ID.oak_fence;
     const stair = (f) => (ID['oak_planks_stairs_' + f] != null ? ID['oak_planks_stairs_' + f] : ID.oak_planks);
@@ -2968,10 +3008,10 @@
     };
     while (x !== x1 || z !== z1) {
       const horiz = x !== x1;
-      lay(x, z, ID.stone_bricks);
-      // 진행 방향에 수직으로 양옆 1칸(조약돌 갓길)
-      if (horiz) { lay(x, z - 1, ID.cobblestone); lay(x, z + 1, ID.cobblestone); }
-      else { lay(x - 1, z, ID.cobblestone); lay(x + 1, z, ID.cobblestone); }
+      lay(x, z, ID.coarse_dirt);   // V53: 실제 허브 탑뷰 대조 — 방사 도로는 다져진 흙길
+      const side = hash3(x, 601, z) < 0.4 ? ID.gravel : ID.dirt;
+      if (horiz) { lay(x, z - 1, side); lay(x, z + 1, side); }
+      else { lay(x - 1, z, side); lay(x + 1, z, side); }
       if (horiz) x += x1 > x ? 1 : -1; else z += z1 > z ? 1 : -1;
     }
   }
