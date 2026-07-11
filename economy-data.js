@@ -305,6 +305,11 @@
   // V10 ⑱: 필드 미니보스 유니크 전리품(드롭 전용)
   const MINIBOSS_LOOT = [
     { key: 'yeti_fur', name: '예티의 모피', category: '전리품', buyPrice: 0, sellPrice: 2800 },
+    // V75: 농장 동물 실드롭(위키 대조 — Sheep/Pig/Cow/Chicken 페이지 드롭 테이블 정합)
+    { key: 'raw_mutton', name: '생양고기', category: '전리품', buyPrice: 0, sellPrice: 4 },
+    { key: 'raw_porkchop', name: '생돼지고기', category: '전리품', buyPrice: 0, sellPrice: 5 },
+    { key: 'raw_beef', name: '생소고기', category: '전리품', buyPrice: 0, sellPrice: 4 },
+    { key: 'raw_chicken', name: '생닭', category: '전리품', buyPrice: 0, sellPrice: 4 },
     { key: 'golem_core', name: '골렘의 코어', category: '전리품', buyPrice: 0, sellPrice: 2200 },
     { key: 'mushroom_crown', name: '무쉬룸 킹의 왕관', category: '전리품', buyPrice: 0, sellPrice: 1500 },
   ];
