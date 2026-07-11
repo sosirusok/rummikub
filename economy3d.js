@@ -285,6 +285,43 @@
     { id: 9, x: 322, z: 328, y: null, hint: '낚시터 오두막 지붕' },
     { id: 10, x: 224, z: 356, y: null, hint: '콜로세움 관중석' },
     { id: 11, x: 148, z: 124, y: null, hint: '숲 큰 나무 옆' },
+    // V32: 실제 허브 = 79개 — 좌표단위 수작업 추가 배치(id 24~90)
+    { id: 24, x: 210, z: 60, y: null, hint: '설산 북서 능선' }, { id: 25, x: 246, z: 70, y: null, hint: '설산 동쪽 바위' },
+    { id: 26, x: 224, z: 108, y: null, hint: '설산 기슭 남쪽' }, { id: 27, x: 196, z: 92, y: null, hint: '설산 서쪽 벼랑' },
+    { id: 28, x: 258, z: 96, y: null, hint: '설산 동남 눈밭' },
+    { id: 29, x: 84, z: 196, y: null, hint: '광산 갱도 입구 위' }, { id: 30, x: 108, z: 224, y: null, hint: '광산 남쪽 자갈길' },
+    { id: 31, x: 74, z: 214, y: null, hint: '광산 서쪽 절벽' }, { id: 32, x: 120, z: 196, y: null, hint: '광산 동쪽 바위 틈' },
+    { id: 33, x: 96, z: 240, y: null, hint: '광산-폐허 사잇길' },
+    { id: 34, x: 136, z: 300, y: null, hint: '묘지 입구 아치' }, { id: 35, x: 168, z: 330, y: null, hint: '묘지 예배당 뒤' },
+    { id: 36, x: 148, z: 344, y: null, hint: '크립트 계단 옆' }, { id: 37, x: 176, z: 306, y: null, hint: '묘비 군락 동쪽' },
+    { id: 38, x: 128, z: 332, y: null, hint: '묘지 남서 고목' },
+    { id: 39, x: 312, z: 204, y: null, hint: '농장 헛간 지붕' }, { id: 40, x: 352, z: 232, y: null, hint: '밀밭 동쪽 끝' },
+    { id: 41, x: 318, z: 248, y: null, hint: '온실 뒤' }, { id: 42, x: 338, z: 196, y: null, hint: '축사 울타리' },
+    { id: 43, x: 300, z: 228, y: null, hint: '농장 서쪽 길가' }, { id: 44, x: 360, z: 214, y: null, hint: '농장 동쪽 벼랑' },
+    { id: 45, x: 124, z: 112, y: null, hint: '숲 북쪽 군락' }, { id: 46, x: 158, z: 146, y: null, hint: '벌목꾼 오두막 지붕' },
+    { id: 47, x: 132, z: 152, y: null, hint: '숲 남쪽 쓰러진 나무' }, { id: 48, x: 116, z: 134, y: null, hint: '숲 서쪽 바위' },
+    { id: 49, x: 152, z: 108, y: null, hint: '숲 북동 자작나무' }, { id: 50, x: 170, z: 128, y: null, hint: '숲-마을 갈림길' },
+    { id: 51, x: 306, z: 310, y: null, hint: '낚시터 다리 밑' }, { id: 52, x: 336, z: 336, y: null, hint: '연못 동쪽 갈대' },
+    { id: 53, x: 316, z: 344, y: null, hint: '연못 남쪽 부두' }, { id: 54, x: 340, z: 310, y: null, hint: '연못 북동 언덕' },
+    { id: 55, x: 206, z: 340, y: null, hint: '콜로세움 서쪽 벽' }, { id: 56, x: 242, z: 340, y: null, hint: '콜로세움 동쪽 벽' },
+    { id: 57, x: 224, z: 372, y: null, hint: '콜로세움 남문 뒤' }, { id: 58, x: 240, z: 364, y: null, hint: '관중석 남동 상단' },
+    { id: 59, x: 310, z: 108, y: null, hint: '마법사 탑 정원' }, { id: 60, x: 334, z: 132, y: null, hint: '탑 동쪽 룬석' },
+    { id: 61, x: 314, z: 140, y: null, hint: '탑 남쪽 오솔길' },
+    { id: 62, x: 76, z: 268, y: null, hint: '폐허 무너진 아치' }, { id: 63, x: 100, z: 292, y: null, hint: '폐허 동쪽 기둥' },
+    { id: 64, x: 82, z: 296, y: null, hint: '폐허 남쪽 제단' }, { id: 65, x: 102, z: 268, y: null, hint: '폐허 북동 벽감' },
+    { id: 66, x: 282, z: 366, y: null, hint: '지구라트 서쪽 계단' }, { id: 67, x: 310, z: 384, y: null, hint: '지구라트 동남 모서리' },
+    { id: 68, x: 296, z: 356, y: null, hint: '카타콤 입구 길목' },
+    { id: 69, x: 204, z: 240, y: null, hint: '상점 지붕' }, { id: 70, x: 242, z: 206, y: null, hint: '은행 돔 뒤' },
+    { id: 71, x: 210, z: 220, y: null, hint: '경매장 로툰다 기둥' }, { id: 72, x: 234, z: 212, y: null, hint: '대장간 굴뚝 옆' },
+    { id: 73, x: 222, z: 190, y: null, hint: '인챈트 탑 발코니' }, { id: 74, x: 214, z: 252, y: null, hint: '시장 거리 차양 위' },
+    { id: 75, x: 236, z: 254, y: null, hint: '시장 동쪽 노점 뒤' }, { id: 76, x: 194, z: 210, y: null, hint: '미니언 관리소 뒤뜰' },
+    { id: 77, x: 246, z: 238, y: null, hint: '펫 상점 옆 골목' }, { id: 78, x: 224, z: 246, y: null, hint: '광장 남쪽 가로등' },
+    { id: 79, x: 264, z: 204, y: null, hint: '천문대 계단' }, { id: 80, x: 224, z: 262, y: null, hint: '대성당 앞뜰' },
+    { id: 81, x: 344, z: 224, y: null, hint: '풍차 날개 아래' }, { id: 82, x: 372, z: 250, y: null, hint: '동쪽 코티지 지붕' },
+    { id: 83, x: 356, z: 276, y: null, hint: '과수원 울타리' }, { id: 84, x: 300, z: 286, y: null, hint: '정자 옆 연못돌' },
+    { id: 85, x: 264, z: 316, y: null, hint: '야영지 모닥불 뒤' }, { id: 86, x: 186, z: 282, y: null, hint: '목장 여물통' },
+    { id: 87, x: 162, z: 226, y: null, hint: '서쪽 타운하우스 골목' }, { id: 88, x: 180, z: 180, y: null, hint: '북서 가로등 언덕' },
+    { id: 89, x: 268, z: 158, y: null, hint: '북동 순환로 생울타리' }, { id: 90, x: 264, z: 268, y: null, hint: '남동 순환로 바위' },
     // V9: 테마 월드 소울 12개
     { id: 12, world: 'park', x: 72, z: 72, y: null, hint: '파크 중앙섬' },
     { id: 13, world: 'park', x: 72, z: 26, y: null, hint: '설원 가문비 부속섬' },
@@ -5122,8 +5159,29 @@
     }
     return surfaceTop(x, z);
   }
+  // V32: 실제 MC painting 텍스처 벽걸이(수작업 좌표 — 마을 건물 내벽)
+  const HUB_PAINTINGS = [
+    { src: 'painting/aztec.png', x: 205, y: 22.3, z: 240.97, ry: Math.PI, w: 2, h: 2 },        // 상점 안쪽 벽
+    { src: 'painting/courbet.png', x: 194.5, y: 22.2, z: 212.0, ry: Math.PI, w: 2, h: 1 },     // 미니언 관리소
+    { src: 'painting/sunset.png', x: 248.5, y: 22.2, z: 240.0, ry: Math.PI, w: 2, h: 1 },      // 펫 상점
+    { src: 'painting/skull_and_roses.png', x: 212, y: 22.4, z: 249.0, ry: Math.PI, w: 2, h: 2 },// 제작소
+    { src: 'painting/wanderer.png', x: 234, y: 22.6, z: 249.0, ry: Math.PI, w: 1, h: 2 },      // 스타포스 강화소
+    { src: 'painting/sea.png', x: 223.5, y: 23.0, z: 194.0, ry: Math.PI, w: 2, h: 1 },         // 인챈트 탑 1층
+    { src: 'painting/creebet.png', x: 205, y: 22.3, z: 235.03, ry: 0, w: 2, h: 1 },            // 상점 맞은편 벽
+    { src: 'painting/bouquet.png', x: 191.03, y: 22.3, z: 209.5, ry: Math.PI / 2, w: 2, h: 2 },// 관리소 서벽
+  ];
+  function buildPaintingMeshes(group) {
+    if (worldMode !== 'hub') return;
+    for (const pt of HUB_PAINTINGS) {
+      const tex = _celTex(pt.src);
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(pt.w, pt.h), new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide }));
+      m.position.set(pt.x, pt.y, pt.z); m.rotation.y = pt.ry;
+      group.add(m);
+    }
+  }
   function buildNpcMeshes() {
     npcGroup = new THREE.Group(); scene.add(npcGroup);
+    buildPaintingMeshes(npcGroup);   // V32: painting 벽걸이(허브)
     // 서비스 NPC(상점/은행/…) — 현재 월드 소속만
     NPCS.forEach(n => {
       if ((n.world || 'hub') !== worldMode) return;
@@ -7685,7 +7743,7 @@
       <div class="econ3d-banner" id="econ3dBanner"></div>
       <div class="econ3d-top">
         <div class="econ3d-gold" id="econ3dGold">💰 0G</div>
-        <div class="econ3d-zone" id="econ3dSouls">✨ 0/24</div>
+        <div class="econ3d-zone" id="econ3dSouls">✨ 0/91</div>
         <button class="btn btn--ghost" data-act="econ3d_fs" title="전체화면 (Ctrl 달리기 가능)">⛶</button>
         <button class="btn btn--ghost" data-act="backHome">✕</button>
       </div>

@@ -981,7 +981,7 @@
   addRecipe({ key: 'hay_block', needs: { wheat: 9 }, gives: 1, unlock: null });
 
   /* ---------------- 페어리 소울(3D 월드 12개 은닉) ---------------- */
-  const FAIRY_SOULS = { total: 24, goldPerSoul: 200, mpPerSoul: 2, per5Bonus: { hp: 10, str: 2 } };   // V9: 테마 월드 12개 추가
+  const FAIRY_SOULS = { total: 91, goldPerSoul: 200, mpPerSoul: 2, per5Bonus: { hp: 10, str: 2 } };   // V32: 실제 허브 79개(수작업 배치) + 테마 12개
 
   /* ---------------- 은행 ---------------- */
   const BANK = { interestPctPerDay: 2, interestCapBalance: 100000,
