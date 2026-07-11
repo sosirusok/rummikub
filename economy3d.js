@@ -5712,6 +5712,51 @@
       });
     }
     buildDungeonDetail(ROOM_W, ROOMS);   // V20-AY(4차): 카타콤 폐허 디테일(바닥 파손·부서진 기둥·석관·화로·사슬·뼈)
+    // ── V74: 실사(Dungeon_Hub.png) — 입구 방(x1~21)을 대회랑 홀로: 창백한 타일 바닥 + 기둥 열주 +
+    //   대문 계단/장미창 + 해골 벽화 알코브(북) + 정원 누크(남) ──
+    {
+      const SM = ID.smooth_stone != null ? ID.smooth_stone : ID.stone_bricks;
+      const AND4 = ID.polished_andesite != null ? ID.polished_andesite : ID.stone;
+      const CH4 = ID.chiseled_stone_bricks != null ? ID.chiseled_stone_bricks : ID.stone_bricks;
+      // 1) 바닥 패턴: 중앙 창백 타일 대로(z 20~27) + 안산암 보더 + 외곽 석재
+      for (let x = 1; x <= 21; x++) for (let z = 9; z <= 38; z++) {
+        if (z >= 20 && z <= 27) setW(x, 2, z, (x + z) % 4 === 0 ? AND4 : SM);
+        else if (z === 19 || z === 28) setW(x, 2, z, AND4);
+        else if (hash3(x, 1041, z) < 0.25) setW(x, 2, z, AND4);
+      }
+      // 2) 열주 2열(z=17/z=30, x=5/9/13/17): 조각 석재 초석 + 석재 기둥 h6 + 청록 배너
+      for (const pz of [17, 30]) for (const px of [5, 9, 13, 17]) {
+        setW(px, 3, pz, CH4);
+        for (let y = 4; y <= 8; y++) setW(px, y, pz, ID.stone_bricks);
+        setW(px, 9, pz, CH4);
+        setW(px, 6, pz + (pz === 17 ? 1 : -1), ID.wool_cyan != null ? ID.wool_cyan : ID.glass);   // 청록 배너
+        setW(px, 5, pz + (pz === 17 ? 1 : -1), ID.wool_cyan != null ? ID.wool_cyan : ID.glass);
+      }
+      // 3) 대문(x22 게이트) 앞 계단 + 횃불 + 장미창(게이트 위 기어 로제트)
+      for (let z = 21; z <= 26; z++) { setW(20, 3, z, SM); setW(21, 3, z, ID.stone_bricks); }
+      setW(21, 5, 20, ID.glowstone); setW(21, 5, 27, ID.glowstone);
+      { const rz = 23, ry = 8;   // 로제트: 링 + 중심 발광
+        for (const [oy, oz] of [[0, -2], [0, 2], [-2, 0], [2, 0], [1, 1], [-1, -1], [1, -1], [-1, 1]]) setW(21, ry + oy, rz + oz + 1, CH4);
+        setW(21, ry, rz + 1, ID.glowstone);
+      }
+      // 4) 해골 벽화 알코브(북벽 z38 앞): 어두운 배경 + 사암 해골 + 빨간 눈
+      {
+        const bx = 8, by = 4;
+        for (let dx = 0; dx < 9; dx++) for (let y = 0; y < 6; y++) setW(bx + dx, by + y, 38, ID.wool_black != null ? ID.wool_black : ID.obsidian);   // 배경
+        const SKULL = [[2,4],[3,4],[4,4],[5,4],[6,4],[1,3],[2,3],[3,3],[4,3],[5,3],[6,3],[7,3],[1,2],[3,2],[5,2],[7,2],[2,1],[3,1],[4,1],[5,1],[6,1],[3,0],[5,0]];
+        for (const [ox, oy] of SKULL) setW(bx + ox, by + oy, 38, ID.sandstone);
+        setW(bx + 2, by + 2, 38, ID.wool_red); setW(bx + 6, by + 2, 38, ID.wool_red);   // 빨간 눈
+        setW(bx - 1, by, 38, ID.lava);   // 용암 낙수 포인트
+      }
+      // 5) 정원 누크(남벽 z9~11, x3~8): 흙 + 소나무형 미니 나무 + 빨간 버섯 + 등
+      {
+        for (let x = 3; x <= 8; x++) for (let z = 9; z <= 11; z++) setW(x, 2, z, ID.dirt);
+        setW(5, 3, 10, ID.oak_log); setW(5, 4, 10, ID.oak_log);
+        for (const [ox, oz] of [[1, 0], [-1, 0], [0, 1], [0, -1], [0, 0]]) setW(5 + ox, 5, 10 + oz, ID.oak_leaves);
+        setW(7, 3, 10, ID.mushroom_red_block != null ? ID.mushroom_red_block : ID.wool_red);
+        setW(3, 3, 10, ID.tall_grass); setW(8, 3, 11, ID.glowstone);
+      }
+    }
     buildWarpPads();
   }
   // V20-AY 4차: 카타콤 던전 디테일 — 좌표 한 칸씩 손 배치. 방마다 바닥 질감 변주 + 부서진 기둥 +
