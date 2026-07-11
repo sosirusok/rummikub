@@ -610,6 +610,73 @@
   }
 
 
+
+  // V48: 버섯 사막 — 거대 버섯 6기(균사체 서편) + 사막 정착지(사암 오두막 2/우물 — 중급 농부 퀘스트 무대)
+  function buildGiantMushrooms() {
+    const shroom = (x, z, red, h) => {
+      const y0 = surfaceTop(x, z);
+      if (y0 < 8) return;
+      for (let y = 0; y < h; y++) setW(x, y0 + y, z, ID.quartz_block);   // 하얀 줄기
+      const cap = red ? (ID.wool_red != null ? ID.wool_red : ID.mushroom_red) : (ID.coarse_dirt != null ? ID.coarse_dirt : ID.dirt);
+      for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) {
+        if (Math.abs(dx) === 2 && Math.abs(dz) === 2) continue;   // 모서리 둥글림
+        setW(x + dx, y0 + h, z + dz, cap);
+        if (Math.abs(dx) < 2 && Math.abs(dz) < 2) setW(x + dx, y0 + h + 1, z + dz, cap);
+      }
+      if (red) { setW(x, y0 + h + 2, z, ID.wool_white); setW(x + 1, y0 + h + 1, z + 1, ID.wool_white); setW(x - 1, y0 + h + 1, z - 1, ID.wool_white); }   // 빨간 갓 흰 반점
+    };
+    shroom(48, 52, true, 5); shroom(38, 66, false, 4); shroom(54, 80, true, 6);
+    shroom(30, 78, false, 3); shroom(44, 92, true, 4); shroom(58, 40, false, 5);
+    // 사막 정착지(등산객 72,100 인근): 사암 오두막 2 + 우물 + 횃불
+    const hut = (hx, hz) => {
+      const hy = surfaceTop(hx, hz);
+      for (let dx = 0; dx < 5; dx++) for (let dz = 0; dz < 4; dz++) {
+        for (let y = 0; y < 3; y++) { const edge = dx === 0 || dx === 4 || dz === 0 || dz === 3; if (edge && !(dz === 0 && dx === 2 && y < 2)) setW(hx + dx, hy + y, hz + dz, ID.sandstone); }
+        setW(hx + dx, hy + 3, hz + dz, ID.smooth_sandstone != null ? ID.smooth_sandstone : ID.sandstone);
+      }
+      setW(hx + 2, hy + 2, hz + 2, ID.glowstone);
+    };
+    hut(78, 96); hut(86, 102);
+    const wy = surfaceTop(82, 108);
+    for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) setW(82 + dx, wy, 108 + dz, (dx || dz) ? ID.sandstone : ID.water);   // 우물
+    setW(82, wy + 1, 107, ID.oak_fence); setW(82, wy + 2, 107, ID.glowstone);
+  }
+  // V48: 딥 캐번 — 자수정 정동 포켓 2곳: 조약돌 껍질 → 퍼퍼 수정층 → 발광 코어(수정 동굴)
+  function buildGeodePockets() {
+    const geode = (cx, cy, cz, r) => {
+      for (let dx = -r; dx <= r; dx++) for (let dy = -r; dy <= r; dy++) for (let dz = -r; dz <= r; dz++) {
+        const d = Math.hypot(dx, dy, dz);
+        if (d > r) continue;
+        const x = cx + dx, y = cy + dy, z = cz + dz;
+        if (d > r - 1.2) setW(x, y, z, ID.smooth_stone);           // 껍질
+        else if (d > r - 2.4) setW(x, y, z, ID.purpur);            // 수정층
+        else setW(x, y, z, 0);                                     // 공동
+      }
+      setW(cx, cy - Math.floor(r) + 2, cz, ID.glowstone);          // 코어 발광
+      setW(cx + 1, cy, cz, ID.purpur); setW(cx - 1, cy - 1, cz + 1, ID.purpur);   // 내부 수정 돌기
+      setW(cx, cy + Math.floor(r) - 2, cz, ID.glowstone);
+      // 입구 틈(동쪽으로 1×2 뚫음)
+      for (let i = 0; i <= Math.ceil(r); i++) { setW(cx + i, cy - 1, cz, 0); setW(cx + i, cy, cz, 0); }
+    };
+    geode(28, 26, 30, 4); geode(66, 14, 70, 5);
+  }
+  // V48: 골드 광산 — 갱도 앞 광차 2기(판자 몸통+울타리 바퀴+적재 광석) + 선광 작업장(체/자갈 더미)
+  function buildMineCarts() {
+    const cart = (x, z, ore) => {
+      const y = surfaceTop(x, z);
+      setW(x, y, z, ID.oak_fence); setW(x + 2, y, z, ID.oak_fence);            // 바퀴
+      for (let dx = 0; dx <= 2; dx++) { setW(x + dx, y + 1, z, ID.oak_planks); }
+      setW(x + 1, y + 2, z, ore);                                              // 적재 광석
+    };
+    cart(52, 76, ID.gold_ore); cart(60, 78, ID.coal_ore);
+    // 선광 작업장: 자갈 더미 + 체(울타리 프레임 + 판자)
+    const sy = surfaceTop(64, 74);
+    setW(64, sy, 74, ID.gravel); setW(65, sy, 74, ID.gravel); setW(64, sy + 1, 74, ID.gravel);
+    setW(67, sy, 74, ID.oak_fence); setW(69, sy, 74, ID.oak_fence);
+    setW(67, sy + 1, 74, ID.oak_planks); setW(68, sy + 1, 74, ID.oak_planks); setW(69, sy + 1, 74, ID.oak_planks);
+    setW(68, sy + 2, 74, ID.glowstone);
+  }
+
   // V47: 마법사 탑 내부 — 내벽 나선계단 발판(y+2 간격), 1층 서재(책장 벽감+독서대), 꼭대기 마법진(발광 링)
   function buildWizardInterior() {
     const cx = 322, cz = 120, base = surfaceTop(cx, cz), R = 4, Ht = 22;
@@ -4098,6 +4165,7 @@
     scatterOre(52, 48, 30, 16, 26, ID.coal_ore, 28, 63);
     // 봉우리 정상 랜턴 표식(원경 인지)
     for (const p of peaks) { const y = surfaceTop(p.x, p.z); setW(p.x, y + 1, p.z, ID.dark_oak_fence != null ? ID.dark_oak_fence : ID.oak_fence); setW(p.x, y + 2, p.z, ID.glowstone); }
+    buildMineCarts();        // V48: 갱도 앞 광차 2기 + 선광 작업장
     buildWarpPads();
   }
   // 💎 딥 캐번: 실제처럼 층별 광물(위→아래: 석탄/철/금·청금/레드스톤/에메랄드·슬라임/다이아/흑요석) + 리프트
@@ -4169,6 +4237,7 @@
     for (let x = 42; x <= 54; x++) for (let z = 80; z <= 92; z++) for (let y = 36; y <= 41; y++) setW(x, y, z, y === 36 ? ID.stone_bricks : 0);
     for (let z = 52; z <= 80; z++) { for (let dx = -1; dx <= 1; dx++) { setW(48 + dx, 36, z, ID.stone_bricks); clearAbove(48 + dx, z, 37, 4); } }
     [[44, 82], [52, 90], [48, 86]].forEach(p2 => setW(p2[0], 37, p2[1], ID.glowstone));
+    buildGeodePockets();     // V48: 자수정 정동 포켓 2곳(수정 동굴)
     buildWarpPads();
   }
   // 🕷️ 스파이더 덴 V6: 거미산 등반 던전 — 나선 등산로를 오르면 점점 강한 거미, 정상에 브루드마더
@@ -4460,6 +4529,7 @@
       const y = surfaceTop(x, z);
       if (getBlockLocal(x, y - 1, z) === ID.sand) { setW(x, y, z, ID.sugar_cane); setW(x, y + 1, z, ID.sugar_cane); }
     }
+    buildGiantMushrooms();   // V48: 거대 버섯 군락 + 사막 정착지(등산객 NPC 마을)
     buildWarpPads();
   }
 
