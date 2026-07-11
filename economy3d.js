@@ -4715,6 +4715,69 @@
         }
       }
     });
+    // ── V70: 실사(The_Park.png) — 섬별 바이옴 팔레트 재도색 ──
+    //   사바나(아카시아)=주황 메사 절벽+모래, 가문비=설원, 짙은참나무=검회색 기둥 절벽+이끼,
+    //   정글=절벽 덩굴 드레이프, 자작=황금 가을(낙엽 더미/노란 꽃)
+    {
+      const themeIsle = (cx, cz, r, fn) => {
+        for (let x = cx - r - 2; x <= cx + r + 2; x++) for (let z = cz - r - 2; z <= cz + r + 2; z++) {
+          const d = Math.hypot(x - cx, z - cz);
+          if (d > r + 2) continue;
+          fn(x, z, d / r);
+        }
+      };
+      const OR2 = ID.terracotta_orange != null ? ID.terracotta_orange : ID.wool_orange;
+      const RD2 = ID.terracotta_red != null ? ID.terracotta_red : ID.bricks;
+      // 사바나(72,20,r20): 지표 모래/주황 패치 + 절벽 측면 메사 밴딩
+      themeIsle(72, 20, 20, (x, z, dr) => {
+        const t = surfaceTop(x, z);
+        if (t <= SEA + 1) return;
+        const g = getBlockLocal(x, t - 1, z);
+        if (g === ID.grass && hash3(x, 996, z) < 0.45) setW(x, t - 1, z, hash3(x, 997, z) < 0.6 ? ID.sand : OR2);
+        for (let y = t - 2; y >= t - 9; y--) {   // 측면 메사 밴딩(흙/돌만 교체)
+          const b = getBlockLocal(x, y, z);
+          if (b !== ID.dirt && b !== ID.stone) continue;
+          if (getBlockLocal(x + 1, y, z) && getBlockLocal(x - 1, y, z) && getBlockLocal(x, y, z + 1) && getBlockLocal(x, y, z - 1)) continue;   // 노출면만
+          setW(x, y, z, (y % 3 === 0) ? RD2 : OR2);
+        }
+      });
+      // 가문비(72,72,r21): 설원 지표
+      themeIsle(72, 72, 21, (x, z, dr) => {
+        const t = surfaceTop(x, z);
+        if (t <= SEA + 1) return;
+        if (getBlockLocal(x, t - 1, z) === ID.grass && hash3(x, 998, z) < 0.8) setW(x, t - 1, z, ID.snow_block);
+      });
+      // 짙은참나무(72,54,r21): 측면 검회색 기둥 + 지표 이끼 패치
+      themeIsle(72, 54, 21, (x, z, dr) => {
+        const t = surfaceTop(x, z);
+        if (t <= SEA + 1) return;
+        if (getBlockLocal(x, t - 1, z) === ID.grass && hash3(x, 999, z) < 0.22) setW(x, t - 1, z, ID.mossy_cobblestone);
+        for (let y = t - 2; y >= t - 8; y--) {
+          const b = getBlockLocal(x, y, z);
+          if (b !== ID.dirt && b !== ID.stone) continue;
+          if (getBlockLocal(x + 1, y, z) && getBlockLocal(x - 1, y, z) && getBlockLocal(x, y, z + 1) && getBlockLocal(x, y, z - 1)) continue;
+          setW(x, y, z, hash3(x, 1000 + y, z) < 0.5 ? ID.cobblestone : (ID.polished_andesite != null ? ID.polished_andesite : ID.stone));
+        }
+      });
+      // 정글(72,36,r20): 절벽 가장자리 덩굴 드레이프
+      themeIsle(72, 36, 20, (x, z, dr) => {
+        if (dr < 0.82) return;
+        const t = surfaceTop(x, z);
+        if (t <= SEA + 1) return;
+        if (hash3(x, 1001, z) > 0.3) return;
+        const len = 2 + Math.floor(hash3(x, 1002, z) * 3);
+        for (let j = 1; j <= len; j++) { if (getBlockLocal(x, t - 1 - j, z) !== 0) break; setW(x, t - 1 - j, z, ID.oak_leaves); }
+      });
+      // 자작(72,90,r21): 황금 가을 — 낙엽 더미(노란 양털 낮은 패치) + 노란 꽃
+      themeIsle(72, 90, 21, (x, z, dr) => {
+        const t = surfaceTop(x, z);
+        if (t <= SEA + 1) return;
+        if (getBlockLocal(x, t - 1, z) !== ID.grass || getBlockLocal(x, t, z) !== 0) return;
+        const r2 = hash3(x, 1003, z);
+        if (r2 < 0.05) setW(x, t - 1, z, ID.wool_yellow != null ? ID.wool_yellow : ID.hay_block);   // 낙엽 더미(지표 교체)
+        else if (r2 < 0.11) setW(x, t, z, ID.flower_yellow);
+      });
+    }
     buildParkCamp();     // V46: 찰리의 캠프(텐트/모닥불/통나무 의자)
     buildWarpPads();
   }
