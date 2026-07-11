@@ -620,15 +620,8 @@
         }
         return false;
       };
-      if (wild && grove && r < 0.062 && !nearCrop()) { (r < 0.038 ? plantOak : r < 0.052 ? plantBirch : plantSpruce)(x, z); }        // V44: 군락 밀도 상향 + 가문비 혼합림
-      else if (wild && grove && r < 0.055) setW(x, y, z, ID.oak_leaves);                                    // 군락 덤불
-      else if (wild && !grove && r < 0.0012 && !nearCrop()) plantOak(x, z);                                 // 개활지 고독한 나무(아주 드묾)
-      else if (wild && r >= 0.997 && !nearCrop()) {                                                         // V28-C: 쓰러진 통나무(1.21.5) — 그루터기+가로 원목+버섯
-        const horiz = hash3(x, 77, z) < 0.5, len = 3 + (hash3(x, 78, z) * 3 | 0);
-        setW(x, y, z, ID.oak_log);
-        for (let i = 1; i <= len; i++) { const lx = x + (horiz ? i + 1 : 0), lz = z + (horiz ? 0 : i + 1); const ly = surfaceTop(lx, lz); if (getBlockLocal(lx, ly - 1, lz) === ID.grass) setW(lx, ly, lz, ID.oak_log); if (i === 2 && hash3(lx, 79, lz) < 0.6) setW(lx, ly + 1, lz, ID.mushroom_brown != null ? ID.mushroom_brown : ID.mushroom_red); }
-      }
-      else if (r < 0.38) setW(x, y, z, ID.tall_grass);                                                    // V44: 풍성한 잔디 밀도 상향
+      // V83: 실제 허브 대조 — 파밍 나무는 '숲' 구역과 파크섬에만 존재. 허브 야생 전역 나무/통나무 심기 폐기.
+      if (r < 0.38) setW(x, y, z, ID.tall_grass);                                                    // V44: 풍성한 잔디 밀도 상향
       else if (r < 0.52) setW(x, y, z, field < 0.34 ? ID.flower_yellow : field < 0.68 ? ID.flower_red : ID.tall_grass);   // V44: 색 군집 꽃밭 확대
       else if (r < 0.425) { setW(x, y, z, ID.mossy_cobblestone); if (r < 0.4215) { setW(x, y + 1, z, ID.mossy_cobblestone); setW(x + 1, y, z, ID.cobblestone); } }  // 바위 군집
     }
@@ -1634,11 +1627,8 @@
       if (getBlockLocal(x, t, z) !== 0) continue;
       const h = hash3(x, 17, z);
       // 저사양 배려 + 걷기 보장: 나무/바위/덤불(고체)은 희소하게, 대부분은 비고체·저비용 키큰풀(밟고 통과)
-      if (h < 0.03) {   // 나무(드묾) — 머리 위 6칸 열림 + 완경사에서만
-        if (!clearAbove(x, z, t, 6)) continue;
-        if (Math.abs(surfaceTop(x + 1, z) - t) > 1) continue;
-        const pk = hash3(x, 19, z); (pk < 0.5 ? plantOak : pk < 0.8 ? plantBirch : plantSpruce)(x, z);
-      } else if (h < 0.06) {   // 바위 노두(이끼/돌/안산암, 비대칭 — 드묾)
+      // V83: 허브 야생 나무 심기 폐기(실제 허브엔 숲 구역 외 파밍 나무 없음)
+      if (h < 0.06) {   // 바위 노두(이끼/돌/안산암, 비대칭 — 드묾)
         setW(x, t, z, moss); if (hash3(x, 21, z) < 0.6) { setW(x + 1, t, z, cob); setW(x, t + 1, z, ((x + z) & 1) ? moss : and_); }
       } else if (h < 0.34) {   // 키큰 풀 메도우(비고체 — 밟고 통과, 저비용)
         if (tg != null) { setW(x, t, z, tg); if (hash3(x, 24, z) < 0.45) setW(x + 1, t, z, tg); if (hash3(x, 27, z) < 0.3) setW(x, t, z + 1, tg); }
@@ -2782,10 +2772,10 @@
       if (zoneAt(x, z) !== 'forest') continue;
       if (Math.hypot(x - 140, z - 132) < 8) continue;   // 오두막 자리
       const r = hash3(x, 69, z);
-      if (r < 0.34) plantOak(x, z);
-      else if (r < 0.55) plantBirch(x, z);
-      else if (r < 0.68) plantDarkOak(x, z);
-      else if (r < 0.84) { const y = surfaceTop(x, z); setW(x, y, z, r < 0.76 ? ID.tall_grass : (r < 0.8 ? ID.flower_red : ID.flower_yellow)); }
+      // V83: 실제 허브 '숲' 구역 — 참나무 위주(+약간 자작), 짙은참나무 없음
+      if (r < 0.62) plantOak(x, z);
+      else if (r < 0.74) plantBirch(x, z);
+      else if (r < 0.9) { const y = surfaceTop(x, z); setW(x, y, z, r < 0.82 ? ID.tall_grass : (r < 0.86 ? ID.flower_red : ID.flower_yellow)); }
     }
     buildHouse(134, 126, 7, 6, surfaceTop(137, 129), ID.spruce_planks, ID.spruce_planks);
   }
@@ -8082,7 +8072,6 @@
   const MOB_TYPES = {
     // ── 허브 ──  books: 이 몹이 떨어뜨리는 인챈트북(V7: 북은 몹 드롭 전용)
     zombie: { name: '좀비', kind: 'humanoid', color: 0x3a7d3a, hp: 100, dmg: 20, hpAnchors: [[1, 100], [15, 707]], dmgAnchors: [[1, 20], [15, 111]], xp: 6, coins: 1, speed: 1.7, books: ['sharpness', 'smite'], drops: [{ key: 'rotten_flesh', n: 1 }, { key: 'poisonous_potato', n: 1, chance: 0.02 }, { key: 'potato', n: 1, chance: 0.01 }, { key: 'carrot', n: 1, chance: 0.01 }], tierCap: 1 },   // V77 드롭 + V81 위키 HP/공격 앵커(L1~15)
-    creeper: { name: '크리퍼', kind: 'quad', color: 0x5ac26a, hp: 80, dmg: 20, xp: 6, coins: 2, speed: 1.5, books: ['smite'], drops: [{ key: 'gunpowder', n: 1 }], tierCap: 1 },   // V78: 위키 — HP80/DMG20, 화약 100%(프라이빗 섬 화약 공급원)
     skeleton: { name: '스켈레톤', kind: 'humanoid', color: 0xcccccc, hp: 100, dmg: 15, hpAnchors: [[1, 100], [15, 707]], dmgAnchors: [[1, 15], [15, 83]], xp: 7, coins: 1, speed: 1.8, books: ['critical', 'prosecute'], drops: [{ key: 'bone', n: 1 }, { key: 'bone', n: 2, chance: 0.5 }], tierCap: 1 },   // V77 드롭 + V81 위키 HP/공격 앵커(L1~15)
     crypt_ghoul: { name: '크립트 구울', kind: 'humanoid', color: 0x5a8a5a, hp: 2000, dmg: 31, gear: { sword: 0xf7d84a }, xp: 25, coins: 15, speed: 2.2, books: ['giant_killer', 'execute'], drops: [{ key: 'rotten_flesh', n: 3 }, { key: 'gold', n: 1, chance: 0.25 }], tierCap: 3 },
     golden_ghoul: { name: '골든 구울', kind: 'humanoid', color: 0xd8b23a, hp: 4500, dmg: 45, gear: { helmet: 0xf7d84a, sword: 0xf7d84a }, xp: 45, coins: 60, speed: 2.3, books: ['looting'], drops: [{ key: 'gold', n: 3 }, { key: 'talisman_wealth_rune', n: 1, chance: 0.02 }], tierCap: 4 },
@@ -8188,7 +8177,7 @@
 
   // 스폰 구역: 실제 스카이블럭처럼 특정 지역에 특정 몬스터(레벨 범위 내 변종 + 5% 정예 ★)
   let SPAWN_AREAS = [
-    { world: 'hub', x: 152, z: 314, r: 26, types: ['zombie', 'skeleton', 'creeper'], lv: [1, 6], cap: 8, respawn: 9 },     // 묘지(실제: Graveyard Zombie Lv1) + V78 크리퍼(화약)
+    { world: 'hub', x: 152, z: 314, r: 26, types: ['zombie', 'skeleton'], lv: [1, 6], cap: 8, respawn: 9 },     // 묘지(실제: Graveyard Zombie Lv1)
     { world: 'hub', x: 152, z: 344, r: 12, types: ['crypt_ghoul'], lv: [28, 32], cap: 2, respawn: 20 },         // 크립트(Lv30 구울)
     { world: 'hub', x: 88, z: 208, r: 16, types: ['slime'], lv: [3, 8], cap: 3, respawn: 14 },                  // 석탄 광산 챔버
     { world: 'hub', x: 224, z: 100, r: 34, types: ['wolf'], lv: [8, 15], cap: 4, respawn: 15 },                 // 설산 늑대
@@ -9668,7 +9657,7 @@
     const eco = window.__econ || {};
     // V22-H2: 9번 칸 = 네더의 별(스카이블럭 메뉴) 고정 — 실제 하이픽셀과 동일
     const star = document.getElementById('econ3dSlot8');
-    if (star) { star.innerHTML = '<span style="font-size:20px">⭐</span>'; star.title = '스카이블럭 메뉴 (9)'; star.classList.remove('is-active'); }
+    if (star) { star.innerHTML = '<img src="item/nether_star.png" alt="" style="width:82%;height:82%;image-rendering:pixelated;image-rendering:crisp-edges">'; star.title = '스카이블럭 메뉴 (9)'; star.classList.remove('is-active'); }
     for (let i = 0; i < 8; i++) {
       const el = document.getElementById('econ3dSlot' + i); if (!el) continue;
       const k = P0.hotbar[i];
