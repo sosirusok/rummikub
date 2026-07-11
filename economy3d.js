@@ -2427,6 +2427,54 @@
       for (let j = 0; j < h; j++) setW(x, y + j, z, ID.dark_oak_log != null ? ID.dark_oak_log : ID.spruce_log);
       setW(x + 1, y + h - 1, z, gFence != null ? gFence : ID.spruce_log);   // 앙상한 가지
     }
+    // ── V60: 실사(Graveyard.png) 분위기 — 구불 흙길 + 대형 고목(가지+검회색 수관) + 납골 돌무더기 + 배경 돌담 ──
+    {
+      const DKL = ID.dark_oak_log != null ? ID.dark_oak_log : ID.spruce_log;
+      const DLV = ID.dark_oak_leaves != null ? ID.dark_oak_leaves : ID.spruce_leaves;
+      const CH2 = ID.chiseled_stone_bricks != null ? ID.chiseled_stone_bricks : ID.stone_bricks;
+      // 1) 구불구불한 흙길(실사의 중앙 산책로): 북입구 → 크립트 계단
+      for (let z = 284; z <= 336; z++) {
+        const px = 152 + Math.round(Math.sin(z * 0.17) * 7 + Math.sin(z * 0.05) * 4);
+        for (let o = -1; o <= 1; o++) {
+          const x = px + o;
+          if (zoneAt(x, z) !== 'graveyard') continue;
+          const g = surfaceTop(x, z);
+          if (getBlockLocal(x, g - 1, z) === ID.grass) { setW(x, g - 1, z, ID.coarse_dirt); if (getBlockLocal(x, g, z) === ID.tall_grass) setW(x, g, z, 0); }
+        }
+      }
+      // 2) 대형 고목 6그루: 굵은 줄기 + 구부러진 가지 + 납작한 검회색 수관 클럼프
+      const trees = [[126, 300], [142, 322], [166, 296], [178, 330], [134, 340], [158, 314]];
+      for (let i = 0; i < trees.length; i++) {
+        const [tx, tz] = trees[i];
+        if (zoneAt(tx, tz) !== 'graveyard') continue;
+        const g = surfaceTop(tx, tz), h = 5 + (hash3(tx, 881, tz) * 3 | 0);
+        for (let j = 0; j < h; j++) setW(tx, g + j, tz, DKL);
+        for (let b = 0; b < 3; b++) {   // 가지 3방(수평 2~3칸) + 끝에 수관 클럼프
+          const dir = [[1, 0], [-1, 0], [0, 1], [0, -1]][(i + b) % 4];
+          const by = g + h - 2 - b, ln = 2 + (hash3(tx + b, 882, tz) * 2 | 0);
+          let bx = tx, bz = tz;
+          for (let k = 1; k <= ln; k++) { bx = tx + dir[0] * k; bz = tz + dir[1] * k; setW(bx, by, bz, DKL); }
+          for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) if (Math.abs(dx) + Math.abs(dz) < 2 || hash3(bx + dx, 883, bz + dz) < 0.5) setW(bx + dx, by + 1, bz + dz, DLV);
+        }
+        setW(tx, g + h, tz, DLV); setW(tx, g + h + 1, tz, hash3(tx, 884, tz) < 0.5 ? DLV : 0);
+      }
+      // 3) 납골 돌무더기 4곳(조각 석재 + 이끼 혼합 봉분)
+      for (const [mx, mz] of [[132, 312], [160, 342], [172, 310], [146, 296]]) {
+        if (zoneAt(mx, mz) !== 'graveyard') continue;
+        const g = surfaceTop(mx, mz);
+        for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) {
+          const hh = (Math.abs(dx) + Math.abs(dz) === 0) ? 2 : hash3(mx + dx, 885, mz + dz) < 0.6 ? 1 : 0;
+          for (let y = 0; y < hh; y++) setW(mx + dx, g + y, mz + dz, hash3(dx, 886 + y, dz) < 0.4 ? ID.mossy_cobblestone : CH2);
+        }
+      }
+      // 4) 배경 돌담(북측 경계 — 실사의 뒷벽): 조약돌/이끼 혼합 h2, 군데군데 결손
+      for (let x = 112; x <= 186; x++) {
+        if (zoneAt(x, 284) !== 'graveyard' || hash3(x, 887, 1) < 0.12) continue;
+        const g = surfaceTop(x, 283);
+        for (let y = 0; y < 2; y++) setW(x, g + y, 283, hash3(x, 888, y) < 0.35 ? ID.mossy_cobblestone : ID.cobblestone);
+        if (hash3(x, 889, 2) < 0.18) setW(x, g + 2, 283, ID.cobblestone);
+      }
+    }
     // 크립트: 지하 방(계단 입구)
     const cy = surfaceTop(152, 334) - 1;
     for (let i = 0; i < 6; i++) { for (let o = -1; o <= 1; o++) setW(152 + o, cy - i, 334 + i, 0); }   // 내려가는 계단
