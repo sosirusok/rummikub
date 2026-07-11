@@ -320,6 +320,7 @@
     // V75/V76: 농장 동물 실드롭 — 생소고기만 전리품(소고기는 실제 컬렉션 아님), 나머지 3종은 축산 컬렉션 원자재로 자동 생성
     { key: 'raw_beef', name: '생소고기', category: '전리품', buyPrice: 0, sellPrice: 4 },
     { key: 'poisonous_potato', name: '독감자', category: '전리품', buyPrice: 0, sellPrice: 2 },   // V77: 좀비 드롭(위키)
+    { key: 'summoning_eye', name: '소환의 눈', category: '전리품', buyPrice: 0, sellPrice: 40000 },   // V80: 특수 질럿 드롭(위키, 1/420) — 드래곤 소환 재료
     { key: 'golem_core', name: '골렘의 코어', category: '전리품', buyPrice: 0, sellPrice: 2200 },
     { key: 'mushroom_crown', name: '무쉬룸 킹의 왕관', category: '전리품', buyPrice: 0, sellPrice: 1500 },
   ];
