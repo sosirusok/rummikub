@@ -2902,22 +2902,18 @@
     // V7: 무화폐 구매 경제 — 상점 주인은 "매입 전문"(시세표 + 판매). 아이템은 채집·드롭·조합으로만 얻는다.
     const cats = [];
     for (const sd of D().SHOP) if (cats.indexOf(sd.category) < 0) cats.push(sd.category);
+    // V35: 상자 GUI — 슬롯 클릭 = 1개 판매, Shift+클릭 = 전부 판매(실제 스블 상점 조작)
+    const pad9 = (arr) => { const out = arr.slice(); while (out.length % 9) out.push('<div class="mc-slot mc-empty2"></div>'); return out.join(''); };
     const ownedCats = cats.map(cat => {
       const items = D().SHOP.filter(sd => sd.category === cat && (P.inv[sd.key] || 0) > 0 && sd.sellPrice > 0);
       if (!items.length) return '';
-      return `<h4>${cat}</h4><div class="econ-shopgrid">${items.map(sd => `
-        <div class="econ-shopitem econ-tt"${ttAttr(sd)}>
-          ${iconImg(sd.key)}<span>${sd.tierKey ? `<span style="color:${tierColorByKey(sd.tierKey)}">${sd.name}</span>` : sd.name} <b>×${P.inv[sd.key]}</b></span>
-          <span class="muted econ-idesc">개당 ${fmtGold(sd.sellPrice)}</span>
-          <span>
-            <button class="btn btn--sm btn--ghost" data-act="econ_sell" data-key="${sd.key}">1개 판매</button>
-            <button class="btn btn--sm" data-act="econ_sell_all" data-key="${sd.key}">전부 판매</button>
-          </span>
-        </div>`).join('')}</div>`;
+      const slots = items.map(sd => `<div class="mc-slot mc-menuslot"${ttAttr(sd)} data-act="econ_sell" data-key="${sd.key}">${iconImg(sd.key)}<span class="mc-cnt">${(P.inv[sd.key] || 0) > 9999 ? fmtNum(P.inv[sd.key]) : P.inv[sd.key]}</span></div>`);
+      return `<div class="mc-chesttitle" style="margin-top:8px">${cat}</div><div class="mc-grid">${pad9(slots)}</div>`;
     }).join('');
-    return `<h4>🛒 상점 주인 — 매입 전문</h4>
-      <p class="econ-note">💰 이 세계의 골드는 <b>강화·인챈트 합성·리포지</b>에만 쓰여요. 장비/도구/북은 전부 <b>채집·몬스터 드롭·조합</b>으로!<br>가진 아이템을 팔아 강화 자금을 모으세요. (희귀 아이템일수록 비싸게 매입)</p>
-      ${ownedCats || '<p class="muted">팔 수 있는 아이템이 없어요. 채집하고 사냥해서 가져오세요!</p>'}`;
+    return `<div class="mc-chest"><div class="mc-chesttitle">🛒 상점 주인 — 매입 전문</div>
+      <p class="econ-note">슬롯 클릭 = <b>1개 판매</b> · Shift+클릭 = <b>전부 판매</b>. 골드는 강화·인챈트 합성·리포지에 사용(아이템은 채집·드롭·조합으로).</p>
+      ${ownedCats || '<p class="muted">팔 수 있는 아이템이 없어요. 채집하고 사냥해서 가져오세요!</p>'}
+      ${chestNavRow('menu')}</div>`;
   }
   // V14: 건축가 빌더 — 건축 블럭 대량(스택) 구매(코인 → 블럭, 서바이벌 설치용 재고)
   function buildShopHTML() {
@@ -2988,43 +2984,42 @@
       <div class="econ-minionlist">${P.minions.map((m, i) => minionRowHTML(m, i)).join('') || '<p class="muted">배치된 미니언이 없어요 (자원을 모아 조합하세요)</p>'}</div>`;
   }
   function petsHTML() {
-    const eggs = D().SHOP.filter(s => s.category === '펫' && hasItem(s.key));
+    // V35: 상자 GUI — 알 슬롯 클릭=부화, 펫 슬롯 클릭=활성화(✔=활성)
+    const pad9 = (arr) => { const out = arr.slice(); while (out.length % 9) out.push('<div class="mc-slot mc-empty2"></div>'); return out.join(''); };
+    const eggs = D().SHOP.filter(s2 => s2.category === '펫' && hasItem(s2.key));
     const ownedPets = (D().PETS || []).filter(p => !!P.pets[p.key]);
-    return `<h4>🐾 펫 (활성 1마리의 보너스가 적용돼요)</h4>
-      ${eggs.length ? `<h4 class="muted">보유한 알</h4><div class="econ-tierbtns">${eggs.map(e => `<button class="btn btn--sm" data-act="econ_pet_hatch" data-key="${e.key.replace('pet_egg_', '')}">${e.name} 부화 (보유 ${P.inv[e.key]})</button>`).join('')}</div>` : ''}
-      ${ownedPets.length ? `<h4 class="muted">보유한 펫</h4><div class="econ-shopgrid">${ownedPets.map(p => {
-        const lvl = petLevel(p.key);
-        return `<div class="econ-shopitem econ-tt"${ttAttr({ key: `pet_egg_${p.key}`, name: p.name, tierKey: p.tierKey, flavor: p.perkText })}>
-          ${iconImg(`pet_egg_${p.key}`)}<span style="color:${tierColorByKey(p.tierKey)}">${p.name} [${tierNameByKey(p.tierKey)}]</span>
-          <span class="muted">Lv.${lvl} — ${p.perkText}</span>
-          ${P.activePet === p.key ? '<span style="color:#4ade80">✔ 활성</span>' : `<button class="btn btn--sm" data-act="econ_pet_activate" data-key="${p.key}">활성화</button>`}
-        </div>`;
-      }).join('')}</div>` : '<p class="muted">보유한 펫이 없어요. 보유한 알을 부화시키면 여기에서 바로 선택할 수 있어요.</p>'}
-      <details class="econ-ownedonly"><summary>미보유 펫 획득처 보기</summary>
-        <div class="econ-shopgrid">${(D().PETS || []).filter(p => !P.pets[p.key]).map(p => `<div class="econ-shopitem is-locked">${iconImg(`pet_egg_${p.key}`)}<span style="color:${tierColorByKey(p.tierKey)}">${p.name}</span><span class="muted">${p.eggPrice > 0 ? '상점 알 구매' : '보스 드롭 전용'}</span></div>`).join('')}</div>
-      </details>`;
+    const eggSlots = eggs.map(e => `<div class="mc-slot mc-menuslot" data-act="econ_pet_hatch" data-key="${e.key.replace('pet_egg_', '')}" data-ttn="${escHtml(e.name)}" data-ttd="클릭: 부화 (보유 ${P.inv[e.key]})">${iconImg(e.key)}<span class="mc-cnt">${P.inv[e.key]}</span></div>`);
+    const petSlots = ownedPets.map(p => {
+      const lvl = petLevel(p.key), act = P.activePet === p.key;
+      return `<div class="mc-slot mc-menuslot ${act ? 'mc-colmax' : ''}" data-act="econ_pet_activate" data-key="${p.key}" data-ttn="${escHtml(p.name)} [${tierNameByKey(p.tierKey)}] Lv.${lvl}${act ? ' ✔활성' : ''}" data-ttd="${escHtml(p.perkText)} — 클릭: 활성화">${iconImg('pet_egg_' + p.key)}<span class="mc-cnt">${lvl}</span></div>`;
+    });
+    const missSlots = (D().PETS || []).filter(p => !P.pets[p.key]).map(p => `<div class="mc-slot mc-menuslot mc-locked" data-ttn="${escHtml(p.name)}" data-ttd="${p.eggPrice > 0 ? '상점 알 구매로 획득' : '보스 드롭 전용'}">${iconImg('pet_egg_' + p.key)}</div>`);
+    return `<div class="mc-chest"><div class="mc-chesttitle">🐾 펫 (활성 1마리 보너스 적용)</div>
+      ${eggSlots.length ? `<div class="mc-chesttitle" style="margin-top:8px">보유한 알</div><div class="mc-grid">${pad9(eggSlots)}</div>` : ''}
+      <div class="mc-chesttitle" style="margin-top:8px">보유한 펫</div>
+      ${petSlots.length ? `<div class="mc-grid">${pad9(petSlots)}</div>` : '<p class="muted">보유한 펫이 없어요 — 알을 부화시키세요.</p>'}
+      <div class="mc-chesttitle" style="margin-top:8px">미보유 펫(획득처는 호버)</div><div class="mc-grid">${pad9(missSlots)}</div>
+      ${chestNavRow('menu')}</div>`;
   }
   function talismansHTML() {
+    // V35: 상자 GUI — 보유 슬롯(호버=효과), 미보유 슬롯 클릭=구매(가격은 호버)
+    const pad9 = (arr) => { const out = arr.slice(); while (out.length % 9) out.push('<div class="mc-slot mc-empty2"></div>'); return out.join(''); };
     const ts = talismanStats();
     const pw = powerStats(), curPw = selectedPowerDef();
     const pwLine = Object.keys(pw).filter(k => pw[k]).map(k => `${({ str: '힘', def: '방어', hp: '체력', intelligence: '지력', critChance: '크리%', critDamage: '크리피해%' })[k]} +${pw[k]}`).join(' · ') || '없음';
     const powerBtns = (D().MAGICAL_POWER.powers || []).map(p => `<button class="btn btn--sm ${p.key === curPw.key ? '' : 'btn--ghost'}" data-act="econ_power" data-key="${p.key}">${p.name}</button>`).join('');
     const owned = D().TALISMANS.filter(t => hasItem(t.key));
     const missing = D().TALISMANS.filter(t => !hasItem(t.key));
-    const card = (t, ownedFlag) => `<div class="econ-shopitem econ-tt ${ownedFlag ? '' : 'is-locked'}"${ttAttr(Object.assign({}, t, { flavor: t.desc }))}>
-          ${iconImg(t.key)}<span style="color:${tierColorByKey(t.tierKey)}">${ownedFlag ? '✔ ' : ''}${t.name}</span>
-          <span class="muted">${t.desc}</span>
-          ${!ownedFlag && t.buyPrice > 0 ? `<button class="btn btn--sm" data-act="econ_buy" data-key="${t.key}">구매 ${fmtGold(t.buyPrice)}</button>` : ''}
-        </div>`;
-    return `<h4>📿 장신구 가방 — 마력 ${magicalPower()} (최종 공격/방어 +${((mpStatMul() - 1) * 100).toFixed(1)}%)</h4>
-      <div class="econ-colgrid" style="margin-bottom:8px">
-        <div class="econ-colrow"><span>✨ 전능의 힘</span><span><b>${curPw.name}</b></span><span class="muted">마력 스케일 ${Math.round(mpScale())} → ${pwLine}</span></div>
-      </div>
+    const slot = (t, ownedFlag) => `<div class="mc-slot mc-menuslot ${ownedFlag ? '' : 'mc-locked'}" ${!ownedFlag && t.buyPrice > 0 ? `data-act="econ_buy" data-key="${t.key}"` : ''} data-ttn="${escHtml(t.name)}${ownedFlag ? ' ✔' : ''}" data-ttd="${escHtml(t.desc)}${!ownedFlag ? (t.buyPrice > 0 ? ` — 클릭: 구매 ${fmtGold(t.buyPrice)}` : ' — 보스/퀘스트 보상') : ''}">${iconImg(t.key)}</div>`;
+    return `<div class="mc-chest"><div class="mc-chesttitle">📿 장신구 가방 — 마력 ${magicalPower()} (최종 공격/방어 +${((mpStatMul() - 1) * 100).toFixed(1)}%)</div>
+      <p class="muted">✨ 전능의 힘: <b>${curPw.name}</b> (스케일 ${Math.round(mpScale())} → ${pwLine}) · 페어리 소울 ${P.fairySouls.length}/${D().FAIRY_SOULS.total}</p>
       <div class="econ-tierbtns" style="margin-bottom:8px">${powerBtns}</div>
-      <p class="muted">페어리 소울 ${P.fairySouls.length}/${D().FAIRY_SOULS.total} (3D 월드 곳곳에 숨어 있어요)</p>
-      ${owned.length ? `<h4 class="muted">보유한 장신구</h4><div class="econ-shopgrid">${owned.map(t => card(t, true)).join('')}</div>` : '<p class="muted">보유한 장신구가 없어요. 미보유 목록에서 구매하거나 보스/퀘스트 보상으로 얻으면 여기에 표시돼요.</p>'}
-      <details class="econ-ownedonly"><summary>미보유 장신구/획득처 보기</summary><div class="econ-shopgrid">${missing.map(t => card(t, false)).join('')}</div></details>
-      <p class="muted">합계 보너스: 힘 +${ts.str} · 방어 +${ts.def} · 체력 +${ts.hp} · 판매가 +${ts.sellBonus}% · 미니언속도 +${ts.minionSpeed}%</p>`;
+      <div class="mc-chesttitle">보유 장신구</div>
+      ${owned.length ? `<div class="mc-grid">${pad9(owned.map(t => slot(t, true)))}</div>` : '<p class="muted">보유한 장신구가 없어요.</p>'}
+      <div class="mc-chesttitle" style="margin-top:8px">미보유(호버=획득처/가격, 클릭=구매)</div>
+      <div class="mc-grid">${pad9(missing.map(t => slot(t, false)))}</div>
+      <p class="muted">합계: 힘 +${ts.str} · 방어 +${ts.def} · 체력 +${ts.hp} · 판매가 +${ts.sellBonus}% · 미니언속도 +${ts.minionSpeed}%</p>
+      ${chestNavRow('menu')}</div>`;
   }
   function enchantHTML() {
     return `<h4>✨ 인챈트 탑 — 북으로 상한까지, 그 위는 혼돈의 마법부여(운빨 돌파!)</h4>
@@ -3628,7 +3623,7 @@
       case 'warp': if (typeof window.economy3dWarp === 'function') window.economy3dWarp(el.dataset.key); break;
       case 'gather': gather(el.dataset.key); break;
       case 'buy': buyItem(el.dataset.key); break;
-      case 'sell': sellItem(el.dataset.key, 1); break;
+      case 'sell': if (window.__shiftDown) sellItem(el.dataset.key, P.inv[el.dataset.key] || 0); else sellItem(el.dataset.key); break;   // V35: Shift=전부 판매
       case 'sell_all': sellItem(el.dataset.key, P.inv[el.dataset.key] || 0); break;
       case 'minion_place': placeMinion(el.dataset.key); break;
       case 'minion_collect': collectMinion(Number(el.dataset.idx)); break;
