@@ -7510,6 +7510,7 @@
   if (typeof window !== 'undefined') {
     window.economy3dMobTypes = () => Object.keys(MOB_TYPES);
     window.economy3dHeal = (n) => { if (php) { php.hp = Math.min(php.max, php.hp + n); updateHpHud(); } };   // V42: 치유 물약
+    window.economy3dHpPct = () => (php ? Math.max(0, php.hp / php.max) : 1);   // V43: 지배(풀피) 판정
     window.economy3dMobName = t => (MOB_TYPES[t] || {}).name || t;
   }
   /* ---------------- 낮밤/하늘 ---------------- */
