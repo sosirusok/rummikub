@@ -534,6 +534,8 @@
       }
     }
     decorateWilds();
+    buildWildPOIs();     // V33-B: 야생 벨트 소형 POI 18곳(우물/건초 수레/폐허 아치/사당/벤치/모닥불) — 꽉 찬 밀도
+    buildPlazaFinish();  // V33-C: 광장 건물 외관 완성(굴뚝/창가 화단/문앞 등불/궤짝 더미)
     // V28-C: 순환로 가로등(약 40블럭 간격) + 길가 생울타리 — 존 사이 개활지에 리듬감
     for (let a = 0; a < 24; a++) {
       const ang = a / 24 * Math.PI * 2;
@@ -584,6 +586,71 @@
     }
   }
 
+  // V33-B: 야생 벨트 소형 POI — 전부 좌표단위 수작업(빈 들판 채우기)
+  function buildWildPOIs() {
+    const gy = (x, z) => surfaceTop(x, z);
+    const well = (x, z) => {   // 우물: 조약돌 링 + 기둥 + 슬래브 지붕 + 물
+      const y = gy(x, z);
+      for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) setW(x + dx, y, z + dz, (dx || dz) ? ID.cobblestone : ID.water);
+      setW(x - 1, y + 1, z - 1, ID.oak_fence); setW(x + 1, y + 1, z - 1, ID.oak_fence); setW(x - 1, y + 1, z + 1, ID.oak_fence); setW(x + 1, y + 1, z + 1, ID.oak_fence);
+      setW(x - 1, y + 2, z - 1, ID.oak_fence); setW(x + 1, y + 2, z - 1, ID.oak_fence); setW(x - 1, y + 2, z + 1, ID.oak_fence); setW(x + 1, y + 2, z + 1, ID.oak_fence);
+      for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) setW(x + dx, y + 3, z + dz, ID.oak_planks);
+      setW(x, y + 4, z, ID.glowstone);
+    };
+    const cart = (x, z) => {   // 건초 수레
+      const y = gy(x, z);
+      setW(x, y, z, ID.oak_fence); setW(x + 2, y, z, ID.oak_fence);
+      for (let dx = 0; dx <= 2; dx++) setW(x + dx, y + 1, z, ID.oak_planks);
+      setW(x, y + 2, z, ID.hay_block); setW(x + 1, y + 2, z, ID.hay_block); setW(x + 1, y + 3, z, ID.hay_block);
+    };
+    const arch = (x, z) => {   // 무너진 아치
+      const y = gy(x, z);
+      for (let dy = 0; dy < 4; dy++) { setW(x, y + dy, z, dy === 3 ? ID.mossy_cobblestone : ID.stone_bricks); }
+      for (let dy = 0; dy < 3; dy++) setW(x + 4, y + dy, z, dy === 2 ? ID.mossy_cobblestone : ID.stone_bricks);
+      setW(x + 1, y + 3, z, ID.mossy_cobblestone);
+      setW(x + 3, y, z, ID.mossy_cobblestone);   // 붕괴 잔해
+      setW(x + 2, y, z + 1, ID.cobblestone);
+    };
+    const shrine = (x, z) => {   // 소형 사당
+      const y = gy(x, z);
+      for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) setW(x + dx, y, z + dz, ID.stone_bricks);
+      setW(x, y + 1, z, ID.quartz_block); setW(x, y + 2, z, ID.glowstone);
+      setW(x - 1, y + 1, z - 1, ID.flower_red); setW(x + 1, y + 1, z + 1, ID.flower_yellow);
+    };
+    const bench = (x, z) => {   // 벤치 + 꽃 링
+      const y = gy(x, z);
+      setW(x, y, z, ID.oak_planks); setW(x + 1, y, z, ID.oak_planks);
+      setW(x - 1, y, z, ID.oak_fence); setW(x + 2, y, z, ID.oak_fence);
+      setW(x, y, z + 2, ID.flower_red); setW(x + 1, y, z + 2, ID.flower_yellow); setW(x - 1, y, z + 1, ID.tall_grass);
+    };
+    const campfire = (x, z) => {   // 모닥불 자리
+      const y = gy(x, z);
+      setW(x, y - 1, z, ID.magma != null ? ID.magma : ID.glowstone);
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) setW(x + dx, y - 1, z + dz, ID.cobblestone);
+      setW(x + 1, y, z + 1, ID.oak_log); setW(x - 1, y, z - 1, ID.oak_log);
+    };
+    // 수작업 좌표 18곳(기존 구조물·도로와 겹치지 않는 개활지)
+    well(196, 170); well(282, 148); well(150, 244);
+    cart(296, 212); cart(308, 248); cart(268, 234);
+    arch(116, 258); arch(106, 250); arch(174, 296);
+    shrine(256, 140); shrine(312, 270); shrine(178, 306);
+    bench(208, 298); bench(240, 298); bench(298, 206); bench(148, 196);
+    campfire(202, 334); campfire(252, 322);
+  }
+  // V33-C: 광장 건물 외관 완성 — 굴뚝/창가 화단/문앞 등불/궤짝(좌표단위)
+  function buildPlazaFinish() {
+    const chimney = (x, z, yTop) => { for (let y = yTop; y < yTop + 3; y++) setW(x, y, z, ID.cobblestone); setW(x, yTop + 3, z, 0); };
+    const lantern = (x, z) => { const y = surfaceTop(x, z); setW(x, y, z, ID.oak_fence); setW(x, y + 1, z, ID.glowstone); };
+    const crates = (x, z) => { const y = surfaceTop(x, z); setW(x, y, z, ID.oak_planks); setW(x + 1, y, z, ID.oak_planks); setW(x, y + 1, z, ID.oak_planks); setW(x + 1, y, z + 1, ID.hay_block); };
+    const windowBox = (x, y, z) => { setW(x, y, z, ID.oak_leaves); };
+    chimney(202, 236, 26); chimney(246, 236, 25); chimney(192, 208, 25);   // 상점/펫/미니언 굴뚝
+    lantern(203, 243); lantern(206, 243);      // 상점 문앞
+    lantern(246, 242); lantern(249, 242);      // 펫 상점 문앞
+    lantern(210, 249); lantern(233, 249);      // 제작소/강화소 문앞
+    crates(197, 231); crates(252, 232); crates(228, 214);   // 상점 옆/펫 옆/대장간 옆 궤짝
+    windowBox(199, 21, 236); windowBox(199, 21, 239); windowBox(253, 21, 236);   // 창가 화단
+    windowBox(212, 21, 244); windowBox(235, 21, 244);
+  }
   /* ---- 허브 구역 빌더(V6) ---- */
   function buildVillage() {
     // 중앙 광장(석재 벽돌 + 분수 + 가로등 링)
@@ -7510,6 +7577,46 @@
       }
     }
   }
+  // V33-A: 같은 허브라도 구역마다 시간대가 다르다(실제 스블 감성) — 묘지=보랏빛 황혼, 광산=흐린 회색,
+  //   설산=차고 쨍한 정오, 농장=따뜻한 아침 금빛, 숲=녹음 한낮, 폐허=호박색 저녁, 던전 입구=어스름
+  const HUB_ZONE_AMBIENCE = {
+    village:  { light: 1.00, sky: ['#3f7fc8', '#76adde', '#bfe0f5'], fog: '#9fc6ea' },
+    snowpeak: { light: 1.05, sky: ['#2f6fc0', '#8ec2ea', '#e8f4fc'], fog: '#cfe6f5' },
+    coalmine: { light: 0.78, sky: ['#5a6470', '#8a929c', '#b8bec6'], fog: '#9aa0a8' },
+    graveyard:{ light: 0.60, sky: ['#2a2340', '#4a3a5e', '#7a5a78'], fog: '#584a66' },
+    farm:     { light: 0.96, sky: ['#c8903f', '#e0b46a', '#f4dca8'], fog: '#e0c490' },
+    forest:   { light: 0.90, sky: ['#2f6a48', '#5f9a6e', '#a8d0a0'], fog: '#8ab890' },
+    pond:     { light: 0.92, sky: ['#3a7ab8', '#6aaad0', '#b8dcE8'.toLowerCase()], fog: '#98c8dc' },
+    arena:    { light: 1.02, sky: ['#b06a2f', '#d0904f', '#ecc890'], fog: '#d8b080' },
+    wizard:   { light: 0.82, sky: ['#3a2a5e', '#6a4a9e', '#a87ad0'], fog: '#7a5aa8' },
+    ruins:    { light: 0.72, sky: ['#6a4a2a', '#9a7a4a', '#d0b080'], fog: '#a8906a' },
+    dungeonentrance: { light: 0.62, sky: ['#1a2030', '#2c3850', '#4a5878'], fog: '#38445c' },
+    wild:     { light: 0.95, sky: ['#3f7fc8', '#76adde', '#bfe0f5'], fog: '#9fc6ea' },
+  };
+  let _zoneAmbCur = null, _zoneAmbT = 0;
+  function tickZoneAmbience(dt) {
+    if (worldMode !== 'hub' || !scene) return;
+    _zoneAmbT -= dt; if (_zoneAmbT > 0) return; _zoneAmbT = 0.25;   // 0.25초마다 갱신
+    const zk = zoneAt(Math.floor(P.x), Math.floor(P.z)) || 'wild';
+    const tgt = HUB_ZONE_AMBIENCE[zk] || HUB_ZONE_AMBIENCE.wild;
+    if (!_zoneAmbCur) _zoneAmbCur = { light: tgt.light, sky: tgt.sky.slice(), fog: tgt.fog };
+    const k = 0.18;   // 지수 보간(부드러운 전환)
+    const mix2 = (a, b) => mixHex(a, b, k);
+    _zoneAmbCur.light += (tgt.light - _zoneAmbCur.light) * k;
+    for (let i = 0; i < 3; i++) _zoneAmbCur.sky[i] = rgbToHex(mix2(_zoneAmbCur.sky[i], tgt.sky[i]));
+    _zoneAmbCur.fog = rgbToHex(mix2(_zoneAmbCur.fog, tgt.fog));
+    if (scene.fog) scene.fog.color.set(_zoneAmbCur.fog);
+    const el = document.getElementById('econ3dSky');
+    if (el) el.style.background = `linear-gradient(${_zoneAmbCur.sky[0]} 0%, ${_zoneAmbCur.sky[1]} 55%, ${_zoneAmbCur.sky[2]} 100%)`;
+    const nv = Math.max(0.6, Math.min(1.05, _zoneAmbCur.light));
+    if (blockMat) blockMat.color.setScalar(nv);
+    if (waterMat) waterMat.color.setScalar(nv);
+    if (plantMat) plantMat.color.setScalar(nv);
+  }
+  function rgbToHex(rgb) {   // 'rgb(r,g,b)' → '#rrggbb'
+    const m = /rgb\((\d+),(\d+),(\d+)\)/.exec(rgb); if (!m) return rgb;
+    return '#' + [1, 2, 3].map(i => (+m[i]).toString(16).padStart(2, '0')).join('');
+  }
   function worldAmbience() { return WORLD_AMBIENCE[worldMode] || WORLD_AMBIENCE.hub; }
   function dayFactor() { return worldAmbience().light; }
   let _lastSkyKey = '';
@@ -7797,7 +7904,7 @@
         if (isTouch && worldMode !== 'visit' && lookT.id !== -1 && !lookT.acted && (lookT.moved || 0) < 10 && performance.now() - lookT.downT > 250) progressBreaking(dt);
         tickMobs(dt); tickFishing(); tickPlayerVitals(dt); tickWarpPads(dt); tickPortalStand(dt); tickPartyDungeonSync(dt);
       }
-      tickRegen(); tickFluids(); tickParticles(dt); tickDmgTexts(dt); tickBuildQueue(); tickChunkCulling(dt); tickAdaptiveView(dt); tickFluidAnim(dt); tickCrackOverlay(); tickCelestials(dt); tickArrows(dt);
+      tickRegen(); tickFluids(); tickParticles(dt); tickDmgTexts(dt); tickBuildQueue(); tickChunkCulling(dt); tickAdaptiveView(dt); tickFluidAnim(dt); tickCrackOverlay(); tickCelestials(dt); tickArrows(dt); tickZoneAmbience(dt);
       _hpHudT += dt; if (_hpHudT > 0.5) { _hpHudT = 0; updateHpHud(); }
       updatePrompt(dt);   // V26: 상호작용 안내
       flushWorldEdits();   // 블록 편집 → 메시 리빌드(프레임당 1회로 병합, 더티 청크만)
