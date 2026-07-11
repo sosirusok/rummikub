@@ -1346,14 +1346,46 @@
     };
     pier(316, 318, 1, 9);    // 남향 잔교
     pier(328, 330, -1, 8);   // 북향 잔교
-    // 어부 오두막(4×4, 가문비)
-    const hx = 310, hz = 312, hy = surfaceTop(hx, hz);
-    for (let dx = 0; dx < 4; dx++) for (let dz = 0; dz < 4; dz++) {
-      for (let y = 0; y < 3; y++) { const edge = dx === 0 || dx === 3 || dz === 0 || dz === 3; if (edge) setW(hx + dx, hy + y, hz + dz, y === 1 && dx === 1 && dz === 0 ? 0 : ID.spruce_planks); }
-      setW(hx + dx, hy + 3, hz + dz, ID.spruce_log);
+    // V62: 어부의 오두막 → 실사(Fisherman's_Hut.png) — 사암 등대 탑(청록 버섯갓 지붕 + 목재 발코니 칼라) +
+    //   청록 줄무늬 박공 지붕의 본채 + 잔교 난간
+    {
+      const hx = 306, hz = 307, hy = surfaceTop(hx + 4, hz + 3);
+      const PR = ID.prismarine, SS2 = ID.sandstone;
+      for (let dx = -1; dx <= 11; dx++) for (let dz = -1; dz <= 7; dz++) for (let y = hy; y <= hy + 15; y++) setW(hx + dx, y, hz + dz, 0);   // 구 오두막 철거
+      // 본채(7×6): 사암 벽 + 가문비 프레임 + 청록 줄무늬 박공 지붕(능선 x방향)
+      for (let dx = 0; dx < 7; dx++) for (let dz = 0; dz < 6; dz++) {
+        setW(hx + dx, hy - 1, hz + dz, ID.spruce_planks);
+        const edge = dx === 0 || dx === 6 || dz === 0 || dz === 5;
+        if (!edge) continue;
+        const corner = (dx === 0 || dx === 6) && (dz === 0 || dz === 5);
+        for (let y = 0; y < 3; y++) setW(hx + dx, hy + y, hz + dz, corner ? ID.spruce_log : y === 1 && (dx % 3 === 1 || dz % 3 === 1) ? ID.glass : SS2);
+      }
+      setW(hx + 3, hy, hz + 5, 0); setW(hx + 3, hy + 1, hz + 5, 0);   // 남측 입구(연못 방향)
+      setW(hx + 2, hy + 2, hz + 5, ID.glowstone);
+      for (let t = 0; t <= 2; t++) for (const dz of [t - 1, 6 - t]) for (let dx = -1; dx <= 7; dx++) {
+        setW(hx + dx, hy + 3 + t, hz + dz, (t % 2 === 0) ? PR : ID.spruce_planks);   // 청록/가문비 줄무늬 지붕
+      }
+      for (let dx = -1; dx <= 7; dx++) setW(hx + dx, hy + 6, hz + 2, PR); setW(hx + 3, hy + 6, hz + 3, PR);
+      // 등대 탑(본채 동측 3×3, h10): 사암 몸통 + 목재 발코니 칼라 + 청록 버섯갓 + 정상 랜턴
+      const tx = hx + 8, tz = hz + 1;
+      for (let y = 0; y < 10; y++) for (let dx = 0; dx < 3; dx++) for (let dz = 0; dz < 3; dz++) {
+        const edge = dx === 0 || dx === 2 || dz === 0 || dz === 2;
+        setW(tx + dx, hy + y, tz + dz, edge ? SS2 : 0);
+      }
+      setW(tx + 1, hy, tz, 0); setW(tx + 1, hy + 1, tz, 0);   // 탑 입구
+      setW(tx + 1, hy + 4, tz, ID.glass); setW(tx, hy + 6, tz + 1, ID.glass); setW(tx + 2, hy + 7, tz + 1, ID.glass);
+      for (let dx = -1; dx <= 3; dx++) for (let dz = -1; dz <= 3; dz++) {   // 발코니 칼라(오크 데크 + 난간)
+        const rim = dx === -1 || dx === 3 || dz === -1 || dz === 3;
+        if (rim) { setW(tx + dx, hy + 7, tz + dz, ID.oak_planks); if ((dx + dz) % 2 === 0) setW(tx + dx, hy + 8, tz + dz, ID.oak_fence); }
+      }
+      for (let dx = -1; dx <= 3; dx++) for (let dz = -1; dz <= 3; dz++) {   // 청록 버섯갓(2단 오버행 돔)
+        const d = Math.max(Math.abs(dx - 1), Math.abs(dz - 1));
+        if (d <= 2) setW(tx + dx, hy + 10, tz + dz, PR);
+      }
+      for (let dx = 0; dx < 3; dx++) for (let dz = 0; dz < 3; dz++) setW(tx + dx, hy + 11, tz + dz, PR);
+      setW(tx + 1, hy + 12, tz + 1, PR); setW(tx + 1, hy + 13, tz + 1, ID.glowstone);   // 정상 랜턴
+      setW(tx + 1, hy + 9, tz + 1, ID.glowstone);   // 등실
     }
-    setW(hx + 1, hy, hz, 0); setW(hx + 1, hy + 1, hz, 0);   // 문
-    setW(hx + 2, hy + 4, hz + 2, ID.glowstone);
     // 계류 보트(참나무 판자 소형 선체)
     for (let i = 0; i < 3; i++) { setW(318, wy, 330 + i, ID.oak_planks); }
     setW(318, wy + 1, 330, ID.oak_fence); setW(318, wy + 1, 332, ID.oak_fence);
