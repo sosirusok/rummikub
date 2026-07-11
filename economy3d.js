@@ -7262,7 +7262,7 @@
     if (_regenT >= 2) {
       _regenT = 0;
       const api = econApi();
-      const rg = api.traitSum ? api.traitSum('regeneration') : 0;
+      const rg = (api.traitSum ? api.traitSum('regeneration') : 0) + (api.buffBonus ? api.buffBonus('hpRegen') : 0);   // V42: 재생 물약
       if (rg > 0 && php.hp < php.max) { php.hp = Math.min(php.max, php.hp + rg); updateHpHud(); }
     }
   }
@@ -7509,6 +7509,7 @@
   // V28-B: 개별 드롭 시스템용 — 몹 타입 목록(순서 고정)과 이름 노출
   if (typeof window !== 'undefined') {
     window.economy3dMobTypes = () => Object.keys(MOB_TYPES);
+    window.economy3dHeal = (n) => { if (php) { php.hp = Math.min(php.max, php.hp + n); updateHpHud(); } };   // V42: 치유 물약
     window.economy3dMobName = t => (MOB_TYPES[t] || {}).name || t;
   }
   /* ---------------- 낮밤/하늘 ---------------- */

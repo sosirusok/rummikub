@@ -161,6 +161,7 @@
     { key: 'foraging', name: '벌목', bonusText: '레벨당 힘 +1' },
     { key: 'fishing', name: '낚시', bonusText: '레벨당 체력 +1' },
     { key: 'enchanting', name: '마법부여', bonusText: '레벨당 지력(마나) +2' },
+    { key: 'alchemy', name: '연금술', bonusText: '레벨당 지력 +1 (실제 스카이블럭) — 물약 양조로 성장, 레벨이 오르면 양조 물약 티어 상승' },
     { key: 'taming', name: '조련', bonusText: '레벨당 펫 경험치 +1%' },
     { key: 'social', name: '사교', bonusText: '5레벨마다 상점 판매가 +1%(최대 +10%)' },
   ];
@@ -853,6 +854,29 @@
   /* ---------------- 제작 레시피(컬렉션 티어로 해금 — 실제 스카이블럭 방식) ---------------- */
   // 인챈티드 자원: 원자재 160개 → 1개(판매가 20% 프리미엄 = 제작 노가다 보상)
   // 인챈티드 아이템: 모든 컬렉션 자원 — 원자재 160개(32×5 십자 배열) → 인챈티드 1개
+  // V42: 실제 스카이블럭 물약(위키 Potions) — fx는 레벨당 수치, dur(분)=3+레벨, 일부는 컬렉션 보상 해금(위키 그대로)
+  const BREWS = [
+    { key: 'speed', name: '신속', maxLvl: 8, fx: { speed: 5 }, needs: { sugarcane: 8 }, xp: 40, flavor: '설탕 — 이동 속도 +5/레벨' },
+    { key: 'strength', name: '힘', maxLvl: 8, fx: { strength: 5 }, needs: { blaze_rod: 1 }, xp: 80, flavor: '블레이즈 파우더 — 힘 +5/레벨' },
+    { key: 'healing', name: '치유', maxLvl: 8, instant: { heal: 20 }, needs: { melon: 12 }, xp: 50, flavor: '반짝이는 수박 — 즉시 회복 20/레벨' },
+    { key: 'regeneration', name: '재생', maxLvl: 9, fx: { hpRegen: 5 }, needs: { ghast_tear: 1 }, xp: 80, flavor: '가스트의 눈물 — 2초마다 +5/레벨 회복' },
+    { key: 'mana', name: '마나', maxLvl: 8, fx: { intelligence: 10 }, needs: { lapis: 16 }, xp: 60, flavor: '청금석 — 지력 +10/레벨' },
+    { key: 'critical', name: '치명타', maxLvl: 4, fx: { critChance: 5, critDamage: 10 }, needs: { diamond: 2, sugarcane: 4 }, xp: 90, flavor: '크리 확률 +5%/크리 피해 +10%/레벨' },
+    { key: 'archery', name: '궁술', maxLvl: 4, fx: { bowDmg: 12.5 }, needs: { feather: 8 }, xp: 70, unlock: { resource: 'feather', tier: 3 }, flavor: '활 피해 +12.5%/레벨 (깃털 III 해금)' },
+    { key: 'haste', name: '성급함', maxLvl: 4, fx: { miningSpeed: 20 }, needs: { coal: 16 }, xp: 60, unlock: { resource: 'coal', tier: 3 }, flavor: '채굴 속도 +20%/레벨 (석탄 III 해금)' },
+    { key: 'rabbit', name: '토끼', maxLvl: 6, fx: { speed: 10 }, needs: { carrot: 16 }, xp: 50, flavor: '토끼처럼 빠르게 — 속도 +10/레벨' },
+    { key: 'night_vision', name: '야간 투시', maxLvl: 1, fx: { nightVision: 1 }, needs: { carrot: 8, gold: 2 }, xp: 40, flavor: '황금 당근 — 밤에도 밝게' },
+    { key: 'water_breathing', name: '수중 호흡', maxLvl: 4, fx: { waterBreath: 1 }, needs: { pufferfish: 2 }, xp: 50, flavor: '복어 — 물속에서 숨쉬기' },
+    { key: 'experience', name: '경험', maxLvl: 4, fx: { xpBoost: 10 }, needs: { lapis: 32 }, xp: 100, unlock: { resource: 'lapis', tier: 6 }, flavor: '스킬 XP +10%/레벨 (청금석 VI 해금)' },
+    { key: 'resistance', name: '저항', maxLvl: 8, fx: { defense: 5 }, needs: { iron: 8 }, xp: 60, flavor: '방어력 +5/레벨' },
+    { key: 'absorption', name: '흡수', maxLvl: 8, fx: { hp: 10 }, needs: { gold: 8 }, xp: 70, unlock: { resource: 'gold', tier: 6 }, flavor: '체력 +10/레벨 (금 VI 해금)' },
+    { key: 'magic_find', name: '마법 탐지', maxLvl: 4, fx: { magicFind: 10 }, needs: { ender_pearl: 4, diamond: 2 }, xp: 120, flavor: '마법 탐지 +10/레벨' },
+    { key: 'dodge', name: '회피', maxLvl: 4, fx: { defense: 10 }, needs: { salmon: 8 }, xp: 60, unlock: { resource: 'salmon', tier: 2 }, flavor: '몸놀림이 가벼워진다 (연어 II 해금)' },
+    { key: 'venomous', name: '맹독', maxLvl: 4, fx: { strength: 3 }, needs: { spider_eye: 8, potato: 16 }, xp: 80, unlock: { resource: 'potato', tier: 5 }, flavor: '공격에 독을 바른다 (감자 V 해금)' },
+    { key: 'knockback', name: '밀치기', maxLvl: 4, fx: { knockback: 1 }, needs: { slime_ball: 8 }, xp: 50, unlock: { resource: 'slime_ball', tier: 4 }, flavor: '공격 넉백 증가 (슬라임볼 IV 해금)' },
+    { key: 'stun', name: '기절', maxLvl: 4, fx: { stun: 1 }, needs: { obsidian: 4 }, xp: 90, unlock: { resource: 'obsidian', tier: 6 }, flavor: '공격 시 몹을 잠시 멈춘다 (흑요석 VI 해금)' },
+    { key: 'burning', name: '연소', maxLvl: 4, fx: { burn: 5 }, needs: { magma_cream: 8 }, xp: 70, flavor: '공격에 화염 데미지를 더한다' },
+  ];
   const ENCHANTED_RES = COLLECTIONS.reduce((a, c) => a.concat(c.resources.map(r => r.key)), []).concat(EXTRA_RES.map(r => r.key));
   // V39: 인챈티드 레시피 해금 티어 — 위키 컬렉션 보상 티어 그대로(수작업)
   const ENCH_UNLOCK_T = { stone: 4, coal: 3, iron: 4, gold: 5, lapis: 4, redstone: 4, diamond: 4, emerald: 4, obsidian: 4, wheat: 5, carrot: 4, potato: 4, pumpkin: 3, melon: 4, sugarcane: 3, oaklog: 3, birchlog: 3, sprucelog: 3, dark_oak_log: 3, jungle_log: 3, acacia_log: 3, rotten_flesh: 4, bone: 5, string: 4, spider_eye: 4, gunpowder: 4, ender_pearl: 2, ghast_tear: 3, slime_ball: 5, blaze_rod: 6, magma_cream: 3, feather: 5, leather: 4, rawfish: 6, salmon: 4, clownfish: 4, pufferfish: 2, prismarine: 3, sponge: 4, clay: 2 };
@@ -1018,9 +1042,6 @@
     { key: 'minion_fuel_lava', needs: { magma_cream: 32, iron: 16 }, gives: 1, unlock: { resource: 'magma_cream', tier: 2 } },
     { key: 'super_compactor', needs: { enchanted_redstone: 1, iron: 64 }, gives: 1, unlock: { resource: 'redstone', tier: 4 } },
     { key: 'compactor', needs: { cobblestone: 160, redstone: 16 }, gives: 1, unlock: { resource: 'stone', tier: 5 } },
-    { key: 'potion_strength', needs: { blaze_rod: 2, spider_eye: 4 }, gives: 1, unlock: { resource: 'spider_eye', tier: 2 } },
-    { key: 'potion_speed', needs: { sugarcane: 16, feather: 4 }, gives: 1, unlock: { resource: 'sugarcane', tier: 2 } },
-    { key: 'potion_healing', needs: { melon: 12, ghast_tear: 1 }, gives: 1, unlock: { resource: 'melon', tier: 2 } },
     { key: 'hot_potato_book', needs: { potato: 128, sugarcane: 32 }, gives: 1, unlock: { resource: 'potato', tier: 3 } },   // V11
     { key: 'fuming_potato_book', needs: { hot_potato_book: 2, magma_cream: 48 }, gives: 1, unlock: { resource: 'potato', tier: 6 } },   // V11
     { key: 'weapon_common', needs: { oaklog: 10, stone: 4 }, gives: 1, unlock: null },
@@ -1122,9 +1143,6 @@
     { key: 'essence_cosmetic_cape', name: '지배자의 망토(장식)', category: '장식', buyPrice: 0, sellPrice: 5000, stackSize: 1 },
     { key: 'dungeon_essence', name: '던전 정수', category: '재료', buyPrice: 0, sellPrice: 120, stackSize: 64 },
     { key: 'arachne_crystal', name: '아라크네 크리스탈', category: '재료', buyPrice: 0, sellPrice: 900, stackSize: 16 },
-    { key: 'potion_strength', name: '힘의 물약(5분 힘 +25)', category: '물약', buyPrice: 0, sellPrice: 150, stackSize: 16 },
-    { key: 'potion_speed', name: '신속의 물약(5분 속도 +20)', category: '물약', buyPrice: 0, sellPrice: 120, stackSize: 16 },
-    { key: 'potion_healing', name: '재생의 물약(5분 체력 +40)', category: '물약', buyPrice: 0, sellPrice: 150, stackSize: 16 },
     ...['magma_cream', 'ghast_tear', 'spider_eye', 'slime_ball', 'gunpowder', 'ender_shard', 'feather', 'leather'].map(k => {
       const names = { magma_cream: '마그마 크림', ghast_tear: '가스트의 눈물', spider_eye: '거미 눈', slime_ball: '슬라임볼', gunpowder: '화약', ender_shard: '엔더 조각', feather: '깃털', leather: '가죽' };
       const sells = { magma_cream: 8, ghast_tear: 40, spider_eye: 5, slime_ball: 4, gunpowder: 6, ender_shard: 22, feather: 3, leather: 5 };
@@ -1155,6 +1173,7 @@
     // 원자재 31종(sellPrice는 컬렉션 정의에서)
     ...COLLECTIONS.flatMap(cat => cat.resources.map(r => ({ key: r.key, name: r.name, category: '원자재', buyPrice: 0, sellPrice: r.sellPrice, stackSize: 64 }))),
     ...EXTRA_RES.map(r => ({ key: r.key, name: r.name, category: '원자재', buyPrice: 0, sellPrice: r.sellPrice, stackSize: 64 })),
+    ...BREWS.map(b => ({ key: `potion_${b.key}`, name: `${b.name}의 물약`, category: '물약', buyPrice: 0, sellPrice: 40 + b.xp, stackSize: 16, flavor: b.flavor })),
     // 장비(던전 전용은 buyPrice 0 → 구매 불가, 판매만 가능)
     ...EQUIPMENT.weapons.map(w => ({ key: w.key, name: `${w.name} [${ITEM_TIERS.find(t => t.key === w.tierKey).name}]`, category: '무기', tierKey: w.tierKey, buyPrice: w.buyPrice, sellPrice: w.sellPrice, stackSize: 1, dmg: w.dmg, slot: w.slot, traits: w.traits, set: w.set, flavor: w.flavor, reqCombat: w.reqCombat })),
     ...EQUIPMENT.armor.map(a => ({ key: a.key, name: `${a.name} [${ITEM_TIERS.find(t => t.key === a.tierKey).name}]`, category: '방어구', tierKey: a.tierKey, buyPrice: a.buyPrice, sellPrice: a.sellPrice, stackSize: 1, defense: a.defense, hp: a.hp || 0, slot: a.slot, traits: a.traits, set: a.set, flavor: a.flavor, reqCombat: a.reqCombat })),
@@ -1590,7 +1609,7 @@
   };
   window.ECON_DATA = {
     PORTAL_ITEMS, CRAFT_GROUPS, SMELT_RECIPES,
-    ITEM_TIERS, COLLECTIONS, COL_TIER_REWARDS, COL_TIER_FX, ENCH_COL_DISCOUNT, EXTRA_RES, SKILLS, GATHER_TABLE, TOOLS, MINIONS, MINION_STORAGE_BASE, MINION_STORAGE_UPGRADED,
+    ITEM_TIERS, COLLECTIONS, COL_TIER_REWARDS, COL_TIER_FX, ENCH_COL_DISCOUNT, EXTRA_RES, SKILLS, BREWS, GATHER_TABLE, TOOLS, MINIONS, MINION_STORAGE_BASE, MINION_STORAGE_UPGRADED,
     MINION_STORAGE_UPGRADE_COST, MINION_OFFLINE_CAP_HOURS, MINION_SLOT_MAX, MINION_SLOT_COST_BASE, MINION_SLOT_COST_MUL,
     MINION_FUEL, MINION_FUEL2, SLAYERS, DUNGEON, DUNGEON_ROOM_SCORE, ESSENCE_SHOP, SHOP, BAZAAR, AUCTION_HOUSE, HEART_OF_MOUNTAIN, DAILY_SELL_LIMIT_PER_STACK,
     EQUIPMENT, STARFORCE, REFORGES, ITEM_ROLL,
