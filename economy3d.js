@@ -560,6 +560,10 @@
     buildWilderness();
     buildHubCastle();    // V44: 허브 캐슬(실제 허브 북서) — 성벽/4탑/알현실/총안
     buildDockPier();     // V44: 연못 → 실제 부두(잔교/계류 보트/어부 오두막)
+    buildMineQuarry();   // V45: 광산 남사면 계단식 노천 채석장(테라스/갱목/광석 노출/수레길)
+    buildRuinWalls();    // V45: 폐허 무너진 성벽 라인 + 쓰러진 기둥 + 잔해 더미
+    buildSnowTrail();    // V45: 설산 지그재그 등반로 + 정상 전망대
+    buildInn();          // V45: 마을 여관(2층 — 객실/간판/발코니)
     buildHubRealign();   // V25-A: 딥서치(위키 좌표) 기반 실제 허브 정합 — 터번/플라워하우스/커뮤니티센터/시리우스 오두막/침몰 크립트   // V24: 허허벌판 채우기 — 풍차/코티지/과수원/정자/캠프/목장(손 배치)
     buildHubPortal();
     buildWarpPads();
@@ -601,6 +605,120 @@
     }
   }
 
+  // V45: 광산 남사면 계단식 노천 채석장 — 테라스 3단(석재/자갈), 갱목 지지대, 광석 노출면, 수레길
+  function buildMineQuarry() {
+    const cx = 88, cz = 230;   // 광산 언덕 남사면
+    for (let ring = 0; ring < 3; ring++) {
+      const r0 = 5 + ring * 4, r1 = r0 + 3, dy = -1 - ring;   // 링마다 한 단 내려감
+      for (let x = cx - r1; x <= cx + r1; x++) for (let z = cz - r1; z <= cz + r1; z++) {
+        const d = Math.hypot(x - cx, z - cz);
+        if (d < r0 || d > r1 || zoneAt(x, z) === 'village') continue;
+        const t = surfaceTop(x, z);
+        // 테라스 바닥: 지표를 한 단씩 깎아 계단식 단면
+        for (let y = t - 1 + dy + 1; y <= t + 3; y++) setW(x, y, z, 0);
+        setW(x, t - 1 + dy, z, hash3(x, 401, z) < 0.3 ? ID.gravel : ID.stone);
+        // 벽면 광석 노출(단 사이 수직면)
+        if (d > r1 - 1.2 && hash3(x, 402, z) < 0.28) setW(x, t + dy, z, hash3(x, 403, z) < 0.6 ? ID.coal_ore : ID.iron_ore);
+      }
+    }
+    // 중앙 최하단 바닥 + 물웅덩이 + 사다리꼴 갱목 크레인
+    for (let x = cx - 4; x <= cx + 4; x++) for (let z = cz - 4; z <= cz + 4; z++) {
+      const t = surfaceTop(x, z);
+      for (let y = t; y <= t + 4; y++) setW(x, y, z, 0);
+      setW(x, t - 1, z, Math.hypot(x - cx, z - cz) < 2 ? ID.water : ID.stone);
+    }
+    const by = surfaceTop(cx + 3, cz + 3);
+    for (let y = 0; y < 6; y++) setW(cx + 5, by + y, cz + 5, ID.spruce_log);   // 크레인 기둥
+    for (let i = 0; i < 4; i++) setW(cx + 5 - i, by + 5, cz + 5, ID.spruce_planks);   // 크레인 팔
+    setW(cx + 2, by + 4, cz + 5, ID.oak_fence);   // 매달린 로프(울타리)
+    setW(cx + 2, by + 3, cz + 5, ID.oak_fence);
+    // 수레길: 채석장 → 갱도 입구(103,208) 자갈 2폭
+    for (let i = 0; i <= 20; i++) {
+      const x = Math.round(cx + (103 - cx) * i / 20), z = Math.round(cz + (208 - cz) * i / 20);
+      for (let w = 0; w <= 1; w++) { const t = surfaceTop(x + w, z); if (getBlockLocal(x + w, t - 1, z) !== 0) setW(x + w, t - 1, z, i % 4 === 0 ? ID.oak_planks : ID.gravel); }
+    }
+    [[cx - 7, cz], [cx, cz - 7], [cx + 7, cz + 1]].forEach(p2 => { const t = surfaceTop(p2[0], p2[1]); setW(p2[0], t, p2[1], ID.glowstone); });   // 작업등
+  }
+  // V45: 폐허 — 무너진 성벽 라인(부분 잔존 높이) + 쓰러진 기둥 + 잔해 더미(플래토 가장자리)
+  function buildRuinWalls() {
+    const wall = (x0, z0, x1, z1) => {
+      const n = Math.max(Math.abs(x1 - x0), Math.abs(z1 - z0));
+      for (let i = 0; i <= n; i++) {
+        const x = Math.round(x0 + (x1 - x0) * i / n), z = Math.round(z0 + (z1 - z0) * i / n);
+        const h = hash3(x, 411, z);
+        if (h < 0.18) continue;                                        // 붕괴 갭
+        const t = surfaceTop(x, z);
+        const hh = h < 0.45 ? 1 : h < 0.8 ? 2 + (i % 2) : 4;           // 잔존 높이 들쭉날쭉
+        for (let y = 0; y < hh; y++) setW(x, t + y, z, hash3(x, y + 412, z) < 0.35 ? ID.mossy_stone_bricks : hash3(x, y + 413, z) < 0.2 ? ID.cracked_stone_bricks : ID.stone_bricks);
+        if (h > 0.93) setW(x, t + hh, z, ID.mossy_cobblestone);        // 꼭대기 이끼 캡
+        if (h < 0.24 && h >= 0.18) { setW(x + 1, t, z, ID.cobblestone); setW(x, t, z + 1, ID.mossy_cobblestone); }   // 갭 아래 잔해
+      }
+    };
+    wall(66, 262, 108, 262);   // 북쪽 성벽 라인
+    wall(66, 262, 66, 300);    // 서쪽 성벽 라인
+    // 쓰러진 기둥 2기(가로 눕힌 석재) + 파괴된 주춧돌
+    for (let i = 0; i < 6; i++) { const t = surfaceTop(96 + i, 272); setW(96 + i, t, 272, i === 0 ? ID.mossy_stone_bricks : ID.stone_bricks); }
+    for (let i = 0; i < 5; i++) { const t = surfaceTop(78, 288 + i); setW(78, t, 288 + i, i % 2 ? ID.stone_bricks : ID.cracked_stone_bricks); }
+    for (let y = 0; y < 3; y++) setW(96, surfaceTop(96, 274) + y, 274, ID.stone_bricks);   // 남은 기둥 밑동
+    [[70, 268], [102, 266], [68, 294]].forEach(p2 => { const t = surfaceTop(p2[0], p2[1]); setW(p2[0], t, p2[1], ID.mossy_cobblestone); setW(p2[0] + 1, t, p2[1], ID.cobblestone); setW(p2[0], t + 1, p2[1], ID.mossy_cobblestone); });   // 잔해 더미
+  }
+  // V45: 설산 — 남사면 지그재그 등반로(다진 길/횃불 이정표) + 정상 전망대(가문비 데크/난간/등불)
+  function buildSnowTrail() {
+    let x = 224, dir = 1;
+    for (let z = 132; z >= 92; z--) {
+      x += dir; if (x > 236) { dir = -1; x = 236; } if (x < 212) { dir = 1; x = 212; }
+      for (let w = -1; w <= 1; w++) {
+        const t = surfaceTop(x + w, z);
+        const g = getBlockLocal(x + w, t - 1, z);
+        if (g === ID.snow_block || g === ID.stone || g === ID.grass || g === ID.dirt) setW(x + w, t - 1, z, (z % 5) ? ID.gravel : ID.spruce_planks);
+      }
+      if (z % 8 === 0) { const t = surfaceTop(x + 2, z); setW(x + 2, t, z, ID.spruce_fence); setW(x + 2, t + 1, z, ID.glowstone); }   // 이정표 등불
+    }
+    // 정상 어깨 전망대(가문비 데크 7×7 + 난간 + 등불 기둥) — 정상 만년설은 보존
+    const px = 232, pz = 96, py = surfaceTop(px, pz);
+    for (let dx = -3; dx <= 3; dx++) for (let dz = -3; dz <= 3; dz++) {
+      setW(px + dx, py - 1, pz + dz, ID.spruce_planks);
+      for (let y = py; y <= py + 3; y++) setW(px + dx, y, pz + dz, 0);
+      if (Math.abs(dx) === 3 || Math.abs(dz) === 3) setW(px + dx, py, pz + dz, ID.spruce_fence);
+    }
+    setW(px, py, pz, ID.spruce_log); setW(px, py + 1, pz, ID.spruce_log); setW(px, py + 2, pz, ID.glowstone);   // 전망대 등불 기둥
+  }
+  // V45: 마을 여관(광장 북동 256,244) — 2층 하프팀버 + 객실 3개 + 발코니 + 간판등
+  function buildInn() {
+    const X = 254, Z = 240, Wd = 9, Dd = 7;
+    const base = surfaceTop(X + 4, Z + 3);
+    for (let dx = -1; dx <= Wd; dx++) for (let dz = -1; dz <= Dd; dz++) for (let y = base; y <= base + 12; y++) setW(X + dx, y, Z + dz, 0);   // 부지 정리
+    for (let dx = 0; dx < Wd; dx++) for (let dz = 0; dz < Dd; dz++) setW(X + dx, base - 1, Z + dz, ID.oak_planks);   // 1층 바닥
+    const wallAt = (dx, dz, y) => {
+      const corner = (dx === 0 || dx === Wd - 1) && (dz === 0 || dz === Dd - 1);
+      if (corner) return ID.dark_oak_log;
+      if (y === base + 1 && ((dx % 3 === 1 && (dz === 0 || dz === Dd - 1)) || (dz % 3 === 1 && (dx === 0 || dx === Wd - 1)))) return ID.glass;
+      return y >= base + 3 ? ID.birch_planks : ID.cobblestone;   // 1층 석재 + 2층 하프팀버(자작)
+    };
+    for (let dx = 0; dx < Wd; dx++) for (let dz = 0; dz < Dd; dz++) {
+      const edge = dx === 0 || dx === Wd - 1 || dz === 0 || dz === Dd - 1;
+      if (!edge) continue;
+      for (let y = base; y <= base + 5; y++) setW(X + dx, y, Z + dz, wallAt(dx, dz, y));
+    }
+    for (let dx = 0; dx < Wd; dx++) for (let dz = 0; dz < Dd; dz++) setW(X + dx, base + 3, Z + dz, ID.oak_planks);   // 2층 바닥(중간층)
+    // 지붕(가문비 박공)
+    for (let step = 0; step <= 3; step++) for (let dx = -1 + step; dx <= Wd - step; dx++) for (const dz of [-1 + step, Dd - step]) setW(X + dx, base + 6 + step, Z + dz, ID.spruce_planks);
+    for (let dx = 2; dx < Wd - 2; dx++) for (let dz = 2; dz < Dd - 2; dz++) setW(X + dx, base + 9, Z + dz, ID.spruce_planks);
+    // 문 + 간판등 + 발코니(정면 -z)
+    setW(X + 4, base, Z, 0); setW(X + 4, base + 1, Z, 0);
+    setW(X + 3, base + 2, Z, ID.glowstone); setW(X + 5, base + 2, Z, ID.glowstone);
+    for (let dx = 3; dx <= 5; dx++) { setW(X + dx, base + 3, Z - 1, ID.oak_planks); setW(X + dx, base + 4, Z - 1, ID.oak_fence); }
+    // 객실 3개(2층): 침대 대용 양털 + 등불, 칸막이
+    for (let i = 0; i < 3; i++) {
+      const rx = X + 1 + i * 3;
+      setW(rx, base + 4, Z + Dd - 2, ID.wool_white); setW(rx + 1, base + 4, Z + Dd - 2, ID.wool_red);
+      if (i < 2) for (let dz2 = 1; dz2 < Dd - 1; dz2++) setW(rx + 2, base + 4, Z + dz2, ID.birch_planks);
+      setW(rx, base + 5, Z + 2, ID.glowstone);
+    }
+    // 1층 로비: 카운터 + 벽난로
+    for (let dx = 2; dx <= 5; dx++) setW(X + dx, base, Z + Dd - 2, ID.oak_planks);
+    setW(X + Wd - 2, base, Z + Dd - 2, ID.cobblestone); setW(X + Wd - 2, base + 1, Z + Dd - 2, ID.glowstone);
+  }
   // V44: 허브 캐슬 — 실제 스카이블럭 허브 북서쪽 캐슬(좌표단위 수작업). 26×22 성곽 + 코너 탑 4기 + 알현실 인테리어
   function buildHubCastle() {
     const CX = 150, CZ = 96, HW = 13, HD = 11;         // 중심/반폭/반깊이
