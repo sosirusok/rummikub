@@ -255,11 +255,11 @@
     { key: 'minionManager', name: '미니언 관리소장', zone: 'hub', tab: 'minions', x: 199, z: 215, color: 0x6aa84f },
     { key: 'petKeeper', name: '펫 상인', zone: 'hub', tab: 'pets', x: 250, z: 243, color: 0xe048c4 },
     { key: 'enchanter', name: '마법부여사', zone: 'hub', tab: 'enchant', x: 224, z: 201, color: 0x9365b8 },
-    { key: 'auctioneer', name: '경매인', zone: 'hub', tab: 'deals', x: 212, z: 226, color: 0xc0392b },
+    { key: 'auctioneer', name: '경매인', zone: 'hub', tab: 'deals', x: 206, z: 221, color: 0xc0392b },   // V56: 신전 입구 앞(포탈 통로 밖)
     { key: 'gladiator', name: '검투사 마스터', zone: 'hub', tab: 'arena', x: 224, z: 346, color: 0xb8860b },   // V11: 콜로세움 아레나
     { key: 'reforgeSmith', name: '재련 대장장이', zone: 'hub', tab: 'reforge', x: 238, z: 226, color: 0x6b5436 },
     { key: 'guide', name: '모험 안내인', zone: 'hub', tab: 'stats', x: 224, z: 247, color: 0x2c82c9 },
-    { key: 'craftsman', name: '장인(제작대)', zone: 'hub', tab: 'craft', x: 214, z: 210, color: 0x8a6a3a },
+    { key: 'craftsman', name: '장인(제작대)', zone: 'hub', tab: 'craft', x: 216, z: 210, color: 0x8a6a3a },   // V56: 경매 신전 동벽(x214) 밖으로
     { key: 'builder', name: '건축가 빌더', zone: 'hub', tab: 'buildshop', x: 246, z: 220, color: 0x9a7b4f },   // V14: 건축 자재상
     { key: 'starSmith', name: '별빛 강화공(스타포스)', zone: 'hub', tab: 'star', x: 234, z: 210, color: 0x54c8e8 },
     { key: 'mineForeman', name: '광산 감독관', zone: 'mine', x: 114, z: 208, color: 0x787878 },
@@ -858,6 +858,36 @@
   }
 
 
+
+  // V56: 경매장 — 실사(Auction_House.png): 굵은 조각 석재 기둥 + 자주(보라) 벽 패널 + 가문비 박공 지붕 + 빨간 배너
+  function buildAuctionTemple(cx, cz) {
+    const X0 = cx - 6, Z0 = cz - 5, Wd = 13, Dd = 11;
+    const base = surfaceTop(cx, cz);
+    const CH = ID.chiseled_stone_bricks != null ? ID.chiseled_stone_bricks : ID.stone_bricks;
+    const PUR = ID.terracotta_purple != null ? ID.terracotta_purple : ID.purpur;
+    for (let dx = -1; dx <= Wd; dx++) for (let dz = -1; dz <= Dd; dz++) for (let y = base; y <= base + 14; y++) setW(X0 + dx, y, Z0 + dz, 0);   // 부지 정리(구 로툰다 철거)
+    for (let dx = 0; dx < Wd; dx++) for (let dz = 0; dz < Dd; dz++) setW(X0 + dx, base - 1, Z0 + dz, ID.polished_andesite != null ? ID.polished_andesite : ID.stone);
+    // 벽: 조각 석재 필라스터(3칸 간격) + 사이 보라 패널
+    for (let dx = 0; dx < Wd; dx++) for (let dz = 0; dz < Dd; dz++) {
+      const edge = dx === 0 || dx === Wd - 1 || dz === 0 || dz === Dd - 1;
+      if (!edge) continue;
+      const pil = (dx % 3 === 0 && (dz === 0 || dz === Dd - 1)) || (dz % 3 === 0 && (dx === 0 || dx === Wd - 1)) || ((dx === 0 || dx === Wd - 1) && (dz === 0 || dz === Dd - 1));
+      for (let y = 0; y < 6; y++) setW(X0 + dx, base + y, Z0 + dz, pil ? (y === 5 ? CH : ID.stone_bricks) : y < 5 ? PUR : ID.stone_bricks);
+    }
+    // 정면(+z, 광장 방향): 대형 입구 + 빨간 배너 2 + 포치 기둥
+    for (let dx = 5; dx <= 7; dx++) for (let y = 0; y < 4; y++) setW(X0 + dx, base + y, Z0 + Dd - 1, 0);
+    for (let y = 1; y <= 3; y++) { setW(X0 + 3, base + y, Z0 + Dd, ID.wool_red); setW(X0 + 9, base + y, Z0 + Dd, ID.wool_red); }   // 배너
+    for (const px of [X0 + 2, X0 + 10]) { for (let y = 0; y < 5; y++) setW(px, base + y, Z0 + Dd + 1, CH); }
+    for (let dx = 2; dx <= 10; dx++) setW(X0 + dx, base + 5, Z0 + Dd + 1, ID.stone_bricks);   // 포치 상인방
+    for (let dx = 4; dx <= 8; dx++) setW(X0 + dx, base - 1, Z0 + Dd, ID.oak_planks);           // 진입 데크
+    // 가문비 박공 지붕
+    for (let step = 0; step <= 3; step++) for (let dx = -1 + step; dx <= Wd - step; dx++) for (const dz of [-1 + step, Dd - step]) setW(X0 + dx, base + 6 + step, Z0 + dz, ID.spruce_planks);
+    for (let dx = 3; dx < Wd - 3; dx++) for (let dz = 3; dz < Dd - 3; dz++) setW(X0 + dx, base + 9, Z0 + dz, ID.spruce_planks);
+    // 내부: 경매 단상(중앙) + 조명
+    setW(cx, base, cz, CH); setW(cx, base + 1, cz, ID.oak_planks);
+    setW(cx - 2, base + 4, cz, ID.glowstone); setW(cx + 2, base + 4, cz, ID.glowstone);
+  }
+
   // V55: 커뮤니티 센터 재건축 — 실사(Community_Center.png): 붉은 벽돌 벽 + 크림(사암) 기둥 프레임 +
   //   짙은 맨사드 지붕 + 중앙 시계탑(석영 시계면) + 3연속 아치 포치
   function rebuildCommunityCenter() {
@@ -944,6 +974,7 @@
   function leafTrimPass() {
     const wallLike = id => { if (!id) return false; const k = BLOCKS[id].key; return /stone_bricks|planks|cobblestone|sandstone|log/.test(k) && !/slab|stairs|fence/.test(k); };
     for (let x = 196; x <= 252; x++) for (let z = 196; z <= 258; z++) {
+      if (NPCS.some(n => Math.abs(n.x - x) <= 1 && Math.abs(n.z - z) <= 1)) continue;   // NPC 자리 융기 방지
       const g = surfaceTop(x, z);
       for (let y = g + 1; y <= g + 5; y++) {
         if (getBlockLocal(x, y, z) !== 0) continue;
@@ -1380,7 +1411,7 @@
     });
     buildHouse(190, 206, 9, 7, 20, ID.oak_planks, ID.spruce_planks);       // 미니언 관리소
     buildHouse(244, 234, 9, 7, 20, ID.birch_planks, ID.oak_planks);        // 펫 상점(자작)
-    buildRotunda(208, 218, 4, 20, { col: ID.quartz_block, band: ID.purpur, gdir: 1 });   // 경매장 — V20-Q 개방형 원형 로툰다(경매 NPC)
+    buildAuctionTemple(208, 212);   // V56: 실사(Auction_House.png) — 신전풍 파사드. 내 섬 포탈(210,224) 앞마당을 침범하지 않게 광장 북서쪽 배치
     buildForge(232, 216, 8, 7, 20);                                        // 대장간(재련) — V20-P 하프팀버 박공+굴뚝+용광로 베이
     buildHouse(208, 244, 8, 6, 20, ID.oak_planks, ID.oak_planks);          // 제작소
     buildHouse(230, 244, 8, 6, 20, ID.quartz_block, ID.purpur);            // 스타포스 강화소(메이플 감성)
@@ -1426,8 +1457,14 @@
     S(223, 20, 192, log); S(223, 21, 192, book);                                  // 낭독대(입구 쪽)
     for (let x = 222; x <= 224; x++) for (let z = 189; z <= 191; z++) S(x, 19, z, ID.purpur);   // 보라 융단
     S(223, 22, 190, glow); S(220, 22, 188, glow);                                 // 서고 조명
-    // ── ③ 경매장 로툰다(208,218 r4) 매물 전시대 3기: 석영 대 + 색양털 '매물' ──
-    const disp = [[206, 218, ID.wool_yellow != null ? ID.wool_yellow : glow], [210, 218, ID.wool_blue != null ? ID.wool_blue : glow], [208, 216, wr]];
+    // V56: 실사(Library.png) — 서가 뒤 보라 벽 패널 + 중앙 인챈트 테이블(레드 카펫) + 천장 샹들리에
+    for (let x = 220; x <= 226; x++) S(x, 22, 187, ID.terracotta_purple != null ? ID.terracotta_purple : ID.purpur);   // 북벽 상단 보라 패널
+    for (let x = 222; x <= 224; x++) for (let z = 189; z <= 191; z++) S(x, 19, z, ID.wool_red != null ? ID.wool_red : ID.purpur);   // 레드 카펫(융단 교체)
+    S(223, 20, 190, ID.obsidian);                                                  // 인챈트 테이블 몸통
+    S(222, 20, 189, ID.prismarine); S(224, 20, 191, ID.prismarine);                // 다이아 코너 장식
+    S(223, 23, 190, ID.oak_fence); S(223, 22, 190, glow);                          // 샹들리에(로프+발광)
+    // ── ③ 경매장 신전(208,212) 매물 전시대 3기: 석영 대 + 색양털 '매물' ──
+    const disp = [[206, 212, ID.wool_yellow != null ? ID.wool_yellow : glow], [210, 212, ID.wool_blue != null ? ID.wool_blue : glow], [208, 210, wr]];
     for (const [px, pz, cap] of disp) { S(px, 20, pz, ID.quartz_block); S(px, 21, pz, cap); }
     // ── ④ 커뮤니티 게시판(광장 남서 모퉁이): 통나무 지주 + 다크오크 판 + 등불 ──
     {
@@ -2827,7 +2864,11 @@
   //   개구부는 (dx 0..1)×(dy 1..3), z=cz 로 비워 둠(이펙트 평면이 그 안에 채워짐).
   // 허브의 "내 섬행" 포탈 — 이끼 낀 고대 자연 신전(덩굴/꽃/초록 크리스탈)
   function buildHubPortal() {
-    const cx = PORTALS.hub.x, cz = PORTALS.hub.z, gy = surfaceTop(cx, cz);
+    const cx = PORTALS.hub.x, cz = PORTALS.hub.z;
+    // V56: 부지에 가로등 링(반경14) 등이 서 있으면 surfaceTop이 그 꼭대기를 가리켜 포탈이 공중 부양하던 버그 —
+    //   포탈 자리(기둥 dx-2..3 × dz-1..2)를 먼저 비우고 광장 보행 높이에 세운다
+    for (let dx = -2; dx <= 3; dx++) for (let dz = -1; dz <= 2; dz++) for (let y = 20; y <= 34; y++) setW(cx + dx, y, cz + dz, 0);
+    const gy = surfaceTop(cx, cz);
     const B = (dx, dy, dz, id) => { if (id != null) setW(cx + dx, gy + dy, cz + dz, id); };
     const moss = ID.mossy_cobblestone, cob = ID.cobblestone, sb = ID.stone_bricks, ch = ID.chiseled_stone_bricks, glow = ID.glowstone, leaf = ID.oak_leaves;
     const seaL = ID.sea_lantern != null ? ID.sea_lantern : ID.glowstone;
