@@ -1388,6 +1388,35 @@
     { key: 'combat_30', name: '무의 극의', desc: '전투 스킬 30레벨', stat: 'combatLv', gte: 30, gold: 100000, item: 'fuming_potato_book' },
   ];
   // 일일 퀘스트 풀(매일 3종 무작위 배정, 카운터 스냅샷 기반)
+  // V50: 페처(Fetchur) — 실제 스블처럼 매일 아이템 1종 요구(월 13일 순환, 수수께끼 힌트). 실제 목록을 보유 아이템으로 대응.
+  const FETCHUR = [
+    { key: 'wool_yellow', n: 20, hint: '노랗고 창문처럼 반짝이는 것' },          // yellow stained glass 대응
+    { key: 'iron', n: 8, hint: '방향을 알려주는 바늘의 재료' },                  // compass 대응
+    { key: 'diamond', n: 3, hint: '깊은 곳에서 캐낸 푸른 보석' },               // mithril 대응
+    { key: 'gunpowder', n: 8, hint: '하늘에서 펑 터지는 것의 속' },              // firework 대응
+    { key: 'potion_speed', n: 1, hint: '졸음을 확 깨워주는 물약' },              // cheap coffee 대응
+    { key: 'oak_planks', n: 16, hint: '문을 짜기 좋은 판자' },                   // wooden door 대응
+    { key: 'leather', n: 3, hint: '토끼처럼 부드러운 가죽' },                    // rabbit foot 대응
+    { key: 'obsidian', n: 4, hint: '폭발도 못 부수는 검은 돌' },                 // superboom TNT 대응
+    { key: 'pumpkin', n: 1, hint: '가을의 얼굴' },
+    { key: 'coal', n: 16, hint: '불을 붙일 때 쓰는 검은 돌' },                   // flint and steel 대응
+    { key: 'emerald', n: 5, hint: '주민이 사랑하는 초록 보석' },
+    { key: 'wool_red', n: 32, hint: '빨갛고 포근한 것' },
+    { key: 'ender_pearl', n: 4, hint: '순간이동의 구슬' },
+  ];
+  const FETCHUR_REWARD = { gold: 2500, miningXp: 200 };
+  // V50: 광부 커미션(실제 드워븐 마인스식) — 매일 4슬롯 순환, 보상 = 산의 심장 가루 + 채광 XP
+  const COMMISSIONS = [
+    { key: 'cm_coal', name: '석탄 채굴부', type: 'col', target: 'coal', goal: 50 },
+    { key: 'cm_iron', name: '철 채굴부', type: 'col', target: 'iron', goal: 30 },
+    { key: 'cm_gold', name: '금 채굴부', type: 'col', target: 'gold', goal: 20 },
+    { key: 'cm_lapis', name: '청금석 채굴부', type: 'col', target: 'lapis', goal: 40 },
+    { key: 'cm_redstone', name: '레드스톤 채굴부', type: 'col', target: 'redstone', goal: 40 },
+    { key: 'cm_diamond', name: '다이아몬드 채굴부', type: 'col', target: 'diamond', goal: 5 },
+    { key: 'cm_blocks', name: '갱도 확장부', type: 'stat', target: 'blocksMined', goal: 200 },
+    { key: 'cm_guard', name: '갱도 경비부', type: 'stat', target: 'kills', goal: 30 },
+  ];
+  const COMMISSION_REWARD = { powder: 250, miningXp: 300 };
   const DAILY_QUESTS = [
     { key: 'dq_kills', name: '오늘의 사냥', counter: 'kills', goal: 60, gold: 1500 },
     { key: 'dq_mine', name: '광맥 청소', counter: 'blocksMined', goal: 150, gold: 1200 },
@@ -1642,7 +1671,7 @@
     MINION_STORAGE_UPGRADE_COST, MINION_OFFLINE_CAP_HOURS, MINION_SLOT_MAX, MINION_SLOT_COST_BASE, MINION_SLOT_COST_MUL,
     MINION_FUEL, MINION_FUEL2, SLAYERS, DUNGEON, DUNGEON_ROOM_SCORE, ESSENCE_SHOP, SHOP, BAZAAR, AUCTION_HOUSE, HEART_OF_MOUNTAIN, DAILY_SELL_LIMIT_PER_STACK,
     EQUIPMENT, STARFORCE, REFORGES, ITEM_ROLL,
-    TRAITS, EQUIP_SETS, FIELD_DIFF, ARENA, ACHIEVEMENTS, DAILY_QUESTS, SALVAGE, WEEKLY, HPB, QUESTS, QUEST_NPCS, BUILDER_SHOP, DYES,
+    TRAITS, EQUIP_SETS, FIELD_DIFF, ARENA, ACHIEVEMENTS, DAILY_QUESTS, FETCHUR, FETCHUR_REWARD, COMMISSIONS, COMMISSION_REWARD, SALVAGE, WEEKLY, HPB, QUESTS, QUEST_NPCS, BUILDER_SHOP, DYES,
     TALISMANS, MAGICAL_POWER, PETS, PET_ITEMS, PET_ABILITIES, PET_XP_BASE, PET_XP_EXP, PET_MAX_LEVEL,
     ENCHANTS, CHAOS_ENCHANT, RECIPES, MASTER_MODE,
     FAIRY_SOULS, BANK, DAILY_DEALS, DUNGEON_CLASSES, ZONES, EASTER_EGGS,

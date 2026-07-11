@@ -2098,6 +2098,53 @@
     P.daily = { date: day, list: list.map(q => ({ k: q.key, base: statValue(q.counter), claimed: false })) };
     saveNow();
   }
+  // V50: 페처 — 오늘의 요구 아이템(월 13일 순환, 실제 스블 방식), 하루 1회 전달
+  function fetchurToday() { const day = new Date().getDate(); return D().FETCHUR[(day - 1) % D().FETCHUR.length]; }
+  function fetchurGive() {
+    const day = todayStr();
+    if (P.fetchur && P.fetchur.date === day && P.fetchur.done) { toastFn('페처: 오늘 부탁은 이미 들어줬어. 내일 또 와!', false); return false; }
+    const f = fetchurToday();
+    if ((P.inv[f.key] || 0) < f.n) { toastFn(`페처: "${f.hint}"... ${itemName(f.key)} ${f.n}개가 필요해!`, false); return false; }
+    removeItem(f.key, f.n);
+    const rw = D().FETCHUR_REWARD;
+    addGold(rw.gold); addSkillXp('mining', rw.miningXp);
+    P.fetchur = { date: day, done: true };
+    stat('fetchurDone'); stat('questsDone');
+    toastFn(`📦 페처: 바로 이거야! +${fmtGold(rw.gold)} · 채광 XP +${rw.miningXp}`, true);
+    saveNow(); renderZone(); return true;
+  }
+  // V50: 광부 커미션 — 매일 4슬롯(날짜 시드), 카운터 스냅샷, 보상 = 산의 심장 가루 + 채광 XP
+  function ensureCommissions() {
+    const day = todayStr();
+    if (P.commissions && P.commissions.date === day) return;
+    const rnd = seededRand('comm' + day);
+    const pool = D().COMMISSIONS.slice();
+    const list = [];
+    for (let i = 0; i < 4 && pool.length; i++) {
+      const c = pool.splice(Math.floor(rnd() * pool.length), 1)[0];
+      list.push({ k: c.key, base: c.type === 'col' ? (P.collections[c.target] || 0) : statValue(c.target), claimed: false });
+    }
+    P.commissions = { date: day, list };
+  }
+  function commissionDef(k) { return D().COMMISSIONS.find(c => c.key === k); }
+  function commissionProgress(e) {
+    const c = commissionDef(e.k);
+    const cur = c.type === 'col' ? (P.collections[c.target] || 0) : statValue(c.target);
+    return Math.min(c.goal, cur - e.base);
+  }
+  function claimCommission(idx) {
+    ensureCommissions();
+    const e = P.commissions.list[idx]; if (!e || e.claimed) return;
+    const c = commissionDef(e.k);
+    if (commissionProgress(e) < c.goal) { toastFn('아직 할당량을 못 채웠어요', false); return; }
+    e.claimed = true;
+    const rw = D().COMMISSION_REWARD;
+    hotmState().mithril += rw.powder;   // 정량 지급(커미션은 실제도 고정 가루)
+    addSkillXp('mining', rw.miningXp);
+    stat('commissionsDone'); stat('questsDone');
+    toastFn(`⛏️ 커미션 [${c.name}] 완료! 산의 심장 가루 +${rw.powder} · 채광 XP +${rw.miningXp}`, true);
+    checkAchievements(true); saveNow(); renderZone();
+  }
   function dailyQuestDef(k) { return D().DAILY_QUESTS.find(q => q.key === k); }
   function dailyProgress(entry) { const q = dailyQuestDef(entry.k); return Math.min(q.goal, statValue(q.counter) - entry.base); }
   function claimDaily(idx) {
@@ -2760,7 +2807,7 @@
       ['stats', '📊', '내 프로필', '스탯 시트'], ['skills', '🧠', '스킬', '8종 스킬 진행도'],
       ['collections', '📚', '컬렉션', '자원 39종 티어'], ['inv', '🎒', '인벤토리', '보유 아이템'],
       ['slayer', '💀', '슬레이어', '의뢰·보스·레벨'], ['minions', '⚙️', '미니언', '조합·컬렉션·수거'],
-      ['ach', '🏅', '업적', `${Object.keys(P.ach || {}).length}/${D().ACHIEVEMENTS.length} 달성`], ['daily', '📜', '일일 퀘스트', '매일 3종·보상'],
+      ['ach', '🏅', '업적', `${Object.keys(P.ach || {}).length}/${D().ACHIEVEMENTS.length} 달성`], ['daily', '📜', '페처·커미션', '아이템 전달 + 광부 할당량(실제식)'],
       ['difficulty', '🎚️', '난이도', `현재: ${fieldDiffDef().name}`], ['equiplog', '📔', '장비 도감', `${fmtNum(equipLogCount())}/${fmtNum(equipTotalCount())}종`],
       ['pets', '🐾', '펫', '펫 관리'], ['talismans', '📿', '장신구 가방', '부적/마력'],
       ['potions', '🧪', '물약(연금술)', '양조대 — 실제 20종'], ['attributes', '🧬', '속성', '파편 사이펀 — 사냥 스킬'], ['craft', '⚒️', '레시피 북', '제작(장인 NPC와 동일)'], ['bestiary', '📕', '도감', '처치 기록·마일스톤 보너스'], ['multi', '🌐', '멀티', '거래·파티·섬 방문'],
@@ -3583,17 +3630,27 @@
       }).join('')}</div>`;
   }
   function dailyHTML() {
-    ensureDaily();
-    return `<h4>📜 일일 퀘스트 — 매일 3종, 자정 리셋</h4>
-      <div class="econ-shopgrid">${P.daily.list.map((e, i) => {
-        const q = dailyQuestDef(e.k); const pr = dailyProgress(e);
-        return `<div class="econ-shopitem">
-          <span>${e.claimed ? '✅' : pr >= q.goal ? '🎁' : '⏳'} <b>${q.name}</b></span>
-          <span class="muted">${fmtNum(pr)}/${fmtNum(q.goal)} · 보상 ${fmtGold(q.gold)}</span>
-          <button class="btn btn--sm" data-act="econ_daily_claim" data-i="${i}" ${!e.claimed && pr >= q.goal ? '' : 'disabled'}>${e.claimed ? '수령 완료' : '보상 받기'}</button>
-        </div>`;
-      }).join('')}</div>
-      <p class="muted">완료 횟수 누적: ${fmtNum(statValue('questsDone'))}회 (업적 연동)</p>`;
+    // V50: 실제 스블식 — 페처(아이템 전달) + 광부 커미션 4슬롯(산의 심장 가루). 일반 일퀘 폐기.
+    ensureCommissions();
+    const pad9 = (arr) => { const out = arr.slice(); while (out.length % 9) out.push('<div class="mc-slot mc-empty2"></div>'); return out.join(''); };
+    const f = fetchurToday();
+    const fDone = P.fetchur && P.fetchur.date === todayStr() && P.fetchur.done;
+    const fHave = P.inv[f.key] || 0;
+    const fSlot = `<div class="mc-slot mc-menuslot ${fDone || fHave < f.n ? 'mc-locked' : ''}" data-act="econ_fetchur" data-key="f"
+      data-ttn="📦 페처의 부탁 — ${escHtml(itemName(f.key))} ×${f.n}"
+      data-ttd="${escHtml(`"${f.hint}" · 보유 ${fHave}/${f.n} · 보상 ${fmtGold(D().FETCHUR_REWARD.gold)} + 채광 XP ${D().FETCHUR_REWARD.miningXp} · 매일 1회(월 ${D().FETCHUR.length}일 순환)${fDone ? ' · ✅ 오늘 완료' : ' · 클릭=전달'}`)}">${iconImg(f.key)}<span class="mc-cnt">${f.n}</span></div>`;
+    const cSlots = P.commissions.list.map((e, i) => {
+      const c = commissionDef(e.k); const pr = commissionProgress(e);
+      const done = pr >= c.goal;
+      const icon = c.type === 'col' ? c.target : (c.target === 'kills' ? 'bone' : 'stone');
+      return `<div class="mc-slot mc-menuslot ${e.claimed || !done ? (e.claimed ? 'mc-locked' : done ? '' : 'mc-locked') : ''}" ${!e.claimed && done ? `data-act="econ_comm_claim" data-i="${i}"` : ''}
+        data-ttn="⛏️ ${escHtml(c.name)} ${e.claimed ? '✅' : ''}"
+        data-ttd="${escHtml(`${fmtNum(pr)}/${fmtNum(c.goal)} · 보상 산의 심장 가루 +${D().COMMISSION_REWARD.powder} + 채광 XP ${D().COMMISSION_REWARD.miningXp}${e.claimed ? ' · 수령 완료' : done ? ' · 클릭=수령' : ''}`)}">${iconImg(icon)}<span class="mc-cnt">${fmtNum(pr)}</span></div>`;
+    });
+    return `<div class="mc-chest"><div class="mc-chesttitle">📜 페처 & 광부 커미션 — 자정 리셋 (실제 스카이블럭식)</div>
+      <div class="mc-grid">${pad9([fSlot].concat(cSlots))}</div>
+      <p class="muted">📦 페처: 매일 다른 아이템 1종을 가져다주면 보상(수수께끼 힌트). ⛏️ 커미션: 4개 할당량 — 보상은 산의 심장(HotM) 가루. 누적 완료 ${fmtNum(statValue('questsDone'))}회</p>
+      ${chestNavRow('menu')}</div>`;
   }
   function difficultyHTML() {
     const cur = P.fieldDiff || 'normal';
@@ -3856,6 +3913,8 @@
       case 'lock': toggleLock(el.dataset.key); break;
       case 'pin': togglePin(el.dataset.key); break;
       case 'daily_claim': claimDaily(Number(el.dataset.i)); break;
+      case 'fetchur': fetchurGive(); break;
+      case 'comm_claim': claimCommission(Number(el.dataset.i)); break;
       case 'field_diff': setFieldDiff(el.dataset.key); break;
       case 'arena_start': startArena(el.dataset.key); break;
       case 'pet_hatch': hatchPet(el.dataset.key); break;
@@ -4071,6 +4130,7 @@
       acceptQuest, questProgress, tryCompleteQuest, questAvailable, questDef,
       brewPotion, usePotion, buffBonus, brewLevel: k => brewLevel(brewDef(k)),
       syphonShard, attrLevel, attrBonus, shardDropRoll,
+      fetchurGive, fetchurToday, claimCommission, ensureCommissions, commissionProgress: (i) => { ensureCommissions(); return commissionProgress(P.commissions.list[i]); },
       placeMinion, upgradeMinion, upgradeMinionStorage, collectMinion, tickMinions, minionStorageCap, minionSpeedMul, useMinionFuel,
       startSlayer, combatAttack, combatFlee, getActiveCombat: () => activeCombat,
       startDungeon, dungeonAdvance, dungeonSecretClick, getDungeonRun: () => dungeonRun, dungeonGrade, canEnterFloor,
