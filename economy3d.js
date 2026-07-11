@@ -888,6 +888,46 @@
     setW(cx - 2, base + 4, cz, ID.glowstone); setW(cx + 2, base + 4, cz, ID.glowstone);
   }
 
+  // V57: 펫 케어(Fann's Pet Care) — 실사(Pet_Care.png): 남향 박공 정면에 청록 패널+프리즈머린 발자국,
+  //   구리색(주황 테라코타) 급경사 지붕, 1층 개방 스토어프런트(석재 기단+통나무 기둥), 입구 옆 건초 더미
+  function buildPetCare(x0, z0) {
+    const X0 = 243, X1 = 253, Z0 = 234, Z1 = 240, base = 20;   // 정면 +z(광장 방향), 폭 11 × 깊이 7
+    const CY = ID.terracotta_cyan != null ? ID.terracotta_cyan : ID.wool_cyan;   // 짙은 청록 필드 — 밝은 프리즈머린 발자국과 대비
+    const OR = ID.terracotta_orange != null ? ID.terracotta_orange : ID.wool_orange;
+    const SS = ID.sandstone, AND = ID.polished_andesite != null ? ID.polished_andesite : ID.stone_bricks;
+    for (let x = X0 - 1; x <= X1 + 1; x++) for (let z = Z0 - 1; z <= Z1 + 2; z++) for (let y = base; y <= base + 16; y++) setW(x, y, z, 0);   // 구 자작집 철거
+    // 바닥: 판자 + 석재 테두리, 입구 앞 오크 진입로
+    for (let x = X0; x <= X1; x++) for (let z = Z0; z <= Z1; z++) setW(x, base - 1, z, (x === X0 || x === X1 || z === Z0 || z === Z1) ? ID.stone_bricks : ID.oak_planks);
+    for (let x = 246; x <= 250; x++) for (let z = Z1 + 1; z <= Z1 + 2; z++) setW(x, base - 1, z, ID.oak_planks);
+    // 1층: 측벽/뒷벽(석재 기단 y0 + 사암 y1~2 + 유리창), 정면 개방(모서리·중간 통나무 기둥)
+    for (let z = Z0; z <= Z1; z++) for (const x of [X0, X1]) {
+      setW(x, base, z, z === Z0 || z === Z1 ? ID.oak_log : AND);
+      setW(x, base + 1, z, (z === 236 || z === 238) ? ID.glass : SS);
+      setW(x, base + 2, z, SS);
+    }
+    for (let x = X0 + 1; x < X1; x++) { setW(x, base, Z0, AND); setW(x, base + 1, Z0, (x % 2 === 0) ? ID.glass : SS); setW(x, base + 2, Z0, SS); }
+    for (const px of [245, 251]) for (let y = 0; y < 3; y++) setW(px, base + y, Z1, ID.oak_log);   // 정면 기둥(개방 스토어프런트)
+    for (let y = 0; y < 3; y++) { setW(X0, base + y, Z1, ID.oak_log); setW(X1, base + y, Z1, ID.oak_log); }
+    // 구리색 차양 밴드(정면 돌출) + 지지 기둥
+    for (let x = X0 + 1; x < X1; x++) setW(x, base + 3, Z1 + 1, OR);
+    // 급경사 박공 지붕(실사처럼 첨두형) — 단차 2칸씩 굵은 계단, 능선 x248, 앞뒤 1칸 처마
+    for (let s = 0; s <= 4; s++) for (const rx of [X0 + s, X1 - s]) for (let z = Z0 - 1; z <= Z1 + 1; z++) { setW(rx, base + 3 + s * 2, z, OR); setW(rx, base + 4 + s * 2, z, OR); }
+    for (let z = Z0 - 1; z <= Z1 + 1; z++) { setW(248, base + 11, z, OR); setW(248, base + 12, z, OR); }
+    // 앞뒤 박공면(사암 프레임): 지붕 안쪽을 꽉 채움 — 정면은 대형 청록 패널 + 프리즈머린 발자국(패드 3×2 + 발가락 4)
+    const gTop = (x) => { const d = Math.abs(248 - x); return d >= 5 ? -1 : d === 0 ? 10 : 2 + (5 - d) * 2; };   // 각 열 벽 최고단(지붕 바로 아래)
+    for (const gz of [Z0, Z1]) for (let x = X0 + 1; x < X1; x++) for (let y = 3; y <= gTop(x); y++) setW(x, base + y, gz, SS);
+    const paw = [];   // [x, y] 프리즈머린 셀 — 큰 패드(3×2) + 발가락 4(호 배열)
+    for (let x = 247; x <= 249; x++) { paw.push([x, 5], [x, 6]); }
+    paw.push([245, 7], [247, 8], [249, 8], [251, 7]);
+    const isPaw = (x, y) => paw.some(c => c[0] === x && c[1] === y);
+    for (let x = 245; x <= 251; x++) for (let y = 4; y <= gTop(x) - 1 && y <= 9; y++) setW(x, base + y, Z1, isPaw(x, y) ? ID.prismarine : CY);
+    // 입구 옆 건초 더미(참조 우측) + 잔디 침식 패치
+    setW(252, base, Z1 + 1, ID.hay_block); setW(252, base + 1, Z1 + 1, ID.hay_block); setW(251, base, Z1 + 2, ID.hay_block);
+    setW(244, base - 1, Z1 + 1, ID.grass); setW(245, base - 1, Z1 + 2, ID.grass); setW(244, base, Z1 + 1, ID.tall_grass);
+    // 내부 조명
+    setW(248, base + 2, 237, ID.glowstone);
+  }
+
   // V55: 커뮤니티 센터 재건축 — 실사(Community_Center.png): 붉은 벽돌 벽 + 크림(사암) 기둥 프레임 +
   //   짙은 맨사드 지붕 + 중앙 시계탑(석영 시계면) + 3연속 아치 포치
   function rebuildCommunityCenter() {
@@ -1382,7 +1422,7 @@
     const lantern = (x, z) => { const y = surfaceTop(x, z); setW(x, y, z, ID.oak_fence); setW(x, y + 1, z, ID.glowstone); };
     const crates = (x, z) => { const y = surfaceTop(x, z); setW(x, y, z, ID.oak_planks); setW(x + 1, y, z, ID.oak_planks); setW(x, y + 1, z, ID.oak_planks); setW(x + 1, y, z + 1, ID.hay_block); };
     const windowBox = (x, y, z) => { setW(x, y, z, ID.oak_leaves); };
-    chimney(202, 236, 26); chimney(246, 236, 25); chimney(192, 208, 25);   // 상점/펫/미니언 굴뚝
+    chimney(202, 236, 26); chimney(192, 208, 25);   // 상점/미니언 굴뚝 (V57: 펫 상점 굴뚝은 새 지붕과 충돌해 제거)
     lantern(203, 243); lantern(206, 243);      // 상점 문앞
     lantern(246, 242); lantern(249, 242);      // 펫 상점 문앞
     lantern(210, 249); lantern(233, 249);      // 제작소/강화소 문앞
@@ -1410,7 +1450,7 @@
       },
     });
     buildHouse(190, 206, 9, 7, 20, ID.oak_planks, ID.spruce_planks);       // 미니언 관리소
-    buildHouse(244, 234, 9, 7, 20, ID.birch_planks, ID.oak_planks);        // 펫 상점(자작)
+    buildPetCare(244, 234);   // V57: 실사(Pet_Care.png) — 박공 정면 프리즈머린 발자국 패널 + 구리색 급경사 지붕 + 개방 스토어프런트 + 건초 더미
     buildAuctionTemple(208, 212);   // V56: 실사(Auction_House.png) — 신전풍 파사드. 내 섬 포탈(210,224) 앞마당을 침범하지 않게 광장 북서쪽 배치
     buildForge(232, 216, 8, 7, 20);                                        // 대장간(재련) — V20-P 하프팀버 박공+굴뚝+용광로 베이
     buildHouse(208, 244, 8, 6, 20, ID.oak_planks, ID.oak_planks);          // 제작소
@@ -1530,7 +1570,6 @@
     S(250, 20, 238, log); S(250, 21, 238, slab);   // 물그릇대
     S(249, 20, 235, ID.quartz_block); S(248, 20, 235, ID.quartz_block);   // 뼈 진열(석영)
     S(247, 20, 238, fence); S(246, 20, 238, fence); S(247, 22, 237, glow);
-    awning(245, 251, 22, 241, ID.wool_yellow != null ? ID.wool_yellow : ID.quartz_block);
     // 4) 제작소(208,244,8,6) — 작업장: 제작대 + 모루 + 도구걸이 + 카운터 + 차양
     S(210, 20, 245, plank); S(211, 20, 245, plank); S(210, 21, 245, ID.oak_trapdoor != null ? ID.oak_trapdoor : plank);
     S(213, 20, 245, ID.iron_ore); S(213, 21, 245, ID.iron_ore);   // 모루
@@ -6007,7 +6046,7 @@
   const HUB_PAINTINGS = [
     { src: 'painting/aztec.png', x: 205, y: 22.3, z: 240.97, ry: Math.PI, w: 2, h: 2 },        // 상점 안쪽 벽
     { src: 'painting/courbet.png', x: 194.5, y: 22.2, z: 212.0, ry: Math.PI, w: 2, h: 1 },     // 미니언 관리소
-    { src: 'painting/sunset.png', x: 248.5, y: 22.2, z: 240.0, ry: Math.PI, w: 2, h: 1 },      // 펫 상점
+    { src: 'painting/sunset.png', x: 248.5, y: 22.2, z: 234.06, ry: Math.PI, w: 2, h: 1 },      // 펫 상점(내부 뒷벽 — V57 개방 정면화로 이동)
     { src: 'painting/skull_and_roses.png', x: 212, y: 22.4, z: 249.0, ry: Math.PI, w: 2, h: 2 },// 제작소
     { src: 'painting/wanderer.png', x: 234, y: 22.6, z: 249.0, ry: Math.PI, w: 1, h: 2 },      // 스타포스 강화소
     { src: 'painting/sea.png', x: 223.5, y: 23.0, z: 194.0, ry: Math.PI, w: 2, h: 1 },         // 인챈트 탑 1층
