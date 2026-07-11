@@ -1236,43 +1236,54 @@
     }
     setW(px, py, pz, ID.spruce_log); setW(px, py + 1, pz, ID.spruce_log); setW(px, py + 2, pz, ID.glowstone);   // 전망대 등불 기둥
   }
-  // V45: 마을 여관(광장 북동 256,244) — 2층 하프팀버 + 객실 3개 + 발코니 + 간판등
+  // V58: 여관 → 실사(Tavern.png) — 낮은 물매의 주황(테라코타) 대형 지붕 + 다크오크 보(용마루/처마) +
+  //   조약돌 기단 + 흰(석영) 하프팀버 벽 + 높은 개방 포치 현관 + 굴뚝 + 온광 홀
   function buildInn() {
-    const X = 254, Z = 240, Wd = 9, Dd = 7;
-    const base = surfaceTop(X + 4, Z + 3);
-    for (let dx = -1; dx <= Wd; dx++) for (let dz = -1; dz <= Dd; dz++) for (let y = base; y <= base + 12; y++) setW(X + dx, y, Z + dz, 0);   // 부지 정리
-    for (let dx = 0; dx < Wd; dx++) for (let dz = 0; dz < Dd; dz++) setW(X + dx, base - 1, Z + dz, ID.oak_planks);   // 1층 바닥
-    const wallAt = (dx, dz, y) => {
-      const corner = (dx === 0 || dx === Wd - 1) && (dz === 0 || dz === Dd - 1);
-      if (corner) return ID.dark_oak_log;
-      if (y === base + 1 && ((dx % 3 === 1 && (dz === 0 || dz === Dd - 1)) || (dz % 3 === 1 && (dx === 0 || dx === Wd - 1)))) return ID.glass;
-      return y >= base + 3 ? ID.birch_planks : ID.cobblestone;   // 1층 석재 + 2층 하프팀버(자작)
-    };
+    const X = 256, Z = 239, Wd = 11, Dd = 9;   // V58b: 펫 케어(~x253) 동벽을 침범하지 않게 2칸 동쪽으로
+    const base = surfaceTop(X + 5, Z + 4);
+    const DK = ID.dark_oak_log, WH = ID.quartz_block, OR = ID.terracotta_orange != null ? ID.terracotta_orange : ID.wool_orange;
+    for (let dx = -2; dx <= Wd + 1; dx++) for (let dz = -2; dz <= Dd + 1; dz++) for (let y = base; y <= base + 14; y++) setW(X + dx, y, Z + dz, 0);   // 부지 정리(구 여관 철거)
+    for (let dx = 0; dx < Wd; dx++) for (let dz = 0; dz < Dd; dz++) setW(X + dx, base - 1, Z + dz, (dx === 0 || dx === Wd - 1 || dz === 0 || dz === Dd - 1) ? ID.cobblestone : ID.oak_planks);
+    // 벽: 조약돌 기단(y0~1, 유리창) + 다크오크 수평보(y2) + 흰 패널(y3, 스터드)
     for (let dx = 0; dx < Wd; dx++) for (let dz = 0; dz < Dd; dz++) {
       const edge = dx === 0 || dx === Wd - 1 || dz === 0 || dz === Dd - 1;
       if (!edge) continue;
-      for (let y = base; y <= base + 5; y++) setW(X + dx, y, Z + dz, wallAt(dx, dz, y));
+      const corner = (dx === 0 || dx === Wd - 1) && (dz === 0 || dz === Dd - 1);
+      setW(X + dx, base, Z + dz, corner ? DK : ID.cobblestone);
+      setW(X + dx, base + 1, Z + dz, corner ? DK : (dx % 3 === 1 || dz % 3 === 1) ? ID.glass : ID.cobblestone);
+      setW(X + dx, base + 2, Z + dz, DK);
+      setW(X + dx, base + 3, Z + dz, corner || dx % 3 === 0 ? DK : WH);
     }
-    for (let dx = 0; dx < Wd; dx++) for (let dz = 0; dz < Dd; dz++) setW(X + dx, base + 3, Z + dz, ID.oak_planks);   // 2층 바닥(중간층)
-    // 지붕(가문비 박공)
-    for (let step = 0; step <= 3; step++) for (let dx = -1 + step; dx <= Wd - step; dx++) for (const dz of [-1 + step, Dd - step]) setW(X + dx, base + 6 + step, Z + dz, ID.spruce_planks);
-    for (let dx = 2; dx < Wd - 2; dx++) for (let dz = 2; dz < Dd - 2; dz++) setW(X + dx, base + 9, Z + dz, ID.spruce_planks);
-    // 문 + 간판등 + 발코니(정면 -z)
-    setW(X + 4, base, Z, 0); setW(X + 4, base + 1, Z, 0);
-    setW(X + 3, base + 2, Z, ID.glowstone); setW(X + 5, base + 2, Z, ID.glowstone);
-    for (let dx = 3; dx <= 5; dx++) { setW(X + dx, base + 3, Z - 1, ID.oak_planks); setW(X + dx, base + 4, Z - 1, ID.oak_fence); }
-    // 객실 3개(2층): 침대 대용 양털 + 등불, 칸막이
-    for (let i = 0; i < 3; i++) {
-      const rx = X + 1 + i * 3;
-      setW(rx, base + 4, Z + Dd - 2, ID.wool_white); setW(rx + 1, base + 4, Z + Dd - 2, ID.wool_red);
-      if (i < 2) for (let dz2 = 1; dz2 < Dd - 1; dz2++) setW(rx + 2, base + 4, Z + dz2, ID.birch_planks);
-      setW(rx, base + 5, Z + 2, ID.glowstone);
+    // 낮은 물매 대형 지붕(용마루 x방향, 앞뒤로 흘림) — 처마/용마루는 다크오크 보
+    for (let t = 0; t <= 4; t++) for (const dz of [t - 1, Dd - t]) for (let dx = -1; dx <= Wd; dx++) {
+      setW(X + dx, base + 4 + t, Z + dz, (t === 0 || t === 4) ? DK : OR);
     }
-    // 1층 로비: 카운터 + 벽난로
-    for (let dx = 2; dx <= 5; dx++) setW(X + dx, base, Z + Dd - 2, ID.oak_planks);
-    setW(X + Wd - 2, base, Z + Dd - 2, ID.cobblestone); setW(X + Wd - 2, base + 1, Z + Dd - 2, ID.glowstone);
+    for (let dx = -1; dx <= Wd; dx++) setW(X + dx, base + 8, Z + 4, DK);   // 용마루 보
+    // 동서 박공면(흰 패널 + 다크오크 스터드)
+    for (const gx of [0, Wd - 1]) for (let dz = 1; dz < Dd - 1; dz++) for (let y = 4; y <= 7; y++) {
+      if (y - 4 < Math.min(dz, Dd - 1 - dz)) setW(X + gx, base + y, Z + dz, (dz === 4 && y >= 6) ? DK : WH);
+    }
+    // 높은 개방 현관(정면 -z): 3칸 폭 개구 + 다크오크 포치 기둥 + 십자 박공(주황) + 계단 데크
+    for (let dx = 4; dx <= 6; dx++) for (let y = 0; y <= 2; y++) setW(X + dx, base + y, Z, 0);
+    for (const px of [3, 7]) for (let y = 0; y <= 3; y++) setW(X + px, base + y, Z - 1, DK);
+    for (let dx = 3; dx <= 7; dx++) setW(X + dx, base + 4, Z - 1, DK);
+    for (let dx = 4; dx <= 6; dx++) setW(X + dx, base + 5, Z - 1, OR);
+    setW(X + 5, base + 6, Z - 1, OR);
+    for (let dx = 4; dx <= 6; dx++) { setW(X + dx, base - 1, Z - 1, ID.oak_planks); setW(X + dx, base - 1, Z - 2, slabIdFor(ID.oak_planks) != null ? slabIdFor(ID.oak_planks) : ID.oak_planks); }
+    setW(X + 3, base + 2, Z, ID.glowstone); setW(X + 7, base + 2, Z, ID.glowstone);   // 현관 등
+    // 간판(서쪽 골목, 실사 좌측 간판): 울타리 + 양털 판
+    setW(X - 1, base + 2, Z + 2, ID.oak_fence); setW(X - 1, base + 3, Z + 2, ID.wool_white != null ? ID.wool_white : WH);
+    // 굴뚝(뒤편 능선)
+    for (let y = 5; y <= 9; y++) setW(X + 8, base + y, Z + 6, ID.cobblestone);
+    setW(X + 8, base + 10, Z + 6, 0);
+    // 내부 홀: 카운터 + 벽난로 + 탁자 2 + 술통(다크오크) + 샹들리에
+    for (let dx = 2; dx <= 5; dx++) setW(X + dx, base, Z + Dd - 2, ID.oak_planks);   // 카운터
+    setW(X + Wd - 2, base, Z + Dd - 2, ID.cobblestone); setW(X + Wd - 2, base + 1, Z + Dd - 2, ID.glowstone);   // 벽난로
+    setW(X + 1, base, Z + 1, DK); setW(X + 1, base + 1, Z + 1, DK);   // 술통 더미
+    setW(X + 2, base, Z + 1, DK);
+    for (const [tx, tz] of [[4, 3], [7, 2]]) { setW(X + tx, base, Z + tz, ID.oak_log); setW(X + tx, base + 1, Z + tz, slabIdFor(ID.oak_planks) != null ? slabIdFor(ID.oak_planks) : ID.oak_planks); }
+    setW(X + 5, base + 3, Z + 4, ID.oak_fence); setW(X + 5, base + 2, Z + 4, ID.glowstone);   // 샹들리에
   }
-  // V44: 허브 캐슬 — 실제 스카이블럭 허브 북서쪽 캐슬(좌표단위 수작업). 26×22 성곽 + 코너 탑 4기 + 알현실 인테리어
   function buildHubCastle() {
     const CX = 150, CZ = 96, HW = 13, HD = 11;         // 중심/반폭/반깊이
     const base = surfaceTop(CX, CZ);
@@ -1974,7 +1985,7 @@
       setW(x0 + 2, base + 4, z0 + 2, ID.bed);
       setW(x0 + 4, base + 4, z0 + 1, ID.bookshelf); setW(x0 + 5, base + 4, z0 + 1, ID.bookshelf);
     };
-    townhouse(252, 240, ID.oak_planks); townhouse(262, 240, ID.birch_planks);
+    // V58: (252,240)/(262,240) 타운하우스는 여관(256~266,239~247)과 겹쳐 제거 — 여관이 이 블록의 앵커
     townhouse(272, 240, ID.spruce_planks); townhouse(282, 240, ID.oak_planks);
     [[250, 248], [270, 248], [290, 248]].forEach(([lx, lz]) => lampPost(lx, lz));
     // ── 6.7) V24-E(건축 #10): 설산 산장촌 — 가문비 산장 3채 + 진입 가로등 ──
