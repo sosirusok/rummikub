@@ -164,6 +164,7 @@
     { key: 'alchemy', name: '연금술', bonusText: '레벨당 지력 +1 (실제 스카이블럭) — 물약 양조로 성장, 레벨이 오르면 양조 물약 티어 상승' },
     { key: 'taming', name: '조련', bonusText: '레벨당 펫 경험치 +1%' },
     { key: 'social', name: '사교', bonusText: '5레벨마다 상점 판매가 +1%(최대 +10%)' },
+    { key: 'hunting', name: '사냥', bonusText: '속성 파편 사이펀 해금(희귀도별 요구 레벨: 고급5/희귀10/영웅15/전설20 — 실제 스카이블럭)' },
   ];
 
   /* ---------------- 기본 스탯(실제 스카이블럭 기본값 그대로) ---------------- */
@@ -854,6 +855,33 @@
   /* ---------------- 제작 레시피(컬렉션 티어로 해금 — 실제 스카이블럭 방식) ---------------- */
   // 인챈티드 자원: 원자재 160개 → 1개(판매가 20% 프리미엄 = 제작 노가다 보상)
   // 인챈티드 아이템: 모든 컬렉션 자원 — 원자재 160개(32×5 십자 배열) → 인챈티드 1개
+  // V43: 실제 스카이블럭 속성(위키 Attributes) — 파편을 사이펀해 I~X 성장. 만렙 누적 파편 = 위키 확정(96/64/48/32/24)
+  const ATTR_LADDER = {   // 레벨별 소요 파편(누적이 위키 만렙값과 정확히 일치하도록 수작업 배분)
+    common: [1, 2, 3, 5, 8, 12, 16, 20, 29],       // 누적 96
+    uncommon: [1, 2, 3, 4, 6, 8, 10, 13, 17],      // 누적 64
+    rare: [1, 2, 3, 4, 5, 6, 8, 9, 10],            // 누적 48
+    epic: [1, 2, 3, 3, 4, 4, 5, 5, 5],             // 누적 32
+    legendary: [1, 2, 2, 3, 3, 3, 3, 3, 4],        // 누적 24
+  };
+  const ATTR_HUNT_REQ = { common: 0, uncommon: 5, rare: 10, epic: 15, legendary: 20 };   // 위키: 사이펀 요구 사냥 레벨
+  const ATTRIBUTES = [
+    { key: 'vitality', name: '생명력(Vitality)', rarity: 'common', fx: { hp: 2 }, mobs: ['zombie', 'pig', 'cow', 'sheep'], desc: '레벨당 체력 +2' },
+    { key: 'fortitude', name: '불굴(Fortitude)', rarity: 'common', fx: { defense: 2 }, mobs: ['skeleton', 'golem'], desc: '레벨당 방어력 +2' },
+    { key: 'speed_attr', name: '신속(Speed)', rarity: 'common', fx: { speed: 1 }, mobs: ['chicken', 'rabbit', 'silverfish'], desc: '레벨당 속도 +1' },
+    { key: 'mana_pool', name: '마나 풀(Mana Pool)', rarity: 'common', fx: { intelligence: 2 }, mobs: ['witch', 'sea'], desc: '레벨당 지력 +2' },
+    { key: 'lifeline', name: '생명줄(Lifeline)', rarity: 'uncommon', fx: { hp: 4 }, mobs: ['spider', 'wolf'], desc: '레벨당 체력 +4' },
+    { key: 'attack_speed', name: '공격 속도(Attack Speed)', rarity: 'uncommon', fx: { attackSpeed: 1 }, mobs: ['blaze', 'piglin'], desc: '레벨당 공격 속도 +1' },
+    { key: 'mending', name: '수선(Mending)', rarity: 'uncommon', fx: { hpRegen: 1 }, mobs: ['slime', 'creeper'], desc: '레벨당 2초 재생 +1' },
+    { key: 'veteran', name: '베테랑(Veteran)', rarity: 'uncommon', fx: { combatWisdom: 1 }, mobs: ['crypt', 'graveyard'], desc: '레벨당 전투 XP +1%' },
+    { key: 'undead_attr', name: '언데드(Undead)', rarity: 'rare', fx: { undeadDmg: 1 }, mobs: ['zombie', 'skeleton', 'ghoul'], desc: '레벨당 언데드 피해 +1%' },
+    { key: 'arachno', name: '아라크노(Arachno)', rarity: 'rare', fx: { arachnoDmg: 1 }, mobs: ['spider', 'tarantula'], desc: '레벨당 거미류 피해 +1%' },
+    { key: 'blazing', name: '블레이징(Blazing)', rarity: 'rare', fx: { blazingDmg: 1 }, mobs: ['blaze', 'magma'], desc: '레벨당 화염계 피해 +1%' },
+    { key: 'ender_attr', name: '엔더(Ender)', rarity: 'rare', fx: { enderDmg: 1 }, mobs: ['enderman', 'endermite'], desc: '레벨당 엔더계 피해 +1%' },
+    { key: 'pet_wisdom', name: '펫 지혜(Pet Wisdom)', rarity: 'epic', fx: { tamingWisdom: 0.5 }, mobs: ['wolf', 'ocelot', 'horse'], desc: '레벨당 조련 XP +0.5%' },
+    { key: 'blazing_fortune', name: '블레이징 포춘(Blazing Fortune)', rarity: 'epic', fx: { magicFind: 1 }, mobs: ['magma', 'blaze'], desc: '레벨당 마법 탐지 +1' },
+    { key: 'fishing_speed', name: '낚시 속도(Fishing Speed)', rarity: 'epic', fx: { fishingWisdom: 3 }, mobs: ['sea', 'squid', 'guardian'], desc: '레벨당 낚시 XP +3%' },
+    { key: 'dominance', name: '지배(Dominance)', rarity: 'legendary', fx: { dominance: 1.5 }, mobs: ['dragon', 'boss', 'wither'], desc: '체력이 가득할 때 레벨당 피해 +1.5%' },
+  ];
   // V42: 실제 스카이블럭 물약(위키 Potions) — fx는 레벨당 수치, dur(분)=3+레벨, 일부는 컬렉션 보상 해금(위키 그대로)
   const BREWS = [
     { key: 'speed', name: '신속', maxLvl: 8, fx: { speed: 5 }, needs: { sugarcane: 8 }, xp: 40, flavor: '설탕 — 이동 속도 +5/레벨' },
@@ -1174,6 +1202,7 @@
     ...COLLECTIONS.flatMap(cat => cat.resources.map(r => ({ key: r.key, name: r.name, category: '원자재', buyPrice: 0, sellPrice: r.sellPrice, stackSize: 64 }))),
     ...EXTRA_RES.map(r => ({ key: r.key, name: r.name, category: '원자재', buyPrice: 0, sellPrice: r.sellPrice, stackSize: 64 })),
     ...BREWS.map(b => ({ key: `potion_${b.key}`, name: `${b.name}의 물약`, category: '물약', buyPrice: 0, sellPrice: 40 + b.xp, stackSize: 16, flavor: b.flavor })),
+    ...ATTRIBUTES.map(a => ({ key: `shard_${a.key}`, name: `속성 파편: ${a.name}`, category: '속성', tierKey: a.rarity === 'common' ? 'common' : a.rarity === 'uncommon' ? 'uncommon' : a.rarity, buyPrice: 0, sellPrice: { common: 50, uncommon: 150, rare: 500, epic: 1500, legendary: 5000 }[a.rarity], stackSize: 64, flavor: a.desc })),
     // 장비(던전 전용은 buyPrice 0 → 구매 불가, 판매만 가능)
     ...EQUIPMENT.weapons.map(w => ({ key: w.key, name: `${w.name} [${ITEM_TIERS.find(t => t.key === w.tierKey).name}]`, category: '무기', tierKey: w.tierKey, buyPrice: w.buyPrice, sellPrice: w.sellPrice, stackSize: 1, dmg: w.dmg, slot: w.slot, traits: w.traits, set: w.set, flavor: w.flavor, reqCombat: w.reqCombat })),
     ...EQUIPMENT.armor.map(a => ({ key: a.key, name: `${a.name} [${ITEM_TIERS.find(t => t.key === a.tierKey).name}]`, category: '방어구', tierKey: a.tierKey, buyPrice: a.buyPrice, sellPrice: a.sellPrice, stackSize: 1, defense: a.defense, hp: a.hp || 0, slot: a.slot, traits: a.traits, set: a.set, flavor: a.flavor, reqCombat: a.reqCombat })),
@@ -1609,7 +1638,7 @@
   };
   window.ECON_DATA = {
     PORTAL_ITEMS, CRAFT_GROUPS, SMELT_RECIPES,
-    ITEM_TIERS, COLLECTIONS, COL_TIER_REWARDS, COL_TIER_FX, ENCH_COL_DISCOUNT, EXTRA_RES, SKILLS, BREWS, GATHER_TABLE, TOOLS, MINIONS, MINION_STORAGE_BASE, MINION_STORAGE_UPGRADED,
+    ITEM_TIERS, COLLECTIONS, COL_TIER_REWARDS, COL_TIER_FX, ENCH_COL_DISCOUNT, EXTRA_RES, SKILLS, BREWS, ATTRIBUTES, ATTR_LADDER, ATTR_HUNT_REQ, GATHER_TABLE, TOOLS, MINIONS, MINION_STORAGE_BASE, MINION_STORAGE_UPGRADED,
     MINION_STORAGE_UPGRADE_COST, MINION_OFFLINE_CAP_HOURS, MINION_SLOT_MAX, MINION_SLOT_COST_BASE, MINION_SLOT_COST_MUL,
     MINION_FUEL, MINION_FUEL2, SLAYERS, DUNGEON, DUNGEON_ROOM_SCORE, ESSENCE_SHOP, SHOP, BAZAAR, AUCTION_HOUSE, HEART_OF_MOUNTAIN, DAILY_SELL_LIMIT_PER_STACK,
     EQUIPMENT, STARFORCE, REFORGES, ITEM_ROLL,

@@ -190,6 +190,8 @@
     if (!P.skillsXp[key] && P.skillsXp[key] !== 0) P.skillsXp[key] = 0;
     const xb = typeof buffBonus === 'function' ? buffBonus('xpBoost') : 0;   // V42: 경험 물약
     if (xb > 0) n = Math.round(n * (1 + xb / 100));
+    const wis = key === 'combat' ? attrBonus('combatWisdom') : key === 'taming' ? attrBonus('tamingWisdom') : key === 'fishing' ? attrBonus('fishingWisdom') : 0;   // V43: 지혜 속성
+    if (wis > 0) n = Math.round(n * (1 + wis / 100));
     P._lastSkill = key;   // V24-E: 3D XP 바 표시용(최근 획득 스킬)
     const before = skillLevel(key);
     P.skillsXp[key] += n;
@@ -626,25 +628,25 @@
     const B2 = D().BASE_STATS2, gs = gemStats(), pw = powerStats();   // V20-I: 전능의 힘
     const st = {
       hp: B.hp + skillLevel('farming') * 2 + skillLevel('fishing') + enchSum('hp') + ts.hp + ps.hp + fb.hp
-        + (rw.hp || 0) + armorRfHp + starHpFlat() + buffBonus('hp')
+        + (rw.hp || 0) + armorRfHp + starHpFlat() + buffBonus('hp') + attrBonus('hp')
         + armorHp + traitSum('vitality') + setStat('hp') + weaponStat('hp') + (gs.hp || 0) + pw.hp,
-      defense: B.defense + buffBonus('defense') + skillLevel('mining') + ts.def + ps.def + enchSum('def')
+      defense: B.defense + buffBonus('defense') + attrBonus('defense') + skillLevel('mining') + ts.def + ps.def + enchSum('def')
         + armorRfDef + starDefFlat() + armorDef + traitSum('bulwark') + setStat('def') + weaponStat('defense') + (gs.defense || 0) + pw.def,
       strength: B.strength + skillLevel('foraging') + ts.str + ps.str + fb.str + buffBonus('strength') + setStat('str')
         + weaponStat('str') + (rw.str || 0) + armorRfStr + (gs.str || 0) + pw.str,
-      speed: B.speed + enchSum('speed') + buffBonus('speed') + traitSum('swift') + traitSum('swiftness') + setStat('speed'),
+      speed: B.speed + enchSum('speed') + buffBonus('speed') + attrBonus('speed') + traitSum('swift') + traitSum('swiftness') + setStat('speed'),
       critChance: Math.min(100, B.critChance + buffBonus('critChance') + skillLevel('combat') * 0.5 + traitSum('crit_eye') + setStat('critChance') + weaponStat('critChance') + (gs.critChance || 0) + pw.critChance),
       critDamage: B.critDamage + buffBonus('critDamage') + skillLevel('combat') + traitSum('brutality') + setStat('critDamage') + weaponStat('critDamage') + (rw.critDamage || 0) + armorRfCd + (gs.critDamage || 0) + (ps.critDamage || 0) + pw.critDamage,
       // V17: 광포(추가타) — 무기/리포지/특성/세트. 실제: floor(광포/100) 확정 추가타 + 나머지% 확률(기댓값 1+광포/100배)
       ferocity: weaponStat('ferocity') + (rw.ferocity || 0) + armorRfFero + traitSum('ferocity') + setStat('ferocity'),
-      intelligence: B.intelligence + skillLevel('enchanting') * 4 + skillLevel('alchemy') + buffBonus('intelligence') + traitSum('mana_well') + setStat('intelligence') + weaponStat('intelligence') + Math.round(magicalPower() * 0.6) + (gs.intelligence || 0) + (ps.intelligence || 0) + pw.intelligence,
+      intelligence: B.intelligence + skillLevel('enchanting') * 4 + skillLevel('alchemy') + buffBonus('intelligence') + attrBonus('intelligence') + traitSum('mana_well') + setStat('intelligence') + weaponStat('intelligence') + Math.round(magicalPower() * 0.6) + (gs.intelligence || 0) + (ps.intelligence || 0) + pw.intelligence,
       // V20: 신규 스탯 — 매직파인드/포춘/공격속도
-      magicFind: B2.magicFind + buffBonus('magicFind') + setStat('magicFind') + traitSum('lucky') + Math.floor(skillLevel('combat') / 5) + (ps.magicFind || 0),
+      magicFind: B2.magicFind + buffBonus('magicFind') + attrBonus('magicFind') + setStat('magicFind') + traitSum('lucky') + Math.floor(skillLevel('combat') / 5) + (ps.magicFind || 0),
       miningFortune: B2.miningFortune + skillLevel('mining') * 4 + (gs.miningFortune || 0) + setStat('miningFortune') + (ps.miningFortune || 0) + hotmMiningFortune() + colMiningFortune(),   // V20-G HotM
       miningSpeed: (B2.miningSpeed || 0) + hotmMiningSpeed(),   // V20-G HotM 채광 속도
       farmingFortune: B2.farmingFortune + skillLevel('farming') * 4 + (gs.farmingFortune || 0) + setStat('farmingFortune'),
       foragingFortune: B2.foragingFortune + skillLevel('foraging') * 4 + setStat('foragingFortune'),
-      attackSpeed: B2.attackSpeed + setStat('attackSpeed') + traitSum('swiftness'),
+      attackSpeed: B2.attackSpeed + attrBonus('attackSpeed') + setStat('attackSpeed') + traitSum('swiftness'),
     };
     st.defense = Math.round(st.defense * mpStatMul());
     st.hp = Math.round(st.hp);
@@ -663,7 +665,9 @@
     const w = equippedWeapon();
     const feroMul = 1 + st.ferocity / 100;
     const bowBuff = (equippedPiece('bow') || (heldKey && api_isBowKeySafe(heldKey))) ? 1 + buffBonus('bowDmg') / 100 : 1;
-    const melee = flat * (1 + st.strength / 100) * additive * feroMul * mpStatMul() * bowBuff;
+    const hpPct = typeof window.economy3dHpPct === 'function' ? window.economy3dHpPct() : 1;
+    const domMul = hpPct >= 0.999 ? 1 + attrBonus('dominance') / 100 : 1;   // V43: 지배 — 풀피에서만
+    const melee = flat * (1 + st.strength / 100) * additive * feroMul * mpStatMul() * bowBuff * domMul;
     // V19-D 밸런스: 아키타입별 어빌리티 데미지 — 캐스터=지력, 근접/원거리 버서크=힘 게이트.
     //   ability = 기본어빌리티 × max(0, 주스탯/100 − 1) × 스케일 × 가산 × 광포 × 마력
     //   주스탯 100 이하면 0(초반 무보정) → 오직 엔드게임(고스탯)에서만 수백만 딜. 세 계열 모두 각자 스탯으로 수렴.
@@ -1908,6 +1912,8 @@
     addSkillXp('combat', xpGain);
     stat('kills');
     if (mob.boss) stat('bossKills');
+    const shard = shardDropRoll(mob.type || mob.name || '');   // V43: 속성 파편(사냥)
+    if (shard) msgs.push(`🧬 속성 파편: ${shard.name}`);
     if (enchantLvl('weapon', 'soul_eater')) P._soulCharge = 1;   // V22-K: 소울 이터 — 처치 후 다음 타격 강화 충전
     // V11: 파티 근접 사냥 XP 공유(절반)
     if (window.econNet && window.econNet.party && window.econNet.party() && window.econNet.partySendXp) window.econNet.partySendXp(Math.round(xpGain * 0.5));
@@ -2260,6 +2266,46 @@
     toastFn(msg, true);
     if (window.econNet && window.econNet.announce) window.econNet.announce(`🏟️ ${ad.name} 제패!`);
     saveNow(); renderZone();
+  }
+  /* ---------------- V43: 속성(Attributes) — 파편 사이펀(위키: 희귀도별 요구량/사냥 레벨 게이트) ---------------- */
+  function attrDef(key) { return (D().ATTRIBUTES || []).find(a => a.key === key); }
+  function attrLevel(key) { return (P.attributes && P.attributes[key] && P.attributes[key].lv) || 0; }
+  function attrBonus(stat) {
+    if (!P || !P.attributes) return 0;
+    let v = 0;
+    for (const k in P.attributes) { const a = attrDef(k); const lv = P.attributes[k].lv || 0; if (a && a.fx && a.fx[stat]) v += a.fx[stat] * lv; }
+    return v;
+  }
+  function syphonShard(key) {
+    const a = attrDef(key); if (!a) return false;
+    const ik = `shard_${key}`;
+    if (!hasItem(ik)) { toastFn('사이펀할 파편이 없어요 — 몹 처치로 얻어요', false); return false; }
+    const req = D().ATTR_HUNT_REQ[a.rarity] || 0;
+    if (skillLevel('hunting') < req) { toastFn(`🔒 ${a.rarity} 속성은 사냥 스킬 ${req}레벨부터 사이펀 가능(현재 ${skillLevel('hunting')})`, false); return false; }
+    if (!P.attributes) P.attributes = {};
+    const st = P.attributes[key] || (P.attributes[key] = { lv: 0, syph: 0 });
+    const ladder = D().ATTR_LADDER[a.rarity];
+    if (st.lv >= ladder.length + 1) { toastFn('이미 X레벨(최대)이에요', false); return false; }
+    removeItem(ik, 1); st.syph = (st.syph || 0) + 1;
+    // 레벨 계산: I레벨은 파편 1개, 이후 ladder[lv-1]개씩
+    let need = 1, lv = 0, acc = 0;
+    const steps = [1].concat(ladder);   // I..X 소요
+    for (let i = 0; i < steps.length; i++) { acc += steps[i]; if (st.syph >= acc) lv = i + 1; }
+    if (lv > st.lv) { st.lv = lv; toastFn(`🧬 ${a.name} ${romanNum(lv)} 달성! (${a.desc})`, true); }
+    else toastFn(`🧬 ${a.name} 파편 사이펀 (${st.syph}개 누적)`, true);
+    addSkillXp('hunting', 8 + 'common uncommon rare epic legendary'.split(' ').indexOf(a.rarity) * 8);
+    stat('shardsSyphoned');
+    saveNow(); renderZone(); return true;
+  }
+  function shardDropRoll(mobKey) {
+    if (Math.random() > 0.04) return null;   // 4% — 사냥으로 파편 획득
+    const mk = String(mobKey || '');
+    const pool = (D().ATTRIBUTES || []).filter(a => a.mobs.some(m => mk.includes(m)));
+    const a = pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
+    if (!a) return null;
+    addItem(`shard_${a.key}`, 1);
+    addSkillXp('hunting', 4);
+    return a;
   }
   /* ---------------- V42: 연금술 양조 + 물약 버프(실제 위키 20종) ---------------- */
   function brewDef(key) { return (D().BREWS || []).find(b => b.key === key || `potion_${b.key}` === key); }
@@ -2639,6 +2685,7 @@
       case 'collections': return collectionsHTML();
       case 'stats': return statsHTML();
       case 'potions': return potionsHTML();
+      case 'attributes': return attributesHTML();
       case 'multi': return multiHTML();
       case 'inv': return invHTML();
       case 'menu': return menuHTML();
@@ -2686,6 +2733,28 @@
       <p class="muted">클릭=양조 · Shift+클릭=마시기. 일부 물약은 컬렉션 보상으로 해금(위키 동일).</p>
       ${chestNavRow('menu')}</div>`;
   }
+  function attributesHTML() {
+    // V43: 속성 메뉴 상자 GUI — 위키 Attribute Menu. 슬롯=속성, 클릭=파편 1개 사이펀, 뱃지=레벨
+    const pad9 = (arr) => { const out = arr.slice(); while (out.length % 9) out.push('<div class="mc-slot mc-empty2"></div>'); return out.join(''); };
+    const RN = { common: '일반', uncommon: '고급', rare: '희귀', epic: '영웅', legendary: '전설' };
+    const slots = D().ATTRIBUTES.map(a => {
+      const ik = `shard_${a.key}`; const have = P.inv[ik] || 0;
+      const lv = attrLevel(a.key); const ladder = D().ATTR_LADDER[a.rarity];
+      const steps = [1].concat(ladder);
+      const cum = steps.slice(0, Math.min(lv + 1, steps.length)).reduce((x, y) => x + y, 0);
+      const syph = (P.attributes && P.attributes[a.key] && P.attributes[a.key].syph) || 0;
+      const req = D().ATTR_HUNT_REQ[a.rarity] || 0;
+      const okHunt = skillLevel('hunting') >= req;
+      const maxed = lv >= 10;
+      return `<div class="mc-slot mc-menuslot ${have > 0 && okHunt && !maxed ? '' : 'mc-locked'}" data-act="econ_syphon" data-key="${a.key}"
+        data-ttn="${escHtml(`${a.name} ${lv ? romanNum(lv) : '—'} [${RN[a.rarity]}]`)}"
+        data-ttd="${escHtml(`${a.desc} · 사이펀 ${syph}/${maxed ? syph : cum} (X레벨 누적 ${steps.reduce((x, y) => x + y, 0)}개) · 파편 보유 ${have} · 획득: ${a.mobs.join('/')} 계열 처치 4%${okHunt ? '' : ` · 🔒 사냥 ${req}레벨 필요`}${maxed ? ' · MAX' : ' · 클릭=파편 1개 사이펀'}`)}">${iconImg(ik)}${lv > 0 ? `<span class="mc-cnt">${lv}</span>` : ''}</div>`;
+    });
+    return `<div class="mc-chest"><div class="mc-chesttitle">🧬 속성 메뉴 — 사냥 ${skillLevel('hunting')}레벨 (파편을 사이펀해 I~X 성장, 위키 요구량)</div>
+      <div class="mc-grid">${pad9(slots)}</div>
+      <p class="muted">몹 계열별 파편 드롭(4%) → 클릭=사이펀. 희귀도별 X레벨 누적 파편 96/64/48/32/24 · 사냥 레벨 게이트 0/5/10/15/20 (실제 위키).</p>
+      ${chestNavRow('menu')}</div>`;
+  }
   function menuHTML() {
     const tiles = [
       ['stats', '📊', '내 프로필', '스탯 시트'], ['skills', '🧠', '스킬', '8종 스킬 진행도'],
@@ -2694,7 +2763,7 @@
       ['ach', '🏅', '업적', `${Object.keys(P.ach || {}).length}/${D().ACHIEVEMENTS.length} 달성`], ['daily', '📜', '일일 퀘스트', '매일 3종·보상'],
       ['difficulty', '🎚️', '난이도', `현재: ${fieldDiffDef().name}`], ['equiplog', '📔', '장비 도감', `${fmtNum(equipLogCount())}/${fmtNum(equipTotalCount())}종`],
       ['pets', '🐾', '펫', '펫 관리'], ['talismans', '📿', '장신구 가방', '부적/마력'],
-      ['potions', '🧪', '물약(연금술)', '양조대 — 실제 20종'], ['craft', '⚒️', '레시피 북', '제작(장인 NPC와 동일)'], ['bestiary', '📕', '도감', '처치 기록·마일스톤 보너스'], ['multi', '🌐', '멀티', '거래·파티·섬 방문'],
+      ['potions', '🧪', '물약(연금술)', '양조대 — 실제 20종'], ['attributes', '🧬', '속성', '파편 사이펀 — 사냥 스킬'], ['craft', '⚒️', '레시피 북', '제작(장인 NPC와 동일)'], ['bestiary', '📕', '도감', '처치 기록·마일스톤 보너스'], ['multi', '🌐', '멀티', '거래·파티·섬 방문'],
       ['halloffame', '🏆', '명예의 전당', '전 시스템 기록·마일스톤'],
     ];
     const worlds = (typeof window.economy3dWorlds === 'function') ? window.economy3dWorlds() : [];
@@ -2733,7 +2802,7 @@
   }
   function skillsHTML() {
     // V34: 실제 스블 스킬 메뉴 = 상자 GUI 슬롯(호버 = 레벨/진행 로어)
-    const IC = { combat: '⚔️', mining: '⛏️', farming: '🌾', foraging: '🪓', fishing: '🎣', enchanting: '✨', alchemy: '🧪', taming: '🐾', social: '💬' };
+    const IC = { combat: '⚔️', mining: '⛏️', farming: '🌾', foraging: '🪓', fishing: '🎣', enchanting: '✨', alchemy: '🧪', taming: '🐾', social: '💬', hunting: '🏹' };
     const slots = D().SKILLS.map(sk => {
       const lv = skillLevel(sk.key), pr = skillXpProgress(sk.key);
       const desc = `레벨 ${lv} · ${pr.need ? `${pr.cur.toLocaleString()}/${pr.need.toLocaleString()} XP` : 'MAX'} · ${sk.bonusText}`;
@@ -3815,6 +3884,7 @@
       case 'bank_upgrade': upgradeBank(); break;
       case 'potion_use': usePotion(el.dataset.key); break;
       case 'brew': if (window.__shiftDown) usePotion(el.dataset.key); else brewPotion(el.dataset.key); break;
+      case 'syphon': syphonShard(el.dataset.key); break;
       case 'slayer_quest': startSlayerQuest(el.dataset.key, Number(el.dataset.tier)); break;
       case 'bank_withdraw': bankWithdraw(el.dataset.amt === 'all' ? 'all' : Number(el.dataset.amt)); break;
       case 'deal_buy': buyDeal(Number(el.dataset.i)); break;
@@ -3902,7 +3972,7 @@
     getP: () => P,
     save: () => saveNow(),   // V21-D2: 3D 측 진행 플래그(파크 게이트 등) 영속화
     markZoneVisited: (k) => { if (!P) return; if (!P.zonesVisited) P.zonesVisited = {}; if (!P.zonesVisited[k]) P.zonesVisited[k] = 1; },   // V40: 탐험가 퀘스트
-    buffBonus,   // V42: 물약 버프(재생 등) 3D 연동
+    buffBonus: (k) => buffBonus(k) + attrBonus(k),   // V42/V43: 물약+속성(재생 등) 3D 연동
     openChest: (key) => { activeChest = key; P.chests = P.chests || {}; P.chests[key] = P.chests[key] || {}; },   // V21-E1
     dumpChest: (key) => dumpChest(key),   // V21-E1: 상자 파괴 시 내용물 회수
     hasActiveEncounter: () => !!(activeCombat || dungeonRun),
@@ -4000,6 +4070,7 @@
       skillLevel, addSkillXp, addCollection, collectionTierIdx,
       acceptQuest, questProgress, tryCompleteQuest, questAvailable, questDef,
       brewPotion, usePotion, buffBonus, brewLevel: k => brewLevel(brewDef(k)),
+      syphonShard, attrLevel, attrBonus, shardDropRoll,
       placeMinion, upgradeMinion, upgradeMinionStorage, collectMinion, tickMinions, minionStorageCap, minionSpeedMul, useMinionFuel,
       startSlayer, combatAttack, combatFlee, getActiveCombat: () => activeCombat,
       startDungeon, dungeonAdvance, dungeonSecretClick, getDungeonRun: () => dungeonRun, dungeonGrade, canEnterFloor,
