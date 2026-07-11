@@ -561,6 +561,10 @@
     buildHubCastle();    // V44: 허브 캐슬(실제 허브 북서) — 성벽/4탑/알현실/총안
     buildDockPier();     // V44: 연못 → 실제 부두(잔교/계류 보트/어부 오두막)
     buildMineQuarry();   // V45: 광산 남사면 계단식 노천 채석장(테라스/갱목/광석 노출/수레길)
+    buildWizardInterior();   // V47: 마법사 탑 내부(나선계단/1층 서재/꼭대기 마법진)
+    buildArenaUnderground(); // V47: 콜로세움 지하 검투사 대기실 2실+터널
+    buildCryptOssuary();     // V47: 묘지 지하 납골당(계단/벽감/관)
+    buildGranary();          // V47: 농장 곡물창고(2층 헛간+건초 로프트)
     buildRuinWalls();    // V45: 폐허 무너진 성벽 라인 + 쓰러진 기둥 + 잔해 더미
     buildSnowTrail();    // V45: 설산 지그재그 등반로 + 정상 전망대
     buildInn();          // V45: 마을 여관(2층 — 객실/간판/발코니)
@@ -603,6 +607,106 @@
       else if (r < 0.52) setW(x, y, z, field < 0.34 ? ID.flower_yellow : field < 0.68 ? ID.flower_red : ID.tall_grass);   // V44: 색 군집 꽃밭 확대
       else if (r < 0.425) { setW(x, y, z, ID.mossy_cobblestone); if (r < 0.4215) { setW(x, y + 1, z, ID.mossy_cobblestone); setW(x + 1, y, z, ID.cobblestone); } }  // 바위 군집
     }
+  }
+
+
+  // V47: 마법사 탑 내부 — 내벽 나선계단 발판(y+2 간격), 1층 서재(책장 벽감+독서대), 꼭대기 마법진(발광 링)
+  function buildWizardInterior() {
+    const cx = 322, cz = 120, base = surfaceTop(cx, cz), R = 4, Ht = 22;
+    // 나선계단: 내벽(반경 R-1) 따라 상승 발판 — 한 바퀴에 8칸 상승
+    for (let step = 0; step < 64; step++) {
+      const th = step * (Math.PI / 8), y = base + Math.floor(step / 2);
+      if (y >= base + Ht - 6) break;
+      const x = cx + Math.round(Math.cos(th) * (R - 1)), z = cz + Math.round(Math.sin(th) * (R - 1));
+      setW(x, y, z, ID.chiseled_stone_bricks);
+      if (step % 8 === 0) setW(x, y + 2, z, ID.glowstone);   // 층계 조명
+    }
+    // 1층 서재: 벽감 책장(퍼퍼+참나무 판자 교차) + 중앙 독서대 + 융단
+    for (const [ox, oz] of [[-2, -2], [2, -2], [-2, 2]]) {
+      setW(cx + ox, base, cz + oz, ID.oak_planks); setW(cx + ox, base + 1, cz + oz, ID.purpur); setW(cx + ox, base + 2, cz + oz, ID.oak_planks);
+    }
+    setW(cx, base, cz, ID.purpur); setW(cx, base + 1, cz, ID.oak_planks);   // 독서대
+    for (let dx = -1; dx <= 1; dx++) setW(cx + dx, base - 1, cz + 1, ID.wool_magenta != null ? ID.wool_magenta : ID.purpur);   // 융단
+    // 꼭대기 마법진: 상층 마루 + 발광 링 + 중앙 수정
+    const ty = base + Ht - 5;
+    for (let dx = -R + 1; dx <= R - 1; dx++) for (let dz = -R + 1; dz <= R - 1; dz++) if (dx * dx + dz * dz <= (R - 1) * (R - 1)) setW(cx + dx, ty, cz + dz, ID.polished_andesite);
+    for (const [ox, oz] of [[2, 0], [-2, 0], [0, 2], [0, -2], [1, 1], [-1, 1], [1, -1], [-1, -1]]) setW(cx + ox, ty + 1, cz + oz, ID.glowstone);
+    setW(cx, ty + 1, cz, ID.purpur); setW(cx, ty + 2, cz, ID.glowstone);
+  }
+  // V47: 콜로세움 지하 — 경기장 밑 검투사 대기실 2실(동/서) + 경기장으로 오르는 터널 계단
+  function buildArenaUnderground() {
+    const cx = 224, cz = 352, cy = surfaceTop(cx, cz) - 1;
+    const room = (rx) => {
+      for (let dx = -3; dx <= 3; dx++) for (let dz = -2; dz <= 2; dz++) for (let dy = 1; dy <= 3; dy++) setW(rx + dx, cy - 5 + dy, cz + dz, 0);
+      for (let dx = -3; dx <= 3; dx++) for (let dz = -2; dz <= 2; dz++) { setW(rx + dx, cy - 5, cz + dz, ID.smooth_stone); setW(rx + dx, cy - 1, cz + dz, ID.smooth_stone); }
+      for (let dx = -3; dx <= 3; dx += 2) { setW(rx + dx, cy - 4, cz - 2, ID.oak_fence); }   // 무기 거치대(울타리)
+      setW(rx, cy - 4, cz + 2, ID.oak_planks); setW(rx - 1, cy - 4, cz + 2, ID.oak_planks);  // 벤치
+      setW(rx, cy - 2, cz, ID.glowstone);
+    };
+    room(cx - 15); room(cx + 15);
+    // 대기실 → 경기장 터널(계단 상승, 모래 바닥으로 개구)
+    for (const dir of [-1, 1]) {
+      for (let i = 0; i < 8; i++) {
+        const x = cx + dir * (12 - i), y = cy - 4 + Math.floor(i / 2);
+        for (let dy = 0; dy <= 2; dy++) setW(x, y + dy, cz, 0);
+        setW(x, y - 1, cz, ID.smooth_stone);
+      }
+    }
+  }
+  // V47: 묘지 납골당 — 예배당 폐허 옆 지하: 하강 계단 + 복도 + 벽감 유골(석영/뼈 느낌) + 석관 2기
+  function buildCryptOssuary() {
+    const ex = 136, ez = 300, ey = surfaceTop(ex, ez);
+    for (let i = 0; i < 6; i++) {   // 하강 계단(남향)
+      const y = ey - 1 - i;
+      for (let dx = -1; dx <= 1; dx++) { for (let dy = 0; dy <= 2; dy++) setW(ex + dx, y + dy, ez + i, 0); setW(ex + dx, y - 1, ez + i, ID.stone_bricks); }
+    }
+    const fy = ey - 7, fz = ez + 6;   // 복도 바닥 높이/시작
+    for (let dz = 0; dz < 12; dz++) for (let dx = -2; dx <= 2; dx++) {
+      for (let dy = 1; dy <= 3; dy++) setW(ex + dx, fy + dy, fz + dz, 0);
+      setW(ex + dx, fy, fz + dz, dz % 3 === 0 ? ID.mossy_stone_bricks : ID.stone_bricks);
+      setW(ex + dx, fy + 4, fz + dz, ID.stone_bricks);
+      if (Math.abs(dx) === 2) {   // 벽 + 벽감(유골: 석영 블럭)
+        setW(ex + dx, fy + 1, fz + dz, dz % 2 === 0 ? ID.quartz_block : ID.stone_bricks);
+        setW(ex + dx, fy + 2, fz + dz, ID.stone_bricks);
+        setW(ex + dx, fy + 3, fz + dz, dz % 4 === 1 ? ID.quartz_block : ID.stone_bricks);
+      }
+      if (dz % 5 === 2) setW(ex, fy + 3, fz + dz, ID.glowstone);   // 천장 등불
+    }
+    // 석관 2기(복도 끝 방)
+    for (let dx = -3; dx <= 3; dx++) for (let dz = 0; dz <= 5; dz++) {
+      for (let dy = 1; dy <= 3; dy++) setW(ex + dx, fy + dy, fz + 12 + dz, 0);
+      setW(ex + dx, fy, fz + 12 + dz, ID.stone_bricks); setW(ex + dx, fy + 4, fz + 12 + dz, ID.stone_bricks);
+      if (Math.abs(dx) === 3 || dz === 5) for (let dy = 1; dy <= 3; dy++) setW(ex + dx, fy + dy, fz + 12 + dz, dz === 5 && dx === 0 && dy < 3 ? 0 : ID.mossy_stone_bricks);
+    }
+    for (const ox of [-2, 2]) { setW(ex + ox, fy + 1, fz + 14, ID.quartz_block); setW(ex + ox, fy + 1, fz + 15, ID.quartz_block); }   // 석관
+    setW(ex, fy + 3, fz + 14, ID.glowstone);
+  }
+  // V47: 농장 곡물창고 — 붉은 2층 헛간(박공) + 건초 로프트 + 마당 건초 롤
+  function buildGranary() {
+    const X = 344, Z = 232, Wd = 8, Dd = 6;
+    const base = surfaceTop(X + 4, Z + 3);
+    for (let dx = -1; dx <= Wd; dx++) for (let dz = -1; dz <= Dd; dz++) for (let y = base; y <= base + 10; y++) setW(X + dx, y, Z + dz, 0);
+    for (let dx = 0; dx < Wd; dx++) for (let dz = 0; dz < Dd; dz++) setW(X + dx, base - 1, Z + dz, ID.oak_planks);
+    for (let dx = 0; dx < Wd; dx++) for (let dz = 0; dz < Dd; dz++) {
+      const edge = dx === 0 || dx === Wd - 1 || dz === 0 || dz === Dd - 1;
+      if (!edge) continue;
+      for (let y = base; y <= base + 4; y++) {
+        const corner = (dx === 0 || dx === Wd - 1) && (dz === 0 || dz === Dd - 1);
+        setW(X + dx, y, Z + dz, corner ? ID.spruce_log : ID.wool_red);
+      }
+    }
+    // 큰 정면 문(2×3) + 로프트 창
+    for (let dx = 3; dx <= 4; dx++) for (let y = base; y <= base + 2; y++) setW(X + dx, y, Z, 0);
+    setW(X + 3, base + 4, Z, ID.glass); setW(X + 4, base + 4, Z, ID.glass);
+    // 박공 지붕(가문비)
+    for (let step = 0; step <= 3; step++) for (let dz = -1 + step; dz <= Dd - step; dz++) for (const dx of [-1 + step, Wd - step]) setW(X + dx, base + 5 + step, Z + dz, ID.spruce_planks);
+    for (let dx = 2; dx < Wd - 2; dx++) for (let dz = 1; dz < Dd - 1; dz++) setW(X + dx, base + 8, Z + dz, ID.spruce_planks);
+    // 로프트 건초 + 내부 건초 더미
+    for (let dx = 1; dx < Wd - 1; dx++) for (let dz = 1; dz < Dd - 1; dz++) if ((dx + dz) % 2 === 0) setW(X + dx, base + 3, Z + dz, ID.hay_block);
+    setW(X + 1, base, Z + Dd - 2, ID.hay_block); setW(X + 2, base, Z + Dd - 2, ID.hay_block); setW(X + 1, base + 1, Z + Dd - 2, ID.hay_block);
+    setW(X + 2, base + 1, Z + 2, ID.glowstone);
+    // 마당 건초 롤 2개
+    for (const [hx, hz] of [[X - 4, Z + 2], [X + Wd + 3, Z + 4]]) { const t = surfaceTop(hx, hz); setW(hx, t, hz, ID.hay_block); setW(hx + 1, t, hz, ID.hay_block); setW(hx, t + 1, hz, ID.hay_block); }
   }
 
   // V45: 광산 남사면 계단식 노천 채석장 — 테라스 3단(석재/자갈), 갱목 지지대, 광석 노출면, 수레길
