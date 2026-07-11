@@ -502,7 +502,90 @@
     return best ? best.key : 'wild';
   }
   function hubZoneName(key) { const zn = HUB_ZONES.find(z => z.key === key); return zn ? zn.name : '🌿 야생 지대'; }
+
+  /* ───────────── 실제 하이픽셀 스카이블럭 허브 맵 임포트 (economy-maps/hub_map.bin) ─────────────
+     실제 The Hub 월드(.mca)를 블럭 하나하나 그대로 반영. 서버 배포용으로 gzip 압축(~0.8MB, 32MB 제한 무관).
+     포맷: 'HMAP' + ver u8 + W,H,D u16 + ox,oy,oz i16(=원본 MC 최소 좌표) + palCount u16 +
+           palette[(u8 len+utf8)…] + gzLen u32 + gzip(Uint16 LE grid, idx=(y*D+z)*W+x). */
+  let HUB_MAP = null, _hubMapPromise = null;
+  const HUB_MC_SPAWN = { x: -2.485, y: 70, z: -68.62 };   // level.dat 실제 스폰 좌표
+  function loadHubMap() {
+    if (HUB_MAP) return Promise.resolve(HUB_MAP);
+    if (_hubMapPromise) return _hubMapPromise;
+    _hubMapPromise = (async () => {
+      try {
+        if (typeof fetch !== 'function' || typeof DecompressionStream === 'undefined') return null;
+        const resp = await fetch('economy-maps/hub_map.bin', { cache: 'force-cache' });
+        if (!resp.ok) return null;
+        const buf = new Uint8Array(await resp.arrayBuffer());
+        if (String.fromCharCode(buf[0], buf[1], buf[2], buf[3]) !== 'HMAP') return null;
+        const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+        let p = 5;                       // magic(4)+ver(1)
+        const mW = dv.getUint16(p, true); p += 2; const mH = dv.getUint16(p, true); p += 2; const mD = dv.getUint16(p, true); p += 2;
+        const ox = dv.getInt16(p, true); p += 2; const oy = dv.getInt16(p, true); p += 2; const oz = dv.getInt16(p, true); p += 2;
+        const palCount = dv.getUint16(p, true); p += 2;
+        const dec = new TextDecoder(); const palette = [];
+        for (let i = 0; i < palCount; i++) { const len = buf[p++]; palette.push(dec.decode(buf.subarray(p, p + len))); p += len; }
+        const gzLen = dv.getUint32(p, true); p += 4;
+        const gz = buf.subarray(p, p + gzLen);
+        const stream = new Response(gz).body.pipeThrough(new DecompressionStream('gzip'));
+        const ab = await new Response(stream).arrayBuffer();
+        const grid = new Uint16Array(ab);
+        if (grid.length !== mW * mH * mD) { console.error('hub map size mismatch', grid.length, mW * mH * mD); return null; }
+        HUB_MAP = { W: mW, H: mH, D: mD, ox, oy, oz, palette, grid };
+        return HUB_MAP;
+      } catch (e) { console.error('hub map load fail', e); return null; }
+    })();
+    return _hubMapPromise;
+  }
+  function genWorldFromMap(M) {
+    W = M.W; H = M.H; Dp = M.D;
+    world = new Uint16Array(W * H * Dp);
+    const remap = new Int32Array(M.palette.length);
+    for (let i = 0; i < M.palette.length; i++) { const k = M.palette[i]; remap[i] = (k === 'air') ? 0 : (ID[k] != null ? ID[k] : ID.stone); }
+    const g = M.grid, n = g.length;
+    for (let i = 0; i < n; i++) { const pi = g[i]; if (pi) world[i] = remap[pi]; }
+    applyHubRealAnchors();   // 게임플레이 레이어(구역/NPC/워프)를 실제 마을에 정렬
+    buildWarpPads();         // 실제 맵엔 절차 워프링이 없으므로 패드만 배치
+  }
+  // 실제 허브 맵의 마을 광장(스폰) 기준으로 구역 라벨·NPC·워프 패드를 재배치
+  let _hubAnchored = false;
+  function applyHubRealAnchors() {
+    if (!HUB_MAP) return;
+    const S = { x: Math.round(HUB_MC_SPAWN.x - HUB_MAP.ox), z: Math.round(HUB_MC_SPAWN.z - HUB_MAP.oz) };
+    if (!_hubAnchored) {
+      _hubAnchored = true;
+      // 실제 허브 = 중앙 마을 광장 + 외곽 야생(산/길). 광장만 명시, 나머지는 자연히 '야생'.
+      HUB_ZONES.length = 0;
+      HUB_ZONES.push({ key: 'village', name: '🏘️ 마을 광장', x: S.x, z: S.z, r: 82 });
+      // 워프 패드: 맵 안쪽 링(대칭 회피용 목적지별 반경 지터), 경계 클램프
+      const cx = Math.round(W / 2), cz = Math.round(Dp / 2), wl = WARPS.hub;
+      for (let i = 0; i < wl.length; i++) {
+        const ang = (i / wl.length) * Math.PI * 2 + 0.3, rr = 150 + (i % 3) * 22;
+        wl[i].x = Math.max(6, Math.min(W - 7, Math.round(cx + Math.cos(ang) * rr)));
+        wl[i].z = Math.max(6, Math.min(Dp - 7, Math.round(cz + Math.sin(ang) * rr)));
+      }
+    }
+    placeHubNpcs(S.x, S.z);
+  }
+  function placeHubNpcs(cx, cz) {
+    const spots = [], used = [];
+    const bad = new Set([ID.water, ID.lava, ID.oak_leaves, ID.spruce_leaves, ID.dark_oak_leaves, ID.jungle_leaves, ID.acacia_leaves].filter(v => v != null));
+    for (let r = 3; r <= 46 && spots.length < NPCS.length; r++) {
+      for (let a = 0; a < 360 && spots.length < NPCS.length; a += 5) {
+        const x = Math.round(cx + Math.cos(a * Math.PI / 180) * r), z = Math.round(cz + Math.sin(a * Math.PI / 180) * r);
+        if (x < 2 || z < 2 || x >= W - 2 || z >= Dp - 2) continue;
+        const t = surfaceTop(x, z), below = getBlockLocal(x, t - 1, z), bb = BLOCKS[below];
+        if (!bb || !bb.solid || !bb.opaque || bad.has(below)) continue;
+        if (getBlockLocal(x, t, z) !== 0 || getBlockLocal(x, t + 1, z) !== 0) continue;
+        if (used.some(u => Math.abs(u.x - x) < 4 && Math.abs(u.z - z) < 4)) continue;
+        spots.push({ x, z }); used.push({ x, z });
+      }
+    }
+    for (let i = 0; i < NPCS.length; i++) { const s = spots[i % (spots.length || 1)]; if (s) { NPCS[i].x = s.x; NPCS[i].z = s.z; } }
+  }
   function genWorld() {
+    if (HUB_MAP) { genWorldFromMap(HUB_MAP); return; }
     world = new Uint16Array(W * H * Dp);
     for (let x = 0; x < W; x++) for (let z = 0; z < Dp; z++) {
       const { y: top, f } = columnSurface(x, z);
@@ -5639,7 +5722,8 @@
     if (typeof toast === 'function') toast(`🚀 ${WORLD_DEFS[dest].name}(으)로 워프!`, true);
     P.vy = 13;   // 슈퍼 점프 연출
     warpCharge = null;
-    setTimeout(() => { if (running) travelTo(dest); }, 420);
+    const go = () => setTimeout(() => { if (running) travelTo(dest); }, 420);
+    if (dest === 'hub' && !HUB_MAP) loadHubMap().then(go); else go();   // 첫 허브 진입 전 실제 맵 로드 보장
   }
   function tickWarpPads(dt) {
     const list = WARPS[worldMode] || [];
@@ -7181,7 +7265,10 @@
     if (P.y < 1) { P._fallPeak = null; respawnAtHub(worldMode === 'hub' ? '마을로 귀환했어요' : '공허에 떨어졌다! 섬으로 귀환'); }
   }
   function resetPlayerToSpawn() {
-    spawnX = 224.5; spawnZ = 232.5; spawnY = surfaceTop(224, 232) + 0.02;
+    if (HUB_MAP) {
+      const sx = Math.round(HUB_MC_SPAWN.x - HUB_MAP.ox), sz = Math.round(HUB_MC_SPAWN.z - HUB_MAP.oz);
+      spawnX = sx + 0.5; spawnZ = sz + 0.5; spawnY = surfaceTop(sx, sz) + 0.02;
+    } else { spawnX = 224.5; spawnZ = 232.5; spawnY = surfaceTop(224, 232) + 0.02; }
     P.x = spawnX; P.y = spawnY; P.z = spawnZ; P.vx = P.vy = P.vz = 0; P.yaw = 0; P.pitch = 0; P.onGround = false;
   }
 
@@ -9568,6 +9655,7 @@
     setupOutline();
     resize(); window.addEventListener('resize', resize);
     bindInput(); requestLookLock(false); running = true; lastT = 0; contextLost = false;
+    loadHubMap();   // 실제 허브 맵 선로딩(홈에서 노는 동안 준비) — 포탈 진입 시 즉시 반영
     updateHud();
     // V12: 실제 하이픽셀 스카이블럭처럼 — 접속/재접속 시 항상 프라이빗 섬에서 스폰(허브 아님).
     //   기존엔 접속 즉시 448² 허브를 풀생성·풀메싱한 뒤 곧바로 섬으로 이동하며 통째로 폐기(이중 작업·프레임 스파이크)했다.
@@ -9753,6 +9841,7 @@
       WORLD_DEFS, WARPS, MOB_TYPES, SPAWN_AREAS, gatherBlocks, regenQueue: () => regenQueue,
       SHALLOW_SEA, DEEP_SEA, pickShallowSea,   // V20-H: 바다 생물 로스터(테스트용)
       loadWorldForTest: (key) => { const def = WORLD_DEFS[key]; W = def.size[0]; H = def.size[1]; Dp = def.size[2]; worldMode = key; if (key === 'hub') genWorld(); else if (key === 'home') genHome(); else def.gen(); return world; },
+      loadHubMap, hubMapInfo: () => HUB_MAP && { W: HUB_MAP.W, H: HUB_MAP.H, D: HUB_MAP.D, ox: HUB_MAP.ox, oy: HUB_MAP.oy, oz: HUB_MAP.oz, pal: HUB_MAP.palette.length },
       getDims: () => ({ W, H, Dp }),
       spawnMobForTest: (area, type, lv) => spawnMob(area, type, lv),
       progressBreaking, tickRegen, pickMob, mobs: () => mobs,
