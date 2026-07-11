@@ -8082,12 +8082,13 @@
   const MOB_TYPES = {
     // ── 허브 ──  books: 이 몹이 떨어뜨리는 인챈트북(V7: 북은 몹 드롭 전용)
     zombie: { name: '좀비', kind: 'humanoid', color: 0x3a7d3a, hp: 100, dmg: 20, xp: 6, coins: 1, speed: 1.7, books: ['sharpness', 'smite'], drops: [{ key: 'rotten_flesh', n: 1 }, { key: 'poisonous_potato', n: 1, chance: 0.02 }, { key: 'potato', n: 1, chance: 0.01 }, { key: 'carrot', n: 1, chance: 0.01 }], tierCap: 1 },   // V77: 위키 드롭 정합
+    creeper: { name: '크리퍼', kind: 'quad', color: 0x5ac26a, hp: 80, dmg: 20, xp: 6, coins: 2, speed: 1.5, books: ['smite'], drops: [{ key: 'gunpowder', n: 1 }], tierCap: 1 },   // V78: 위키 — HP80/DMG20, 화약 100%(프라이빗 섬 화약 공급원)
     skeleton: { name: '스켈레톤', kind: 'humanoid', color: 0xcccccc, hp: 100, dmg: 15, xp: 7, coins: 1, speed: 1.8, books: ['critical', 'prosecute'], drops: [{ key: 'bone', n: 1 }, { key: 'bone', n: 2, chance: 0.5 }], tierCap: 1 },   // V77: 위키 — HP100, 뼈2x 50%
     crypt_ghoul: { name: '크립트 구울', kind: 'humanoid', color: 0x5a8a5a, hp: 2000, dmg: 31, gear: { sword: 0xf7d84a }, xp: 25, coins: 15, speed: 2.2, books: ['giant_killer', 'execute'], drops: [{ key: 'rotten_flesh', n: 3 }, { key: 'gold', n: 1, chance: 0.25 }], tierCap: 3 },
     golden_ghoul: { name: '골든 구울', kind: 'humanoid', color: 0xd8b23a, hp: 4500, dmg: 45, gear: { helmet: 0xf7d84a, sword: 0xf7d84a }, xp: 45, coins: 60, speed: 2.3, books: ['looting'], drops: [{ key: 'gold', n: 3 }, { key: 'talisman_wealth_rune', n: 1, chance: 0.02 }], tierCap: 4 },
     wraith: { name: '레이스', kind: 'tall', color: 0x8a94b8, hp: 250, dmg: 38, xp: 30, coins: 10, speed: 2.6, books: ['life_steal'], drops: [{ key: 'gunpowder', n: 1 }, { key: 'bone', n: 2 }, { key: 'lapis', n: 2, chance: 0.3 }], tierCap: 3 },
     rat: { name: '쥐', kind: 'quad', color: 0x6a6258, hp: 40, dmg: 8, xp: 3, coins: 1, speed: 3.0, scale: 0.45, books: [], drops: [{ key: 'rawfish', n: 1, chance: 0.3 }], tierCap: 0 },
-    wolf: { name: '늑대', kind: 'quad', color: 0x9a9a9a, hp: 160, dmg: 20, xp: 10, coins: 4, speed: 2.8, books: ['first_strike', 'looting'], drops: [{ key: 'bone', n: 2 }, { key: 'talisman_wolf_claw', n: 1, chance: 0.015 }], tierCap: 2 },
+    wolf: { name: '늑대', kind: 'quad', color: 0x9a9a9a, hp: 160, dmg: 20, xp: 10, coins: 4, speed: 2.8, books: ['first_strike', 'looting'], drops: [{ key: 'bone', n: 1 }, { key: 'talisman_wolf_claw', n: 1, chance: 0.015 }], tierCap: 2 },   // V78: 위키 — 뼈 1개
     old_wolf: { name: '올드 울프', kind: 'quad', color: 0x5a5a62, hp: 900, dmg: 80, xp: 60, coins: 25, speed: 3.0, scale: 1.4, books: ['first_strike', 'experience'], drops: [{ key: 'bone', n: 4 }], tierCap: 4 },
     slime: { name: '슬라임', kind: 'slime', color: 0x5ac26a, hp: 120, dmg: 14, xp: 8, coins: 2, speed: 1.4, books: ['magnet', 'big_brain'], drops: [{ key: 'emerald', n: 1, chance: 0.08 }], tierCap: 2 },
     miner_zombie: { name: '광부 좀비', kind: 'humanoid', color: 0x7a6a4a, hp: 200, dmg: 28, gear: { helmet: 0xd8d8d4, tool: 0x9c7a44 }, xp: 15, coins: 5, speed: 1.8, books: ['efficiency'], drops: [{ key: 'iron', n: 1, chance: 0.4 }, { key: 'coal', n: 2, chance: 0.5 }], tierCap: 2 },
@@ -8187,7 +8188,7 @@
 
   // 스폰 구역: 실제 스카이블럭처럼 특정 지역에 특정 몬스터(레벨 범위 내 변종 + 5% 정예 ★)
   let SPAWN_AREAS = [
-    { world: 'hub', x: 152, z: 314, r: 26, types: ['zombie', 'skeleton'], lv: [1, 6], cap: 8, respawn: 9 },     // 묘지(실제: Graveyard Zombie Lv1)
+    { world: 'hub', x: 152, z: 314, r: 26, types: ['zombie', 'skeleton', 'creeper'], lv: [1, 6], cap: 8, respawn: 9 },     // 묘지(실제: Graveyard Zombie Lv1) + V78 크리퍼(화약)
     { world: 'hub', x: 152, z: 344, r: 12, types: ['crypt_ghoul'], lv: [28, 32], cap: 2, respawn: 20 },         // 크립트(Lv30 구울)
     { world: 'hub', x: 88, z: 208, r: 16, types: ['slime'], lv: [3, 8], cap: 3, respawn: 14 },                  // 석탄 광산 챔버
     { world: 'hub', x: 224, z: 100, r: 34, types: ['wolf'], lv: [8, 15], cap: 4, respawn: 15 },                 // 설산 늑대
