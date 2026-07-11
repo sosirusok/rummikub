@@ -40,6 +40,9 @@
     pumpkin: ['호박 미니언 I 레시피', '호박 갑옷 레시피', '인챈티드 호박 레시피', '큐비즘 XP 할인 -25% + 스푸키 미끼 레시피', '훈련용 더미 레시피', '파머 오브 레시피', '랜턴 투구 레시피', '농장 크리스탈 레시피', '파머 부츠 레시피', '폴리시드 호박 레시피', '랜처 부츠 레시피'],
     melon: ['수박 미니언 I 레시피', '농사 XP +50', '농사 XP +125', '인챈티드 수박 조각 레시피', '인챈티드 반짝이는 수박 레시피', '인챈티드 수박 블럭 레시피', '농사 XP +5,000', '농사 XP +10,000', '수박 갑옷 4부위 레시피'],
     sugarcane: ['사탕수수 미니언 I 레시피', '스피드 부적 레시피', '인챈티드 설탕 레시피', '스피드스터 갑옷 레시피', '인챈티드 종이 레시피 + 스피드 반지 레시피', '인챈티드 책장 레시피', '농사 XP +10,000', '인챈티드 사탕수수 레시피 + 스피드 유물 레시피', '농사 XP +25,000'],
+    raw_porkchop: ['돼지 미니언 I 레시피', '농사 XP +500', '피그맨 펫 레시피 + 인챈티드 생돼지고기 레시피', '농사 XP +2,500', '피기 뱅크 레시피', '농사 XP +10,000', '인챈티드 익힌 돼지고기 레시피', '농사 XP +25,000', '피그맨 소드 레시피'],
+    raw_chicken: ['닭 미니언 I 레시피', '다리 알 레시피', '닭 펫 레시피 + 닭 모자 레시피', '인챈티드 생닭 레시피', '인챈티드 달걀 레시피', '농사 XP +5,000', '인챈티드 케이크 레시피', '민첩 물약 레시피', '슈퍼 인챈티드 달걀 레시피', '오메가 인챈티드 달걀 레시피'],
+    raw_mutton: ['양 미니언 I 레시피', '농사 XP +10', '양 펫 레시피', '마나 물약 레시피', '인챈티드 생양고기 레시피 + 소형 축산 자루 레시피', '레인보우 XP 할인 -25%', '중형 축산 자루 레시피', '인챈티드 익힌 양고기 레시피', '고통의 뿔 레시피 + 대형 축산 자루 레시피', '대형 인챈티드 축산 자루 레시피'],
     feather: ['발사체 보호 XP 할인 -25%', '가벼운 착지 XP 할인 -25%', '궁술 물약 레시피', '깃털 부적 레시피', '인챈티드 깃털 레시피', '드래곤 트레이서 XP 할인 -25%', '깃털 반지 레시피', '저격 XP 할인 -25%', '깃털 유물 레시피'],
     leather: ['소 미니언 I 레시피', '소 모자 레시피 + 우유 양동이 거래', '소형 배낭 레시피 + 말 펫 레시피', '인챈티드 가죽 레시피', '인챈티드 생소고기 레시피', '중형 배낭 레시피', '농사 XP +5,000', '안장 레시피', '대형 배낭 레시피', '농사 XP +10,000', '그레이터 배낭 레시피'],
     oaklog: ['참나무 미니언 I 레시피', '리플릿 갑옷 레시피 + 참나무 잎 거래', '인챈티드 참나무 원목 레시피', '소형 창고 레시피', '숲 바이옴 스틱 레시피', '중형 창고 레시피', '나무 친화 부적 레시피', '벌목 XP +10,000', '대형 창고 레시피'],
@@ -68,6 +71,9 @@
   };
   // V39: 기능 보상 — sx: [스킬, XP] 실지급 / ds: 해당 인챈트 부여 비용 -25% / mf: 채광 행운 +1 (위키 그대로)
   const COL_TIER_FX = {
+    raw_porkchop: { 2: { sx: ['farming', 500] }, 4: { sx: ['farming', 2500] }, 6: { sx: ['farming', 10000] }, 8: { sx: ['farming', 25000] } },
+    raw_chicken: { 6: { sx: ['farming', 5000] } },
+    raw_mutton: { 2: { sx: ['farming', 10] } },
     stone: { 6: { sx: ['mining', 1000] } },
     obsidian: { 5: { mf: 1 }, 7: { mf: 1 }, 8: { mf: 1 }, 10: { mf: 1, sx: ['mining', 50000] } },
     gold: { 3: { ds: 'looting' }, 9: { ds: 'fortune' } },
@@ -135,6 +141,10 @@
     ] },
     { category: '축산', key: 'husbandry', resources: [
       res('feather', '깃털', 3, 0, [50, 100, 250, 1000, 2500, 5000, 10000, 25000, 50000]), res('leather', '가죽', 5, 0, [50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000]),
+      // V76: 위키 대조 — Raw Porkchop 9T / Raw Chicken 10T / Mutton 10T (실사다리·실판매가)
+      res('raw_porkchop', '생돼지고기', 5, 0, [50, 100, 250, 1000, 2500, 5000, 10000, 25000, 50000]),
+      res('raw_chicken', '생닭', 4, 0, [50, 100, 250, 1000, 2500, 5000, 10000, 25000, 50000, 100000]),
+      res('raw_mutton', '생양고기', 5, 0, [50, 100, 250, 1000, 2500, 5000, 10000, 25000, 50000, 100000]),
     ] },
   ];
   // V39: 위키에 없는 컬렉션은 제외하되 아이템/레시피는 유지 — 별도 원자재 목록
@@ -280,7 +290,9 @@
     minion('slime_minion', '슬라임 미니언', 'slime_ball', 26, 120),
     minion('blaze_minion', '블레이즈 미니언', 'blaze_rod', 33, 400),
     minion('cow_minion', '소 미니언', 'leather', 26, 80),
-    minion('chicken_minion', '닭 미니언', 'feather', 26, 80),
+    minion('chicken_minion', '닭 미니언', 'raw_chicken', 26, 80),   // V76: 위키 — 생닭 생산, Raw Chicken I 해금
+    minion('pig_minion', '돼지 미니언', 'raw_porkchop', 26, 80),      // V76: 위키 — Raw Porkchop I 해금
+    minion('sheep_minion', '양 미니언', 'raw_mutton', 24, 80),        // V76: 위키 — Mutton I 해금
     minion('ghast_minion', '가스트 미니언', 'ghast_tear', 36, 500),
     // V10: 컬렉션 수(39)와 동일하게 — 나머지 11종
     minion('apple_minion', '사과 미니언', 'apple', 30, 80),
@@ -305,11 +317,8 @@
   // V10 ⑱: 필드 미니보스 유니크 전리품(드롭 전용)
   const MINIBOSS_LOOT = [
     { key: 'yeti_fur', name: '예티의 모피', category: '전리품', buyPrice: 0, sellPrice: 2800 },
-    // V75: 농장 동물 실드롭(위키 대조 — Sheep/Pig/Cow/Chicken 페이지 드롭 테이블 정합)
-    { key: 'raw_mutton', name: '생양고기', category: '전리품', buyPrice: 0, sellPrice: 4 },
-    { key: 'raw_porkchop', name: '생돼지고기', category: '전리품', buyPrice: 0, sellPrice: 5 },
+    // V75/V76: 농장 동물 실드롭 — 생소고기만 전리품(소고기는 실제 컬렉션 아님), 나머지 3종은 축산 컬렉션 원자재로 자동 생성
     { key: 'raw_beef', name: '생소고기', category: '전리품', buyPrice: 0, sellPrice: 4 },
-    { key: 'raw_chicken', name: '생닭', category: '전리품', buyPrice: 0, sellPrice: 4 },
     { key: 'golem_core', name: '골렘의 코어', category: '전리품', buyPrice: 0, sellPrice: 2200 },
     { key: 'mushroom_crown', name: '무쉬룸 킹의 왕관', category: '전리품', buyPrice: 0, sellPrice: 1500 },
   ];
@@ -912,7 +921,7 @@
   ];
   const ENCHANTED_RES = COLLECTIONS.reduce((a, c) => a.concat(c.resources.map(r => r.key)), []).concat(EXTRA_RES.map(r => r.key));
   // V39: 인챈티드 레시피 해금 티어 — 위키 컬렉션 보상 티어 그대로(수작업)
-  const ENCH_UNLOCK_T = { stone: 4, coal: 3, iron: 4, gold: 5, lapis: 4, redstone: 4, diamond: 4, emerald: 4, obsidian: 4, wheat: 5, carrot: 4, potato: 4, pumpkin: 3, melon: 4, sugarcane: 3, oaklog: 3, birchlog: 3, sprucelog: 3, dark_oak_log: 3, jungle_log: 3, acacia_log: 3, rotten_flesh: 4, bone: 5, string: 4, spider_eye: 4, gunpowder: 4, ender_pearl: 2, ghast_tear: 3, slime_ball: 5, blaze_rod: 6, magma_cream: 3, feather: 5, leather: 4, rawfish: 6, salmon: 4, clownfish: 4, pufferfish: 2, prismarine: 3, sponge: 4, clay: 2 };
+  const ENCH_UNLOCK_T = { stone: 4, coal: 3, iron: 4, gold: 5, lapis: 4, redstone: 4, diamond: 4, emerald: 4, obsidian: 4, wheat: 5, carrot: 4, potato: 4, pumpkin: 3, melon: 4, sugarcane: 3, oaklog: 3, birchlog: 3, sprucelog: 3, dark_oak_log: 3, jungle_log: 3, acacia_log: 3, rotten_flesh: 4, bone: 5, string: 4, spider_eye: 4, gunpowder: 4, ender_pearl: 2, ghast_tear: 3, slime_ball: 5, blaze_rod: 6, magma_cream: 3, feather: 5, leather: 4, raw_porkchop: 3, raw_chicken: 4, raw_mutton: 5, rawfish: 6, salmon: 4, clownfish: 4, pufferfish: 2, prismarine: 3, sponge: 4, clay: 2 };
   const ENCH_BLOCK_T = { stone: 5, coal: 7, iron: 7, gold: 8, lapis: 7, redstone: 8, diamond: 8, emerald: 7, bone: 10, slime_ball: 8, gunpowder: 6, ender_pearl: 6 };
   // 광물은 한 단계 더: 인챈티드 160개 → 인챈티드 블록
   const ENCHANTED_BLOCK_RES = ['stone', 'coal', 'iron', 'gold', 'lapis', 'redstone', 'diamond', 'emerald', 'bone', 'slime_ball', 'gunpowder', 'ender_pearl'];   // V10: 12종

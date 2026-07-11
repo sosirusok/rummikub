@@ -230,6 +230,7 @@
     dark_oak_log: 'forest', acacia_log: 'forest', jungle_log: 'forest',
     rawfish: 'dock', clay: 'dock',
     rotten_flesh: 'hub', bone: 'hub', string: 'hub', slime_ball: 'hub', blaze_rod: 'hub', ghast_tear: 'hub', leather: 'farm', feather: 'farm',
+    raw_porkchop: 'farm', raw_chicken: 'farm', raw_mutton: 'farm',   // V76: 축산 컬렉션 자원(농장 존)
     apple: 'forest', salmon: 'dock', clownfish: 'dock', pufferfish: 'dock', prismarine: 'dock', sponge: 'dock',
     magma_cream: 'hub', spider_eye: 'hub', gunpowder: 'hub', ender_pearl: 'hub', ender_shard: 'hub',
   };
@@ -239,6 +240,7 @@
     wheat: 0xd8b23a, carrot: 0xe07b1f, potato: 0xc8a25a, pumpkin: 0xd6791f, melon: 0x4c8f46, sugarcane: 0x8fc36a,
     oaklog: 0x8a6a3a, birchlog: 0xd7d3c8, sprucelog: 0x4a3722,
     rawfish: 0x3a6ee0, clay: 0xa4a8b6,
+    raw_porkchop: 0xe8a0a0, raw_chicken: 0xe8d8b0, raw_mutton: 0xd8c8b8,   // V76
   };
   // V24: 미니언 슬롯 좌표 현행화 — 구 192² 레이아웃 좌표가 공허/엉뚱한 존에 떠 있던 버그.
   //   각 존 실제 중심 인근(광산 96,208 / 농장 330,224 / 숲 140,130 / 연못 322,322)으로 재배치
