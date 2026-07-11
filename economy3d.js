@@ -588,6 +588,8 @@
     buildWarpPads();
     beautifyHub();   // V20-L: 광장 미화(분수·정원·벤치·현수막) — 마지막에 얹어 덮이지 않게
     buildHubInteriors();   // V21-D5: 명명 건물 인테리어(은행 창구/도서관/경매 전시대/게시판) — 대로·미화 이후 최후 배치(덮어쓰기 방지)
+    rebuildCommunityCenter();  // V55: 실사(Community_Center.png) 재건축 — 벽돌+크림 프레임+시계탑+3연아치
+    rebuildFlowerHouse();      // V55: 실사(Flower_House.png) 재건축 — 조약돌+다크오크 프레임+구리 지붕+꽃밭
     buildShopInteriors();  // V51: 소형 상점 인테리어(잡화점/펫 상점/플라워 하우스/커뮤니티 센터) — 공기 칸만 채움
     leafTrimPass();        // V53: 마을 벽면 잎/덩굴 트림(실제 바자 골목 질감)
     boulderPass();         // V53: 야생 대형 바위 군집 10곳(실제 탑뷰 대조)
@@ -855,6 +857,89 @@
     }
   }
 
+
+  // V55: 커뮤니티 센터 재건축 — 실사(Community_Center.png): 붉은 벽돌 벽 + 크림(사암) 기둥 프레임 +
+  //   짙은 맨사드 지붕 + 중앙 시계탑(석영 시계면) + 3연속 아치 포치
+  function rebuildCommunityCenter() {
+    const X0 = 248, Z0 = 180, Wd = 13, Dd = 10;   // V55b: 은행 돔(240,200)과 겹치던 부지를 북동으로 이전
+    const base = surfaceTop(X0 + 6, Z0 + 5);
+    const CREAM = ID.sandstone, BRICK = ID.bricks != null ? ID.bricks : ID.terracotta_red, ROOF = ID.terracotta_black != null ? ID.terracotta_black : ID.obsidian;
+    for (let dx = -1; dx <= Wd; dx++) for (let dz = -1; dz <= Dd; dz++) for (let y = base; y <= base + 16; y++) setW(X0 + dx, y, Z0 + dz, 0);   // 부지 정리
+    for (let dx = 0; dx < Wd; dx++) for (let dz = 0; dz < Dd; dz++) setW(X0 + dx, base - 1, Z0 + dz, ID.polished_andesite != null ? ID.polished_andesite : ID.stone);
+    // 2층 몸체: 벽돌 벽 + 크림 코너/층간 프레임 + 창
+    for (let dx = 0; dx < Wd; dx++) for (let dz = 0; dz < Dd; dz++) {
+      const edge = dx === 0 || dx === Wd - 1 || dz === 0 || dz === Dd - 1;
+      if (!edge) continue;
+      for (let y = 0; y < 7; y++) {
+        const corner = (dx === 0 || dx === Wd - 1) && (dz === 0 || dz === Dd - 1);
+        let id = corner || y === 3 ? CREAM : BRICK;                          // 크림 코너 기둥 + 층간 띠
+        if ((y === 1 || y === 5) && ((dx % 4 === 2 && (dz === 0 || dz === Dd - 1)) || (dz % 4 === 2 && (dx === 0 || dx === Wd - 1)))) id = ID.glass;
+        setW(X0 + dx, base + y, Z0 + dz, id);
+      }
+    }
+    for (let dx = 0; dx < Wd; dx++) for (let dz = 0; dz < Dd; dz++) setW(X0 + dx, base + 3, Z0 + dz, ID.oak_planks);   // 2층 바닥
+    // 맨사드 지붕(짙은 테라코타, 2단 안쪽 물림)
+    for (let step = 0; step < 2; step++) for (let dx = step; dx < Wd - step; dx++) for (let dz = step; dz < Dd - step; dz++) {
+      const rim = dx === step || dx === Wd - 1 - step || dz === step || dz === Dd - 1 - step;
+      if (rim) setW(X0 + dx, base + 7 + step, Z0 + dz, ROOF);
+    }
+    for (let dx = 2; dx < Wd - 2; dx++) for (let dz = 2; dz < Dd - 2; dz++) setW(X0 + dx, base + 8, Z0 + dz, ID.oak_planks);   // 지붕 마감
+    // 3연속 아치 포치(남쪽 정면 +z): 크림 기둥 4 + 상인방
+    for (const px of [X0 + 2, X0 + 5, X0 + 8, X0 + 11]) { for (let y = 0; y < 4; y++) setW(px, base + y, Z0 + Dd + 1, CREAM); }
+    for (let dx = 2; dx <= 11; dx++) setW(X0 + dx, base + 4, Z0 + Dd + 1, CREAM);
+    for (let dx = 3; dx <= 10; dx++) if (dx % 3 !== 2) setW(X0 + dx, base + 3, Z0 + Dd + 1, 0);
+    for (const px of [X0 + 3, X0 + 6, X0 + 9]) { setW(px, base, Z0 + Dd - 1, 0); setW(px, base + 1, Z0 + Dd - 1, 0); }   // 3연 입구
+    for (let dx = 2; dx <= 11; dx++) setW(X0 + dx, base - 1, Z0 + Dd, ID.oak_planks);   // 포치 데크
+    // 중앙 시계탑(크림 몸통 h6 + 석영 시계면 + 검은 침 + 붉은 첨두)
+    const cx = X0 + 6;
+    for (let y = 9; y <= 14; y++) for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) {
+      const edge = Math.abs(dx) === 1 || Math.abs(dz) === 1;
+      setW(cx + dx, base + y, Z0 + 4 + dz, edge ? CREAM : 0);
+    }
+    setW(cx, base + 12, Z0 + 5 + 1, ID.quartz_block);   // 시계면(남면)
+    setW(cx, base + 11, Z0 + 5 + 1, ID.quartz_block); setW(cx - 1, base + 12, Z0 + 5 + 1, ID.quartz_block); setW(cx + 1, base + 12, Z0 + 5 + 1, ID.quartz_block); setW(cx, base + 13, Z0 + 5 + 1, ID.quartz_block);
+    setW(cx, base + 12, Z0 + 5 + 2, ID.concrete_black != null ? ID.concrete_black : ID.obsidian);   // 침(중심점)
+    for (let y = 15; y <= 16; y++) setW(cx, base + y, Z0 + 4, ID.terracotta_red != null ? ID.terracotta_red : ROOF);   // 첨두
+    setW(cx, base + 17, Z0 + 4, ID.glowstone);
+  }
+  // V55: 플라워 하우스 재건축 — 실사(Flower_House.png): 조약돌 벽 + 다크오크 프레임 + 구리색(주황 테라코타) 지붕 +
+  //   개방형 정면 + 내부 목조 계단 + 주변 꽃밭 + 흰 퍼걸러 별관
+  function rebuildFlowerHouse() {
+    const X0 = 194, Z0 = 190, Wd = 8, Dd = 8;
+    const base = surfaceTop(X0 + 4, Z0 + 4);
+    const COPPER = ID.terracotta_orange != null ? ID.terracotta_orange : ID.wool_orange;
+    for (let dx = -1; dx <= Wd + 3; dx++) for (let dz = -1; dz <= Dd; dz++) for (let y = base; y <= base + 10; y++) setW(X0 + dx, y, Z0 + dz, 0);
+    for (let dx = 0; dx < Wd; dx++) for (let dz = 0; dz < Dd; dz++) setW(X0 + dx, base - 1, Z0 + dz, ID.cobblestone);
+    // 몸체: 조약돌 벽 + 다크오크 코너/보 프레임, 남면(+z) 전면 개방
+    for (let dx = 0; dx < Wd; dx++) for (let dz = 0; dz < Dd; dz++) {
+      const edge = dx === 0 || dx === Wd - 1 || dz === 0 || dz === Dd - 1;
+      if (!edge) continue;
+      const front = dz === Dd - 1 && dx >= 2 && dx <= Wd - 3;
+      for (let y = 0; y < 4; y++) {
+        if (front && y < 3) continue;                                        // 개방 정면
+        const corner = (dx === 0 || dx === Wd - 1) && (dz === 0 || dz === Dd - 1);
+        setW(X0 + dx, base + y, Z0 + dz, corner ? ID.dark_oak_log : y === 3 ? ID.dark_oak_log : ID.cobblestone);
+      }
+    }
+    // 구리 지붕(박공)
+    for (let step = 0; step <= 2; step++) for (let dx = -1 + step; dx <= Wd - step; dx++) for (const dz of [-1 + step, Dd - step]) setW(X0 + dx, base + 4 + step, Z0 + dz, COPPER);
+    for (let dx = 1; dx < Wd - 1; dx++) for (let dz = 1; dz < Dd - 1; dz++) setW(X0 + dx, base + 6, Z0 + dz, COPPER);
+    // 내부: 2층으로 오르는 목조 계단 + 로프트
+    for (let i = 0; i < 3; i++) { setW(X0 + 2 + i, base + i, Z0 + 2, ID.oak_planks); }
+    for (let dx = 1; dx < Wd - 1; dx++) setW(X0 + dx, base + 3, Z0 + 1, ID.oak_planks);
+    setW(X0 + 4, base + 2, Z0 + 4, ID.glowstone);
+    // 흰 퍼걸러 별관(서쪽): 석영 기둥 + 상판
+    for (const [px, pz] of [[X0 - 3, Z0 + 2], [X0 - 3, Z0 + 6], [X0 - 1, Z0 + 2], [X0 - 1, Z0 + 6]]) { for (let y = 0; y < 3; y++) setW(px, base + y, pz, ID.quartz_block); }
+    for (let dx = -3; dx <= -1; dx++) for (let dz = 2; dz <= 6; dz++) setW(X0 + dx, base + 3, Z0 + dz, ID.quartz_block);
+    // 주변 꽃밭(참조: 건물 앞 다색 꽃 무리)
+    for (let dx = -4; dx <= Wd + 2; dx++) for (let dz = Dd; dz <= Dd + 4; dz++) {
+      const x = X0 + dx, z = Z0 + dz, t = surfaceTop(x, z);
+      if (getBlockLocal(x, t - 1, z) !== ID.grass || getBlockLocal(x, t, z) !== 0) continue;
+      const h = hash3(x, 711, z);
+      if (h < 0.5) setW(x, t, z, h < 0.2 ? ID.flower_red : h < 0.38 ? ID.flower_yellow : ID.tall_grass);
+    }
+  }
+
   // V53: 마을 벽면 잎 트림 — 건물 외벽(석재/판자)에 잎을 낮은 확률로 부착해 '덩굴 낀 마을' 질감(Bazaar_Alley.png)
   function leafTrimPass() {
     const wallLike = id => { if (!id) return false; const k = BLOCKS[id].key; return /stone_bricks|planks|cobblestone|sandstone|log/.test(k) && !/slab|stairs|fence/.test(k); };
@@ -916,12 +1001,12 @@
       for (let i = 0; i < 4; i++) put(197 + i, y - 1, 195, ID.wool_pink != null ? ID.wool_pink : ID.wool_red);   // 융단
       put(199, y + 3, 195, ID.glowstone);
     }
-    { // ── 커뮤니티 센터(238,196): 회의 탁자 + 의자 6 + 연단 ──
-      const y = fy(239, 198);
-      for (let i = 0; i < 4; i++) put(237 + i, y, 197, ID.oak_planks);       // 긴 탁자
-      for (let i = 0; i < 3; i++) { put(237 + i * 2 - 1 + 1, y, 195, ID.oak_fence); put(237 + i * 2, y, 199, ID.oak_fence); }   // 의자
-      put(242, y, 197, ID.oak_log); put(242, y + 1, 197, ID.oak_planks);     // 연단
-      put(239, y + 3, 197, ID.glowstone);
+    { // ── 커뮤니티 센터(신축 254,184): 회의 탁자 + 의자 6 + 연단 ──
+      const y = fy(254, 184);
+      for (let i = 0; i < 4; i++) put(251 + i, y, 184, ID.oak_planks);       // 긴 탁자
+      for (let i = 0; i < 3; i++) { put(251 + i * 2, y, 182, ID.oak_fence); put(251 + i * 2, y, 186, ID.oak_fence); }   // 의자
+      put(256, y, 184, ID.oak_log); put(256, y + 1, 184, ID.oak_planks);     // 연단
+      put(253, y + 3, 184, ID.glowstone);
     }
   }
 
