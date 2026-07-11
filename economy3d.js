@@ -1212,8 +1212,8 @@
     // 역할별 고유 건물(문 앞에 NPC)
     buildHouse(200, 234, 10, 8, 20, ID.bricks, ID.spruce_planks);          // 상점(벽돌)
     // 은행 → V20-O 대형 돔 보물전(사암+석영 돔, 중앙 금고). 정문 +z(광장 방향), NPC 위치 유지
-    buildDomedHall(240, 200, 5, 20, {
-      wall: ID.sandstone, accent: ID.quartz_block, dome: ID.quartz_block, floor: ID.polished_andesite, gdir: 1,
+    buildDomedHall(240, 200, 5, 20, {   // V52: 실제 은행(Bank.png) 대조 — 다크오크 곡면 + 금 밴드/창(금광석 악센트)
+      wall: ID.dark_oak_planks != null ? ID.dark_oak_planks : ID.sandstone, accent: ID.gold_ore, dome: ID.dark_oak_planks != null ? ID.dark_oak_planks : ID.quartz_block, floor: ID.polished_andesite, gdir: 1,
       feature: (cx, cz, base) => {   // 중앙 금고: 금광석 + 울타리 창살 + 발광
         setW(cx, base, cz, ID.gold_ore); setW(cx, base + 1, cz, ID.gold_ore);
         for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { setW(cx + dx, base, cz + dz, ID.oak_fence); setW(cx + dx, base + 1, cz + dz, ID.oak_fence); }
@@ -2063,24 +2063,37 @@
         else if (bid) struct = true;
       }
       if (struct) continue;   // 건물 기둥/벽이 있는 칸은 바닥 재포장도 하지 않음
+      // V52: 실제 마을 광장 대조 — 흰 대로/동심원 폐기, 회색 톤 패치워크(안산암/조약돌/석재/이끼) + 가장자리 잔디 침식
+      const pn = hash3(x, 501, z);
       let mat;
-      if (Math.abs(dx) <= 1 || Math.abs(dz) <= 1) mat = ID.quartz_block;      // 십자 대로(석영)
-      else if (d > R - 1.3) mat = SMOOTH;                                     // 외곽 테두리
-      else if (Math.round(d) % 4 === 0) mat = CH;                            // 동심원 경계(치즐)
-      else mat = ((dx + dz) & 1) ? ID.stone_bricks : AND;                    // 격자 무늬
+      if (d > R - 2.2 && pn < 0.30) {   // 가장자리 잔디 침식 패치
+        setW(x, fy, z, ID.grass);
+        if (pn < 0.10) setW(x, fy + 1, z, ID.tall_grass);
+        else if (pn < 0.14) setW(x, fy + 1, z, pn < 0.12 ? ID.flower_yellow : ID.flower_red);
+        continue;
+      }
+      if (Math.abs(dx) <= 1 || Math.abs(dz) <= 1) mat = AND;                 // 대로 = 안산암(실제는 회색 길)
+      else mat = pn < 0.34 ? AND : pn < 0.62 ? ID.cobblestone : pn < 0.82 ? ID.stone_bricks : pn < 0.9 ? ID.mossy_cobblestone : SMOOTH;
       setW(x, fy, z, mat);
     }
-    // 2) 걸어서 도는 2단 분수(반경2.6, 올려진 물받이 — 발밑엔 물 없음)
-    for (let dx = -3; dx <= 3; dx++) for (let dz = -3; dz <= 3; dz++) {
-      const d = Math.hypot(dx, dz); if (d > 2.7) continue;
-      setW(cx + dx, fy, cz + dz, CH);                          // 받침(포장 위 강조)
-      if (d > 1.5) setW(cx + dx, fy + 1, cz + dz, ID.stone_bricks);          // 물받이 벽(1높이, 발밑=이 벽에 막혀 못 들어감 → 돌아서 통행)
-      else if (d > 0.6) setW(cx + dx, fy + 1, cz + dz, ID.water);            // 아래 물받이(벽 안, 발밑 아님)
+    // 2) V52: 실제 마을 중앙(Village.png) — 침몰 포탈 연못 + 퍼퍼 크리스탈 링 + 수풀 침식
+    for (let dx = -5; dx <= 5; dx++) for (let dz = -5; dz <= 5; dz++) {
+      const d = Math.hypot(dx, dz); if (d > 5.3) continue;
+      const x = cx + dx, z = cz + dz;
+      if (d <= 1.6) { setW(x, fy, z, ID.obsidian); setW(x, fy + 1, z, 0); setW(x, fy - 0, z, ID.obsidian); setW(x, fy, z, ID.water); }   // 어두운 수면(침몰 풀)
+      else if (d <= 2.6) setW(x, fy, z, ID.stone_bricks);                                  // 풀 테두리 림
+      else if (d <= 4.6) setW(x, fy, z, hash3(x, 502, z) < 0.3 ? ID.mossy_cobblestone : hash3(x, 503, z) < 0.5 ? AND : ID.cobblestone);   // 패치워크 광장 중심부
     }
-    // 중앙 첨탑 + 상단 물받이 + 흘러내리는 물(다중 재질)
-    setW(cx, fy + 1, cz, CH); setW(cx, fy + 2, cz, ID.quartz_block); setW(cx, fy + 3, cz, ID.quartz_block);
-    for (const [ax, az] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { setW(cx + ax, fy + 3, cz + az, ID.prismarine); setW(cx + ax, fy + 4, cz + az, ID.water); }   // 상단 물받이 테두리+물
-    setW(cx, fy + 4, cz, ID.water); setW(cx, fy + 5, cz, ID.sea_lantern != null ? ID.sea_lantern : ID.glowstone);   // 정상 발광
+    // 퍼퍼 크리스탈 6기(참조: 연못 둘레 보라 수정, 높이 1~3 차등) + 낮은 수풀
+    for (let k = 0; k < 6; k++) {
+      const th = k / 6 * Math.PI * 2 + 0.4;
+      const x = cx + Math.round(Math.cos(th) * 3.4), z = cz + Math.round(Math.sin(th) * 3.4);
+      const h = 1 + (k % 3);
+      for (let y = 1; y <= h; y++) setW(x, fy + y, z, ID.purpur);
+      if (h >= 2) setW(x, fy + h + 1, z, ID.glowstone);
+      const bx = cx + Math.round(Math.cos(th + 0.5) * 4.6), bz = cz + Math.round(Math.sin(th + 0.5) * 4.6);
+      if (k % 2 === 0) setW(bx, fy + 1, bz, ID.oak_leaves);   // 둘레 관목
+    }
     // 3) 대로를 비껴 대각선에 가로등 + 올려진 화분(통행 방해 없음)
     for (const [x, z] of [[214, 214], [234, 214], [214, 234], [234, 234]]) lampPost(x, z);
     for (const [x, z] of [[219, 219], [229, 219], [219, 229], [229, 229]]) {
