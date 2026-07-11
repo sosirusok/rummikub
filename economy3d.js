@@ -3756,7 +3756,7 @@
     else if (mode === 'barn' && ok(58, 100)) { buildBarnEstate(); buildOtherDetail('barn'); }   // V20-AB 대형 농장 + V20-BA(6차) 디테일
     else if (mode === 'gold' && ok(50, 90)) { buildGoldOutpost(); buildGoldDetail(); buildGoldLandmarks(); buildGoldGate(); furnishThemeLodge(50, 90, 'gold'); }   // V67: 실사(Gold_Mine.png) 대문/광장   // V20-W 전초기지 + V20-AX 디테일 + V20-BG(7차) 노란림 플랫폼/딥캐번 포탈/용암류
     else if (mode === 'deep' && ok(48, 80)) buildDeepDepot();   // V20-X: 손 배치 지하 크리스탈 채광 정거장
-    else if (mode === 'spider' && ok(74, 88)) { buildSpiderNest(); buildSpiderRegions(); buildMonsterDetail('spider'); }   // V20-AA 거미굴 + V20-BD(7차) 실제 6구역 + V20-AZ 디테일
+    else if (mode === 'spider' && ok(74, 88)) { buildSpiderNest(); buildSpiderRegions(); buildMonsterDetail('spider'); buildSpiderDressing(); }   // + V69: 실사(Spider's_Den.png) 독성 연못/거미줄 드레이프/알집/오두막
     else if (mode === 'nether' && ok(62, 78)) { buildNetherKeep(); buildCrimsonRegions(); buildMonsterDetail('nether'); }   // V20-Y 네더 요새 + V21-D4 크림슨 구역 + V20-AZ 디테일
     else if (mode === 'end' && ok(62, 84)) { buildEndSanctum(); buildEndLandmarks(); buildMonsterDetail('end'); }   // V20-Z 성소 + V20-BE(7차) Dragon's Nest/View + V20-AZ 디테일
     else if (mode === 'mushroom' && ok(58, 100)) {
@@ -5032,6 +5032,67 @@
     buildWarpPads();
   }
   // 🕷️ 스파이더 덴 V6: 거미산 등반 던전 — 나선 등산로를 오르면 점점 강한 거미, 정상에 브루드마더
+  // V69: 실사(Spider's_Den.png) — 독성 초록 연못 + 절벽 거미줄 드레이프 + 알집(코쿤) + 회색 오두막 + 고사목
+  function buildSpiderDressing() {
+    const web = ID.wool_white, brn = ID.wool_brown != null ? ID.wool_brown : ID.dirt, lime = ID.wool_lime != null ? ID.wool_lime : ID.emerald_ore;
+    // 1) 독성 초록 연못(남서 기슭): 낮은 보울 + 라임 수면 + 둘레 이끼
+    {
+      const px = 40, pz = 82;
+      for (let dx = -4; dx <= 4; dx++) for (let dz = -3; dz <= 3; dz++) {
+        const d = Math.hypot(dx / 1.3, dz);
+        if (d > 3.4) continue;
+        const g = surfaceTop(px + dx, pz + dz);
+        if (g < 6) continue;
+        for (let y = g; y <= g + 3; y++) setW(px + dx, y, pz + dz, 0);
+        setW(px + dx, g - 1, pz + dz, d > 2.4 ? ID.mossy_cobblestone : lime);   // 라임 수면 + 이끼 테
+      }
+    }
+    // 2) 절벽 거미줄 드레이프: 가파른 사면 12곳에서 흰 줄 수직 낙하(3~6칸)
+    for (let i = 0; i < 12; i++) {
+      const th = i / 12 * Math.PI * 2 + 0.2;
+      const rr = 20 + hash3(i, 991, 1) * 14;
+      const x = Math.round(64 + Math.cos(th) * rr), z = Math.round(64 + Math.sin(th) * rr);
+      const g = surfaceTop(x, z);
+      if (g < 18) continue;   // 산 사면만
+      const len = 3 + Math.floor(hash3(x, 992, z) * 4);
+      for (let j = 0; j < len; j++) { if (getBlockLocal(x, g - 1 - j, z) !== 0) break; setW(x, g - 1 - j, z, web); }
+      setW(x, g, z, web);
+    }
+    // 3) 알집(코쿤): 산 중턱 감실 3곳 — 파낸 벽감 + 갈색 알집 + 거미줄 덮개
+    for (const [ax, az] of [[76, 50], [52, 68], [70, 76]]) {
+      const g = surfaceTop(ax, az);
+      if (g < 20) continue;
+      for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) for (let y = 0; y <= 2; y++) setW(ax + dx, g - 3 + y, az + dz, 0);   // 감실
+      setW(ax, g - 3, az, brn); setW(ax + 1, g - 3, az, brn); setW(ax, g - 2, az, brn);   // 알집 덩이
+      setW(ax - 1, g - 1, az, web); setW(ax + 1, g - 1, az + 1, web);   // 줄 덮개
+    }
+    // 4) 회색 오두막 2채(기슭 길가): 조약돌 벽 + 다크오크 지붕
+    for (const [hx, hz] of [[42, 52], [88, 84]]) {
+      const g = surfaceTop(hx + 2, hz + 1);
+      if (g < 8 || g > 20) continue;
+      for (let dx = -1; dx <= 5; dx++) for (let dz = -1; dz <= 4; dz++) for (let y = g; y <= g + 6; y++) setW(hx + dx, y, hz + dz, 0);
+      for (let dx = 0; dx < 5; dx++) for (let dz = 0; dz < 4; dz++) {
+        setW(hx + dx, g - 1, hz + dz, ID.cobblestone);
+        const edge = dx === 0 || dx === 4 || dz === 0 || dz === 3;
+        if (edge) for (let y = 0; y < 3; y++) setW(hx + dx, g + y, hz + dz, (y === 1 && dx === 2 && dz === 3) ? 0 : ID.cobblestone);
+      }
+      setW(hx + 2, g, hz + 3, 0); setW(hx + 2, g + 1, hz + 3, 0);   // 문
+      const DKP2 = ID.dark_oak_planks != null ? ID.dark_oak_planks : ID.spruce_planks;
+      for (let dx = -1; dx <= 5; dx++) for (const dz of [-1, 4]) setW(hx + dx, g + 3, hz + dz, DKP2);
+      for (let dx = 0; dx < 5; dx++) for (let dz = 0; dz < 4; dz++) setW(hx + dx, g + 3 + (dz === 1 || dz === 2 ? 1 : 0), hz + dz, DKP2);
+      setW(hx + 2, g + 2, hz + 1, ID.glowstone);
+    }
+    // 5) 고사목 4그루(가지만 남은 검은 나무)
+    for (const [tx, tz] of [[34, 66], [92, 58], [58, 92], [78, 96]]) {
+      const g = surfaceTop(tx, tz);
+      if (g < 8 || g > 24) continue;
+      const h = 4 + Math.floor(hash3(tx, 993, tz) * 2);
+      for (let j = 0; j < h; j++) setW(tx, g + j, tz, ID.dark_oak_log != null ? ID.dark_oak_log : ID.spruce_log);
+      setW(tx + 1, g + h - 1, tz, ID.dark_oak_log != null ? ID.dark_oak_log : ID.spruce_log);
+      setW(tx - 1, g + h - 2, tz, ID.oak_fence);
+      if (hash3(tx, 994, tz) < 0.5) setW(tx, g + h, tz, web);   // 나무 꼭대기 거미줄
+    }
+  }
   function genSpiderDen() {
     world = new Uint16Array(W * H * Dp);
     genBlobIsland(64, 64, 56, 14, { surf: ID.dirt });
