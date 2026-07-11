@@ -215,24 +215,29 @@
   }
   // V23-B: 컬렉션 티어 보상(실제 스카이블럭식 진행 보상) — 골드 + 해당 카테고리 스킬 경험치 + 레시피 해금(RECIPES) + 미니언 생산 +2%
   function collectionCategoryKey(resKey) { for (const c of D().COLLECTIONS) if (c.resources.some(r => r.key === resKey)) return c.key; return 'mining'; }
-  // V30: 실제 위키 보상 구조 — 매 티어 +4 스카이블럭 XP(코인 없음) + 레시피 해금 + 일부 고티어는 스킬 XP 보너스
-  function collectionTierReward(t, maxT) {
-    const skillXp = (maxT >= 8 && t === maxT - 1) ? 10000 : 0;   // 위키식: 최상위 부근 티어에 +10,000 스킬 XP
-    return { sbXp: 4, skillXp };
+  // V39: 실제 위키 보상 — 매 티어 +4 스카이블럭 XP + COL_TIER_FX의 티어별 스킬 XP(수작업 위키표) 실지급
+  function collectionTierReward(key, t) {
+    const fx = ((D().COL_TIER_FX || {})[key] || {})[t];
+    return { sbXp: 4, skillXp: fx && fx.sx ? fx.sx[1] : 0, skill: fx && fx.sx ? fx.sx[0] : null };
   }
+  // V39: 흑요석 컬렉션 채광 행운 +1 (위키: V/VII/VIII/X)
+  function colMiningFortune() { let n = 0; for (const t of [5, 7, 8, 10]) if (collectionTierIdx('obsidian') >= t) n++; return n; }
+  // V39: 컬렉션 보상 인챈트 XP(비용) 할인 -25% (위키: 강타=썩은살점 III 등)
+  function enchantFeeMul(enchKey) { const m = (D().ENCH_COL_DISCOUNT || {})[enchKey]; return m && collectionTierIdx(m[0]) >= m[1] ? 0.75 : 1; }
   function addCollection(key, n) {
     if (!resourceDef(key)) return;
     P.collections[key] = (P.collections[key] || 0) + n;
     const before = P.collectionTier[key] || 0, after = collectionTierIdx(key);
     if (after > before) {
       P.collectionTier[key] = after;
-      const maxT = (resourceDef(key).tierThresholds || []).length;
-      let sb = 0, sk = 0;
-      for (let t = before + 1; t <= after; t++) { const rw = collectionTierReward(t, maxT); sb += rw.sbXp; sk += rw.skillXp; }
+      let sb = 0, skTxt = '';
+      for (let t = before + 1; t <= after; t++) {
+        const rw = collectionTierReward(key, t); sb += rw.sbXp;
+        if (rw.skillXp) { addSkillXp(rw.skill, rw.skillXp); skTxt += ` · ${rw.skill} XP +${rw.skillXp.toLocaleString()}`; }
+      }
       P.sbXp = (P.sbXp || 0) + sb;
-      const cat = collectionCategoryKey(key);
-      if (sk) addSkillXp(cat, sk);
-      toastFn(`📚 ${resourceDef(key).name} 컬렉션 ${after}티어! +${sb} 스카이블럭 XP${sk ? ` · ${cat} XP +${sk.toLocaleString()}` : ''} · 레시피 해금`, true);
+      const rwName = ((D().COL_TIER_REWARDS || {})[key] || [])[after - 1];
+      toastFn(`📚 ${resourceDef(key).name} 컬렉션 ${after}티어! +${sb} 스카이블럭 XP${skTxt}${rwName ? ` · 🏅 ${rwName}` : ''}`, true);
     }
   }
 
@@ -404,7 +409,7 @@
     if (!hasItem(bookKey)) { toastFn('인챈트북이 필요해요 — 북은 몬스터가 떨어뜨려요(몹마다 다른 북!)', false); return false; }
     const reqE = enchantReqLevel(def) + cur;   // 높은 레벨 합성일수록 높은 마법부여 스킬 요구
     if (skillLevel('enchanting') < reqE) { toastFn(`마법부여 스킬 ${reqE}레벨 필요 (현재 ${skillLevel('enchanting')})`, false); return false; }
-    const fee = def.bookBasePrice * cur;   // 합성 비용: 레벨이 오를수록 증가(첫 레벨은 무료)
+    const fee = Math.round(def.bookBasePrice * cur * enchantFeeMul(def.key));   // 합성 비용(컬렉션 보상 할인 반영)
     if (P.gold < fee) { toastFn(`부여 비용 ${fmtGold(fee)}이 부족해요`, false); return false; }
     removeItem(bookKey, 1); addGold(-fee);
     P.enchants[slot][key] = cur + 1;
@@ -633,7 +638,7 @@
       intelligence: B.intelligence + skillLevel('enchanting') * 4 + traitSum('mana_well') + setStat('intelligence') + weaponStat('intelligence') + Math.round(magicalPower() * 0.6) + (gs.intelligence || 0) + (ps.intelligence || 0) + pw.intelligence,
       // V20: 신규 스탯 — 매직파인드/포춘/공격속도
       magicFind: B2.magicFind + setStat('magicFind') + traitSum('lucky') + Math.floor(skillLevel('combat') / 5) + (ps.magicFind || 0),
-      miningFortune: B2.miningFortune + skillLevel('mining') * 4 + (gs.miningFortune || 0) + setStat('miningFortune') + (ps.miningFortune || 0) + hotmMiningFortune(),   // V20-G HotM
+      miningFortune: B2.miningFortune + skillLevel('mining') * 4 + (gs.miningFortune || 0) + setStat('miningFortune') + (ps.miningFortune || 0) + hotmMiningFortune() + colMiningFortune(),   // V20-G HotM
       miningSpeed: (B2.miningSpeed || 0) + hotmMiningSpeed(),   // V20-G HotM 채광 속도
       farmingFortune: B2.farmingFortune + skillLevel('farming') * 4 + (gs.farmingFortune || 0) + setStat('farmingFortune'),
       foragingFortune: B2.foragingFortune + skillLevel('foraging') * 4 + setStat('foragingFortune'),
@@ -1413,7 +1418,7 @@
   //   컬렉션 티어 1 이상이어야 해금, 조합할 때마다 고유 조합 수가 쌓여 슬롯이 늘어난다.
   function minionUnlocked(key) {
     const def = minionDef(key); if (!def) return false;
-    return collectionTierIdx(def.unlockCollection || def.resource) >= 1;
+    return collectionTierIdx(def.unlockCollection || def.resource) >= (def.unlockTier || 1);
   }
   // V16: 실제 하이픽셀 미니언 슬롯 보너스(고유 미니언-티어 조합 수 → 계단식). 650 조합 = +21(최대)
   function minionSlotBonus(uniq) {
@@ -3039,7 +3044,7 @@
     const pad9 = (arr) => { const out = arr.slice(); while (out.length % 9) out.push('<div class="mc-slot mc-empty2"></div>'); return out.join(''); };
     const slots = D().ENCHANTS.map(e => {
       const cur = enchantLvl(e.target, e.key); const book = `enchant_book_${e.key}`;
-      const fee = e.bookBasePrice * cur;
+      const fee = Math.round(e.bookBasePrice * cur * enchantFeeMul(e.key));
       const hardCap = enchantHardCap(e);
       const isOver = cur >= e.maxLvl;
       const canChaos = isOver && cur < hardCap;
@@ -3368,14 +3373,14 @@
       const t = i + 1;
       const done = tier >= t;
       const recipes = D().RECIPES.filter(rc => rc.unlock && rc.unlock.resource === r.key && rc.unlock.tier === t).map(rc => itemName(rc.key));
-      const rw = collectionTierReward(t, r.tierThresholds.length);
+      const rw = collectionTierReward(r.key, t);
       const parts = [];
       const wikiRw = (D().COL_TIER_REWARDS || {})[r.key];
       if (wikiRw && wikiRw[i]) parts.push(`🏅 ${wikiRw[i]}`);   // V31-A: 위키 실보상명(수작업 표)
       if (t === 1 && minions.length) parts.push(`⚙️ ${minions.join('·')} 해금`);
       if (recipes.length) parts.push(`⚒️ 레시피: ${recipes.join(', ')}`);
       parts.push(`✦ +${rw.sbXp} 스카이블럭 XP`);
-      if (rw.skillXp) parts.push(`✨ ${collectionCategoryKey(r.key)} XP +${rw.skillXp.toLocaleString()}`);
+      if (rw.skillXp) parts.push(`✨ ${rw.skill} XP +${rw.skillXp.toLocaleString()}`);
       return `<div class="econ-colrow" style="${done ? 'opacity:.92' : 'opacity:.62'}">
         <span style="min-width:88px">${done ? '✅' : '🔒'} <b>티어 ${t}</b></span>
         <span style="min-width:110px">${fmtNum(th)}개${done ? '' : cur >= (r.tierThresholds[i - 1] || 0) && tier === t - 1 ? ` <span class="muted">(${fmtNum(cur)}/${fmtNum(th)})</span>` : ''}</span>
@@ -3932,7 +3937,7 @@
       placeMinion, upgradeMinion, upgradeMinionStorage, collectMinion, tickMinions, minionStorageCap, minionSpeedMul, useMinionFuel,
       startSlayer, combatAttack, combatFlee, getActiveCombat: () => activeCombat,
       startDungeon, dungeonAdvance, dungeonSecretClick, getDungeonRun: () => dungeonRun, dungeonGrade, canEnterFloor,
-      reforge, reforgeSlot, reforgePremium, reforgeApex, bazaarPrice, bazaarInstantBuy, bazaarInstantSell, ahList, ahClaim, ahCancel, ahSettle, ahFairValue, ahCurrentBid, hotmUpgrade, hotmUnlockTier, hotmNodeLevel, hotmNodeCost, hotmStat, hotmAwardPowder, playerAttackPower, playerDefensePct, playerMaxHp, playerStr, playerStats, playerCritRoll, skillXpProgress, minionUnlocked, recordMinionCraft,
+      reforge, reforgeSlot, reforgePremium, reforgeApex, bazaarPrice, bazaarInstantBuy, bazaarInstantSell, ahList, ahClaim, ahCancel, ahSettle, ahFairValue, ahCurrentBid, hotmUpgrade, hotmUnlockTier, hotmNodeLevel, hotmNodeCost, hotmStat, hotmAwardPowder, playerAttackPower, playerDefensePct, playerMaxHp, playerStr, playerStats, playerCritRoll, skillXpProgress, minionUnlocked, recordMinionCraft, enchantFeeMul, colMiningFortune,
       gemStats, socketGem, applyRecomb, gemSlotsOf, recombMul,
       equippedWeapon, dungeonClassDef,
       hatchPet, activatePet, petLevel, petStats, petDef, equipPetItem,

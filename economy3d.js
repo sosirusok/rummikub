@@ -227,6 +227,7 @@
     stone: 'mine', coal: 'mine', iron: 'mine', gold: 'mine', lapis: 'mine', redstone: 'mine', diamond: 'mine', emerald: 'mine', obsidian: 'mine',
     wheat: 'farm', carrot: 'farm', potato: 'farm', pumpkin: 'farm', melon: 'farm', sugarcane: 'farm',
     oaklog: 'forest', birchlog: 'forest', sprucelog: 'forest',
+    dark_oak_log: 'forest', acacia_log: 'forest', jungle_log: 'forest',
     rawfish: 'dock', clay: 'dock',
     rotten_flesh: 'hub', bone: 'hub', string: 'hub', slime_ball: 'hub', blaze_rod: 'hub', ghast_tear: 'hub', leather: 'farm', feather: 'farm',
     apple: 'forest', salmon: 'dock', clownfish: 'dock', pufferfish: 'dock', prismarine: 'dock', sponge: 'dock',

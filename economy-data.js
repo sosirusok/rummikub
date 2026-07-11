@@ -23,26 +23,90 @@
   function res(key, name, sell, th0, custom) { return { key, name, stackSize: 64, sellPrice: sell, tierThresholds: custom || [th0, th0 * 2, th0 * 5, th0 * 20, th0 * 50, th0 * 100, th0 * 200, th0 * 500, th0 * 800, th0 * 1400] }; }
   // V31-A: 티어별 실제 보상명(wiki.hypixel.net 인용 그대로 수작업 옮김) — 인덱스 = 티어-1.
   //   미기재 티어는 '레시피 해금'으로 표기. 모든 티어 공통 +4 스카이블럭 XP는 economy.js에서 지급.
+  // V39: 위키(hypixelskyblock.minecraft.wiki) 전 컬렉션 전 티어 실보상 — 수작업 옮김. 인덱스 = 티어-1.
   const COL_TIER_REWARDS = {
-    stone: ['조약돌 미니언 I 레시피', '돌 발판 레시피', '자동 제련기 레시피', '인챈티드 조약돌 레시피', '컴팩터 레시피', '실버피시 펫 레시피', '신속의 반지 레시피', '하이퍼 화로 레시피', '신속의 유물 레시피', '슈퍼 컴팩터 3000 레시피'],
-    diamond: ['다이아몬드 미니언 I 레시피', '처형(Execute) XP 할인 -25%', '딥 캐번 포탈 레시피 + 채광 XP 3,000', '인챈티드 다이아몬드 레시피', '치명타(Critical) XP 할인 -25%', '다이아 스프레딩 레시피', '강화 다이아 갑옷 4부위 레시피', '인챈티드 다이아 블럭 레시피', '퍼펙트 갑옷 티어 I 레시피'],
-    oaklog: ['참나무 미니언 I 레시피', '리플릿 갑옷 레시피 + 참나무잎 거래', '인챈티드 참나무 원목 레시피', '소형 창고 레시피', '숲 바이옴 스틱 레시피', '중형 창고 레시피', '나무 친화 부적 레시피', '벌목 XP +10,000', '대형 창고 레시피'],
-    carrot: ['당근 미니언 I 레시피', '심플 당근 캔디 레시피', '레시피 해금', '인챈티드 당근 레시피', '레시피 해금', '레시피 해금', '레시피 해금', '레시피 해금', '농사 XP +10,000'],
-    spider_eye: ['동굴 거미 미니언 I 레시피', '거미 검 레시피', '거미 모자 레시피', '인챈티드 거미 눈 레시피', '절지류의 재앙 XP 할인 -25%', '베노머스 XP 할인 -25%', '인챈티드 발효 거미 눈 레시피', '전투 XP +25,000', '리핑 소드 레시피'],
-    gunpowder: ['크리퍼 미니언 I 레시피', '크리퍼 모자 레시피', '폭발 보호 XP 할인', '인챈티드 화약 레시피', '썬더로드 XP 할인', '인챈티드 폭죽 레시피', '전투 XP +10,000', '크리퍼 바지 레시피', '폭발 활 레시피'],
-    ghast_tear: ['가스트 미니언 I 레시피', '자이언트 킬러 XP 할인 -25%', '인챈티드 가스트 눈물 레시피', '뱀피리즘 할인 + 가스트 망토 레시피', '실버 팽 레시피', '메테오 샤드 레시피', '정복자 가스트 망토 레시피'],
-    magma_cream: ['마그마 큐브 미니언 I 레시피', '화염 보호 XP 할인 -25%', '네더 바이옴 스틱 + 인챈티드 마그마 크림 레시피', '마그마 목걸이 레시피', '용암 양동이 거래', '레시피 해금', '레시피 해금', '레시피 해금'],
-    blaze_rod: ['블레이즈 미니언 I 레시피', '화염 손길 XP 할인', '인챈티드 블레이즈 파우더 레시피', '화염 부적 레시피', '화염(Flame) XP 할인', '인챈티드 블레이즈 막대 레시피', '블레이즈 투구 레시피', '블레이즈 펫 레시피'],
-    leather: ['소 미니언 I 레시피', '소 머리 레시피 + 우유 거래', '소형 배낭 레시피', '인챈티드 생소고기 레시피', '중형 배낭 레시피', '인챈티드 가죽 레시피', '안장 레시피', '대형 배낭 레시피', '미스터리 말 펫 레시피', '그레이터 배낭 레시피'],
-    feather: ['닭 미니언 I 레시피', '레시피 해금', '레시피 해금', '인챈티드 깃털 레시피', '레시피 해금', '레시피 해금', '레시피 해금', '레시피 해금', '깃털 유물 레시피'],
-    rawfish: ['물고기 모자 + 미노우 미끼 레시피', '낚시 미니언 I 레시피', '소형 낚시 가방', '연못 섬 레시피', '낚시 XP +2,500', '인챈티드 생선 레시피', '중형 낚시 가방', '인챈티드 구운 생선 레시피', '대형 낚시 가방', '자이언트 낚시 가방', '매시브 낚시 가방'],
-    ender_pearl: ['레시피 해금', '레시피 해금', '레시피 해금', '레시피 해금', '레시피 해금', '레시피 해금', '레시피 해금', '레시피 해금', '대형 드래곤 자루 + 세이빙 그레이스 레시피'],
-    bone: ['스켈레톤 미니언 I 레시피', '레시피 해금', '레시피 해금', '레시피 해금', '레시피 해금', '레시피 해금', '레시피 해금', '레시피 해금', '레시피 해금', '인챈티드 뼈 블럭 레시피'],
+    stone: ['조약돌 미니언 I 레시피', '돌 발판 레시피', '실버피시 펫 레시피 + 자동 제련기 레시피', '인챈티드 조약돌 레시피', '컴팩터 레시피', '채광 XP +1,000', '신속의 반지 레시피', '하이퍼 화로 레시피', '신속의 유물 레시피', '슈퍼 컴팩터 3000 레시피'],
+    coal: ['석탄 미니언 I 레시피', '제련의 손길 XP 할인 -25%', '인챈티드 석탄 레시피 + 신속 물약 레시피', '위더 스켈레톤 펫 레시피', '인챈티드 목탄 레시피 + 소형 채광 자루 레시피', '골드 광산 이동 스크롤 레시피', '인챈티드 석탄 블럭 레시피 + 중형 채광 자루 레시피', '인챈티드 용암 양동이 레시피', '대형 채광 자루 레시피', '대형 인챈티드 채광 자루 레시피'],
+    iron: ['철 미니언 I 레시피', '골렘 모자 레시피 + 프로스펙팅 갑옷 레시피', '보호 XP 할인 -25%', '인챈티드 철 주괴 레시피', '버짓 호퍼 레시피', '골렘 갑옷 레시피', '인챈티드 철 블럭 레시피', '골렘 소드 레시피', '인챈티드 호퍼 레시피 + 퍼스널 딜리터 4000 레시피', '퍼스널 딜리터 5000 레시피', '퍼스널 딜리터 6000 레시피', '퍼스널 딜리터 7000 레시피'],
+    gold: ['금 미니언 I 레시피', '클리버 레시피', '약탈 XP 할인 -25%', '골드 광산 포탈 레시피', '인챈티드 금 주괴 레시피', '흡수 물약 레시피', '스캐빈저 XP 할인 -25%', '인챈티드 금 블럭 레시피', '행운 XP 할인 -25%', '인챈티드 시계 레시피'],
+    lapis: ['청금석 미니언 I 레시피', '경험치 병 레시피', '청금석 곡괭이 레시피 + 경험 XP 할인 -25%', '인챈티드 청금석 레시피', '그랜드 경험치 병 레시피', '경험 물약 레시피', '인챈티드 청금석 블럭 레시피', '타이타닉 경험치 병 레시피', '경험의 유물 레시피', '교과서 레시피'],
+    redstone: ['레드스톤 미니언 I 레시피', '소형 장신구 가방 업그레이드', '효율 XP 할인 -25%', '인챈티드 레드스톤 레시피', '날씨 스틱 레시피', '중형 장신구 가방 업그레이드', '깊은 동굴 이동 스크롤 레시피', '인챈티드 레드스톤 블럭 레시피', '대형 장신구 가방 업그레이드 + 퍼스널 컴팩터 4000 레시피', '그레이터 장신구 가방 업그레이드', '자이언트 장신구 가방 업그레이드 + 퍼스널 컴팩터 5000 레시피', '매시브 장신구 가방 업그레이드', '휴몽거스 장신구 가방 업그레이드 + 퍼스널 컴팩터 6000 레시피', '콜로설 장신구 가방 업그레이드 + 퍼스널 컴팩터 7000 레시피', '타이타닉 장신구 가방 업그레이드', '프리포스터러스 장신구 가방 업그레이드'],
+    diamond: ['다이아몬드 미니언 I 레시피', '처형 XP 할인 -25%', '깊은 동굴 포탈 레시피', '인챈티드 다이아몬드 레시피', '치명타 XP 할인 -25%', '다이아몬드 스프레딩 레시피', '강화 다이아몬드 갑옷 레시피', '인챈티드 다이아몬드 블럭 레시피', '퍼펙트 갑옷 레시피'],
+    emerald: ['에메랄드 미니언 I 레시피', '동전의 부적 레시피', '자석 부적 레시피', '인챈티드 에메랄드 레시피', '에메랄드 반지 레시피', '개인 은행 아이템 레시피 (/bank 접근)', '인챈티드 에메랄드 블럭 레시피', '에메랄드 블레이드 레시피', '에메랄드 갑옷 레시피'],
+    obsidian: ['흑요석 미니언 I 레시피', '리썰리티 XP 할인 -25%', '중력의 부적 레시피', '인챈티드 흑요석 레시피', '채광 행운 +1', '기절 물약 레시피', '채광 행운 +1', '채광 행운 +1', '흑요석 태블릿 레시피', '채광 행운 +1 + 채광 XP +50,000'],
+    wheat: ['밀 미니언 I 레시피', '수확 XP 할인 -25%', '농부 수트 레시피', '농사 부적 레시피', '인챈티드 밀 레시피 + 인챈티드 빵 레시피', '농사 섬 레시피', '소형 농경 자루 레시피', '중형 농경 자루 레시피', '농장 갑옷 레시피', '대형 농경 자루 레시피', '인챈티드 건초 더미 레시피 + 대형 인챈티드 농경 자루 레시피'],
+    carrot: ['당근 미니언 I 레시피', '심플 당근 캔디 레시피', '당근 미끼 레시피', '인챈티드 당근 레시피', '인챈티드 당근 낚싯대 레시피', '그레이트 당근 캔디 레시피', '인챈티드 황금 당근 레시피', '슈퍼브 당근 캔디 레시피', '농사 XP +10,000'],
+    potato: ['감자 미니언 I 레시피', '농장(The Barn) 포탈 레시피', '백신 부적 레시피', '인챈티드 감자 레시피', '맹독 물약 레시피', '농장 이동 스크롤 레시피', '인챈티드 구운 감자 레시피', '핫 포테이토 북 레시피', '농사 XP +10,000'],
+    pumpkin: ['호박 미니언 I 레시피', '호박 갑옷 레시피', '인챈티드 호박 레시피', '큐비즘 XP 할인 -25% + 스푸키 미끼 레시피', '훈련용 더미 레시피', '파머 오브 레시피', '랜턴 투구 레시피', '농장 크리스탈 레시피', '파머 부츠 레시피', '폴리시드 호박 레시피', '랜처 부츠 레시피'],
+    melon: ['수박 미니언 I 레시피', '농사 XP +50', '농사 XP +125', '인챈티드 수박 조각 레시피', '인챈티드 반짝이는 수박 레시피', '인챈티드 수박 블럭 레시피', '농사 XP +5,000', '농사 XP +10,000', '수박 갑옷 4부위 레시피'],
+    sugarcane: ['사탕수수 미니언 I 레시피', '스피드 부적 레시피', '인챈티드 설탕 레시피', '스피드스터 갑옷 레시피', '인챈티드 종이 레시피 + 스피드 반지 레시피', '인챈티드 책장 레시피', '농사 XP +10,000', '인챈티드 사탕수수 레시피 + 스피드 유물 레시피', '농사 XP +25,000'],
+    feather: ['발사체 보호 XP 할인 -25%', '가벼운 착지 XP 할인 -25%', '궁술 물약 레시피', '깃털 부적 레시피', '인챈티드 깃털 레시피', '드래곤 트레이서 XP 할인 -25%', '깃털 반지 레시피', '저격 XP 할인 -25%', '깃털 유물 레시피'],
+    leather: ['소 미니언 I 레시피', '소 모자 레시피 + 우유 양동이 거래', '소형 배낭 레시피 + 말 펫 레시피', '인챈티드 가죽 레시피', '인챈티드 생소고기 레시피', '중형 배낭 레시피', '농사 XP +5,000', '안장 레시피', '대형 배낭 레시피', '농사 XP +10,000', '그레이터 배낭 레시피'],
+    oaklog: ['참나무 미니언 I 레시피', '리플릿 갑옷 레시피 + 참나무 잎 거래', '인챈티드 참나무 원목 레시피', '소형 창고 레시피', '숲 바이옴 스틱 레시피', '중형 창고 레시피', '나무 친화 부적 레시피', '벌목 XP +10,000', '대형 창고 레시피'],
+    birchlog: ['자작나무 미니언 I 레시피', '자작나무 잎 거래', '인챈티드 자작나무 원목 레시피 + 자작나무 공원 포탈 레시피', '조각가의 도끼 레시피', '자작나무 숲 바이옴 스틱 레시피', '소형 벌목 자루 레시피', '중형 벌목 자루 레시피', '대형 벌목 자루 레시피', '대형 인챈티드 벌목 자루 레시피'],
+    sprucelog: ['가문비 미니언 I 레시피', '가문비 도끼 레시피 + 가문비 잎 거래', '인챈티드 가문비 원목 레시피 + 가문비 숲 포탈 레시피 + 늑대 펫 레시피', '벌목 XP +500', '타이가 바이옴 스틱 레시피', '벌목 XP +2,000', '벌목 크리스탈 레시피', '벌목 XP +10,000', '벌목 XP +25,000'],
+    dark_oak_log: ['짙은 참나무 미니언 I 레시피', '짙은 참나무 잎 거래', '인챈티드 짙은 참나무 원목 레시피 + 다크 시킷 포탈 레시피', '지붕 숲 섬 레시피', '지붕 숲 바이옴 스틱 레시피', '벌목 XP +2,000', '성장 XP 할인 -25%', '벌목 XP +10,000', '성장의 갑옷 레시피'],
+    acacia_log: ['아카시아 미니언 I 레시피', '아카시아 잎 거래', '인챈티드 아카시아 원목 레시피 + 사바나 삼림 포탈 레시피', '사바나 활 레시피', '사바나 바이옴 스틱 레시피', '벌목 XP +2,000', '리펠링 캔들 레시피', '벌목 XP +10,000', '아카시아 새집 레시피'],
+    jungle_log: ['정글나무 미니언 I 레시피', '정글나무 잎 거래', '인챈티드 정글나무 원목 레시피 + 정글 섬 포탈 레시피 + 오셀롯 펫 레시피', '덩굴 거래', '정글 바이옴 스틱 레시피', '벌목 XP +2,000', '트리캐피테이터 레시피', '벌목 XP +10,000', '벌목 XP +10,000'],
+    rawfish: ['물고기 모자 레시피 + 미노우 미끼 레시피', '낚시 미니언 I 레시피', '소형 낚시 가방 업그레이드', '연못 섬 레시피', '낚시 XP +2,500', '인챈티드 생대구 레시피', '중형 낚시 가방 업그레이드', '인챈티드 구운 대구 레시피', '대형 낚시 가방 업그레이드', '자이언트 낚시 가방 업그레이드', '매시브 낚시 가방 업그레이드'],
+    salmon: ['연어 모자 레시피', '회피 물약 레시피', '루어 XP 할인 -25%', '인챈티드 생연어 레시피', '물고기 미끼 레시피', '연어 갑옷 레시피', '낚시 XP +5,000', '인챈티드 구운 연어 레시피', '낚시 XP +10,000'],
+    clownfish: ['열대어 모자 레시피', '물 양동이 거래', '자석 XP 할인 -25%', '소형 자루 가방 업그레이드 + 인챈티드 열대어 레시피', '중형 자루 가방 업그레이드', '대형 자루 가방 업그레이드', '트로피컬 망토 레시피 + 그레이터 자루 가방 업그레이드', '자이언트 자루 가방 업그레이드', '매시브 자루 가방 업그레이드'],
+    pufferfish: ['복어 모자 레시피', '인챈티드 복어 레시피', '클리브 XP 할인 -25%', '물갈퀴 XP 할인 -25%', '스파이크 미끼 레시피 + 소형 낚시 자루 레시피', '스파이크 훅 XP 할인 -25%', '중형 낚시 자루 레시피', '핫스팟 미끼 레시피', '대형 낚시 자루 레시피', '대형 인챈티드 낚시 자루 레시피'],
+    prismarine: ['임페일링 XP 할인 -25%', '프리즈마린 블레이드 레시피', '인챈티드 프리즈마린 조각 레시피', '프리즈마린 싱커 레시피', '프리즈마린 활 레시피', '웨더 노드 레시피', '프리즈마린 목걸이 레시피'],
+    sponge: ['스펀지 거래', '스펀지 싱커 레시피', '해양 생물 부적 레시피', '인챈티드 스펀지 레시피', '스펀지 벨트 레시피', '해양 생물 반지 레시피', '인챈티드 젖은 스펀지 레시피 + 스테레오 바지 레시피', '해양 생물 유물 레시피', '스펀지 갑옷 레시피'],
+    clay: ['점토 미니언 I 레시피', '인챈티드 점토 레시피', '수중 호흡 XP 할인 -25%', '프레일 XP 할인 -25%', '점토 팔찌 레시피', '낚시 XP +2,500', '인챈티드 점토 블럭 레시피'],
+    rotten_flesh: ['좀비 미니언 I 레시피', '좀비 곡괭이 레시피', '강타 XP 할인 -25% + 좀비 펫 레시피', '인챈티드 썩은 살점 레시피', '좀비 모자 레시피 + 소형 전투 자루 레시피', '좀비의 심장 레시피', '좀비 소드 레시피 + 중형 전투 자루 레시피', '좀비 갑옷 레시피', '대형 전투 자루 레시피', '대형 인챈티드 전투 자루 레시피'],
+    bone: ['스켈레톤 미니언 I 레시피', '인챈티드 뼛가루 거래', '파워 XP 할인 -25% + 스켈레톤 펫 레시피', '스켈레톤 모자 레시피', '인챈티드 뼈 레시피', '전투 XP +1,000', '허리케인 활 레시피', '스켈레톤 투구 레시피', '루난의 활 레시피', '인챈티드 뼈 블럭 레시피'],
+    string: ['거미 미니언 I 레시피', '거미줄 블럭 레시피', '화살통 업그레이드 + 거미 펫 레시피', '인챈티드 실 레시피 + 그래플링 훅 레시피', '섬세한 손길 XP 할인 -25%', '무한 화살통 XP 할인 -25% + 대형 화살통 업그레이드', '전투 XP +20,000', '거미의 부츠 레시피', '자이언트 화살통 업그레이드'],
+    spider_eye: ['동굴 거미 미니언 I 레시피', '거미 검 레시피', '거미 모자 레시피', '인챈티드 거미 눈 레시피', '절지류의 재앙 XP 할인 -25%', '베노머스 XP 할인 -25%', '인챈티드 발효된 거미 눈 레시피', '전투 XP +25,000', '리핑 소드 레시피'],
+    gunpowder: ['크리퍼 미니언 I 레시피', '크리퍼 모자 레시피', '폭발 보호 XP 할인 -25%', '인챈티드 화약 레시피', '썬더로드 XP 할인 -25%', '인챈티드 폭죽 레시피', '전투 XP +10,000', '크리퍼 바지 레시피', '폭발 활 레시피'],
+    ender_pearl: ['엔더맨 미니언 I 레시피 + 사일런트 진주 레시피', '인챈티드 엔더 진주 레시피', '엔더 슬레이어 XP 할인 -25%', '소형 드래곤 자루 레시피', '엔더 활 레시피', '중형 드래곤 자루 레시피 + 인챈티드 엔더의 눈 레시피', '텔레포트 패드 거래 + 앱솔루트 엔더 진주 레시피', '엔드의 형상 레시피', '대형 드래곤 자루 레시피 + 세이빙 그레이스 레시피'],
+    ghast_tear: ['가스트 미니언 I 레시피', '자이언트 킬러 XP 할인 -25%', '인챈티드 가스트 눈물 레시피', '뱀피리즘 XP 할인 -25% + 가스트 망토 레시피', '실버 팽 레시피', '메테오 청크 레시피', '정복된 가스트 망토 레시피'],
+    slime_ball: ['슬라임 미니언 I 레시피', '슬라임 모자 레시피', '밀치기 XP 할인 -25%', '밀치기 물약 레시피', '인챈티드 슬라임볼 레시피', '펀치 XP 할인 -25%', '발사 패드 레시피', '인챈티드 슬라임 블럭 레시피', '슬라임 활 레시피'],
+    blaze_rod: ['블레이즈 미니언 I 레시피', '발화 XP 할인 -25%', '인챈티드 블레이즈 파우더 레시피', '화염 부적 레시피 + 블레이즈 벨트 레시피', '화염(Flame) XP 할인 -25%', '인챈티드 블레이즈 막대 레시피 + 블레이즈 왁스 레시피 + 블레이즈 펫 레시피', '블레이즈 갑옷 레시피 + 정복된 블레이즈 벨트 레시피', '전투 XP +10,000'],
+    magma_cream: ['마그마 큐브 미니언 I 레시피', '화염 보호 XP 할인 -25%', '네더 바이옴 스틱 레시피 + 인챈티드 마그마 크림 레시피', '마그마 목걸이 레시피', '용암 양동이 거래', '용암 부적 레시피 + 시어링 스톤 레시피', '정복된 마그마 목걸이 레시피', '휘핑 마그마 크림 레시피'],
   };
+  // V39: 기능 보상 — sx: [스킬, XP] 실지급 / ds: 해당 인챈트 부여 비용 -25% / mf: 채광 행운 +1 (위키 그대로)
+  const COL_TIER_FX = {
+    stone: { 6: { sx: ['mining', 1000] } },
+    obsidian: { 5: { mf: 1 }, 7: { mf: 1 }, 8: { mf: 1 }, 10: { mf: 1, sx: ['mining', 50000] } },
+    gold: { 3: { ds: 'looting' }, 9: { ds: 'fortune' } },
+    lapis: { 3: { ds: 'experience' } },
+    redstone: { 3: { ds: 'efficiency' } },
+    diamond: { 2: { ds: 'execute' }, 5: { ds: 'critical' } },
+    iron: { 3: { ds: 'protection' } },
+    carrot: { 9: { sx: ['farming', 10000] } },
+    potato: { 9: { sx: ['farming', 10000] } },
+    pumpkin: { 4: { ds: 'cubism' } },
+    melon: { 2: { sx: ['farming', 50] }, 3: { sx: ['farming', 125] }, 7: { sx: ['farming', 5000] }, 8: { sx: ['farming', 10000] } },
+    sugarcane: { 7: { sx: ['farming', 10000] }, 9: { sx: ['farming', 25000] } },
+    leather: { 7: { sx: ['farming', 5000] }, 10: { sx: ['farming', 10000] } },
+    oaklog: { 8: { sx: ['foraging', 10000] } },
+    sprucelog: { 4: { sx: ['foraging', 500] }, 6: { sx: ['foraging', 2000] }, 8: { sx: ['foraging', 10000] }, 9: { sx: ['foraging', 25000] } },
+    dark_oak_log: { 6: { sx: ['foraging', 2000] }, 7: { ds: 'growth' }, 8: { sx: ['foraging', 10000] } },
+    acacia_log: { 6: { sx: ['foraging', 2000] }, 8: { sx: ['foraging', 10000] } },
+    jungle_log: { 6: { sx: ['foraging', 2000] }, 8: { sx: ['foraging', 10000] }, 9: { sx: ['foraging', 10000] } },
+    rawfish: { 5: { sx: ['fishing', 2500] } },
+    salmon: { 7: { sx: ['fishing', 5000] }, 9: { sx: ['fishing', 10000] } },
+    clownfish: { 3: { ds: 'magnet' } },
+    clay: { 6: { sx: ['fishing', 2500] } },
+    rotten_flesh: { 3: { ds: 'smite' } },
+    bone: { 3: { ds: 'power' }, 6: { sx: ['combat', 1000] } },
+    string: { 7: { sx: ['combat', 20000] } },
+    spider_eye: { 5: { ds: 'bane_of_arthropods' }, 6: { ds: 'venomous' }, 8: { sx: ['combat', 25000] } },
+    gunpowder: { 5: { ds: 'thunderlord' }, 7: { sx: ['combat', 10000] } },
+    ender_pearl: { 3: { ds: 'ender_slayer' } },
+    ghast_tear: { 2: { ds: 'giant_killer' }, 4: { ds: 'vampirism' } },
+    blaze_rod: { 2: { ds: 'fire_aspect' }, 8: { sx: ['combat', 10000] } },
+    slime_ball: { 6: { ds: 'punch' } },
+  };
+  // 인챈트키 → [컬렉션, 티어] 역인덱스 (부여 비용 -25% 판정용)
+  const ENCH_COL_DISCOUNT = {};
+  for (const ck in COL_TIER_FX) for (const t in COL_TIER_FX[ck]) if (COL_TIER_FX[ck][t].ds) ENCH_COL_DISCOUNT[COL_TIER_FX[ck][t].ds] = [ck, Number(t)];
   // V27-E: 채굴/농사/벌목 티어 요구량 = wiki.hypixel.net 확정값(3표 검증). 전투/낚시도 V30에서 위키 정합.
   const COLLECTIONS = [
     { category: '채굴', key: 'mining', resources: [
-      res('stone', '돌', 2, 0, [50, 100, 250, 1000, 2500, 5000, 10000, 25000, 40000, 70000]),   /* 위키 확정: IX/X=40k/70k */   /* V23-B: '조약돌' 중복 이름 해소 — 채집/제련 돌='돌', 건축 블럭 cobblestone='조약돌' */ res('coal', '석탄', 3, 0, [50, 100, 250, 1000, 2500, 5000, 10000, 25000, 50000, 100000]), res('iron', '철 주괴', 6, 0, [50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 200000, 400000]),   /* 위키 확정 12티어 */
+      res('stone', '돌', 2, 0, [50, 100, 250, 1000, 2500, 5000, 10000, 25000, 40000, 70000]),   /* 위키 확정: IX/X=40k/70k */   /* V23-B: '조약돌' 중복 이름 해소 — 채집/제련 돌='돌', 건축 블럭 cobblestone='조약돌' */ res('coal', '석탄', 3, 0, [50, 100, 250, 1000, 2500, 5000, 10000, 25000, 50000, 100000]), res('iron', '철 주괴', 6, 0, [50, 100, 250, 1000, 2500, 5000, 10000, 25000, 50000, 100000, 200000, 400000]),   /* 위키 확정 12티어 */
       res('gold', '금 주괴', 12, 0, [50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 500000]),   /* 위키 확정: X=500k */ res('lapis', '청금석', 8, 0, [250, 500, 1000, 2000, 10000, 25000, 50000, 100000, 150000, 250000]), res('redstone', '레드스톤', 7, 0, [100, 250, 750, 1500, 3000, 5000, 10000, 25000, 50000, 200000, 400000, 600000, 800000, 1000000, 1200000, 1400000]),   /* 위키 확정 16티어 */
       res('diamond', '다이아몬드', 45, 0, [50, 100, 250, 1000, 2500, 5000, 10000, 25000, 50000]), res('emerald', '에메랄드', 25, 0, [50, 100, 250, 1000, 5000, 15000, 30000, 50000, 100000]), res('obsidian', '흑요석', 18, 0, [50, 100, 250, 1000, 2500, 5000, 10000, 25000, 50000, 100000]),
     ] },
@@ -52,24 +116,29 @@
     ] },
     { category: '벌목', key: 'foraging', resources: [
       res('oaklog', '참나무 원목', 5, 0, [50, 100, 250, 500, 1000, 2000, 5000, 10000, 25000]), res('birchlog', '자작나무 원목', 5, 0, [50, 100, 250, 500, 1000, 2000, 5000, 10000, 25000]),
-      res('sprucelog', '가문비 원목', 6, 0, [50, 100, 250, 500, 1000, 2000, 5000, 10000, 25000]), res('apple', '사과', 8, 20),
+      res('sprucelog', '가문비 원목', 6, 0, [50, 100, 250, 500, 1000, 2000, 5000, 10000, 25000]),
+      res('dark_oak_log', '짙은 참나무 원목', 6, 0, [50, 100, 250, 500, 1000, 2000, 5000, 10000, 25000]),
+      res('acacia_log', '아카시아 원목', 6, 0, [50, 100, 250, 500, 1000, 2000, 5000, 10000, 25000]),
+      res('jungle_log', '정글나무 원목', 6, 0, [50, 100, 250, 500, 1000, 2000, 5000, 10000, 25000]),
     ] },
     { category: '낚시', key: 'fishing', resources: [
-      res('rawfish', '생선', 4, 0, [20, 50, 100, 250, 500, 1000, 2500, 15000, 30000, 45000, 60000]), res('salmon', '연어', 7, 0, [20, 50, 100, 250, 500, 1000, 2500, 5000, 10000]), res('clownfish', '광대어', 20, 0, [10, 25, 50, 100, 200, 400, 800, 1600, 4000]),
-      res('pufferfish', '복어', 12, 0, [20, 50, 100, 150, 400, 800, 2400, 4800, 9000, 18000]), res('prismarine', '프리즈마린 조각', 9, 25),
-      res('sponge', '스펀지', 30, 0, [10, 20, 50, 100, 200, 400]), res('clay', '점토', 4, 30),
+      res('rawfish', '생선', 4, 0, [20, 50, 100, 250, 500, 1000, 2500, 15000, 30000, 45000, 60000]), res('salmon', '연어', 7, 0, [20, 50, 100, 250, 500, 1000, 2500, 5000, 10000]), res('clownfish', '열대어', 20, 0, [10, 25, 50, 100, 200, 400, 800, 1600, 4000]),
+      res('pufferfish', '복어', 12, 0, [20, 50, 100, 150, 400, 800, 2400, 4800, 9000, 18000]), res('prismarine', '프리즈마린 조각', 9, 0, [10, 25, 50, 100, 200, 400, 800]),
+      res('sponge', '스펀지', 30, 0, [20, 50, 100, 250, 500, 1000, 1500, 2000, 4000]), res('clay', '점토', 4, 0, [50, 100, 250, 1000, 1500, 2500, 5000]),
     ] },
     { category: '전투', key: 'combat', resources: [
       res('rotten_flesh', '썩은 살점', 2, 0, [50, 100, 250, 1000, 2500, 5000, 10000, 25000, 50000, 100000]), res('bone', '뼈', 3, 0, [50, 100, 250, 500, 1000, 5000, 10000, 25000, 50000, 150000]), res('string', '거미줄', 4, 0, [50, 100, 250, 1000, 2500, 5000, 10000, 25000, 50000]),
       res('ender_pearl', '엔더 진주', 15, 0, [50, 250, 1000, 2500, 5000, 10000, 15000, 25000, 50000]), res('blaze_rod', '블레이즈 막대', 20, 0, [50, 250, 1000, 2500, 5000, 10000, 25000, 50000]),
       res('magma_cream', '마그마 크림', 8, 0, [50, 250, 1000, 2500, 5000, 10000, 25000, 50000]), res('ghast_tear', '가스트의 눈물', 40, 0, [20, 250, 1000, 2500, 5000, 10000, 25000]),
       res('spider_eye', '거미 눈', 5, 0, [50, 100, 250, 1000, 2500, 5000, 10000, 25000, 50000]), res('slime_ball', '슬라임볼', 4, 0, [50, 100, 250, 1000, 2500, 5000, 10000, 25000, 50000]),
-      res('gunpowder', '화약', 6, 0, [50, 100, 250, 1000, 2500, 5000, 10000, 25000, 50000]), res('ender_shard', '엔더 조각', 22, 0, [10, 25, 75, 250, 1000]),
+      res('gunpowder', '화약', 6, 0, [50, 100, 250, 1000, 2500, 5000, 10000, 25000, 50000]),
     ] },
     { category: '축산', key: 'husbandry', resources: [
-      res('feather', '깃털', 3, 0, [50, 100, 250, 1000, 2500, 5000, 10000, 25000, 50000]), res('leather', '가죽', 5, 0, [50, 100, 250, 1000, 2500, 5000, 10000, 25000, 50000, 100000]),
+      res('feather', '깃털', 3, 0, [50, 100, 250, 1000, 2500, 5000, 10000, 25000, 50000]), res('leather', '가죽', 5, 0, [50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000]),
     ] },
   ];
+  // V39: 위키에 없는 컬렉션은 제외하되 아이템/레시피는 유지 — 별도 원자재 목록
+  const EXTRA_RES = [res('apple', '사과', 8, 20), res('ender_shard', '엔더 조각', 22, 0, [10, 25, 75, 250, 1000])];
 
   // 실제 하이픽셀 스카이블럭 스킬 XP 테이블(위키): 레벨 n→n+1 필요 XP. 최대 50레벨.
   // V16: 실제 하이픽셀 스카이블럭 스킬 XP 표(위키 검증). L1~L50는 실제와 100% 일치, L51~L60 확장.
@@ -197,6 +266,9 @@
     minion('oak_minion', '참나무 미니언', 'oaklog', 26, 80),
     minion('birch_minion', '자작나무 미니언', 'birchlog', 26, 80),
     minion('spruce_minion', '가문비 미니언', 'sprucelog', 27, 100),
+    minion('dark_oak_minion', '짙은 참나무 미니언', 'dark_oak_log', 27, 100),
+    minion('acacia_minion', '아카시아 미니언', 'acacia_log', 27, 100),
+    minion('jungle_minion', '정글나무 미니언', 'jungle_log', 27, 100),
     minion('fishing_minion', '낚시 미니언', 'rawfish', 30, 60),
     minion('clay_minion', '점토 미니언', 'clay', 26, 60),
     // V9: 전투/축산 미니언(실제 스카이블럭 로스터)
@@ -221,6 +293,10 @@
     minion('endermite_minion', '엔더마이트 미니언', 'ender_shard', 34, 300),
     minion('enderman_minion', '엔더맨 미니언', 'ender_pearl', 33, 300),
   ];
+  // V39: 위키 해금 보정 — 컬렉션에서 빠진 자원의 미니언은 관련 컬렉션으로, 낚시 미니언은 생선 II
+  MINIONS.find(m => m.key === 'apple_minion').unlockCollection = 'oaklog';
+  MINIONS.find(m => m.key === 'endermite_minion').unlockCollection = 'ender_pearl';
+  MINIONS.find(m => m.key === 'fishing_minion').unlockTier = 2;
   const MINION_STORAGE_BASE = 15, MINION_STORAGE_UPGRADED = 24, MINION_STORAGE_UPGRADE_COST = 5000;
   const MINION_OFFLINE_CAP_HOURS = 48;
   const MINION_SLOT_MAX = 31, MINION_SLOT_COST_BASE = 6000, MINION_SLOT_COST_MUL = 1.6;
@@ -777,15 +853,18 @@
   /* ---------------- 제작 레시피(컬렉션 티어로 해금 — 실제 스카이블럭 방식) ---------------- */
   // 인챈티드 자원: 원자재 160개 → 1개(판매가 20% 프리미엄 = 제작 노가다 보상)
   // 인챈티드 아이템: 모든 컬렉션 자원 — 원자재 160개(32×5 십자 배열) → 인챈티드 1개
-  const ENCHANTED_RES = COLLECTIONS.reduce((a, c) => a.concat(c.resources.map(r => r.key)), []);
+  const ENCHANTED_RES = COLLECTIONS.reduce((a, c) => a.concat(c.resources.map(r => r.key)), []).concat(EXTRA_RES.map(r => r.key));
+  // V39: 인챈티드 레시피 해금 티어 — 위키 컬렉션 보상 티어 그대로(수작업)
+  const ENCH_UNLOCK_T = { stone: 4, coal: 3, iron: 4, gold: 5, lapis: 4, redstone: 4, diamond: 4, emerald: 4, obsidian: 4, wheat: 5, carrot: 4, potato: 4, pumpkin: 3, melon: 4, sugarcane: 3, oaklog: 3, birchlog: 3, sprucelog: 3, dark_oak_log: 3, jungle_log: 3, acacia_log: 3, rotten_flesh: 4, bone: 5, string: 4, spider_eye: 4, gunpowder: 4, ender_pearl: 2, ghast_tear: 3, slime_ball: 5, blaze_rod: 6, magma_cream: 3, feather: 5, leather: 4, rawfish: 6, salmon: 4, clownfish: 4, pufferfish: 2, prismarine: 3, sponge: 4, clay: 2 };
+  const ENCH_BLOCK_T = { stone: 5, coal: 7, iron: 7, gold: 8, lapis: 7, redstone: 8, diamond: 8, emerald: 7, bone: 10, slime_ball: 8, gunpowder: 6, ender_pearl: 6 };
   // 광물은 한 단계 더: 인챈티드 160개 → 인챈티드 블록
   const ENCHANTED_BLOCK_RES = ['stone', 'coal', 'iron', 'gold', 'lapis', 'redstone', 'diamond', 'emerald', 'bone', 'slime_ball', 'gunpowder', 'ender_pearl'];   // V10: 12종
   const RECIPES = [
     ...ENCHANTED_RES.map(rk => ({
-      key: `enchanted_${rk}`, needs: { [rk]: 160 }, gives: 1, unlock: { resource: rk, tier: 2 },
+      key: `enchanted_${rk}`, needs: { [rk]: 160 }, gives: 1, unlock: { resource: rk, tier: ENCH_UNLOCK_T[rk] || 2 },
     })),
     ...ENCHANTED_BLOCK_RES.map(rk => ({
-      key: `enchanted_${rk}_block`, needs: { [`enchanted_${rk}`]: 160 }, gives: 1, unlock: { resource: rk, tier: 5 },
+      key: `enchanted_${rk}_block`, needs: { [`enchanted_${rk}`]: 160 }, gives: 1, unlock: { resource: rk, tier: ENCH_BLOCK_T[rk] || 5 },
     })),
     // ===== V12: 바닐라 마인크래프트 조합 체인(항상 해금 — 원목→판자→막대→도구/작업대/화로/상자) =====
     { key: 'oak_planks', needs: { oaklog: 1 }, gives: 4, unlock: null },
@@ -1060,11 +1139,11 @@
     { key: 'super_compactor', name: '슈퍼 컴팩터(미니언 산출 압축 — 판매가치 +50%)', category: '미니언', buyPrice: 0, sellPrice: 3000, stackSize: 1 },
     // 인챈티드 자원(제작 전용, 판매가 20% 프리미엄)
     ...ENCHANTED_BLOCK_RES.map(rk => {
-      const r = COLLECTIONS.flatMap(c => c.resources).find(x => x.key === rk);
+      const r = COLLECTIONS.flatMap(c => c.resources).concat(EXTRA_RES).find(x => x.key === rk);
       return { key: `enchanted_${rk}_block`, name: `인챈티드 ${r.name} 블록`, category: '제작품', buyPrice: 0, sellPrice: Math.round(r.sellPrice * 160 * 1.2 * 160 * 1.1), stackSize: 64 };
     }),
     ...ENCHANTED_RES.map(rk => {
-      const r = COLLECTIONS.flatMap(c => c.resources).find(x => x.key === rk);
+      const r = COLLECTIONS.flatMap(c => c.resources).concat(EXTRA_RES).find(x => x.key === rk);
       return { key: `enchanted_${rk}`, name: `인챈티드 ${r.name}`, category: '제작품', buyPrice: 0, sellPrice: Math.round(r.sellPrice * 160 * 1.2), stackSize: 64 };
     }),
     ...ENCHANTS.map(e => ({ key: `enchant_book_${e.key}`, name: `인챈트북: ${e.name}`, category: '인챈트', buyPrice: 0, sellPrice: Math.round(e.bookBasePrice * 0.2), stackSize: 64 })),   // V7: 북은 몹 드롭 전용 — 골드는 합성(부여) 비용에만
@@ -1074,6 +1153,7 @@
     ...PETS.map(p => ({ key: `pet_egg_${p.key}`, name: `펫 알: ${p.name}`, category: '펫', tierKey: p.tierKey, buyPrice: 0, sellPrice: Math.max(2000, Math.round((p.eggPrice || 10000) * 0.2)), stackSize: 1 })),   // V7: 펫 알도 몹/낚시/던전 드롭 전용
     // 원자재 31종(sellPrice는 컬렉션 정의에서)
     ...COLLECTIONS.flatMap(cat => cat.resources.map(r => ({ key: r.key, name: r.name, category: '원자재', buyPrice: 0, sellPrice: r.sellPrice, stackSize: 64 }))),
+    ...EXTRA_RES.map(r => ({ key: r.key, name: r.name, category: '원자재', buyPrice: 0, sellPrice: r.sellPrice, stackSize: 64 })),
     // 장비(던전 전용은 buyPrice 0 → 구매 불가, 판매만 가능)
     ...EQUIPMENT.weapons.map(w => ({ key: w.key, name: `${w.name} [${ITEM_TIERS.find(t => t.key === w.tierKey).name}]`, category: '무기', tierKey: w.tierKey, buyPrice: w.buyPrice, sellPrice: w.sellPrice, stackSize: 1, dmg: w.dmg, slot: w.slot, traits: w.traits, set: w.set, flavor: w.flavor, reqCombat: w.reqCombat })),
     ...EQUIPMENT.armor.map(a => ({ key: a.key, name: `${a.name} [${ITEM_TIERS.find(t => t.key === a.tierKey).name}]`, category: '방어구', tierKey: a.tierKey, buyPrice: a.buyPrice, sellPrice: a.sellPrice, stackSize: 1, defense: a.defense, hp: a.hp || 0, slot: a.slot, traits: a.traits, set: a.set, flavor: a.flavor, reqCombat: a.reqCombat })),
@@ -1098,9 +1178,6 @@
     { key: 'ladder', name: '사다리', category: '건축', buyPrice: 0, sellPrice: 2, stackSize: 64 },
     { key: 'bed', name: '침대', category: '건축', buyPrice: 0, sellPrice: 8, stackSize: 1 },
     { key: 'boat', name: '보트', category: '도구', buyPrice: 0, sellPrice: 6, stackSize: 1 },
-    { key: 'dark_oak_log', name: '짙은 참나무 원목', category: '자원', buyPrice: 0, sellPrice: 6, stackSize: 64 },
-    { key: 'jungle_log', name: '정글나무 원목', category: '자원', buyPrice: 0, sellPrice: 6, stackSize: 64 },
-    { key: 'acacia_log', name: '아카시아 원목', category: '자원', buyPrice: 0, sellPrice: 6, stackSize: 64 },
     { key: 'dark_oak_planks', name: '짙은 참나무 판자', category: '건축', buyPrice: 0, sellPrice: 1, stackSize: 64 },
     { key: 'jungle_planks', name: '정글나무 판자', category: '건축', buyPrice: 0, sellPrice: 1, stackSize: 64 },
     { key: 'acacia_planks', name: '아카시아 판자', category: '건축', buyPrice: 0, sellPrice: 1, stackSize: 64 },
@@ -1525,7 +1602,7 @@
   };
   window.ECON_DATA = {
     PORTAL_ITEMS, CRAFT_GROUPS, SMELT_RECIPES,
-    ITEM_TIERS, COLLECTIONS, COL_TIER_REWARDS, SKILLS, GATHER_TABLE, TOOLS, MINIONS, MINION_STORAGE_BASE, MINION_STORAGE_UPGRADED,
+    ITEM_TIERS, COLLECTIONS, COL_TIER_REWARDS, COL_TIER_FX, ENCH_COL_DISCOUNT, EXTRA_RES, SKILLS, GATHER_TABLE, TOOLS, MINIONS, MINION_STORAGE_BASE, MINION_STORAGE_UPGRADED,
     MINION_STORAGE_UPGRADE_COST, MINION_OFFLINE_CAP_HOURS, MINION_SLOT_MAX, MINION_SLOT_COST_BASE, MINION_SLOT_COST_MUL,
     MINION_FUEL, MINION_FUEL2, SLAYERS, DUNGEON, DUNGEON_ROOM_SCORE, ESSENCE_SHOP, SHOP, BAZAAR, AUCTION_HOUSE, HEART_OF_MOUNTAIN, DAILY_SELL_LIMIT_PER_STACK,
     EQUIPMENT, STARFORCE, REFORGES, ITEM_ROLL,
