@@ -2572,6 +2572,71 @@
     for (let i = 1; i <= 6; i++) [[i, i], [-i, i], [i, -i], [-i, -i]].forEach(o => setW(wx + 1 + o[0], wy + 9 + o[1], wz - 1, (i % 3 === 0) ? ID.spruce_planks : ID.wool_white));
     setW(wx + 1, wy + 9, wz - 1, ID.spruce_log); setW(wx + 2, wy + 9, wz - 1, ID.spruce_log);
     buildHouse(330, 236, 10, 8, surfaceTop(335, 240), ID.wool_red, ID.spruce_planks);   // 헛간
+    // ── V61: 실사(Farm.png) — 밭 둘레 잡석 돌담 + 건초 더미 + 흙길(등불) + 사과나무 + 건초 지붕 헛간 ──
+    {
+      const AND2 = ID.polished_andesite != null ? ID.polished_andesite : ID.stone;
+      const rubble = (x, z) => {
+        const g = surfaceTop(x, z);
+        if (zoneAt(x, z) !== 'farm') return;
+        const b = getBlockLocal(x, g - 1, z);
+        if (b !== ID.grass && b !== ID.dirt && b !== ID.coarse_dirt) return;
+        const r = hash3(x, 921, z);
+        if (r < 0.22) return;   // 결손(실사의 무너진 담)
+        setW(x, g, z, r < 0.5 ? ID.cobblestone : r < 0.75 ? AND2 : ID.mossy_cobblestone);
+        if (r > 0.9) setW(x, g + 1, z, ID.cobblestone);
+      };
+      for (let ci = 0; ci < 6; ci++) {   // 6개 플롯 둘레 잡석 돌담
+        const px = 306 + (ci % 3) * 18, pz = 200 + Math.floor(ci / 3) * 26;
+        for (let x = px - 1; x <= px + 14; x++) { rubble(x, pz - 1); rubble(x, pz + 20); }
+        for (let z = pz - 1; z <= pz + 20; z++) { rubble(px - 1, z); rubble(px + 14, z); }
+      }
+      // 중앙 흙길(z222~224 스트립) + 등불 + 건초 수레
+      for (let x = 286; x <= 352; x++) for (let z = 222; z <= 224; z++) {
+        if (zoneAt(x, z) !== 'farm') continue;
+        const g = surfaceTop(x, z);
+        if (getBlockLocal(x, g - 1, z) === ID.grass) { setW(x, g - 1, z, (x + z) % 7 ? ID.coarse_dirt : ID.gravel); if (getBlockLocal(x, g, z)) setW(x, g, z, 0); }
+      }
+      for (let x = 290; x <= 350; x += 12) {
+        if (zoneAt(x, 221) !== 'farm') continue;
+        const g = surfaceTop(x, 221);
+        setW(x, g, 221, ID.oak_fence); setW(x, g + 1, 221, ID.glowstone);
+      }
+      for (const [hx, hz] of [[302, 225], [332, 221], [348, 226]]) {   // 건초 더미
+        if (zoneAt(hx, hz) !== 'farm') continue;
+        const g = surfaceTop(hx, hz);
+        setW(hx, g, hz, ID.hay_block); setW(hx + 1, g, hz, ID.hay_block); setW(hx, g + 1, hz, ID.hay_block);
+      }
+      // 사과나무 2그루(오크 수관 + 빨간 점)
+      for (const [ax, az] of [[296, 219], [340, 227]]) {
+        if (zoneAt(ax, az) !== 'farm') continue;
+        const g = surfaceTop(ax, az);
+        for (let j = 0; j < 4; j++) setW(ax, g + j, az, ID.oak_log);
+        for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) if (Math.abs(dx) + Math.abs(dz) <= 3) {
+          setW(ax + dx, g + 4, az + dz, hash3(ax + dx, 922, az + dz) < 0.12 ? ID.wool_red : ID.oak_leaves);
+          if (Math.abs(dx) + Math.abs(dz) <= 1) setW(ax + dx, g + 5, az + dz, ID.oak_leaves);
+        }
+      }
+      // 건초 지붕 헛간(실사의 짚 지붕 오두막): (296, 226) 6×5
+      {
+        const bx = 294, bz = 246, gy = surfaceTop(bx + 3, bz + 2);
+        let ok = true;
+        for (let dx = 0; dx < 7 && ok; dx++) for (let dz = 0; dz < 5 && ok; dz++) if (zoneAt(bx + dx, bz + dz) !== 'farm') ok = false;
+        if (ok) {
+          for (let dx = -1; dx <= 7; dx++) for (let dz = -1; dz <= 5; dz++) for (let y = gy; y <= gy + 9; y++) setW(bx + dx, y, bz + dz, 0);
+          for (let dx = 0; dx < 7; dx++) for (let dz = 0; dz < 5; dz++) setW(bx + dx, gy - 1, bz + dz, ID.coarse_dirt);
+          for (let dx = 0; dx < 7; dx++) for (let dz = 0; dz < 5; dz++) {
+            const edge = dx === 0 || dx === 6 || dz === 0 || dz === 4;
+            if (!edge) continue;
+            const corner = (dx === 0 || dx === 6) && (dz === 0 || dz === 4);
+            for (let y = 0; y < 3; y++) setW(bx + dx, gy + y, bz + dz, corner ? ID.oak_log : y === 1 && dx % 2 === 0 ? ID.glass : ID.spruce_planks);
+          }
+          setW(bx + 3, gy, bz + 4, 0); setW(bx + 3, gy + 1, bz + 4, 0);   // 남측 입구
+          for (let t = 0; t <= 2; t++) for (const dz of [t - 1, 5 - t]) for (let dx = -1; dx <= 7; dx++) setW(bx + dx, gy + 3 + t, bz + dz, ID.hay_block);   // 짚(건초) 지붕
+          for (let dx = -1; dx <= 7; dx++) setW(bx + dx, gy + 6, bz + 2, ID.hay_block);
+          setW(bx + 3, gy + 1, bz + 2, ID.glowstone);
+        }
+      }
+    }
   }
   function buildForestZone() {
     for (let gx = 0; gx < 12; gx++) for (let gz = 0; gz < 12; gz++) {
