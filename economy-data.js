@@ -374,7 +374,7 @@
       ['ender_pearl', 'reforge_stone_rare', 'talisman_deep_pearl'],
       ['ender_pearl', 'aspect_of_the_end', 'talisman_hourglass'],
       ['ender_pearl', 'armor_mythic', 'enchant_book_protection'],
-      ['ender_pearl', 'aspect_of_the_dragons', 'pet_egg_enderman'],
+      ['ender_pearl', 'aspect_of_the_dragon', 'pet_egg_enderman'],
       ['ender_pearl', 'reforge_stone_rare', 'fuming_potato_book'],
     ]) },
     { key: 'blaze_slayer', uniqueDrop: 'fire_fury_staff', name: '블레이즈 슬레이어', flavor: '인페르노 데몬로드', dropResource: 'blaze_rod', tiers: mkSlayerTiers([2500000, 10000000, 45000000, 150000000, 350000000], 25, 10, 900, 2266, [
@@ -459,7 +459,7 @@
     { key: 'spirit_bow', name: '영혼의 활', wclass: 'bow', tierKey: 'epic', dmg: 160, buyPrice: 0, sellPrice: 2500 },
     { key: 'livid_dagger', name: '리비드 대거', wclass: 'sword', tierKey: 'legendary', dmg: 180, critDamage: 40, critChance: 10, buyPrice: 0, sellPrice: 7000 },
     { key: 'midas_sword', name: '미다스의 검', wclass: 'sword', tierKey: 'legendary', dmg: 130, str: 50, buyPrice: 0, sellPrice: 12000 },
-    { key: 'aspect_of_the_dragons', name: '용의 형상(AOTD)', wclass: 'sword', tierKey: 'legendary', dmg: 225, str: 100, buyPrice: 0, sellPrice: 14000 },
+    { key: 'aspect_of_the_dragon', name: '용의 형상(AOTD)', wclass: 'sword', tierKey: 'legendary', dmg: 225, str: 100, buyPrice: 0, sellPrice: 14000 },
     { key: 'giant_sword', name: '거인의 대검', wclass: 'sword', tierKey: 'mythic', dmg: 500, abilityDmg: 9000, abilityStat: 'str', abilityScaling: 0.6, buyPrice: 0, sellPrice: 15000 },
     { key: 'necron_blade', name: '네크론의 검', wclass: 'sword', tierKey: 'ancient', dmg: 190, str: 100, abilityDmg: 8500, abilityStat: 'str', abilityScaling: 0.6, buyPrice: 0, sellPrice: 40000 },
     // V17: 위더 블레이드 4종(네크론의 검 + 촉매) — 실제 최종 캐스터 무기
@@ -665,33 +665,60 @@
   // 레거시 장비 슬롯 정규화(구 방어구는 전부 흉갑 취급, 무기는 wclass 기준)
   EQUIPMENT.weapons.forEach(w => { if (!w.slot) w.slot = w.wclass === 'bow' ? 'bow' : 'weapon'; });
   EQUIPMENT.armor.forEach(a => { if (!a.slot) a.slot = 'chest'; });
-  // 1400종 신규 장비 DB(economy-equip.js가 window.ECON_EQUIP로 선로드) 머지
-  const EQ2 = (typeof window !== 'undefined' && window.ECON_EQUIP && Array.isArray(window.ECON_EQUIP.items)) ? window.ECON_EQUIP : null;
-  if (EQ2) {
-    for (const it of EQ2.items) {
-      const e = {
-        key: it.key, name: it.name, tierKey: it.tierKey, buyPrice: 0, sellPrice: it.sellPrice,
-        reqCombat: REQ_COMBAT_BY_TIER[it.tierKey] || 0, traits: it.traits || [], set: it.set || null,
-        src: it.src || 'field', flavor: it.flavor || '',
-      };
-      if (it.slot === 'sword' || it.slot === 'bow') {
-        e.wclass = it.slot === 'bow' ? 'bow' : 'sword'; e.slot = it.slot === 'bow' ? 'bow' : 'weapon'; e.dmg = it.dmg;
-        EQUIPMENT.weapons.push(e);
-      } else {
-        e.slot = it.slot; e.defense = it.defense || 0; e.hp = it.hp || 0;
-        EQUIPMENT.armor.push(e);
-      }
+  // 실제 하이픽셀 장비 카탈로그(economy-gear.js가 window.ECON_GEAR로 선로드, 공식 Hypixel API 원본) 머지.
+  //   실제 id·이름·등급·스탯·요구·판매가 그대로. 무기 220 / 방어구 830 / 장신구 553 / 도구 152.
+  const STAT_FIELDS = ['str', 'critDamage', 'critChance', 'hp', 'defense', 'trueDefense', 'intelligence', 'ferocity', 'attackSpeed', 'speed', 'seaCreatureChance', 'magicFind', 'miningSpeed', 'miningFortune', 'farmingFortune', 'foragingFortune', 'fishingSpeed', 'swingRange', 'abilityDamage'];
+  function mergeReal(it, list, isWeapon) {
+    const e = { key: it.key, id: it.id, name: it.name, real: true, tierKey: it.tierKey, tier: it.tier,
+      buyPrice: 0, sellPrice: it.sellPrice || 0, reqCombat: it.reqCombat || 0, req: it.req || null, stats: it.stats || {} };
+    for (const f of STAT_FIELDS) if (it[f] != null) e[f] = it[f];
+    if (isWeapon) { e.wclass = it.wclass || 'sword'; e.slot = it.slot === 'bow' ? 'bow' : 'weapon'; e.dmg = it.dmg || 0; }
+    else { e.slot = it.slot; e.defense = it.defense || 0; e.hp = it.hp || 0; }
+    list.push(e);
+  }
+  const GEAR = (typeof window !== 'undefined' && window.ECON_GEAR) ? window.ECON_GEAR : null;
+  if (GEAR) {
+    // 이미 존재하는 실제 키(던전/슬레이어 드롭 플레이스홀더 등)는 실제 데이터로 덮어쓰고, 없으면 추가.
+    const wByKey = {}; EQUIPMENT.weapons.forEach(x => wByKey[x.key] = x);
+    const aByKey = {}; EQUIPMENT.armor.forEach(x => aByKey[x.key] = x);
+    function upsert(it, isWeapon) {
+      const ex = isWeapon ? wByKey[it.key] : aByKey[it.key];
+      if (ex) { ex.name = it.name; ex.id = it.id; ex.real = true; ex.tierKey = it.tierKey; ex.tier = it.tier; ex.sellPrice = it.sellPrice || ex.sellPrice || 0; ex.stats = it.stats || {}; ex.req = it.req || ex.req || null; if (it.reqCombat) ex.reqCombat = it.reqCombat;
+        for (const f of STAT_FIELDS) if (it[f] != null) ex[f] = it[f];
+        if (isWeapon) { ex.wclass = it.wclass || ex.wclass || 'sword'; ex.slot = it.slot === 'bow' ? 'bow' : 'weapon'; ex.dmg = it.dmg || 0; } else { ex.slot = it.slot; ex.defense = it.defense || 0; ex.hp = it.hp || 0; }
+      } else mergeReal(it, isWeapon ? EQUIPMENT.weapons : EQUIPMENT.armor, isWeapon);
     }
-    EQUIPMENT.weapons.sort((x, y) => x.dmg - y.dmg || (x.key < y.key ? -1 : 1));
-    EQUIPMENT.armor.sort((x, y) => x.defense - y.defense || (x.key < y.key ? -1 : 1));
-    // 슬레이어 T5 전리품: 계열 전용 최상위 장비로 교체(플레이스홀더 → 실제 키)
-    const bySrc = {};
-    EQ2.items.forEach(it => { (bySrc[it.src] = bySrc[it.src] || []).push(it); });
-    SLAYERS.forEach(sd => {
-      const fam = sd.key.replace('_slayer', '');
-      const pool = (bySrc['slayer_' + fam] || []).slice().sort((x, y) => (REQ_COMBAT_BY_TIER[y.tierKey] || 0) - (REQ_COMBAT_BY_TIER[x.tierKey] || 0));
-      if (pool.length >= 2 && sd.tiers[4]) sd.tiers[4].rareDropTable = [sd.dropResource, pool[0].key, pool[1].key];
-    });
+    (GEAR.weapons || []).forEach(it => upsert(it, true));
+    (GEAR.armor || []).forEach(it => upsert(it, false));
+    EQUIPMENT.accessories = (GEAR.accessories || []).map(it => ({ key: it.key, id: it.id, name: it.name, real: true, tierKey: it.tierKey, tier: it.tier, sellPrice: it.sellPrice || 0, slot: 'accessory', stats: it.stats || {}, magicalPower: (ITEM_TIERS.find(t => t.key === it.tierKey) || {}).magicalPower || 3 }));
+    EQUIPMENT.weapons.sort((x, y) => (x.dmg || 0) - (y.dmg || 0) || (x.key < y.key ? -1 : 1));
+    EQUIPMENT.armor.sort((x, y) => (x.defense || 0) - (y.defense || 0) || (x.key < y.key ? -1 : 1));
+    // 레거시 티어 장비(레시피/드롭이 참조하는 weapon_*/armor_* 등)를 동급 실제 아이템 이름·스탯으로 이식(키 유지 → 호환).
+    const realByClassTier = { weapon: {}, bow: {}, staff: {}, armor: {} };
+    const saneGear = it => it.tier !== 'UNOBTAINABLE' && (it.dmg || 0) <= 1000 && (it.defense || 0) <= 1000;   // 노벨티/미획득(레이건 등) 제외
+    (GEAR.weapons || []).forEach(it => { if (!saneGear(it)) return; const c = it.wclass || 'sword'; const g = c === 'bow' ? 'bow' : c === 'staff' ? 'staff' : 'weapon'; (realByClassTier[g][it.tierKey] = realByClassTier[g][it.tierKey] || []).push(it); });
+    (GEAR.armor || []).forEach(it => { if (!saneGear(it)) return; (realByClassTier.armor[it.tierKey] = realByClassTier.armor[it.tierKey] || []).push(it); });
+    const TIER_ORDER = ITEM_TIERS.map(t => t.key);
+    function nearestReal(group, tierKey) {
+      const gt = realByClassTier[group]; if (!gt) return null;
+      if (gt[tierKey] && gt[tierKey].length) return gt[tierKey];
+      const ti = TIER_ORDER.indexOf(tierKey);
+      for (let d = 1; d < TIER_ORDER.length; d++) { for (const k of [TIER_ORDER[ti - d], TIER_ORDER[ti + d]]) if (k && gt[k] && gt[k].length) return gt[k]; }
+      return null;
+    }
+    const pick = { weapon: {}, bow: {}, staff: {}, armor: {} };
+    function assignReal(e, group) {
+      const pool = nearestReal(group, e.tierKey); if (!pool || !pool.length) return;
+      const idx = (pick[group][e.tierKey] = (pick[group][e.tierKey] || 0)); pick[group][e.tierKey] = idx + 1;
+      const r = pool[idx % pool.length];
+      e.name = r.name; e.id = r.id; e.real = true; e.stats = r.stats || {}; e.tier = r.tier; e.tierKey = r.tierKey;
+      for (const f of STAT_FIELDS) if (r[f] != null) e[f] = r[f];
+      if (group === 'armor') { e.defense = r.defense || 0; e.hp = r.hp || 0; } else { e.dmg = r.dmg || 0; }
+    }
+    EQUIPMENT.weapons.forEach(w => { if (!w.real) assignReal(w, w.wclass === 'bow' ? 'bow' : w.wclass === 'staff' ? 'staff' : 'weapon'); });
+    EQUIPMENT.armor.forEach(a => { if (!a.real) assignReal(a, 'armor'); });
+    EQUIPMENT.weapons.sort((x, y) => (x.dmg || 0) - (y.dmg || 0) || (x.key < y.key ? -1 : 1));
+    EQUIPMENT.armor.sort((x, y) => (x.defense || 0) - (y.defense || 0) || (x.key < y.key ? -1 : 1));
   }
   // 도구도 계열별 105종 추가(전부 드롭 전용) — 배율 0.6~2.6, 기존 5종 사다리는 그대로 유지
   const GEN_TOOL_BASES = ['공구', '연장', '장비', '명품', '걸작', '비장의 도구', '유물 공구', '고대 연장', '전설의 공구', '신화의 연장', '용의 도구', '별의 공구', '태초의 연장', '창세의 공구', '신의 연장'];
