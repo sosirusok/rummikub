@@ -5445,6 +5445,59 @@
       const y = surfaceTop(x, z);
       if (getBlockLocal(x, y - 1, z) === ID.sand) { setW(x, y, z, ID.sugar_cane); setW(x, y + 1, z, ID.sugar_cane); }
     }
+    // ── V71: 실사(Mushroom_Desert.png) — 붉은 메사 후두 첨탑 + 선인장 + 서측 오아시스(야자/계단 연못) ──
+    {
+      const MOR = ID.terracotta_orange != null ? ID.terracotta_orange : ID.wool_orange;
+      const MRD = ID.terracotta_red != null ? ID.terracotta_red : ID.bricks;
+      const MBR = ID.terracotta_brown != null ? ID.terracotta_brown : ID.dirt;
+      // 1) 후두(hoodoo) 첨탑 5기 — 붉은 밴딩 원기둥, 중앙 능선부
+      for (const [hx, hz, hh, hr] of [[70, 48, 16, 3], [80, 56, 12, 2], [62, 60, 14, 3], [88, 44, 10, 2], [74, 66, 11, 2]]) {
+        const g = surfaceTop(hx, hz);
+        if (g < 8) continue;
+        for (let y = 0; y < hh; y++) {
+          const rr2 = y > hh - 3 ? hr - 1 : hr;
+          for (let dx = -rr2; dx <= rr2; dx++) for (let dz = -rr2; dz <= rr2; dz++) {
+            if (Math.hypot(dx, dz) > rr2 + 0.3) continue;
+            const band = (g + y) % 5;
+            setW(hx + dx, g + y, hz + dz, band === 0 ? MRD : band === 3 ? MBR : MOR);
+          }
+        }
+        setW(hx, g + hh, hz, ID.sand); if (hh >= 14) setW(hx, g + hh + 1, hz, ID.mushroom_red_block != null ? ID.mushroom_red_block : 0);
+      }
+      // 2) 선인장(라임 콘크리트 기둥) — 동측 모래밭 산포
+      const CAC = ID.concrete_lime != null ? ID.concrete_lime : (ID.wool_lime != null ? ID.wool_lime : ID.oak_leaves);
+      for (let x = 78; x < W - 10; x += 2) for (let z = 14; z < Dp - 14; z += 2) {
+        if (hash3(x, 1011, z) > 0.018) continue;
+        const g = surfaceTop(x, z);
+        if (g < 8 || getBlockLocal(x, g - 1, z) !== ID.sand || getBlockLocal(x, g, z) !== 0) continue;
+        const ch = 2 + Math.floor(hash3(x, 1012, z) * 2);
+        for (let y = 0; y < ch; y++) setW(x, g + y, z, CAC);
+      }
+      // 3) 서측 오아시스: 계단식 연못 3단 + 야자수 4그루 + 잔디 테
+      {
+        const ox2 = 36, oz2 = 84;
+        for (let ti = 0; ti < 3; ti++) {
+          const px2 = ox2 + ti * 5, pz2 = oz2 + ti * 3, pr = 4 - ti;
+          const g = surfaceTop(px2, pz2);
+          if (g < 8) continue;
+          for (let dx = -pr; dx <= pr; dx++) for (let dz = -pr; dz <= pr; dz++) {
+            const d = Math.hypot(dx, dz);
+            if (d > pr + 0.3) continue;
+            for (let y = g; y <= g + 3; y++) setW(px2 + dx, y, pz2 + dz, 0);
+            setW(px2 + dx, g - 1, pz2 + dz, d > pr - 1 ? ID.grass : ID.water);
+          }
+        }
+        for (const [tx2, tz2] of [[30, 80], [42, 80], [34, 92], [46, 90]]) {
+          const g = surfaceTop(tx2, tz2);
+          if (g < 8 || getBlockLocal(tx2, g, tz2) !== 0) continue;
+          const th2 = 5 + Math.floor(hash3(tx2, 1013, tz2) * 2);
+          for (let y = 0; y < th2; y++) setW(tx2, g + y, tz2, ID.jungle_log != null ? ID.jungle_log : ID.oak_log);
+          for (const [lx2, lz2] of [[1, 0], [-1, 0], [0, 1], [0, -1], [2, 0], [-2, 0], [0, 2], [0, -2], [1, 1], [-1, -1], [1, -1], [-1, 1]])
+            setW(tx2 + lx2, g + th2 - 1 + (Math.abs(lx2) + Math.abs(lz2) > 1 ? -1 : 0), tz2 + lz2, ID.oak_leaves);   // 야자 잎(펼침)
+          setW(tx2, g + th2, tz2, ID.oak_leaves);
+        }
+      }
+    }
     buildGiantMushrooms();   // V48: 거대 버섯 군락 + 사막 정착지(등산객 NPC 마을)
     buildWarpPads();
   }
