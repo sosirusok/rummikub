@@ -5243,6 +5243,55 @@
       const y = surfaceTop(x, z) - 1;
       if (getBlockLocal(x, y, z) === ID.netherrack) setW(x, y, z, hash3(i, 93, 3) < 0.6 ? ID.soul_sand : ID.magma_block);
     }
+    // ── V73: 실사(Blazing_Fortress.png) — 표면 용암 균열 맥 + 검붉은 뿔 첨탑(림) + 마그마 원형 패치 ──
+    {
+      const NB = ID.nether_bricks != null ? ID.nether_bricks : ID.obsidian;
+      // 1) 용암 균열 맥 6줄(랜덤워크): 표면 1칸 파고 용암 + 마그마 가장자리
+      for (let v = 0; v < 6; v++) {
+        let vx = 64 + (hash3(v, 1031, 1) - 0.5) * 56, vz = 64 + (hash3(v, 1031, 2) - 0.5) * 56;
+        let dir = hash3(v, 1032, 1) * Math.PI * 2;
+        for (let st2 = 0; st2 < 45; st2++) {
+          dir += (hash3(v, 1033, st2) - 0.5) * 0.8;
+          vx += Math.cos(dir); vz += Math.sin(dir);
+          const ix = Math.round(vx), iz = Math.round(vz);
+          if (Math.hypot(ix - 64, iz - 64) > 48) continue;
+          const g = surfaceTop(ix, iz);
+          if (g < 8 || getBlockLocal(ix, g - 1, iz) !== ID.netherrack) continue;
+          setW(ix, g - 1, iz, ID.lava);
+          if (hash3(ix, 1034, iz) < 0.5 && getBlockLocal(ix + 1, g - 1, iz) === ID.netherrack) setW(ix + 1, g - 1, iz, ID.magma_block);
+        }
+      }
+      // 2) 검붉은 뿔 첨탑 8기(림, 위로 갈수록 옆으로 휘는 곡선) — 네더벽돌/네더랙 혼합
+      for (let n2 = 0; n2 < 8; n2++) {
+        const a2 = n2 / 8 * Math.PI * 2 + 0.25;
+        const sx = Math.round(64 + Math.cos(a2) * 44), sz = Math.round(64 + Math.sin(a2) * 44);
+        const g = surfaceTop(sx, sz);
+        if (g < 8) continue;
+        const hh = 10 + Math.floor(hash3(sx, 1035, sz) * 8);
+        const bendX = Math.cos(a2), bendZ = Math.sin(a2);   // 바깥으로 휨
+        for (let y = 0; y < hh; y++) {
+          const off = Math.floor((y / hh) * (y / hh) * 4);
+          const cx2 = sx + Math.round(bendX * off), cz2 = sz + Math.round(bendZ * off);
+          const rr2 = y < 3 ? 2 : y < hh - 3 ? 1 : 0;
+          for (let dx = -rr2; dx <= rr2; dx++) for (let dz = -rr2; dz <= rr2; dz++) {
+            if (Math.abs(dx) + Math.abs(dz) > rr2 + 1) continue;
+            setW(cx2 + dx, g + y, cz2 + dz, hash3(cx2 + dx, 1036 + y, cz2 + dz) < 0.35 ? NB : ID.netherrack);
+          }
+        }
+      }
+      // 3) 마그마 원형 패치 5곳(실사의 어두운 원 무늬 광장)
+      for (const [mx, mz] of [[52, 76], [78, 52], [70, 84], [46, 56], [84, 72]]) {
+        const g = surfaceTop(mx, mz);
+        if (g < 8) continue;
+        for (let dx = -4; dx <= 4; dx++) for (let dz = -4; dz <= 4; dz++) {
+          const d = Math.hypot(dx, dz);
+          if (d > 4.3) continue;
+          const gy2 = surfaceTop(mx + dx, mz + dz) - 1;
+          if (getBlockLocal(mx + dx, gy2, mz + dz) !== ID.netherrack) continue;
+          if (d > 3.2 || hash3(mx + dx, 1037, mz + dz) < 0.3) setW(mx + dx, gy2, mz + dz, d > 3.2 ? ID.magma_block : NB);
+        }
+      }
+    }
     // ── V20-AJ: 손 사각 네더 분위기 조형 — 흑요석 현무암 첨탑 + 발광석 천장 군집 + 용암 폭포 ──
     for (let n = 0; n < 18; n++) {   // 현무암(흑요석) 첨탑 — 섬 곳곳 비대칭, 높이 차등
       const a = hash3(n, 300, 1) * Math.PI * 2, rr = 12 + hash3(n, 301, 2) * 34;
