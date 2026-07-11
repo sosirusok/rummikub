@@ -470,10 +470,21 @@
     top += Math.round(bump(x, z, 224, 86, 68, 31));     // 북쪽 설산(먼 곳, 정상 y≥48)
     top += Math.round(bump(x, z, 96, 208, 46, 8));      // 서쪽 광산 언덕
     top -= Math.round(bump(x, z, 322, 322, 22, 2));     // 연못 분지
-    // 완만한 구릉 — 마을(중심 70칸)은 평탄 유지, 외곽만 굴곡. 진폭 소·스케일 대 → 계단은 1칸 이하(통행 보장)
+    // V44: 실제 허브식 릴리프 — 구역별 고도차(수작업 좌표)
+    top += Math.round(bump(x, z, 146, 140, 42, 5));     // 숲 구릉(완만한 언덕 숲)
+    top += Math.round(bump(x, z, 84, 282, 34, 5));      // 폐허 플래토(솟은 대지)
+    top += Math.round(bump(x, z, 318, 122, 30, 7));     // 마법사 탑 언덕
+    top -= Math.round(bump(x, z, 158, 316, 24, 2));     // 묘지 분지(가라앉은 골짜기)
+    top += Math.round(bump(x, z, 296, 168, 20, 4));     // 야생 언덕 A(농장-마법사 사이)
+    top += Math.round(bump(x, z, 128, 242, 16, 4));     // 야생 언덕 B(광산-폐허 사이)
+    top += Math.round(bump(x, z, 262, 322, 18, 4));     // 야생 언덕 C(연못-아레나 사이)
+    top += Math.round(bump(x, z, 352, 268, 16, 5));     // 야생 언덕 D(농장 남동)
+    top += Math.round(bump(x, z, 150, 96, 14, 3));      // 캐슬 대지(성 아래 기단 언덕)
+    // 완만한 구릉 — 마을(중심 70칸)은 평탄 유지, 외곽만 굴곡. V44: 진폭 2.2→3.6(실제 야생 굴곡)
     const dc = Math.hypot(x - HUB_C, z - HUB_C);
-    const amp = 2.2 * Math.max(0, Math.min(1, (dc - 70) / 150));
+    const amp = 3.6 * Math.max(0, Math.min(1, (dc - 70) / 150));
     top += Math.round((smoothNoise(x, z, 34) - 0.5) * 2 * amp);
+    if (f < 0.16) top -= Math.round((0.16 - Math.max(0, f)) * 24);   // V44: 해안 사면 — 대륙 가장자리로 3~4칸 내려가는 벼랑/해변 느낌
     return { y: Math.min(H - 6, top), f };
   }
   function zoneAt(x, z) {
@@ -547,6 +558,8 @@
       if (a % 3 === 0) { const hx = Math.round(224 + Math.cos(ang + 0.06) * 158), hz = Math.round(224 + Math.sin(ang + 0.06) * 158); const ht = surfaceTop(hx, hz); if (getBlockLocal(hx, ht - 1, hz) === ID.grass) for (let i = 0; i < 4; i++) setW(hx + i, surfaceTop(hx + i, hz), hz, ID.oak_leaves); }
     }
     buildWilderness();
+    buildHubCastle();    // V44: 허브 캐슬(실제 허브 북서) — 성벽/4탑/알현실/총안
+    buildDockPier();     // V44: 연못 → 실제 부두(잔교/계류 보트/어부 오두막)
     buildHubRealign();   // V25-A: 딥서치(위키 좌표) 기반 실제 허브 정합 — 터번/플라워하우스/커뮤니티센터/시리우스 오두막/침몰 크립트   // V24: 허허벌판 채우기 — 풍차/코티지/과수원/정자/캠프/목장(손 배치)
     buildHubPortal();
     buildWarpPads();
@@ -565,7 +578,7 @@
       const r = hash3(x, 111, z);
       const field = smoothNoise(x, z, 26);                              // 저주파 → 꽃 색이 지역별로 뭉쳐 예쁜 색밭
       // V28-C: 나무는 '숲 군락(grove)'에만 — 아무 데나 심던 균일 산포 폐기(실제 스블 허브처럼 개활지와 숲이 구분)
-      const grove = smoothNoise(x + 137, z + 59, 17) > 0.66;
+      const grove = smoothNoise(x + 137, z + 59, 17) > 0.60;   // V44: 숲 군락 확대(밀도 증가)
       // 밭 보호: 주변 3칸에 작물/사탕수수/경작지가 있으면 나무·덤불 금지(사탕수수밭 자작나무 버그)
       const nearCrop = () => {
         for (let dx = -3; dx <= 3; dx++) for (let dz = -3; dz <= 3; dz++) {
@@ -574,7 +587,7 @@
         }
         return false;
       };
-      if (wild && grove && r < 0.045 && !nearCrop()) { (r < 0.032 ? plantOak : plantBirch)(x, z); }        // 군락 내 밀도 높은 숲
+      if (wild && grove && r < 0.062 && !nearCrop()) { (r < 0.038 ? plantOak : r < 0.052 ? plantBirch : plantSpruce)(x, z); }        // V44: 군락 밀도 상향 + 가문비 혼합림
       else if (wild && grove && r < 0.055) setW(x, y, z, ID.oak_leaves);                                    // 군락 덤불
       else if (wild && !grove && r < 0.0012 && !nearCrop()) plantOak(x, z);                                 // 개활지 고독한 나무(아주 드묾)
       else if (wild && r >= 0.997 && !nearCrop()) {                                                         // V28-C: 쓰러진 통나무(1.21.5) — 그루터기+가로 원목+버섯
@@ -582,12 +595,87 @@
         setW(x, y, z, ID.oak_log);
         for (let i = 1; i <= len; i++) { const lx = x + (horiz ? i + 1 : 0), lz = z + (horiz ? 0 : i + 1); const ly = surfaceTop(lx, lz); if (getBlockLocal(lx, ly - 1, lz) === ID.grass) setW(lx, ly, lz, ID.oak_log); if (i === 2 && hash3(lx, 79, lz) < 0.6) setW(lx, ly + 1, lz, ID.mushroom_brown != null ? ID.mushroom_brown : ID.mushroom_red); }
       }
-      else if (r < 0.30) setW(x, y, z, ID.tall_grass);                                                    // 풍성한 잔디(전역)
-      else if (r < 0.42) setW(x, y, z, field < 0.34 ? ID.flower_yellow : field < 0.68 ? ID.flower_red : ID.tall_grass);   // 색 군집 꽃밭(전역)
+      else if (r < 0.38) setW(x, y, z, ID.tall_grass);                                                    // V44: 풍성한 잔디 밀도 상향
+      else if (r < 0.52) setW(x, y, z, field < 0.34 ? ID.flower_yellow : field < 0.68 ? ID.flower_red : ID.tall_grass);   // V44: 색 군집 꽃밭 확대
       else if (r < 0.425) { setW(x, y, z, ID.mossy_cobblestone); if (r < 0.4215) { setW(x, y + 1, z, ID.mossy_cobblestone); setW(x + 1, y, z, ID.cobblestone); } }  // 바위 군집
     }
   }
 
+  // V44: 허브 캐슬 — 실제 스카이블럭 허브 북서쪽 캐슬(좌표단위 수작업). 26×22 성곽 + 코너 탑 4기 + 알현실 인테리어
+  function buildHubCastle() {
+    const CX = 150, CZ = 96, HW = 13, HD = 11;         // 중심/반폭/반깊이
+    const base = surfaceTop(CX, CZ);
+    // 부지 정리: 성 볼륨 + 주변 1칸을 공기로(나무/덤불 제거), 바닥은 석재 기단으로 평탄화
+    for (let x = CX - HW - 2; x <= CX + HW + 2; x++) for (let z = CZ - HD - 2; z <= CZ + HD + 2; z++) {
+      for (let y = base - 3; y <= base + 22; y++) setW(x, y, z, 0);
+      for (let y = Math.max(2, base - 6); y <= base - 1; y++) setW(x, y, z, ID.stone);
+      setW(x, base - 1, z, Math.abs(x - CX) <= HW && Math.abs(z - CZ) <= HD ? ID.stone_bricks : ID.grass);
+    }
+    const wallId = (x, y, z) => (hash3(x, y, z) < 0.12 ? ID.mossy_stone_bricks : hash3(x, y + 7, z) < 0.08 ? ID.cracked_stone_bricks : ID.stone_bricks);
+    // 성벽(높이 9) + 총안(crenellation) + 창(유리)
+    for (let x = CX - HW; x <= CX + HW; x++) for (let z = CZ - HD; z <= CZ + HD; z++) {
+      const onEdge = x === CX - HW || x === CX + HW || z === CZ - HD || z === CZ + HD;
+      if (!onEdge) continue;
+      for (let y = 0; y < 9; y++) {
+        let id = wallId(x, base + y, z);
+        if (y >= 3 && y <= 4 && ((Math.abs(x - CX) % 5 === 0 && (z === CZ - HD || z === CZ + HD)) || (Math.abs(z - CZ) % 5 === 0 && (x === CX - HW || x === CX + HW)))) id = ID.glass;
+        setW(x, base + y, z, id);
+      }
+      if ((x + z) % 2 === 0) setW(x, base + 9, z, ID.stone_bricks);   // 총안 요철
+    }
+    // 코너 탑 4기(r2, 높이 15, 꼭대기 발광)
+    for (const [tx, tz] of [[CX - HW, CZ - HD], [CX + HW, CZ - HD], [CX - HW, CZ + HD], [CX + HW, CZ + HD]]) {
+      for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) {
+        if (Math.hypot(dx, dz) > 2.4) continue;
+        const ring = Math.hypot(dx, dz) > 1.4;
+        for (let y = 0; y < 15; y++) if (ring) setW(tx + dx, base + y, tz + dz, wallId(tx + dx, base + y, tz + dz));
+        setW(tx + dx, base + 15, tz + dz, ring && (dx + dz) % 2 === 0 ? ID.stone_bricks : 0);
+      }
+      setW(tx, base + 15, tz, ID.glowstone);   // 탑 꼭대기 등불
+    }
+    // 정문(남쪽, 광장 방향): 3폭 아치 + 다크오크 문설주 + 진입로
+    for (let dx = -1; dx <= 1; dx++) for (let y = 0; y < 4; y++) setW(CX + dx, base + y, CZ + HD, 0);
+    setW(CX - 2, base + 4, CZ + HD, ID.dark_oak_log); setW(CX + 2, base + 4, CZ + HD, ID.dark_oak_log);
+    for (let dx = -1; dx <= 1; dx++) setW(CX + dx, base + 4, CZ + HD, ID.mossy_stone_bricks);
+    for (let i = 1; i <= 10; i++) { const pz = CZ + HD + i; const pt = surfaceTop(CX, pz); for (let dx = -1; dx <= 1; dx++) setW(CX + dx, pt - 1, pz, i % 4 ? ID.gravel : ID.cobblestone); }
+    // 알현실 인테리어: 레드카펫(양털) + 석영 옥좌 + 연회 탁자 + 횃불 벽 + 2층 회랑
+    for (let z = CZ - HD + 2; z <= CZ + HD - 2; z++) for (let dx = -1; dx <= 1; dx++) setW(CX + dx, base, z, ID.wool_red);
+    const tz0 = CZ - HD + 3;
+    setW(CX, base, tz0, ID.quartz_block); setW(CX, base + 1, tz0, ID.quartz_block); setW(CX - 1, base + 1, tz0, ID.purpur); setW(CX + 1, base + 1, tz0, ID.purpur);   // 옥좌
+    setW(CX - 1, base, tz0 + 1, ID.quartz_block); setW(CX + 1, base, tz0 + 1, ID.quartz_block);
+    for (let i = 0; i < 5; i++) { setW(CX - 5, base, CZ - 2 + i, ID.oak_planks); setW(CX + 5, base, CZ - 2 + i, ID.oak_planks); }   // 연회 탁자 2열
+    setW(CX - 5, base + 1, CZ, ID.glowstone); setW(CX + 5, base + 1, CZ, ID.glowstone);
+    for (let x = CX - HW + 1; x <= CX + HW - 1; x += 6) { setW(x, base + 5, CZ - HD + 1, ID.torch != null ? ID.torch : ID.glowstone); setW(x, base + 5, CZ + HD - 1, ID.torch != null ? ID.torch : ID.glowstone); }
+    for (let x = CX - HW + 1; x <= CX + HW - 1; x++) { setW(x, base + 5, CZ - HD + 2, ID.oak_planks); setW(x, base + 5, CZ + HD - 2, ID.oak_planks); }   // 2층 회랑 바닥
+    // 깃발 느낌: 정문 위 퍼퍼 배너 기둥
+    setW(CX - 2, base + 6, CZ + HD, ID.purpur); setW(CX + 2, base + 6, CZ + HD, ID.purpur);
+  }
+  // V44: 부두 확장 — 연못 존을 실제 부두로(잔교 2기 + 계류 보트 + 어부 오두막 + 등대 말뚝)
+  function buildDockPier() {
+    const px = 322, pz = 322;
+    const wy = surfaceTop(px, pz) - 1;   // 수면 근처 기준
+    const pier = (x0, z0, dz, len) => {
+      for (let i = 0; i < len; i++) {
+        const z = z0 + i * dz;
+        for (let dx = 0; dx <= 1; dx++) { setW(x0 + dx, wy + 1, z, ID.oak_planks); }
+        if (i % 3 === 0) { setW(x0 - 1, wy + 1, z, ID.oak_fence); setW(x0 + 2, wy + 1, z, ID.oak_fence); setW(x0 - 1, wy, z, ID.oak_log); setW(x0 + 2, wy, z, ID.oak_log); }
+        if (i === len - 1) { setW(x0, wy + 2, z, ID.oak_fence); setW(x0 + 1, wy + 2, z, ID.oak_fence); setW(x0, wy + 3, z, ID.glowstone); }
+      }
+    };
+    pier(316, 318, 1, 9);    // 남향 잔교
+    pier(328, 330, -1, 8);   // 북향 잔교
+    // 어부 오두막(4×4, 가문비)
+    const hx = 310, hz = 312, hy = surfaceTop(hx, hz);
+    for (let dx = 0; dx < 4; dx++) for (let dz = 0; dz < 4; dz++) {
+      for (let y = 0; y < 3; y++) { const edge = dx === 0 || dx === 3 || dz === 0 || dz === 3; if (edge) setW(hx + dx, hy + y, hz + dz, y === 1 && dx === 1 && dz === 0 ? 0 : ID.spruce_planks); }
+      setW(hx + dx, hy + 3, hz + dz, ID.spruce_log);
+    }
+    setW(hx + 1, hy, hz, 0); setW(hx + 1, hy + 1, hz, 0);   // 문
+    setW(hx + 2, hy + 4, hz + 2, ID.glowstone);
+    // 계류 보트(참나무 판자 소형 선체)
+    for (let i = 0; i < 3; i++) { setW(318, wy, 330 + i, ID.oak_planks); }
+    setW(318, wy + 1, 330, ID.oak_fence); setW(318, wy + 1, 332, ID.oak_fence);
+  }
   // V33-B: 야생 벨트 소형 POI — 전부 좌표단위 수작업(빈 들판 채우기)
   function buildWildPOIs() {
     const gy = (x, z) => surfaceTop(x, z);
