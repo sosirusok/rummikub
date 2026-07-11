@@ -546,6 +546,7 @@
     buildForestZone();
     buildPondZone();
     buildColosseum();
+    colosseumOvergrowth();   // V66: 실사(Colosseum.png, 0.23 폐허화) — 이끼/균열 풍화 + 덩굴 + 둘레 가문비 + 무너진 아치
     buildWizardTower();
     buildRuinsZone();
     buildZigguratV6();
@@ -2826,6 +2827,52 @@
       setW(bx + 2, by + 4, bz + 2, ID.glowstone);
     }
     lampPost(306, 318);
+  }
+  // V66: 현재 위키의 콜로세움은 수풀에 뒤덮인 폐허 — 검투사 게임플레이(관중석/지하/제단)는 유지하고
+  //   외관만 폐허화: 사암 일부를 이끼/조약돌로 풍화, 상단 림 덩굴, 둘레 가문비 숲, 무너진 아치 잔해
+  function colosseumOvergrowth() {
+    const cx = 224, cz = 352, ROUT = 21;
+    // 1) 사암 풍화(약 1/4) — 실사의 회색 이끼 낀 잔해 톤
+    for (let x = cx - ROUT - 2; x <= cx + ROUT + 2; x++) for (let z = cz - ROUT - 2; z <= cz + ROUT + 2; z++) {
+      for (let y = 16; y <= 34; y++) {
+        if (getBlockLocal(x, y, z) !== ID.sandstone) continue;
+        const r = hash3(x, 961 + y, z);
+        if (r < 0.14) setW(x, y, z, ID.mossy_cobblestone);
+        else if (r < 0.24) setW(x, y, z, ID.cobblestone);
+      }
+    }
+    // 2) 상단/관중석에 덩굴 잎 + 풀 포기
+    for (let a = 0; a < 60; a++) {
+      const th = a / 60 * Math.PI * 2, rr = 12 + hash3(a, 962, 1) * 9;
+      const x = cx + Math.round(Math.cos(th) * rr), z = cz + Math.round(Math.sin(th) * rr);
+      const t = surfaceTop(x, z);
+      const below = getBlockLocal(x, t - 1, z);
+      if (below !== ID.sandstone && below !== ID.mossy_cobblestone && below !== ID.cobblestone) continue;
+      const r = hash3(x, 963, z);
+      if (r < 0.4) setW(x, t, z, ID.oak_leaves);
+      else if (r < 0.7) setW(x, t, z, ID.tall_grass);
+    }
+    // 3) 둘레 가문비 숲(실사의 침엽수 군락)
+    for (let a = 0; a < 10; a++) {
+      const th = a / 10 * Math.PI * 2 + 0.3;
+      const rr = ROUT + 5 + (hash3(a, 964, 2) * 5 | 0);
+      const x = cx + Math.round(Math.cos(th) * rr), z = cz + Math.round(Math.sin(th) * rr);
+      if (zoneAt(x, z) !== 'arena') continue;
+      const t = surfaceTop(x, z);
+      if (getBlockLocal(x, t - 1, z) === ID.grass && getBlockLocal(x, t, z) === 0) plantSpruce(x, z);
+    }
+    // 4) 무너진 아치 잔해(북동 바깥 — 실사의 홀로 선 아치)
+    {
+      const ax = cx + 26, az = cz - 24;
+      if (zoneAt(ax, az) === 'arena') {
+        const g = surfaceTop(ax, az);
+        for (let y = 0; y < 5; y++) { setW(ax, g + y, az, ID.stone_bricks); setW(ax + 4, g + y, az, hash3(ax, 965, y) < 0.3 ? ID.mossy_cobblestone : ID.stone_bricks); }
+        setW(ax + 1, g + 5, az, ID.stone_bricks); setW(ax + 2, g + 5, az, ID.mossy_cobblestone);   // 부러진 상인방(끝이 끊김)
+        setW(ax, g + 5, az, ID.stone_bricks); setW(ax + 4, g + 5, az, ID.stone_bricks);
+        setW(ax + 2, g, az + 1, ID.cobblestone); setW(ax + 3, g, az + 2, ID.mossy_cobblestone);   // 잔해 더미
+        setW(ax, g + 3, az + 1, ID.oak_leaves); setW(ax + 4, g + 2, az - 1, ID.oak_leaves);   // 덩굴
+      }
+    }
   }
   function buildColosseum() {
     // V18: 로마식 원형 투기장 — 계단식 관중석 + 아치 입구 4방 + 크레넬 성벽 + 깃발/랜턴
