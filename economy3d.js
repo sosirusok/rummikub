@@ -2472,6 +2472,26 @@
     scatterOre(88, 208, 16, 17, 26, ID.iron_ore, 20, 66);
     for (let z = 204; z <= 212; z += 2) { setW(103, 25, z, ID.oak_log); }   // 갱목
     [[80, 24, 200], [94, 25, 214], [84, 20, 216], [92, 19, 200]].forEach(p2 => setW(p2[0], p2[1], p2[2], ID.glowstone));
+    // ── V64: 실사(Coal_Mine.png) 내부 — 목재 갠트리(기둥+대들보+랜턴) + 자갈/거친흙 혼합 바닥 ──
+    for (let x = 106; x <= 116; x += 5) {   // 입구 터널 갠트리
+      for (let y = 21; y <= 24; y++) { setW(x, y, 205, ID.oak_log); setW(x, y, 211, ID.oak_log); }
+      for (let z = 205; z <= 211; z++) setW(x, 25, z, ID.oak_planks);
+      setW(x, 24, 208, ID.glowstone);
+    }
+    {   // 챔버 중앙 대형 갠트리(실사의 십자 대들보)
+      for (let y = 19; y <= 25; y++) { setW(84, y, 208, ID.oak_log); setW(92, y, 208, ID.oak_log); }
+      for (let x = 83; x <= 93; x++) setW(x, 26, 208, ID.oak_planks);
+      for (let z = 203; z <= 213; z++) setW(88, 26, z, ID.oak_planks);
+      setW(85, 25, 208, ID.glowstone); setW(91, 25, 208, ID.glowstone);
+      setW(84, 21, 207, ID.oak_fence); setW(84, 22, 207, ID.glowstone);   // 기둥 랜턴
+    }
+    for (let x = 76; x <= 100; x++) for (let z = 196; z <= 220; z++) {   // 바닥 질감: 자갈/거친흙 패치
+      const r = hash3(x, 941, z);
+      if (r > 0.4) continue;
+      for (let y = 17; y <= 20; y++) {
+        if (getBlockLocal(x, y, z) !== 0 && getBlockLocal(x, y + 1, z) === 0) { setW(x, y, z, r < 0.22 ? ID.gravel : ID.coarse_dirt); break; }
+      }
+    }
     buildHouse(108, 214, 7, 6, surfaceTop(111, 217), ID.spruce_planks, ID.stone);   // 감독관 오두막
   }
   function buildGraveyardZone() {
