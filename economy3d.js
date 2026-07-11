@@ -511,8 +511,10 @@
       for (let y = top; y >= Math.max(2, top - depth); y--) {
         let id = ID.stone;
         if (y === top) {
-          if (top >= 34) id = ID.snow_block;                                        // 설산 만년설
-          else if (top >= 30) id = hash3(x, 36, z) < 0.5 ? ID.stone : ID.snow_block;  // 설산 기슭(눈+바위 얼룩)
+          // V65: 실사(Mountain.png) — 회색 크래그 산 + 정상부만 만년설 캡 + 이끼 낀 바위 선반
+          if (top >= 46) id = ID.snow_block;                                        // 만년설 캡(정상부)
+          else if (top >= 36) { const ch = hash3(x, 36, z); id = ch < 0.10 ? ID.snow_block : ch < 0.42 ? ID.stone : ch < 0.72 ? (ID.polished_andesite != null ? ID.polished_andesite : ID.stone) : ch < 0.86 ? ID.cobblestone : ID.quartz_block; }   // 회색 크래그(흰 줄무늬)
+          else if (top >= 30) { const ch = hash3(x, 36, z); id = ch < 0.38 ? ID.stone : ch < 0.62 ? ID.grass : ch < 0.85 ? (ID.polished_andesite != null ? ID.polished_andesite : ID.stone) : ID.mossy_cobblestone; }   // 이끼 선반 기슭
           else if (zn === 'graveyard') id = hash3(x >> 1, 31, z >> 1) < 0.4 ? ID.coarse_dirt : (hash3(x, 32, z) < 0.15 ? ID.gravel : ID.grass);
           else if (zn === 'coalmine') id = hash3(x >> 1, 33, z >> 1) < 0.35 ? ID.gravel : ID.grass;
           else {
@@ -2460,6 +2462,31 @@
     const py = surfaceTop(224, 78);   // 정상 전망대
     for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) setW(224 + dx, py, 78 + dz, ID.spruce_planks);
     [[222, 76], [226, 76], [222, 80], [226, 80]].forEach(p2 => { setW(p2[0], py + 1, p2[1], ID.spruce_log); setW(p2[0], py + 2, p2[1], ID.glowstone); });
+    // V65: 실사(Mountain.png) — 정상 사당(어두운 플레어 지붕 소옥) + 능선 깃발 기둥 + 얼음 첨탑
+    {
+      const hx = 214, hz = 82, hy = surfaceTop(hx + 2, hz + 1);
+      const DKP = ID.dark_oak_planks != null ? ID.dark_oak_planks : ID.spruce_planks;
+      for (let dx = 0; dx < 5; dx++) for (let dz = 0; dz < 4; dz++) for (let y = hy; y <= hy + 6; y++) setW(hx + dx, y, hz + dz, 0);
+      for (const [ox, oz] of [[0, 0], [4, 0], [0, 3], [4, 3]]) for (let y = 0; y < 3; y++) setW(hx + ox, hy + y, hz + oz, ID.spruce_log);
+      for (let dx = 0; dx < 5; dx++) { setW(hx + dx, hy + 1, hz, ID.spruce_planks); setW(hx + dx, hy + 1, hz + 3, ID.spruce_planks); }   // 낮은 난간벽
+      for (let dx = -1; dx <= 5; dx++) for (let dz = -1; dz <= 4; dz++) setW(hx + dx, hy + 3, hz + dz, DKP);   // 플레어 처마
+      for (let dx = 0; dx < 5; dx++) for (let dz = 0; dz < 4; dz++) setW(hx + dx, hy + 4, hz + dz, DKP);
+      setW(hx + 2, hy + 5, hz + 1, DKP); setW(hx + 2, hy + 6, hz + 1, ID.glowstone);   // 용마루 + 등
+      setW(hx + 2, hy, hz + 1, ID.glowstone);   // 사당 내등
+    }
+    for (const [fx, fz] of [[236, 74], [208, 92], [230, 102]]) {   // 능선 깃발 기둥(주황 배너)
+      if (zoneAt(fx, fz) !== 'snowpeak') continue;
+      const fy = surfaceTop(fx, fz);
+      setW(fx, fy, fz, ID.spruce_log); setW(fx, fy + 1, fz, ID.spruce_log); setW(fx, fy + 2, fz, ID.spruce_log);
+      setW(fx + 1, fy + 2, fz, ID.wool_orange != null ? ID.wool_orange : ID.wool_red); setW(fx + 1, fy + 1, fz, ID.wool_orange != null ? ID.wool_orange : ID.wool_red);
+    }
+    for (const [ix, iz] of [[218, 74], [232, 84], [224, 70]]) {   // 얼음 첨탑(실사의 청빙 수정)
+      if (zoneAt(ix, iz) !== 'snowpeak') continue;
+      const iy = surfaceTop(ix, iz);
+      if (iy < 44) continue;
+      setW(ix, iy, iz, ID.ice); setW(ix, iy + 1, iz, ID.ice); setW(ix, iy + 2, iz, ID.ice);
+      if (hash3(ix, 951, iz) < 0.5) setW(ix, iy + 3, iz, ID.ice);
+    }
   }
   function buildCoalMineZone() {
     // 언덕에 갱도 입구 → 내부 챔버(석탄/철 광맥) — 실제 Coal Mine 감성
