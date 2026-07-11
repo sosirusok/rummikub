@@ -1049,10 +1049,11 @@
   function toolFamilyOfKey(k) {
     if (!k) return null;
     for (const fam in D().TOOLS) if ((D().TOOLS[fam] || []).some(t => t.key === k)) return fam;
-    const m = /^(wooden|stone|iron|golden|diamond|netherite|ancient)_(pickaxe|axe|shovel|hoe)$/.exec(k);
+    const m = /^(wooden|stone|iron|golden|diamond|netherite|ancient|promising)_(pickaxe|axe|shovel|hoe)$/.exec(k);
     return m ? m[2] : null;
   }
   function heldToolTier(k, fam) {
+    if (/^promising_/.test(k || '')) return 1;   // V40: 프로미싱 도끼/삽 = 나무 등급(위키 퀘스트 보상)
     const ladder = D().TOOLS[fam] || [];
     const t = ladder.find(x => x.key === k);
     const lv = skillLevel(TOOL_SKILL[fam] || 'mining');
@@ -1388,7 +1389,7 @@
   function bankDeposit(amount) {
     amount = amount === 'all' ? P.gold : Math.min(amount, P.gold);
     if (amount <= 0) { toastFn('예치할 골드가 없어요', false); return; }
-    addGold(-amount); P.bank += amount; saveNow(); renderZone();
+    addGold(-amount); P.bank += amount; stat('bankDeposits'); saveNow(); renderZone();
   }
   function bankWithdraw(amount) {
     amount = amount === 'all' ? P.bank : Math.min(amount, P.bank);
@@ -1427,6 +1428,7 @@
   }
   function recordMinionCraft(key, tier) {
     if (!P.minionCrafts) P.minionCrafts = {};
+    stat('minionsCrafted');
     P.minionCrafts[`${key}:${tier}`] = 1;
     const uniq = Object.keys(P.minionCrafts).length;
     const slots = Math.min(D().MINION_SLOT_MAX, 5 + minionSlotBonus(uniq) + Math.min(5, P.minionSlotsBought || 0));   // 실제: 기본5 + 조합보너스(최대21) + 상점(최대5) = 31
@@ -2115,6 +2117,11 @@
       case 'place': return statValue('blocksPlaced');
       case 'gold': return statValue('goldEarned');
       case 'souls': return statValue('fairySouls');
+      case 'enchant': return statValue('enchantsApplied');   // V40: 도서관 카드
+      case 'reforge': return statValue('reforges');          // V40: 리포저
+      case 'bank': return statValue('bankDeposits');         // V40: 저축하기
+      case 'minion': return statValue('minionsCrafted');     // V40: 헛간으로 돌아가서
+      case 'zones': return Object.keys(P.zonesVisited || {}).length;   // V40: 탐험가
       case 'talk': return 0;   // 대화형: 수락 즉시 목표 도달로 취급
       default: return 0;
     }
@@ -2133,7 +2140,7 @@
   function acceptQuest(key) {
     if (!questAvailable(key)) return false;
     const q = questDef(key);
-    P.quests.active[key] = { base: questMetric(q.objective), at: Date.now() };
+    P.quests.active[key] = { base: (q.objective.type === 'zones' || q.objective.type === 'souls') ? 0 : questMetric(q.objective), at: Date.now() };   // V40: 탐험가/소울은 총량 기준(실제)
     P.quests.seen[key] = 1;
     toastFn(`📜 퀘스트 수락: [${q.name}] — ${q.objective.label} 0/${q.objective.count}`, true);
     saveNow(); if (typeof renderZone === 'function') renderZone();
@@ -2144,6 +2151,7 @@
     const rw = q.reward || {};
     if (rw.gold) addGold(rw.gold);
     if (rw.xp && rw.xp.skill) addSkillXp(rw.xp.skill, rw.xp.amt || 0);
+    if (rw.sbXp) P.sbXp = (P.sbXp || 0) + rw.sbXp;   // V40: 실제 퀘스트 보상 +5 스카이블럭 XP
     if (Array.isArray(rw.items)) rw.items.forEach(it => addItem(it.key, it.n || 1));
   }
   function tryCompleteQuest(key) {
@@ -2378,7 +2386,7 @@
     const pick = pool[Math.floor(Math.random() * pool.length)];
     P.reforgeSlots[slot] = Object.assign({}, pick);
     toastFn(`리포지 결과: [${pick.name}] ${SLOT_NAMES[slot] || slot}!`, true);
-    saveNow(); renderZone();
+    stat('reforges'); saveNow(); renderZone();
   }
   function reforgePremium(slot) {
     if (!hasItem('reforge_stone_rare')) { toastFn('리포지 스톤(희귀)이 필요해요', false); return; }
@@ -2389,7 +2397,7 @@
     const pick = D().REFORGES.premium[reforgePoolType(slot)];
     P.reforgeSlots[slot] = Object.assign({}, pick);
     toastFn(`💎 스톤 리포지! [${pick.name}] 확정 부여!`, true);
-    saveNow(); renderZone();
+    stat('reforges'); saveNow(); renderZone();
   }
   // V20-D: +α 최상급 리포지 — 신룡의 룬석(F11 드롭) 소모, 신룡/천상 테마 커스텀
   function reforgeApex(slot) {
@@ -2401,7 +2409,7 @@
     const pick = D().REFORGES.premiumApex[reforgePoolType(slot)];
     P.reforgeSlots[slot] = Object.assign({}, pick);
     toastFn(`🐉 전설 리포지! [${pick.name}] 확정 부여!`, true);
-    saveNow(); renderZone();
+    stat('reforges'); saveNow(); renderZone();
   }
   // (구버전 API 호환 — 기존 테스트/세이브의 개별 아이템 리포지 보너스도 계속 동작)
   function reforge(key) {
@@ -2411,7 +2419,7 @@
     addGold(-tierDef.reforgeCost);
     P.reforgeBonus[key] = (P.reforgeBonus[key] || 0) + 1 + Math.floor(Math.random() * 3);
     toastFn(`리포지 성공! ${shopE.name} 공격력 보너스 +${P.reforgeBonus[key]}`, true);
-    saveNow(); renderZone();
+    stat('reforges'); saveNow(); renderZone();
   }
 
   /* ---------------- 렌더링 ---------------- */
@@ -3839,6 +3847,7 @@
   window.econApi = {
     getP: () => P,
     save: () => saveNow(),   // V21-D2: 3D 측 진행 플래그(파크 게이트 등) 영속화
+    markZoneVisited: (k) => { if (!P) return; if (!P.zonesVisited) P.zonesVisited = {}; if (!P.zonesVisited[k]) P.zonesVisited[k] = 1; },   // V40: 탐험가 퀘스트
     openChest: (key) => { activeChest = key; P.chests = P.chests || {}; P.chests[key] = P.chests[key] || {}; },   // V21-E1
     dumpChest: (key) => dumpChest(key),   // V21-E1: 상자 파괴 시 내용물 회수
     hasActiveEncounter: () => !!(activeCombat || dungeonRun),
@@ -3934,6 +3943,7 @@
       open, stop, act, getP: () => P, setP: v => { P = v; }, renderZone, itemName, itemLore, shopDef,
       gather, buyItem, sellItem, addItem, hasItem, removeItem, addGold,
       skillLevel, addSkillXp, addCollection, collectionTierIdx,
+      acceptQuest, questProgress, tryCompleteQuest, questAvailable, questDef,
       placeMinion, upgradeMinion, upgradeMinionStorage, collectMinion, tickMinions, minionStorageCap, minionSpeedMul, useMinionFuel,
       startSlayer, combatAttack, combatFlee, getActiveCombat: () => activeCombat,
       startDungeon, dungeonAdvance, dungeonSecretClick, getDungeonRun: () => dungeonRun, dungeonGrade, canEnterFloor,
@@ -3952,6 +3962,7 @@
       smeltItem, chestPut, chestTake, dumpChest, getChest: k => (P.chests || {})[k],
       dungeonAttack, dungeonLootTreasure,
       bankDeposit, bankWithdraw, bankInterestTick,
+      markZoneVisited: (k) => { if (!P) return; if (!P.zonesVisited) P.zonesVisited = {}; if (!P.zonesVisited[k]) { P.zonesVisited[k] = 1; } },
       dealsForToday, buyDeal, bestToolMul, sellBonusPct, minionSlotCost,
       freshPlayer, migrate, saveNow, saveLocal, loadLocal, loadCloud, cloudReady,
       setZone: z => { zone = z; }, getZone: () => zone, setHubTab: t => { hubTab = t; }, getHubTab: () => hubTab,

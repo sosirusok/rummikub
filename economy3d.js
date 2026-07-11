@@ -4114,6 +4114,7 @@
   }
   function warpTo(dest, menuWarp) {
     if (!WORLD_DEFS[dest]) return;
+    if (window.econApi && window.econApi.markZoneVisited) window.econApi.markZoneVisited('world:' + dest);   // V40: 탐험가 퀘스트
     const req = WARP_REQ[dest];
     const api = econApi();
     if (req && api.skillLv && api.skillLv(req.sk) < req.lv) {
@@ -7615,9 +7616,11 @@
   };
   let _zoneAmbCur = null, _zoneAmbT = 0;
   function tickZoneAmbience(dt) {
+    if (worldMode && window.econApi && window.econApi.markZoneVisited) window.econApi.markZoneVisited('world:' + worldMode);   // V40: 탐험가 — 현재 월드도 방문 기록
     if (worldMode !== 'hub' || !scene) return;
     _zoneAmbT -= dt; if (_zoneAmbT > 0) return; _zoneAmbT = 0.25;   // 0.25초마다 갱신
     const zk = zoneAt(Math.floor(P.x), Math.floor(P.z)) || 'wild';
+    if (window.econApi && window.econApi.markZoneVisited) window.econApi.markZoneVisited('hub:' + zk);   // V40: 탐험가 퀘스트
     const tgt = HUB_ZONE_AMBIENCE[zk] || HUB_ZONE_AMBIENCE.wild;
     if (!_zoneAmbCur) _zoneAmbCur = { light: tgt.light, sky: tgt.sky.slice(), fog: tgt.fog };
     const k = 0.18;   // 지수 보간(부드러운 전환)
