@@ -2651,16 +2651,19 @@
       ${chestNavRow(null)}`;
   }
   function bestiaryHTML() {
+    // V36: 상자 GUI — 종별 슬롯(처치 수 뱃지), 호버 = 별/다음 마일스톤
     const b = P.bestiary || {};
-    const MS = [10, 100, 500, 1000];   // V10: 종별 마일스톤 4단계
+    const MS = [10, 100, 500, 1000];
     const entries = Object.keys(b).sort((x, y) => b[y] - b[x]);
-    return `<h4>📕 도감 — 종별 처치 100마리당 전투 피해 +0.5% (현재 +${bestiaryBonusPct()}%)</h4>
-      <p class="muted">종별 마일스톤: ${MS.map(m => fmtNum(m)).join(' → ')}마리 (★4 = 그 종의 정복자!)</p>
-      ${entries.length ? `<div class="econ-colgrid">${entries.slice(0, 60).map(k => {
-        const n = b[k]; const stars = MS.filter(m => n >= m).length;
-        const next = MS.find(m => n < m);
-        return `<div class="econ-colrow"><span>${k} <span style="color:#f6c945">${'★'.repeat(stars)}</span><span class="muted">${'☆'.repeat(4 - stars)}</span></span><span><b>${fmtNum(n)}</b>마리</span><span class="muted">${next ? `다음 ★까지 ${fmtNum(next - n)}` : '정복 완료!'}</span></div>`;
-      }).join('')}</div>` : '<p class="econ-note">아직 처치 기록이 없어요. 사냥을 시작해보세요!</p>'}`;
+    const pad9 = (arr) => { const out = arr.slice(); while (out.length % 9) out.push('<div class="mc-slot mc-empty2"></div>'); return out.join(''); };
+    const nameOf = t => (typeof window !== 'undefined' && window.economy3dMobName) ? window.economy3dMobName(t) : t;
+    const slots = entries.slice(0, 54).map(k => {
+      const n = b[k]; const stars = MS.filter(m => n >= m).length; const next = MS.find(m => n < m);
+      return `<div class="mc-slot mc-menuslot" data-ttn="${escHtml(nameOf(k))} ${'★'.repeat(stars)}${'☆'.repeat(4 - stars)}" data-ttd="${fmtNum(n)}마리 처치 · ${next ? `다음 ★까지 ${fmtNum(next - n)}` : '정복 완료!'} · 100마리당 전투 피해 +0.5%"><span>📕</span><span class="mc-cnt">${n > 999 ? fmtNum(n) : n}</span></div>`;
+    });
+    return `<div class="mc-chest"><div class="mc-chesttitle">📕 도감 — 종별 100마리당 전투 피해 +0.5% (현재 +${bestiaryBonusPct()}%)</div>
+      ${entries.length ? `<div class="mc-grid">${pad9(slots)}</div>` : '<p class="muted">아직 처치 기록이 없어요. 사냥을 시작해보세요!</p>'}
+      ${chestNavRow('menu')}</div>`;
   }
   function skillsHTML() {
     // V34: 실제 스블 스킬 메뉴 = 상자 GUI 슬롯(호버 = 레벨/진행 로어)
@@ -2946,15 +2949,19 @@
     saveNow(); renderZone();
   }
   function bankHTML() {
+    // V36: 상자 GUI — 금괴 슬롯 클릭=예치, 호퍼측 슬롯 클릭=출금, 에메랄드=금고 업그레이드
     const bi = bankTierInfo();
-    return `<h4>🏦 은행 (하루 ${D().BANK.interestPctPerDay}% 이자 · 잔고 상한 ${fmtGold(bi.cap)})</h4>
-      ${bi.next ? `<button class="btn btn--sm" data-act="econ_bank_upgrade">금고 업그레이드 → 상한 ${fmtGold(bi.next.cap)} (비용 ${fmtGold(bi.next.cost)})</button>` : '<p class="muted">🏆 최고 등급 금고</p>'}
-      <p>예치금: <b style="color:#facc15">${fmtGold(P.bank)}</b> · 소지금: ${fmtGold(P.gold)}</p>
-      <div class="econ-tierbtns">
-        ${[1000, 10000, 'all'].map(a => `<button class="btn btn--sm" data-act="econ_bank_deposit" data-amt="${a}">예치 ${a === 'all' ? '전부' : fmtGold(a)}</button>`).join('')}
-        ${[1000, 10000, 'all'].map(a => `<button class="btn btn--sm btn--ghost" data-act="econ_bank_withdraw" data-amt="${a}">출금 ${a === 'all' ? '전부' : fmtGold(a)}</button>`).join('')}
-      </div>
-      <p class="muted">매일 첫 접속 시 이자가 자동 지급돼요.</p>`;
+    const pad9 = (arr) => { const out = arr.slice(); while (out.length % 9) out.push('<div class="mc-slot mc-empty2"></div>'); return out.join(''); };
+    const dep = (amt, icon, label) => `<div class="mc-slot mc-menuslot" data-act="econ_bank_deposit" data-amt="${amt}" data-ttn="예치 ${label}" data-ttd="클릭: 소지금에서 ${label} 예치">${iconImg(icon)}</div>`;
+    const wd = (amt, icon, label) => `<div class="mc-slot mc-menuslot" data-act="econ_bank_withdraw" data-amt="${amt}" data-ttn="출금 ${label}" data-ttd="클릭: 예치금에서 ${label} 출금">${iconImg(icon)}</div>`;
+    const up = bi.next ? `<div class="mc-slot mc-menuslot" data-act="econ_bank_upgrade" data-ttn="🏦 금고 업그레이드" data-ttd="상한 ${fmtGold(bi.next.cap)} · 비용 ${fmtGold(bi.next.cost)} — 클릭: 업그레이드">${iconImg('emerald')}</div>` : `<div class="mc-slot mc-menuslot mc-colmax" data-ttn="🏆 최고 등급 금고" data-ttd="상한 ${fmtGold(bi.cap)}">${iconImg('emerald')}</div>`;
+    return `<div class="mc-chest"><div class="mc-chesttitle">🏦 은행 — 예치 ${fmtGold(P.bank)} · 소지 ${fmtGold(P.gold)} (하루 ${bi.pct}% 이자 · 상한 ${fmtGold(bi.cap)})</div>
+      <div class="mc-chesttitle" style="margin-top:8px">예치 (금괴 클릭)</div>
+      <div class="mc-grid">${pad9([dep(1000, 'gold', '1,000G'), dep(10000, 'gold', '10,000G'), dep('all', 'gold_block', '전부'), up])}</div>
+      <div class="mc-chesttitle" style="margin-top:8px">출금</div>
+      <div class="mc-grid">${pad9([wd(1000, 'gold', '1,000G'), wd(10000, 'gold', '10,000G'), wd('all', 'gold_block', '전부')])}</div>
+      <p class="muted">매일 첫 접속 시 이자가 자동 지급돼요.</p>
+      ${chestNavRow('menu')}</div>`;
   }
   function minionsHTML() {
     const fuelLeft = P.minionFuelUntil > Date.now() ? Math.ceil((P.minionFuelUntil - Date.now()) / 3600000) : 0;
@@ -2977,11 +2984,17 @@
         <span class="muted">기본 5 + 고유조합 최대 +21 + 상점 최대 +5 = <b>${D().MINION_SLOT_MAX}칸</b>(실제 하이픽셀 상한)</span>
       </div>
       <p class="muted">실제 스카이블럭처럼 미니언은 <b>자원으로 조합</b>해요. 컬렉션 티어 1 달성 시 해금, 고유 조합 마일스톤(5·15·50·100·200·350·650)마다 슬롯 확장!</p>
-      <div class="econ-minionplace">${D().MINIONS.map(m => {
-        const c = m.tiers[0].craftCost; const un = minionUnlocked(m.key); const have = (P.inv[c.key] || 0);
-        return `<button class="btn btn--sm ${un ? '' : 'btn--ghost'}" data-act="econ_minion_place" data-key="${m.key}" ${un ? '' : 'disabled'}>${m.name}<br><span class="muted">${un ? `${itemName(c.key)} ${have}/${c.n}` : '컬렉션 티어1 필요'}</span></button>`;
-      }).join('')}</div>
-      <div class="econ-minionlist">${P.minions.map((m, i) => minionRowHTML(m, i)).join('') || '<p class="muted">배치된 미니언이 없어요 (자원을 모아 조합하세요)</p>'}</div>`;
+      <div class="mc-chesttitle" style="margin-top:8px">미니언 조합·배치 (슬롯 클릭 = 조합해 배치)</div>
+      <div class="mc-grid">${(() => {   // V36: 상자 GUI 슬롯 — 아이콘=재료, 뱃지=보유/필요, 잠금=컬렉션 미달
+        const slots = D().MINIONS.map(m => {
+          const c = m.tiers[0].craftCost; const un = minionUnlocked(m.key); const have = (P.inv[c.key] || 0);
+          return `<div class="mc-slot mc-menuslot ${un ? '' : 'mc-locked'}" ${un ? `data-act="econ_minion_place" data-key="${m.key}"` : ''} data-ttn="${escHtml(m.name)}" data-ttd="${un ? `재료: ${escHtml(itemName(c.key))} ${have}/${c.n} — 클릭: 조합·배치` : '컬렉션 티어 1 달성 시 해금'}">${iconImg(c.key)}${un && have >= c.n ? '<span class="mc-cnt">✔</span>' : ''}</div>`;
+        });
+        while (slots.length % 9) slots.push('<div class="mc-slot mc-empty2"></div>');
+        return slots.join('');
+      })()}</div>
+      <div class="econ-minionlist">${P.minions.map((m, i) => minionRowHTML(m, i)).join('') || '<p class="muted">배치된 미니언이 없어요 (자원을 모아 조합하세요)</p>'}</div>
+      ${chestNavRow('menu')}`;
   }
   function petsHTML() {
     // V35: 상자 GUI — 알 슬롯 클릭=부화, 펫 슬롯 클릭=활성화(✔=활성)
