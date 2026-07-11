@@ -536,6 +536,7 @@
     decorateWilds();
     buildWildPOIs();     // V33-B: 야생 벨트 소형 POI 18곳(우물/건초 수레/폐허 아치/사당/벤치/모닥불) — 꽉 찬 밀도
     buildPlazaFinish();  // V33-C: 광장 건물 외관 완성(굴뚝/창가 화단/문앞 등불/궤짝 더미)
+    buildPlazaGates();   // V33-D: 4방향 대문 아치
     // V28-C: 순환로 가로등(약 40블럭 간격) + 길가 생울타리 — 존 사이 개활지에 리듬감
     for (let a = 0; a < 24; a++) {
       const ang = a / 24 * Math.PI * 2;
@@ -636,6 +637,24 @@
     shrine(256, 140); shrine(312, 270); shrine(178, 306);
     bench(208, 298); bench(240, 298); bench(298, 206); bench(148, 196);
     campfire(202, 334); campfire(252, 322);
+  }
+  // V33-D: 광장 4방향 대문 — 실제 허브처럼 마을 경계에 큰 게이트 아치(수작업)
+  function buildPlazaGates() {
+    const gate = (cx, cz, axis) => {   // 7폭 석재 아치 + 등불 + 깃발(양털)
+      const y = 20;
+      for (let off = -3; off <= 3; off++) {
+        const x = axis === 'x' ? cx + off : cx, z = axis === 'x' ? cz : cz + off;
+        if (Math.abs(off) === 3) { for (let dy = 0; dy < 5; dy++) setW(x, y + dy, z, dy === 4 ? ID.stone_bricks : (dy === 3 ? ID.mossy_cobblestone : ID.stone_bricks)); setW(x, y + 5, z, ID.oak_fence); setW(x, y + 6, z, ID.wool_red != null ? ID.wool_red : ID.bricks); }
+        else { setW(x, y + 4, z, ID.stone_bricks); if (off === 0) setW(x, y + 5, z, ID.glowstone); }
+      }
+      // 등불 기둥 옆
+      const lx = axis === 'x' ? cx - 4 : cx + 1, lz = axis === 'x' ? cz + 1 : cz - 4;
+      setW(lx, y, lz, ID.oak_fence); setW(lx, y + 1, lz, ID.glowstone);
+    };
+    gate(224, 202, 'x');   // 북문(인챈트 탑 방향)
+    gate(224, 248, 'x');   // 남문(시장 방향)
+    gate(202, 224, 'z');   // 서문
+    gate(248, 224, 'z');   // 동문
   }
   // V33-C: 광장 건물 외관 완성 — 굴뚝/창가 화단/문앞 등불/궤짝(좌표단위)
   function buildPlazaFinish() {
