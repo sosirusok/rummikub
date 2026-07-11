@@ -573,6 +573,7 @@
     buildWarpPads();
     beautifyHub();   // V20-L: 광장 미화(분수·정원·벤치·현수막) — 마지막에 얹어 덮이지 않게
     buildHubInteriors();   // V21-D5: 명명 건물 인테리어(은행 창구/도서관/경매 전시대/게시판) — 대로·미화 이후 최후 배치(덮어쓰기 방지)
+    buildShopInteriors();  // V51: 소형 상점 인테리어(잡화점/펫 상점/플라워 하우스/커뮤니티 센터) — 공기 칸만 채움
     agingPass(70, 260, 110, 300, 0.5);    // V22-G2: 폐허 구역 — 석재 벽돌 절반을 이끼/금 간 변형으로(고대 유적 질감)
     agingPass(126, 296, 176, 336, 0.28);  // V22-G2: 묘지 구역 — 은은한 노후화
   }
@@ -809,6 +810,46 @@
     setW(X + 2, base + 1, Z + 2, ID.glowstone);
     // 마당 건초 롤 2개
     for (const [hx, hz] of [[X - 4, Z + 2], [X + Wd + 3, Z + 4]]) { const t = surfaceTop(hx, hz); setW(hx, t, hz, ID.hay_block); setW(hx + 1, t, hz, ID.hay_block); setW(hx, t + 1, hz, ID.hay_block); }
+  }
+
+
+  // V51: 소형 상점 인테리어 — 기존 건물 내부의 '공기 칸'만 채우는 안전 배치(벽/기둥 훼손 없음)
+  function buildShopInteriors() {
+    const put = (x, y, z, id) => { if (getBlockLocal(x, y, z) === 0) setW(x, y, z, id); };
+    const fy = (x, z) => surfaceTop(x, z);
+    { // ── 잡화점(상점 주인 204,244): L자 카운터 + 벽 선반 진열 + 궤짝 + 등불 ──
+      const y = fy(205, 243);
+      for (let i = 0; i < 4; i++) put(202 + i, y, 242, ID.oak_planks);      // 카운터
+      put(206, y, 243, ID.oak_planks); put(206, y, 244, ID.oak_planks);     // L자 꺾임
+      for (let i = 0; i < 3; i++) { put(202 + i, y + 2, 240, ID.oak_planks); put(202 + i, y + 3, 240, i === 1 ? ID.wool_yellow : ID.wool_red); }   // 선반+상품
+      put(201, y, 246, ID.oak_log); put(202, y, 246, ID.oak_log); put(201, y + 1, 246, ID.oak_log);   // 궤짝 더미
+      put(203, y + 3, 241, ID.glowstone);   // NPC(204,244) 머리 위 회피
+    }
+    { // ── 펫 상점(펫 상인 250,243): 우리 2칸(울타리) + 건초/물그릇 + 횃대 ──
+      const y = fy(251, 242);
+      for (let dx = 0; dx <= 2; dx++) { put(249 + dx, y, 240, ID.oak_fence); put(249 + dx, y, 238, ID.oak_fence); }
+      put(249, y, 239, ID.oak_fence); put(252, y, 239, ID.oak_fence);       // 우리 A
+      put(250, y, 239, ID.hay_block);
+      for (let dx = 0; dx <= 2; dx++) { put(253 + dx, y, 240, ID.oak_fence); }
+      put(254, y - 1, 239, ID.water);                                        // 물그릇(바닥 파임 대신 수면)
+      put(248, y, 244, ID.oak_fence); put(248, y + 1, 244, ID.oak_fence); put(248, y + 2, 244, ID.glowstone);   // 횃대 등불
+    }
+    { // ── 플라워 하우스(198,194): 화분 진열대 2열 + 융단 통로 ──
+      const y = fy(199, 196);
+      for (let i = 0; i < 4; i++) {
+        put(197 + i, y, 193, ID.oak_planks); put(197 + i, y + 1, 193, i % 2 ? ID.flower_red : ID.flower_yellow);
+        put(197 + i, y, 197, ID.oak_planks); put(197 + i, y + 1, 197, i % 2 ? ID.flower_yellow : ID.flower_red);
+      }
+      for (let i = 0; i < 4; i++) put(197 + i, y - 1, 195, ID.wool_pink != null ? ID.wool_pink : ID.wool_red);   // 융단
+      put(199, y + 3, 195, ID.glowstone);
+    }
+    { // ── 커뮤니티 센터(238,196): 회의 탁자 + 의자 6 + 연단 ──
+      const y = fy(239, 198);
+      for (let i = 0; i < 4; i++) put(237 + i, y, 197, ID.oak_planks);       // 긴 탁자
+      for (let i = 0; i < 3; i++) { put(237 + i * 2 - 1 + 1, y, 195, ID.oak_fence); put(237 + i * 2, y, 199, ID.oak_fence); }   // 의자
+      put(242, y, 197, ID.oak_log); put(242, y + 1, 197, ID.oak_planks);     // 연단
+      put(239, y + 3, 197, ID.glowstone);
+    }
   }
 
   // V45: 광산 남사면 계단식 노천 채석장 — 테라스 3단(석재/자갈), 갱목 지지대, 광석 노출면, 수레길
