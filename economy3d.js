@@ -1193,7 +1193,63 @@
     [[cx - 7, cz], [cx, cz - 7], [cx + 7, cz + 1]].forEach(p2 => { const t = surfaceTop(p2[0], p2[1]); setW(p2[0], t, p2[1], ID.glowstone); });   // 작업등
   }
   // V45: 폐허 — 무너진 성벽 라인(부분 잔존 높이) + 쓰러진 기둥 + 잔해 더미(플래토 가장자리)
+  // V63: 실사(Ruins.png) — 폐허 쌍탑 성채: 흰-회색 풍화 원탑 2기(붉은 원뿔 지붕, 부서진 총안) +
+  //   사이 무너진 성문 벽(아치) + 담쟁이 + 흙길. buildRuinWalls보다 먼저 호출됨(같은 훅에서).
+  function buildRuinTowers() {
+    const RED = ID.terracotta_red != null ? ID.terracotta_red : ID.bricks;
+    const tower = (cx, cz, h, seed) => {
+      if (zoneAt(cx, cz) !== 'ruins') return;
+      const base = surfaceTop(cx, cz), R = 3;
+      for (let y = 0; y < h; y++) for (let a = 0; a < 26; a++) {
+        const th = a / 26 * Math.PI * 2;
+        const x = cx + Math.round(Math.cos(th) * R), z = cz + Math.round(Math.sin(th) * R);
+        // 위로 갈수록 붕괴 확률 증가(부서진 실루엣)
+        if (y > h - 4 && hash3(x, seed + y, z) < 0.3 + (y - (h - 4)) * 0.15) continue;
+        const w = hash3(x, seed, z + y);
+        setW(x, base + y, z, w < 0.3 ? ID.quartz_block : w < 0.42 ? ID.mossy_cobblestone : ID.stone_bricks);
+      }
+      // 창(2개층) + 내부 비움은 원통이라 자동 — 담쟁이
+      setW(cx + R, base + Math.floor(h / 2), cz, ID.glass); setW(cx - R, base + Math.floor(h / 2) + 3, cz, ID.glass);
+      for (let v = 0; v < 6; v++) {
+        const th = hash3(cx, seed + 7, v) * Math.PI * 2;
+        const x = cx + Math.round(Math.cos(th) * (R + 1)), z = cz + Math.round(Math.sin(th) * (R + 1));
+        const vy = base + 1 + Math.floor(hash3(x, seed + 8, z) * (h - 4));
+        for (let i = 0; i < 2 + (v % 2); i++) setW(x, vy + i, z, ID.oak_leaves);
+      }
+      // 붉은 원뿔 지붕(계단 수렴) — 한쪽 탑은 반쯤 무너진 채(2단만)
+      const steps = seed % 2 === 0 ? 4 : 2;
+      for (let t2 = 0; t2 < steps; t2++) {
+        const rr = R - t2 + 1;
+        for (let a = 0; a < 26; a++) {
+          const th = a / 26 * Math.PI * 2;
+          setW(cx + Math.round(Math.cos(th) * Math.max(0, rr)), base + h + t2, cz + Math.round(Math.sin(th) * Math.max(0, rr)), RED);
+        }
+        for (let dx = -Math.max(0, rr - 1); dx <= Math.max(0, rr - 1); dx++) for (let dz = -Math.max(0, rr - 1); dz <= Math.max(0, rr - 1); dz++)
+          if (Math.hypot(dx, dz) <= rr - 0.5) setW(cx + dx, base + h + t2, cz + dz, RED);
+      }
+      if (steps === 4) { setW(cx, base + h + 4, cz, RED); setW(cx, base + h + 5, cz, RED); }
+    };
+    tower(76, 270, 12, 430); tower(76, 292, 14, 431);
+    // 성문 벽(두 탑 사이, x76 라인): 붕괴 갭 + 중앙 아치
+    for (let z = 274; z <= 288; z++) {
+      if (zoneAt(76, z) !== 'ruins') continue;
+      const t = surfaceTop(76, z);
+      const isGate = z >= 280 && z <= 282;
+      const hh = isGate ? 0 : hash3(76, 433, z) < 0.2 ? 0 : 2 + Math.floor(hash3(76, 434, z) * 4);
+      for (let y = 0; y < hh; y++) setW(76, t + y, z, hash3(76, 435 + y, z) < 0.35 ? ID.mossy_cobblestone : ID.stone_bricks);
+      if (z === 279 || z === 283) for (let y = 0; y < 5; y++) setW(76, t + y, z, ID.stone_bricks);   // 아치 기둥
+      if (isGate) setW(76, t + 5, z, ID.stone_bricks);   // 아치 상인방
+    }
+    // 성문으로 이어지는 흙길
+    for (let x = 77; x <= 96; x++) {
+      const z = 281 + Math.round(Math.sin(x * 0.4) * 1.5);
+      if (zoneAt(x, z) !== 'ruins') continue;
+      const g = surfaceTop(x, z);
+      if (getBlockLocal(x, g - 1, z) === ID.grass) setW(x, g - 1, z, ID.coarse_dirt);
+    }
+  }
   function buildRuinWalls() {
+    buildRuinTowers();   // V63: 쌍탑 성채(실사 Ruins.png)
     const wall = (x0, z0, x1, z1) => {
       const n = Math.max(Math.abs(x1 - x0), Math.abs(z1 - z0));
       for (let i = 0; i <= n; i++) {
