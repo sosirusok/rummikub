@@ -611,6 +611,41 @@
 
 
 
+
+  // V49: 네더 요새 다리 — 섬 가장자리에서 용암 바다 위로 뻗는 네더 벽돌 다리(교각/크레넬/종단 보물 플랫폼) + 성문 탑
+  function buildNetherBridges() {
+    const bridge = (x0, z0, dx, dz, len) => {
+      for (let i = 0; i < len; i++) {
+        const x = x0 + dx * i, z = z0 + dz * i;
+        for (let o = -1; o <= 1; o++) {
+          const px = dx !== 0 ? x : x + o, pz = dx !== 0 ? z + o : z;
+          setW(px, 20, pz, ID.nether_bricks);                                 // 상판
+          if (Math.abs(o) === 1 && i % 2 === 0) setW(px, 21, pz, ID.nether_bricks);   // 크레넬 난간
+        }
+        if (i % 6 === 3) for (let y = 3; y < 20; y++) { setW(x, y, z, ID.nether_bricks); }   // 용암까지 내려가는 교각
+        if (i % 9 === 4) setW(x, 22, z, ID.glowstone);                        // 다리 등불
+      }
+      // 종단 보물 플랫폼(5×5) + 금광석 더미 + 발광
+      const ex = x0 + dx * len, ez = z0 + dz * len;
+      for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) {
+        setW(ex + (dx !== 0 ? a : a), 20, ez + (dz !== 0 ? b : b), ID.nether_bricks);
+        if (Math.abs(a) === 2 && Math.abs(b) === 2) { setW(ex + a, 21, ez + b, ID.nether_bricks); setW(ex + a, 22, ez + b, ID.glowstone); }
+      }
+      setW(ex, 21, ez, ID.gold_ore); setW(ex + (dx ? -1 : 1), 21, ez, ID.gold_ore); setW(ex, 22, ez, ID.gold_ore);
+      // 성문 탑(다리 시작점): 좌우 기둥 + 아치
+      for (let y = 20; y <= 26; y++) {
+        setW(x0 + (dx !== 0 ? 0 : -2), y, z0 + (dz !== 0 ? 0 : -2) + (dx !== 0 ? -2 : 0) * 0, ID.nether_bricks);
+      }
+      const gx1 = dx !== 0 ? x0 : x0 - 2, gz1 = dx !== 0 ? z0 - 2 : z0;
+      const gx2 = dx !== 0 ? x0 : x0 + 2, gz2 = dx !== 0 ? z0 + 2 : z0;
+      for (let y = 20; y <= 26; y++) { setW(gx1, y, gz1, ID.nether_bricks); setW(gx2, y, gz2, ID.nether_bricks); }
+      for (let o = -2; o <= 2; o++) setW(dx !== 0 ? x0 : x0 + o, 26, dz !== 0 ? z0 + 0 : z0, ID.nether_bricks);
+      setW(gx1, 27, gz1, ID.glowstone); setW(gx2, 27, gz2, ID.glowstone);
+    };
+    bridge(104, 64, 1, 0, 18);   // 동쪽 다리(요새 외곽 회랑 동단에서 바다로)
+    bridge(64, 104, 0, 1, 18);   // 남쪽 다리
+  }
+
   // V48: 버섯 사막 — 거대 버섯 6기(균사체 서편) + 사막 정착지(사암 오두막 2/우물 — 중급 농부 퀘스트 무대)
   function buildGiantMushrooms() {
     const shroom = (x, z, red, h) => {
@@ -4393,6 +4428,7 @@
     }
     for (let o = -1; o <= 1; o++) for (let y = 21; y <= 23; y++) setW(64 + o, y, 52, 0);   // 남쪽 문
     [[56, 26, 38], [72, 26, 48], [64, 26, 42]].forEach(p2 => setW(p2[0], p2[1], p2[2], ID.glowstone));
+    buildNetherBridges();   // V49: 용암 바다 위 요새 다리 2기 + 성문 탑
     buildWarpPads();
   }
   // 🌌 디 엔드 V6: 중앙이 깊게 뚫린 심연 — 나선 미로 발판을 타고 내려가면 거대한 드래곤 둥지(실제 Dragon's Nest)
