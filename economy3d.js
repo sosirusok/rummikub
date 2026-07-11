@@ -8081,7 +8081,7 @@
   /* ---------------- 인월드 몬스터(실제 스카이블럭식: 이름 위 [Lv] 이름 ❤HP, 변종/정예) ---------------- */
   const MOB_TYPES = {
     // ── 허브 ──  books: 이 몹이 떨어뜨리는 인챈트북(V7: 북은 몹 드롭 전용)
-    zombie: { name: '좀비', kind: 'humanoid', color: 0x3a7d3a, hp: 100, dmg: 20, xp: 6, coins: 1, speed: 1.7, books: ['sharpness', 'smite'], drops: [{ key: 'rotten_flesh', n: 1 }, { key: 'poisonous_potato', n: 1, chance: 0.02 }, { key: 'potato', n: 1, chance: 0.01 }, { key: 'carrot', n: 1, chance: 0.01 }], tierCap: 1 },   // V77: 위키 드롭 정합
+    zombie: { name: '좀비', kind: 'humanoid', color: 0x3a7d3a, hp: 100, dmg: 20, hpAnchors: [[1, 100], [15, 707]], dmgAnchors: [[1, 20], [15, 111]], xp: 6, coins: 1, speed: 1.7, books: ['sharpness', 'smite'], drops: [{ key: 'rotten_flesh', n: 1 }, { key: 'poisonous_potato', n: 1, chance: 0.02 }, { key: 'potato', n: 1, chance: 0.01 }, { key: 'carrot', n: 1, chance: 0.01 }], tierCap: 1 },   // V77 드롭 + V81 위키 HP/공격 앵커(L1~15)
     creeper: { name: '크리퍼', kind: 'quad', color: 0x5ac26a, hp: 80, dmg: 20, xp: 6, coins: 2, speed: 1.5, books: ['smite'], drops: [{ key: 'gunpowder', n: 1 }], tierCap: 1 },   // V78: 위키 — HP80/DMG20, 화약 100%(프라이빗 섬 화약 공급원)
     skeleton: { name: '스켈레톤', kind: 'humanoid', color: 0xcccccc, hp: 100, dmg: 15, xp: 7, coins: 1, speed: 1.8, books: ['critical', 'prosecute'], drops: [{ key: 'bone', n: 1 }, { key: 'bone', n: 2, chance: 0.5 }], tierCap: 1 },   // V77: 위키 — HP100, 뼈2x 50%
     crypt_ghoul: { name: '크립트 구울', kind: 'humanoid', color: 0x5a8a5a, hp: 2000, dmg: 31, gear: { sword: 0xf7d84a }, xp: 25, coins: 15, speed: 2.2, books: ['giant_killer', 'execute'], drops: [{ key: 'rotten_flesh', n: 3 }, { key: 'gold', n: 1, chance: 0.25 }], tierCap: 3 },
@@ -8114,7 +8114,7 @@
     wither_skeleton: { name: '위더 스켈레톤', kind: 'tall', color: 0x2a2a2a, hp: 900, dmg: 65, xp: 45, coins: 10, speed: 2.2, books: ['titan_killer', 'dragon_hunter'], drops: [{ key: 'bone', n: 2 }, { key: 'coal', n: 3, chance: 0.5 }, { key: 'obsidian', n: 1, chance: 0.1 }], tierCap: 4 },
     magma_cube: { name: '마그마 큐브', kind: 'slime', color: 0xd2541f, hp: 350, dmg: 35, xp: 22, coins: 6, speed: 1.5, books: ['hardened', 'thorns'], drops: [{ key: 'magma_cream', n: 1 }, { key: 'blaze_rod', n: 1, chance: 0.15 }], tierCap: 3 },   // V79: 위키 — 마그마 크림 100%(컬렉션 공급원)
     pigman: { name: '피그맨', kind: 'humanoid', color: 0xe6a8ad, hp: 450, dmg: 48, xp: 28, coins: 8, speed: 2.1, books: ['vitality'], drops: [{ key: 'gold', n: 2, chance: 0.6 }], tierCap: 3 },
-    enderman: { name: '엔더맨', kind: 'tall', color: 0x1a1a22, hp: 800, dmg: 60, xp: 40, coins: 8, speed: 2.6, books: ['ender_slayer', 'sugar_rush'], drops: [{ key: 'ender_pearl', n: 1, chance: 0.5 }], tierCap: 4 },
+    enderman: { name: '엔더맨', kind: 'tall', color: 0x1a1a22, hp: 800, dmg: 60, hpAnchors: [[42, 4500], [45, 6000], [50, 9000]], dmgAnchors: [[42, 500], [45, 600], [50, 700]], xp: 40, coins: 8, speed: 2.6, books: ['ender_slayer', 'sugar_rush'], drops: [{ key: 'ender_pearl', n: 1, chance: 0.5 }], tierCap: 4 },   // V81: 위키 HP/공격 앵커(엔드 L42~50)
     endermite: { name: '엔더마이트', kind: 'quad', color: 0x5a3a6a, hp: 320, dmg: 66, xp: 20, coins: 5, speed: 3.2, scale: 0.5, books: [], drops: [{ key: 'ender_shard', n: 1 }, { key: 'ender_pearl', n: 1, chance: 0.15 }], tierCap: 3 },
     zealot: { name: '젤롯', kind: 'tall', color: 0x2a1a3a, hp: 655, dmg: 63, xp: 6, coins: 2, speed: 2.6, books: ['ender_slayer', 'last_stand', 'true_protection'], drops: [{ key: 'ender_pearl', n: 2 }, { key: 'ender_shard', n: 2 }, { key: 'enchanted_ender_pearl', n: 1, chance: 0.02 }, { key: 'summoning_eye', n: 1, chance: 1 / 420 }, { key: 'talisman_void_eye', n: 1, chance: 0.01 }], tierCap: 5 },   // V80: 위키 — 엔더진주100%+인챈티드2%+소환의눈1/420
     obsidian_defender: { name: '흑요석 수호자', kind: 'tall', color: 0x2a2040, hp: 500, dmg: 29, xp: 30, coins: 8, speed: 1.8, books: ['protection', 'hardened'], drops: [{ key: 'obsidian', n: 2 }], tierCap: 5 },
@@ -8432,10 +8432,18 @@
       const WK = window.ECON_DATA.WEEKLY; hpMulD *= WK.hpMul; rewardMul *= WK.rewardMul;
     }
     const mul = 1 + (lv - 1) * 0.35;
+    // V81: 위키 실측 HP/공격력 앵커 보간 — 레벨 범위 몹의 비선형 커브 재현(단일 선형 공식으로 불가)
+    const anchorStat = (a, L) => {
+      if (L <= a[0][0]) { const [x0, y0] = a[0], [x1, y1] = a[1] || a[0]; return x1 === x0 ? y0 : y0 + (y1 - y0) * (L - x0) / (x1 - x0); }
+      for (let i = 1; i < a.length; i++) if (L <= a[i][0]) { const [x0, y0] = a[i - 1], [x1, y1] = a[i]; return y0 + (y1 - y0) * (L - x0) / (x1 - x0); }
+      const n = a.length, [x0, y0] = a[n - 2] || a[0], [x1, y1] = a[n - 1]; return x1 === x0 ? y1 : y0 + (y1 - y0) * (L - x0) / (x1 - x0);
+    };
+    const baseHp = def.hpAnchors ? anchorStat(def.hpAnchors, lv) : def.hp * mul;
+    const baseDmg = def.dmgAnchors ? anchorStat(def.dmgAnchors, lv) : def.dmg * mul;
     const mob = {
       type: typeKey, def, lv, elite, rewardMul, weekly,
-      maxHp: Math.round(def.hp * mul * (elite ? 2.5 : 1) * hpMulD),
-      dmg: Math.round(def.dmg * mul * (elite ? 1.5 : 1) * dmgMulD),
+      maxHp: Math.round(Math.max(1, baseHp) * (elite ? 2.5 : 1) * hpMulD),
+      dmg: Math.round(Math.max(0, baseDmg) * (elite ? 1.5 : 1) * dmgMulD),
       state: 'wander', tx: x, tz: z, atkCd: 0, hitIdx: 0, area, walkT: Math.random() * 6,
     };
     mob.hp = mob.maxHp;
