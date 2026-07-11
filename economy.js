@@ -2610,6 +2610,16 @@
     return '';
   }
   /* ---- 스카이블럭 메뉴(네더의 별 ✦ 우클릭 / 핫바 9번) — 실제 메뉴 구성 패턴 ---- */
+  // V34: 실제 스블 상자 GUI 규격 — 하단 네비 행(화살표=뒤로, 배리어=닫기)
+  function chestNavRow(backKey) {
+    const cells = [];
+    for (let i = 0; i < 9; i++) {
+      if (i === 3 && backKey) cells.push(`<div class="mc-slot mc-menuslot" data-act="econ_menu" data-key="${backKey}" data-ttn="⬅ 뒤로 가기" data-ttd="이전 메뉴로">${iconImg('arrow')}</div>`);
+      else if (i === 4) cells.push(`<div class="mc-slot mc-menuslot" data-act="econ3d_panel_close" data-ttn="✕ 닫기" data-ttd="메뉴 닫기">${iconImg('barrier')}</div>`);
+      else cells.push('<div class="mc-slot mc-empty2"></div>');
+    }
+    return `<div class="mc-grid" style="margin-top:8px">${cells.join('')}</div>`;
+  }
   function menuHTML() {
     const tiles = [
       ['stats', '📊', '내 프로필', '스탯 시트'], ['skills', '🧠', '스킬', '8종 스킬 진행도'],
@@ -2637,7 +2647,8 @@
         <div class="mc-grid">${warpSlots.length ? pad(warpSlots).join('') : ''}</div>
         ${warpSlots.length ? '' : '<p class="muted">3D 월드에서 사용 가능</p>'}
       </div>
-      <p class="muted">상점·은행·인챈트·강화·리포지·특가는 마을의 해당 NPC에게 직접 찾아가세요!</p>`;
+      <p class="muted">상점·은행·인챈트·강화·리포지·특가는 마을의 해당 NPC에게 직접 찾아가세요!</p>
+      ${chestNavRow(null)}`;
   }
   function bestiaryHTML() {
     const b = P.bestiary || {};
@@ -2652,16 +2663,17 @@
       }).join('')}</div>` : '<p class="econ-note">아직 처치 기록이 없어요. 사냥을 시작해보세요!</p>'}`;
   }
   function skillsHTML() {
-    return `<h4>🧠 스킬 (실제 스카이블럭 XP 테이블 · 최대 ${D().SKILL_MAX_LEVEL}레벨)</h4>
-      <div class="econ-colgrid">${D().SKILLS.map(sk => {
-        const lv = skillLevel(sk.key), pr = skillXpProgress(sk.key);
-        const pct = pr.need > 0 ? Math.min(100, pr.cur / pr.need * 100) : 100;
-        return `<div class="econ-colrow"><span>${sk.name} <b>Lv.${lv}</b></span>
-          <span class="econ-hpbar" style="flex:1;height:14px"><span class="econ-hpbar__fill" style="width:${pct}%;background:linear-gradient(90deg,#2c82c9,#54c8e8)"></span></span>
-          <span class="muted">${pr.need ? `${pr.cur.toLocaleString()}/${pr.need.toLocaleString()} XP` : 'MAX'} · ${sk.bonusText}</span></div>`;
-      }).join('')}</div>`;
+    // V34: 실제 스블 스킬 메뉴 = 상자 GUI 슬롯(호버 = 레벨/진행 로어)
+    const IC = { combat: '⚔️', mining: '⛏️', farming: '🌾', foraging: '🪓', fishing: '🎣', enchanting: '✨', taming: '🐾', social: '💬' };
+    const slots = D().SKILLS.map(sk => {
+      const lv = skillLevel(sk.key), pr = skillXpProgress(sk.key);
+      const desc = `레벨 ${lv} · ${pr.need ? `${pr.cur.toLocaleString()}/${pr.need.toLocaleString()} XP` : 'MAX'} · ${sk.bonusText}`;
+      return `<div class="mc-slot mc-menuslot" data-ttn="${escHtml(sk.name)} Lv.${lv}" data-ttd="${escHtml(desc)}"><span>${IC[sk.key] || '📗'}</span><span class="mc-cnt">${lv}</span></div>`;
+    });
+    while (slots.length % 9) slots.push('<div class="mc-slot mc-empty2"></div>');
+    return `<div class="mc-chest"><div class="mc-chesttitle">🧠 스킬 (실제 스카이블럭 XP 테이블 · 최대 ${D().SKILL_MAX_LEVEL}레벨)</div>
+      <div class="mc-grid">${slots.join('')}</div>${chestNavRow('menu')}</div>`;
   }
-  /* ---- 인벤토리(전체 보유 아이템 + 판매) ---- */
   function invCatOf(k, sdef) {
     if (k.indexOf('enchant_book_') === 0) return 'book';
     if (k.indexOf('potion_') === 0 || k.indexOf('pet_egg_') === 0) return 'use';
@@ -3363,19 +3375,21 @@
       <div style="font-weight:800;margin-bottom:4px">${r.name} 컬렉션 — 전체 티어 보상 <span class="muted">(누적 ${fmtNum(cur)}개 · 현재 T${tier})</span></div>${rows}</div>`;
   }
   function collectionsHTML() {
-    return `<div class="muted" style="margin:2px 0 6px">컬렉션을 클릭하면 실제 스카이블럭처럼 모든 티어의 필요량과 보상을 볼 수 있어요.</div>` +
-      D().COLLECTIONS.map(cat => `<h4>${cat.category}</h4><div class="econ-colgrid">${cat.resources.map(r => {
-      const tier = collectionTierIdx(r.key), maxT = r.tierThresholds.length;
-      const cur = P.collections[r.key] || 0;
-      const next = tier < maxT ? r.tierThresholds[tier] : null;
-      const prev = tier > 0 ? r.tierThresholds[tier - 1] : 0;
-      const pct = next ? Math.min(100, Math.max(0, (cur - prev) / (next - prev) * 100)) : 100;
-      const nextRecipes = next ? D().RECIPES.filter(rc => rc.unlock && rc.unlock.resource === r.key && rc.unlock.tier === tier + 1).map(rc => itemName(rc.key)) : [];
-      const rewardTxt = next ? `T${tier + 1} 보상: ${nextRecipes.length ? `레시피 ${nextRecipes.slice(0, 2).join('·')}${nextRecipes.length > 2 ? ` 외 ${nextRecipes.length - 2}` : ''} · ` : ''}✦ +4 SB XP` : 'MAX 달성!';
-      return `<div class="econ-colrow" data-act="econ_col_detail" data-key="${r.key}" style="cursor:pointer" title="클릭 = 전체 티어 보상 보기"><span>${colDetailKey === r.key ? '▼' : '▶'} ${r.name} <b>T${tier}</b><span class="muted">/${maxT}</span></span>
-        <span class="econ-hpbar" style="flex:1;height:12px"><span class="econ-hpbar__fill" style="width:${pct.toFixed(0)}%;background:linear-gradient(90deg,#7a5cff,#b28dff)"></span></span>
-        <span class="muted">${fmtNum(cur)}${next ? `/${fmtNum(next)}` : ''} · ${rewardTxt}</span></div>${colDetailKey === r.key ? collectionDetailHTML(r) : ''}`;
-    }).join('')}</div>`).join('');
+    // V34: 실제 스블 컬렉션 메뉴 = 상자 GUI — 카테고리별 슬롯 그리드, 슬롯 클릭 = 티어 상세(다음 화면 개념)
+    const pad9 = (arr) => { const out = arr.slice(); while (out.length % 9) out.push('<div class="mc-slot mc-empty2"></div>'); return out.join(''); };
+    return `<div class="mc-chest"><div class="mc-chesttitle">📚 컬렉션</div>` +
+      D().COLLECTIONS.map(cat => {
+        const slots = cat.resources.map(r => {
+          const tier = collectionTierIdx(r.key), maxT = r.tierThresholds.length;
+          const cur = P.collections[r.key] || 0;
+          const next = tier < maxT ? r.tierThresholds[tier] : null;
+          const desc = `${fmtNum(cur)}${next ? ` / ${fmtNum(next)}` : ' (MAX)'} · 티어 ${tier}/${maxT} — 클릭: 전체 티어 보상`;
+          return `<div class="mc-slot mc-menuslot ${tier >= maxT ? 'mc-colmax' : ''}" data-act="econ_col_detail" data-key="${r.key}" data-ttn="${escHtml(r.name)} ${tier > 0 ? 'T' + tier : ''}" data-ttd="${escHtml(desc)}">${iconImg(r.key)}${tier > 0 ? `<span class="mc-cnt">${tier}</span>` : ''}</div>`;
+        });
+        const detail = cat.resources.find(r => colDetailKey === r.key);
+        return `<div class="mc-chesttitle" style="margin-top:8px">${cat.category}</div><div class="mc-grid">${pad9(slots)}</div>${detail ? collectionDetailHTML(detail) : ''}`;
+      }).join('') +
+      chestNavRow('menu') + `</div>`;
   }
   function statsHTML() {
     const w = equippedWeapon(), a = equippedArmor();
