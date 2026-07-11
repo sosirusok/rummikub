@@ -2635,9 +2635,9 @@
     const cx = 322, cz = 120, base = surfaceTop(cx, cz);
     const R = 4, H = 22;
     flattenSite(cx - R - 2, cz - R - 2, cx + R + 2, cz + R + 2, base - 1);
-    // 원통 벽(반경 R) — 아래 석재벽돌, 위 4칸 자수정(purpur)
+    // V59: 실사(Wizard_Tower.png) — 흰(석영) 몸통 + 최상단 퍼퍼 코니스 띠
     for (let y = base; y < base + H; y++) {
-      const mat = y >= base + H - 5 ? ID.purpur : ID.stone_bricks;
+      const mat = y >= base + H - 2 ? ID.purpur : ID.quartz_block;
       for (let a = 0; a < 40; a++) {
         const th = a / 40 * Math.PI * 2;
         const x = cx + Math.round(Math.cos(th) * R), z = cz + Math.round(Math.sin(th) * R);
@@ -2648,7 +2648,7 @@
     for (let dx = -R; dx <= R; dx++) for (let dz = -R; dz <= R; dz++) if (dx * dx + dz * dz <= R * R) { setW(cx + dx, base - 1, cz + dz, ID.polished_andesite); }
     // 4방 버트레스(모서리 지지 기둥 + 상단 자수정 캡)
     for (const [ox, oz] of [[R, 0], [-R, 0], [0, R], [0, -R]]) {
-      for (let y = base; y < base + H - 3; y++) setW(cx + ox, y, cz + oz, ID.chiseled_stone_bricks);
+      for (let y = base; y < base + H - 3; y++) setW(cx + ox, y, cz + oz, ID.quartz_block);
       setW(cx + ox, base + H - 3, cz + oz, ID.purpur); setW(cx + ox, base + H - 2, cz + oz, ID.glowstone);
     }
     // 아치창(3층, 4방) — 유리 + 위에 계단 아치머리
@@ -2667,16 +2667,47 @@
       for (let a = 0; a < 48; a++) {
         const th = a / 48 * Math.PI * 2, dx = Math.cos(th), dz = Math.sin(th);
         const x = cx + Math.round(dx * rr), z = cz + Math.round(dz * rr);
-        const f = Math.abs(dx) > Math.abs(dz) ? (dx > 0 ? 1 : 3) : (dz > 0 ? 0 : 2);   // 바깥 향해 물매
-        const sid = stairIdFor(ID.purpur, f);
-        setW(x, ry, z, rr > 0 && sid != null ? sid : ID.purpur);
+        const BL = ID.wool_blue != null ? ID.wool_blue : ID.purpur;
+        setW(x, ry, z, ((a + rr * 3) % 6 === 0) ? ID.purpur : BL);   // V59: 파랑 원뿔 + 퍼퍼 나선 줄무늬
       }
       rr--; ry++;
     }
     // 발광 첨탑(수정 막대)
-    for (let i = 0; i < 4; i++) setW(cx, ry + i, cz, i < 3 ? ID.purpur : ID.glowstone);
+    for (let i = 0; i < 4; i++) setW(cx, ry + i, cz, i < 3 ? (i === 1 ? ID.purpur : (ID.wool_blue != null ? ID.wool_blue : ID.purpur)) : ID.glowstone);
     // 떠다니는 룬 고리(자수정+발광 — 마력 연출)
     for (const [ox, oz] of [[R + 2, 0], [-(R + 2), 0], [0, R + 2], [0, -(R + 2)]]) setW(cx + ox, base + 10, cz + oz, ID.glowstone);
+    // V59: 목재 발코니 링(실사 중단 발코니) — 오크 데크 + 울타리 난간 + 다크오크 지지대
+    for (let a = 0; a < 44; a++) {
+      const th = a / 44 * Math.PI * 2;
+      const x = cx + Math.round(Math.cos(th) * (R + 1)), z = cz + Math.round(Math.sin(th) * (R + 1));
+      setW(x, base + 9, z, ID.oak_planks);
+      if (a % 2 === 0) setW(x, base + 10, z, ID.oak_fence);
+    }
+    for (const [ox, oz] of [[R + 1, 0], [-(R + 1), 0], [0, R + 1], [0, -(R + 1)]]) setW(cx + ox, base + 8, cz + oz, ID.dark_oak_log != null ? ID.dark_oak_log : ID.oak_log);
+    // V59: 사이드 터릿(실사 우측 작은 탑) — 석영 소탑 + 다크오크 첨두
+    {
+      const tx = cx + 6, tz = cz + 3;
+      for (let y = base + 7; y <= base + 13; y++) for (const [ox, oz] of [[0, 0], [1, 0], [0, 1], [1, 1]]) setW(tx + ox, y, tz + oz, ID.quartz_block);
+      setW(tx, base + 11, tz - 1, ID.glass); setW(tx + 1, base + 12, tz + 2, ID.glass);
+      const DKP = ID.dark_oak_planks != null ? ID.dark_oak_planks : ID.spruce_planks;
+      for (const [ox, oz] of [[-1, -1], [2, -1], [-1, 2], [2, 2], [0, -1], [1, -1], [-1, 0], [2, 0], [-1, 1], [2, 1], [0, 2], [1, 2]]) setW(tx + ox, base + 14, tz + oz, DKP);
+      for (const [ox, oz] of [[0, 0], [1, 0], [0, 1], [1, 1]]) setW(tx + ox, base + 15, tz + oz, DKP);
+      setW(tx, base + 16, tz, DKP); setW(tx, base + 17, tz, ID.glowstone);
+      for (let y = base + 9; y <= base + 9; y++) { setW(cx + 4, y, cz + 2, ID.oak_planks); setW(cx + 5, y, cz + 2, ID.oak_planks); }   // 연결 브리지
+    }
+    // V59: 흰 바위 크래그(탑 기단 주변 불규칙 석영/안산암 노두) + 덩굴 잎
+    for (let a = 0; a < 20; a++) {
+      const th = a / 20 * Math.PI * 2;
+      const rr2 = 5 + (hash3(a, 771, 3) * 3 | 0);
+      const x = cx + Math.round(Math.cos(th) * rr2), z = cz + Math.round(Math.sin(th) * rr2);
+      const g = surfaceTop(x, z);
+      const h = 1 + (hash3(a, 772, 7) * 4 | 0);
+      for (let y = 0; y < h; y++) setW(x, g + y, z, hash3(a, 773, y) < 0.6 ? ID.quartz_block : (ID.polished_andesite != null ? ID.polished_andesite : ID.stone));
+      if (hash3(a, 774, 1) < 0.4) setW(x, g + h, z, ID.oak_leaves);
+    }
+    for (const [ox, oz, vy] of [[R, 1, 4], [-R, -1, 6], [1, R, 3], [-1, -R, 7], [R, -1, 9]]) {
+      for (let i = 0; i < 3; i++) setW(cx + ox + (ox === R ? 1 : ox === -R ? -1 : 0), base + vy - i, cz + oz + (oz === R ? 1 : oz === -R ? -1 : 0), ID.oak_leaves);
+    }
   }
   // V20-O: 재사용 돔형 대회당(랜드마크) — 원형 벽 + 8기둥 + 아치창 + 반구 돔 + 대아치 정문 + 실내.
   // 판타지 실루엣(직육면체 탈피). 용도 있는 건물(은행/경매장 등)에 사용 — NPC는 정문 앞 고정 위치 유지.
