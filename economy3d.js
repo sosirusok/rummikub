@@ -6807,6 +6807,47 @@
     specs.forEach((s, i) => { const m = mkBox(s.w, s.h, s.d, s.col, s.x, s.y, s.z); g.add(m); if (i === legLi) legL = m; else if (i === legRi) legR = m; });
     return { group: g, legL, legR };
   }
+  // V122: 실제 마인크래프트 주민(Villager) 모델 — 큰 코/눈썹 능선/긴 갈색 로브/배 앞에 모은 팔/직업 배지
+  //   NPC는 스티브형이 아니라 바닐라 주민 형태(직업색 배지 세로줄로 상점/은행/농부 등 구분)
+  function buildVillager(look, opts) {
+    const L = toLook(look);
+    const g = new THREE.Group();
+    const specs = []; const add = (w, h, d, col, x, y, z) => specs.push({ w, h, d, col, x, y, z });
+    const skin = 0xbe9c7e;                         // 주민 살색(평원 계열)
+    const noseC = shade(skin, 0.9);
+    const robe = 0x8a6a3e, robeD = shade(robe, 0.82), robeL = shade(robe, 1.08);   // 갈색 로브
+    const badge = (L.apron != null ? L.apron : (L.shirt != null ? L.shirt : 0x6b4f2a));   // 직업 배지색(NPC_LOOK 앞치마/셔츠)
+    // 발(로브 밑으로 살짝)
+    add(0.17, 0.12, 0.24, 0x2a2018, -0.11, 0.06, 0.02);
+    add(0.17, 0.12, 0.24, 0x2a2018, 0.11, 0.06, 0.02);
+    // 로브: 아래 넓은 단 + 상체
+    const sY = 0.12;
+    add(0.64, 0.6, 0.44, robe, 0, sY + 0.3, 0);
+    add(0.52, 0.5, 0.32, robeD, 0, sY + 0.6 + 0.25, 0);
+    add(0.66, 0.08, 0.46, robeL, 0, sY + 0.6, 0);         // 허리 띠
+    // 직업 배지(가슴 세로줄) — 실제 주민 직업 표식
+    add(0.16, 0.46, 0.02, badge, 0, sY + 0.6 + 0.25, 0.165);
+    // 배 앞에 모은 팔 + 손
+    const armY = sY + 0.6 + 0.18;
+    add(0.52, 0.17, 0.2, robeD, 0, armY, 0.19);
+    add(0.13, 0.17, 0.13, skin, -0.15, armY, 0.28);
+    add(0.13, 0.17, 0.13, skin, 0.15, armY, 0.28);
+    // 머리
+    const hy = sY + 0.6 + 0.5 + 0.29;
+    add(0.56, 0.56, 0.56, skin, 0, hy, 0);
+    // 유니브로 능선
+    add(0.5, 0.09, 0.06, shade(skin, 0.62), 0, hy + 0.12, 0.28);
+    // 눈(흰자+동공)
+    add(0.11, 0.13, 0.02, 0xf4f4f4, -0.13, hy + 0.0, 0.285);
+    add(0.11, 0.13, 0.02, 0xf4f4f4, 0.13, hy + 0.0, 0.285);
+    add(0.05, 0.09, 0.03, 0x3a2a6a, -0.14, hy - 0.01, 0.295);
+    add(0.05, 0.09, 0.03, 0x3a2a6a, 0.14, hy - 0.01, 0.295);
+    // 큰 코(앞으로 크게 돌출) — 주민 상징
+    add(0.15, 0.36, 0.24, noseC, 0, hy - 0.05, 0.33);
+    if (opts && opts.merged) { g.add(mergeBoxes(specs)); return { group: g, legL: null, legR: null }; }
+    specs.forEach(s => g.add(mkBox(s.w, s.h, s.d, s.col, s.x, s.y, s.z)));
+    return { group: g, legL: null, legR: null };
+  }
   function buildQuadruped(baseCol, size) {
     const g = new THREE.Group(); const legs = [];
     const dark = shade(baseCol, 0.75), light = shade(baseCol, 1.15);
@@ -6965,8 +7006,7 @@
     // 서비스 NPC(상점/은행/…) — 현재 월드 소속만
     NPCS.forEach(n => {
       if ((n.world || 'hub') !== worldMode) return;
-      const h = buildHumanoid(npcLook(n.key, n.color), { merged: true });
-      const fp = npcFacePlane(n.key); if (fp) h.group.add(fp);
+      const h = buildVillager(npcLook(n.key, n.color), { merged: true });   // V122: 실제 주민 모델
       n._y = npcGroundY(n.x, n.z);
       h.group.position.set(n.x + 0.5, n._y, n.z + 0.5);
       h.group.rotation.y = hash3(n.x, 5, n.z) * Math.PI * 2;
@@ -6976,7 +7016,7 @@
     // V13-B: 위치기반 퀘스트 NPC(느낌표 표식) — 현재 월드 소속만
     questNpcList().forEach(n => {
       if ((n.world || 'hub') !== worldMode) return;
-      const h = buildHumanoid(npcLook(n.key, n.color), { merged: true });
+      const h = buildVillager(npcLook(n.key, n.color), { merged: true });   // V122: 실제 주민 모델
       n._y = npcGroundY(n.x, n.z);
       h.group.position.set(n.x + 0.5, n._y, n.z + 0.5);
       h.group.rotation.y = hash3(n.x, 9, n.z) * Math.PI * 2;
