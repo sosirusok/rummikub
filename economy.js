@@ -903,7 +903,7 @@
   }
   function recipeMatchesGrid(r) {
     if (!manualCraftCapable(r)) return false;
-    const ptn = craftPattern(r.key);
+    const ptn = craftPattern(r.key) || r.pattern;   // V89: 바닐라 레시피는 자체 pattern(형태) 사용
     return ptn ? patternMatchesGrid(ptn) : shapelessMatchesGrid(r);
   }
   function craftGridRecipe() {
@@ -1568,6 +1568,7 @@
     const s = shopDef(key); if (s) return s.name;
     const pi = (D().PORTAL_ITEMS || {})[key]; if (pi) return pi.name;   // V21-C: 섬 포탈 아이템
     if (!_buildNameMap) { _buildNameMap = {}; (D().BUILDER_SHOP || []).forEach(b => { _buildNameMap[b.key] = b.name; }); }   // V15: 건축 블럭 이름
+    const vn = (D().VANILLA_NAMES || {})[key]; if (vn) return _buildNameMap[key] || vn;   // V89: 바닐라 전 아이템 이름
     return _buildNameMap[key] || key;
   }
   // 보너스 장비 드롭: 상점에서 못 사는(드롭 전용) 무기/방어구 풀에서 무작위 지급 — 파밍의 재미
