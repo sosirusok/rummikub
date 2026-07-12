@@ -3194,16 +3194,15 @@
   }
   // V14: 건축가 빌더 — 건축 블럭 대량(스택) 구매(코인 → 블럭, 서바이벌 설치용 재고)
   function buildShopHTML() {
-    return `<h4>🧱 건축가 빌더 — 건축 자재상</h4>
-      <p class="econ-note">코인으로 건축 블럭을 <b>대량 구매</b>해요. 산 블럭은 인벤토리에 들어가고, 프라이빗 섬에서 <b>서바이벌 방식으로 설치</b>(설치 시 소모)돼요.</p>
-      <p class="muted">소지금: ${fmtGold(P.gold)}</p>
+    return `<div class="mc-chest"><div class="mc-chesttitle">🧱 건축가 빌더 — 건축 자재상</div>
+      <p class="econ-note">코인으로 건축 블럭을 대량 구매. 산 블럭은 프라이빗 섬에서 서바이벌 설치. 소지금: ${fmtGold(P.gold)}</p>
       <div class="econ-shopgrid">${D().BUILDER_SHOP.map(b => {
         const ok = P.gold >= b.price;
         const sd = shopDef(b.key) || { key: b.key, name: b.name, category: '건축', flavor: '프라이빗 섬에 설치 가능한 건축 블럭' };
         return `<div class="econ-shopitem econ-tt"${ttAttr(sd)}>${iconImg(b.key)}<span>${b.name} <b>×${b.amount}</b></span>
           <span class="muted econ-idesc">보유 ${P.inv[b.key] || 0}</span>
           <button class="btn btn--sm" data-act="econ_buildbuy" data-key="${b.key}" ${ok ? '' : 'disabled'}>${fmtGold(b.price)} 구매</button></div>`;
-      }).join('')}</div>`;
+      }).join('')}</div>${chestNavRow('menu')}</div>`;
   }
   function buildBuy(key) {
     const b = D().BUILDER_SHOP.find(x => x.key === key); if (!b) return;
@@ -3516,7 +3515,7 @@
   function dealsHTML() {
     // V7: 경매인 = 수집상. 매일 원하는 아이템 3종을 시세의 2.5배로 매입(무화폐 구매 경제의 골드 수급처)
     const deals = dealsForToday();
-    return `<h4>🎪 수집상 — 오늘의 웃돈 매입(시세 ×2.5)</h4>
+    return `<div class="mc-chest"><div class="mc-chesttitle">🎪 수집상 — 오늘의 웃돈 매입(시세 ×2.5)</div>
       <p class="econ-note">수집상이 매일 다른 아이템을 비싸게 사들여요. 보유분을 팔아 강화 자금을 벌어보세요!</p>
       <div class="econ-shopgrid">${deals.map((d, i) => {
         const sd = shopDef(d.key); if (!sd) return '';
@@ -3527,7 +3526,7 @@
           <span class="muted econ-idesc">${i === 0 ? '🎰 오늘의 잭팟! ' : ''}매입가 ${fmtGold(Math.round(sd.sellPrice * mul))} (시세 ×${mul})</span>
           <button class="btn btn--sm" data-act="econ_deal_buy" data-i="${i}" ${owned > 0 && !bought ? '' : 'disabled'}>${bought ? '오늘 매입 완료' : '보유분 전부 판매(최대 64개)'}</button>
         </div>`;
-      }).join('')}</div>`;
+      }).join('')}</div>${chestNavRow('menu')}</div>`;
   }
   function bazaarHTML() {
     const bz = D().BAZAAR;
@@ -3549,11 +3548,12 @@
         </span>
       </div>`;
     }).join('');
-    return `<h4>🏪 바자회 — 대량 자원 시장</h4>
-      <p class="econ-note">시세는 1시간마다 ±${bz.fluxPct}% 변동해요. 즉시구매가는 즉시판매가보다 ${bz.spreadPct}% 높습니다(스프레드). 장비는 거래하지 않아요 — 원자재/인챈티드 자원 전용.</p>
+    return `<div class="mc-chest"><div class="mc-chesttitle">🏪 바자회 — 대량 자원 시장</div>
+      <p class="econ-note">시세는 1시간마다 ±${bz.fluxPct}% 변동. 즉시구매가는 즉시판매가보다 ${bz.spreadPct}% 높음(스프레드). 원자재/인챈티드 자원 전용.</p>
       <div class="econ-zonenav">${catNav}</div>
       <div class="econ-tierbtns" style="margin:6px 0">거래 수량: ${qtyNav}</div>
-      <div class="econ-shopgrid">${rows}</div>`;
+      <div class="econ-shopgrid">${rows}</div>
+      ${chestNavRow('menu')}</div>`;
   }
   function hotmHTML() {
     const H = D().HEART_OF_MOUNTAIN; const st = hotmState();
@@ -3639,12 +3639,13 @@
         </span>
       </div>`;
     }).join('') : '<p class="muted">등록할 수 있는 아이템이 없어요(채집·드롭·조합으로 획득한 잉여분을 올릴 수 있어요).</p>';
-    return `<h4>🏛️ 경매장 — 잉여 아이템 판매(경매/즉시구매)</h4>
-      <p class="econ-note">보유 아이템을 경매(시간 경과로 입찰 상승, 인내의 보상)나 즉시구매(BIN)로 등록하세요. NPC 수집가가 사들입니다. 장비는 골드로 살 수 없어요 — 경매장은 <b>판매 창구</b>예요. 슬롯 ${arr.length}/${A.maxListings} · 수수료 ${A.feePct}%.</p>
-      <h4 style="margin-top:10px">📜 내 매물</h4>
+    return `<div class="mc-chest"><div class="mc-chesttitle">🏛️ 경매장 — 잉여 아이템 판매(경매/즉시구매)</div>
+      <p class="econ-note">경매(시간 경과로 입찰 상승) 또는 즉시구매(BIN)로 등록. 슬롯 ${arr.length}/${A.maxListings} · 수수료 ${A.feePct}%.</p>
+      <div class="mc-chesttitle" style="margin-top:8px">📜 내 매물</div>
       <div class="econ-shopgrid">${listRows}</div>
-      <h4 style="margin-top:14px">➕ 등록 &nbsp;<span class="muted" style="font-weight:400">경매 기간: ${durNav}</span></h4>
-      <div class="econ-shopgrid">${listForms}</div>`;
+      <div class="mc-chesttitle" style="margin-top:12px">➕ 등록 &nbsp;<span class="muted" style="font-weight:400">경매 기간: ${durNav}</span></div>
+      <div class="econ-shopgrid">${listForms}</div>
+      ${chestNavRow('menu')}</div>`;
   }
   // V23-B: 컬렉션 상세 — 행 클릭 시 실제 스카이블럭처럼 모든 티어의 필요량·보상을 표로 표시
   let colDetailKey = null;
