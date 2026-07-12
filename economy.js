@@ -1900,9 +1900,11 @@
   }
   // V102: 로어 기반 테마 드롭 매핑(장비→고정 드롭 몹). 여기 없는 장비만 해시로 몹 배정.
   //   실제 스블: 라피스 갑옷 = 딥캐번 청금석 층 '라피스 좀비' 드롭.
+  // V103: 로어 기반 테마 드롭 매핑 {mob, chance}. 위키 확정 수치는 chance 명시, 없으면 티어 공식.
+  //   라피스 갑옷 = 딥캐번 라피스 좀비 드롭, 부위당 1%(위키: wiki.hypixel.net/Lapis_Armor).
   const DROP_MOB_OVERRIDE = {
-    lapis_armor_helmet: 'lapis_zombie', lapis_armor_chestplate: 'lapis_zombie',
-    lapis_armor_leggings: 'lapis_zombie', lapis_armor_boots: 'lapis_zombie',
+    lapis_armor_helmet: { mob: 'lapis_zombie', chance: 0.01 }, lapis_armor_chestplate: { mob: 'lapis_zombie', chance: 0.01 },
+    lapis_armor_leggings: { mob: 'lapis_zombie', chance: 0.01 }, lapis_armor_boots: { mob: 'lapis_zombie', chance: 0.01 },
   };
   function mobDropTable(mobType) {
     if (!_mobDropTables) _mobDropTables = {};
@@ -1912,9 +1914,10 @@
     if (!mobs.length) return [];
     const table = [];
     for (const it of items) {
-      const target = DROP_MOB_OVERRIDE[it.key] || mobs[_fnv(it.key) % mobs.length];   // 오버라이드 있으면 해시 대신 테마 몹(단일 출처 유지)
+      const ov = DROP_MOB_OVERRIDE[it.key];
+      const target = ov ? ov.mob : mobs[_fnv(it.key) % mobs.length];   // 오버라이드 있으면 해시 대신 테마 몹(단일 출처 유지)
       if (target !== mobType) continue;
-      table.push({ key: it.key, name: it.name, chance: equipDropChanceOf(it.key, it.tierKey) });
+      table.push({ key: it.key, name: it.name, chance: (ov && ov.chance != null) ? ov.chance : equipDropChanceOf(it.key, it.tierKey) });
     }
     return (_mobDropTables[mobType] = table);
   }
