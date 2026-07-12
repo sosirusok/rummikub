@@ -1595,6 +1595,16 @@
       if (maxTierIdx != null && ti > maxTierIdx) continue;
       pool.push(it);
     }
+    if (!pool.length) {
+      // V101: 어떤 장비도 .src 태그를 안 가져(현재 전량) equipSrc 드롭이 통째로 죽던 문제 — 요청 티어 이하 실제 장비로 폴백
+      for (const list of [E.weapons, E.armor]) for (const it of list) {
+        if (!it.real) continue;
+        const ti = tiers.findIndex(t => t.key === it.tierKey);
+        if (ti < 0 || (maxTierIdx != null && ti > maxTierIdx)) continue;
+        if ((it.dmg || 0) > 100000 || (it.defense || 0) > 100000) continue;   // 노벨티/미획득(레이건 등) 제외
+        pool.push(it);
+      }
+    }
     if (!pool.length) return null;
     const it = pool[Math.floor(Math.random() * pool.length)];
     addItem(it.key, 1);
@@ -2549,7 +2559,7 @@
   /* ---------------- 렌더링 ---------------- */
   function fmtGold(n) { return fmtNum(n) + 'G'; }
   function fmtNum(n) {   // V10: 컴팩트 표기(1.2M, 3.4k)
-    if (n == null || isNaN(n)) return '0';   // V95: null/NaN 가드('NaN'/'undefined' 방지)
+    if (n == null || !isFinite(n)) return '0';   // V95/V101: null/NaN/Infinity 가드('NaN'/'undefined'/'InfinityT' 방지)
     if (n >= 1e12) return (n / 1e12).toFixed(n % 1e12 ? 1 : 0) + 'T';   // V95: 조(T) 단위 추가
     if (n >= 1e9) return (n / 1e9).toFixed(n % 1e9 ? 1 : 0) + 'B';
     if (n >= 1e6) return (n / 1e6).toFixed(n % 1e6 ? 1 : 0) + 'M';
