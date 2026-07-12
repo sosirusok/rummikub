@@ -32,7 +32,6 @@
       // --- V2 필드 ---
       pets: {}, activePet: null, petXp: {},
       enchants: { weapon: {}, armor: {}, tool: {} },
-      fairySouls: [],
       bank: 0, lastInterestDay: null,
       minionSlotsBought: 0, minionFuelUntil: 0,
       dealsBought: {}, dealsDate: null,
@@ -307,7 +306,6 @@
       out.sellBonus += e.sellBonus || 0; out.minionSpeed += e.minionSpeed || 0;
       if (e.doubleZone) out.doublePct[e.doubleZone] = (out.doublePct[e.doubleZone] || 0) + (e.doublePct || 0);
     }
-    out.mp += P.fairySouls.length * D().FAIRY_SOULS.mpPerSoul;
     return out;
   }
   function magicalPower() { return talismanStats().mp; }
@@ -331,20 +329,7 @@
     toastFn(`✨ 전능의 힘: ${pw.name} 선택!`, true);
     saveNow(); renderZone();
   }
-  function fairyBonus() {
-    const sets = Math.floor(P.fairySouls.length / 5);
-    return { hp: sets * D().FAIRY_SOULS.per5Bonus.hp, str: sets * D().FAIRY_SOULS.per5Bonus.str };
-  }
-  function collectFairySoul(id) {
-    if (P.fairySouls.indexOf(id) >= 0) return false;
-    P.fairySouls.push(id);
-    addGold(D().FAIRY_SOULS.goldPerSoul);
-    addSkillXp('social', 50);
-    const n = P.fairySouls.length;
-    toastFn(`✨ 페어리 소울 발견! (${n}/${D().FAIRY_SOULS.total}) +${D().FAIRY_SOULS.goldPerSoul}G, 마력 +${D().FAIRY_SOULS.mpPerSoul}`, true);
-    if (n % 5 === 0) toastFn(`🧚 5개 달성 보너스! 체력 +${D().FAIRY_SOULS.per5Bonus.hp}, 힘 +${D().FAIRY_SOULS.per5Bonus.str} (영구)`, true);
-    saveNow(); return true;
-  }
+  // V115: 페어리 소울 기능 완전 제거 — fairyBonus/collectFairySoul 삭제
 
   /* ---------------- 인챈트(북 부여 + 혼돈의 마법부여로 상한 돌파) ---------------- */
   function enchantDef(key) { return D().ENCHANTS.find(e => e.key === key); }
@@ -620,7 +605,7 @@
   // ── 실제 스카이블럭 스탯 시트: 기본 HP100/방어0/힘0/속도100/크리확률30/크리피해50/지능100 ──
   function playerStats() {
     const B = D().BASE_STATS, HB = D().HPB;
-    const ts = talismanStats(), ps = petStats(), fb = fairyBonus();
+    const ts = talismanStats(), ps = petStats();
     // V11: 4부위 방어구 합산(초기롤 + 핫포북 + 아이템 HP)
     let armorDef = 0, armorHp = 0, armorRfDef = 0, armorRfHp = 0, armorRfStr = 0, armorRfCd = 0, armorRfFero = 0, armorRfInt = 0;
     for (const sl of ARMOR_SLOTS) {
@@ -631,12 +616,12 @@
     const rw = reforgeOf('weapon');
     const B2 = D().BASE_STATS2, gs = gemStats(), pw = powerStats();   // V20-I: 전능의 힘
     const st = {
-      hp: B.hp + skillLevel('farming') * 4 + skillLevel('fishing') * 4 + enchSum('hp') + ts.hp + ps.hp + fb.hp
+      hp: B.hp + skillLevel('farming') * 4 + skillLevel('fishing') * 4 + enchSum('hp') + ts.hp + ps.hp
         + (rw.hp || 0) + armorRfHp + starHpFlat() + buffBonus('hp') + attrBonus('hp')
         + armorHp + traitSum('vitality') + setStat('hp') + weaponStat('hp') + (gs.hp || 0) + pw.hp,
       defense: B.defense + buffBonus('defense') + attrBonus('defense') + Math.round(skillLevel('mining') * 1.77) + ts.def + ps.def + enchSum('def')
         + armorRfDef + starDefFlat() + armorDef + traitSum('bulwark') + setStat('def') + weaponStat('defense') + (gs.defense || 0) + pw.def,
-      strength: B.strength + Math.round(skillLevel('foraging') * 1.74) + ts.str + ps.str + fb.str + buffBonus('strength') + setStat('str')
+      strength: B.strength + Math.round(skillLevel('foraging') * 1.74) + ts.str + ps.str + buffBonus('strength') + setStat('str')
         + weaponStat('str') + (rw.str || 0) + armorRfStr + (gs.str || 0) + pw.str
         + (equippedWeapon() ? hpbOf(equippedWeapon().key) * (HB.weaponStrPerBook || 0) : 0),   // V107: 무기 핫포북 힘+2/권
       speed: B.speed + enchSum('speed') + buffBonus('speed') + attrBonus('speed') + traitSum('swift') + traitSum('swiftness') + setStat('speed'),
@@ -2094,7 +2079,6 @@
     const st = P.stats || {};
     switch (k) {
       case 'equipLog': return equipLogCount();
-      case 'fairySouls': return (P.fairySouls || []).length;
       case 'minionSlots': return P.maxMinionSlots || 0;
       case 'combatLv': return skillLevel('combat');
       case 'starMax': return Math.max.apply(null, EQUIP_SLOTS.map(sl => P.starForce[sl] || 0));
@@ -2205,7 +2189,6 @@
       case 'craft': return statValue('itemsCrafted');
       case 'place': return statValue('blocksPlaced');
       case 'gold': return statValue('goldEarned');
-      case 'souls': return statValue('fairySouls');
       case 'enchant': return statValue('enchantsApplied');   // V40: 도서관 카드
       case 'reforge': return statValue('reforges');          // V40: 리포저
       case 'bank': return statValue('bankDeposits');         // V40: 저축하기
@@ -3295,7 +3278,7 @@
     const missing = D().TALISMANS.filter(t => !hasItem(t.key));
     const slot = (t, ownedFlag) => `<div class="mc-slot mc-menuslot ${ownedFlag ? '' : 'mc-locked'}" ${!ownedFlag && t.buyPrice > 0 ? `data-act="econ_buy" data-key="${t.key}"` : ''} data-ttn="${escHtml(t.name)}${ownedFlag ? ' ✔' : ''}" data-ttd="${escHtml(t.desc)}${!ownedFlag ? (t.buyPrice > 0 ? ` — 클릭: 구매 ${fmtGold(t.buyPrice)}` : ' — 보스/퀘스트 보상') : ''}">${iconImg(t.key)}</div>`;
     return `<div class="mc-chest"><div class="mc-chesttitle">📿 장신구 가방 — 마력 ${magicalPower()} (최종 공격/방어 +${((mpStatMul() - 1) * 100).toFixed(1)}%)</div>
-      <p class="muted">✨ 전능의 힘: <b>${curPw.name}</b> (스케일 ${Math.round(mpScale())} → ${pwLine}) · 페어리 소울 ${P.fairySouls.length}/${D().FAIRY_SOULS.total}</p>
+      <p class="muted">✨ 전능의 힘: <b>${curPw.name}</b> (스케일 ${Math.round(mpScale())} → ${pwLine})</p>
       <div class="econ-tierbtns" style="margin-bottom:8px">${powerBtns}</div>
       <div class="mc-chesttitle">보유 장신구</div>
       ${owned.length ? `<div class="mc-grid">${pad9(owned.map(t => slot(t, true)))}</div>` : '<p class="muted">보유한 장신구가 없어요.</p>'}
@@ -3350,7 +3333,6 @@
       { ic: '🏪', label: '바자 거래량', val: bazaarTraded, th: [64, 1000, 10000, 100000, 1e6], fmt: fmtNum },
       { ic: '⛰️', label: '산의 심장 티어', val: hotm.tier || 1, th: [2, 3, 4, 6, 7], fmt: v => 'T' + v },
       { ic: '🔹', label: '미스릴 가루 보유', val: hotm.mithril || 0, th: [5000, 50000, 3e5, 1e6, 5e6], fmt: fmtNum },
-      { ic: '🧚', label: '페어리 소울', val: (P.fairySouls || []).length, th: [5, 20, 40, 60, D().FAIRY_SOULS.total], fmt: v => `${v}/${D().FAIRY_SOULS.total}` },
       { ic: '📔', label: '장비 도감', val: equipLogCount(), th: [50, 200, 500, 1000, 1400], fmt: fmtNum },
       { ic: '⛏️', label: '채굴 블록', val: S.blocksMined || 0, th: [500, 5000, 50000, 2e5, 1e6], fmt: fmtNum },
       { ic: '🎣', label: '낚시 성공', val: S.fishCaught || 0, th: [100, 1000, 10000, 50000, 2e5], fmt: fmtNum },
@@ -4127,8 +4109,6 @@
     openChest: (key) => { activeChest = key; P.chests = P.chests || {}; P.chests[key] = P.chests[key] || {}; },   // V21-E1
     dumpChest: (key) => dumpChest(key),   // V21-E1: 상자 파괴 시 내용물 회수
     hasActiveEncounter: () => !!(activeCombat || dungeonRun),
-    collectFairySoul,
-    fairySoulCollected: (id) => !!(P && P.fairySouls.indexOf(id) >= 0),
     // 프라이빗 섬 블록 편집 영속화(economy3d.js가 호출)
     getHomeEdits: () => (P ? P.homeEdits : {}),
     setHomeEdit: (x, y, z, id) => {
@@ -4230,7 +4210,7 @@
       gemStats, socketGem, applyRecomb, gemSlotsOf, recombMul,
       equippedWeapon, dungeonClassDef,
       hatchPet, activatePet, petLevel, petStats, petDef, equipPetItem,
-      talismanStats, magicalPower, mpStatMul, powerStats, selectPower, mpScale, fairyBonus, collectFairySoul,
+      talismanStats, magicalPower, mpStatMul, powerStats, selectPower, mpScale,
       applyEnchant, chaosEnchant, enchantLvl, enchantHardCap, enchantDef,
       enchSum, enchVsSum, enchCondMul, enchHitHeal, enchCoinMul, enchXpMul, randomEquipDrop,
       tradeCanGive, tradeApply, partyStartDungeon, partyRemoteAttack, partyGuestReward, partySnapshot,

@@ -304,86 +304,8 @@
   ];
   // V5: "딸깍" 채집 노드는 폐지 — 광석/작물/나무/물을 직접 캐고 낚는다(인월드 채집).
   const NODES = [];
-  // 페어리 소울 12개(탐험 보상 — 등대 꼭대기/동굴 심부/풍차 위/다리 밑/수중 등)
-  const FAIRY_SPOTS = [
-    { id: 0, x: 224, z: 74, y: null, hint: '설산 정상' },
-    { id: 1, x: 322, z: 120, y: null, hint: '마법사 탑 꼭대기' },
-    { id: 2, x: 152, z: 318, y: null, hint: '묘지 크립트 근처' },
-    { id: 3, x: 96, z: 200, y: null, hint: '석탄 광산 동굴' },
-    { id: 4, x: 344, z: 210, y: null, hint: '풍차 옆' },
-    { id: 5, x: 296, z: 380, y: null, hint: '지구라트 뒤편' },
-    { id: 6, x: 88, z: 280, y: null, hint: '폐허 기둥' },
-    { id: 7, x: 224, z: 158, y: null, hint: '사당' },
-    { id: 8, x: 224, z: 228, y: null, hint: '분수 뒤' },
-    { id: 9, x: 322, z: 328, y: null, hint: '낚시터 오두막 지붕' },
-    { id: 10, x: 224, z: 356, y: null, hint: '콜로세움 관중석' },
-    { id: 11, x: 148, z: 124, y: null, hint: '숲 큰 나무 옆' },
-    // V32: 실제 허브 = 79개 — 좌표단위 수작업 추가 배치(id 24~90)
-    { id: 24, x: 210, z: 60, y: null, hint: '설산 북서 능선' }, { id: 25, x: 246, z: 70, y: null, hint: '설산 동쪽 바위' },
-    { id: 26, x: 224, z: 108, y: null, hint: '설산 기슭 남쪽' }, { id: 27, x: 196, z: 92, y: null, hint: '설산 서쪽 벼랑' },
-    { id: 28, x: 258, z: 96, y: null, hint: '설산 동남 눈밭' },
-    { id: 29, x: 84, z: 196, y: null, hint: '광산 갱도 입구 위' }, { id: 30, x: 108, z: 224, y: null, hint: '광산 남쪽 자갈길' },
-    { id: 31, x: 74, z: 214, y: null, hint: '광산 서쪽 절벽' }, { id: 32, x: 120, z: 196, y: null, hint: '광산 동쪽 바위 틈' },
-    { id: 33, x: 96, z: 240, y: null, hint: '광산-폐허 사잇길' },
-    { id: 34, x: 136, z: 300, y: null, hint: '묘지 입구 아치' }, { id: 35, x: 168, z: 330, y: null, hint: '묘지 예배당 뒤' },
-    { id: 36, x: 148, z: 344, y: null, hint: '크립트 계단 옆' }, { id: 37, x: 176, z: 306, y: null, hint: '묘비 군락 동쪽' },
-    { id: 38, x: 128, z: 332, y: null, hint: '묘지 남서 고목' },
-    { id: 39, x: 312, z: 204, y: null, hint: '농장 헛간 지붕' }, { id: 40, x: 352, z: 232, y: null, hint: '밀밭 동쪽 끝' },
-    { id: 41, x: 318, z: 248, y: null, hint: '온실 뒤' }, { id: 42, x: 338, z: 196, y: null, hint: '축사 울타리' },
-    { id: 43, x: 300, z: 228, y: null, hint: '농장 서쪽 길가' }, { id: 44, x: 360, z: 214, y: null, hint: '농장 동쪽 벼랑' },
-    { id: 45, x: 124, z: 112, y: null, hint: '숲 북쪽 군락' }, { id: 46, x: 158, z: 146, y: null, hint: '벌목꾼 오두막 지붕' },
-    { id: 47, x: 132, z: 152, y: null, hint: '숲 남쪽 쓰러진 나무' }, { id: 48, x: 116, z: 134, y: null, hint: '숲 서쪽 바위' },
-    { id: 49, x: 152, z: 108, y: null, hint: '숲 북동 자작나무' }, { id: 50, x: 170, z: 128, y: null, hint: '숲-마을 갈림길' },
-    { id: 51, x: 306, z: 310, y: null, hint: '낚시터 다리 밑' }, { id: 52, x: 336, z: 336, y: null, hint: '연못 동쪽 갈대' },
-    { id: 53, x: 316, z: 344, y: null, hint: '연못 남쪽 부두' }, { id: 54, x: 340, z: 310, y: null, hint: '연못 북동 언덕' },
-    { id: 55, x: 206, z: 340, y: null, hint: '콜로세움 서쪽 벽' }, { id: 56, x: 242, z: 340, y: null, hint: '콜로세움 동쪽 벽' },
-    { id: 57, x: 224, z: 372, y: null, hint: '콜로세움 남문 뒤' }, { id: 58, x: 240, z: 364, y: null, hint: '관중석 남동 상단' },
-    { id: 59, x: 310, z: 108, y: null, hint: '마법사 탑 정원' }, { id: 60, x: 334, z: 132, y: null, hint: '탑 동쪽 룬석' },
-    { id: 61, x: 314, z: 140, y: null, hint: '탑 남쪽 오솔길' },
-    { id: 62, x: 76, z: 268, y: null, hint: '폐허 무너진 아치' }, { id: 63, x: 100, z: 292, y: null, hint: '폐허 동쪽 기둥' },
-    { id: 64, x: 82, z: 296, y: null, hint: '폐허 남쪽 제단' }, { id: 65, x: 102, z: 268, y: null, hint: '폐허 북동 벽감' },
-    { id: 66, x: 282, z: 366, y: null, hint: '지구라트 서쪽 계단' }, { id: 67, x: 310, z: 384, y: null, hint: '지구라트 동남 모서리' },
-    { id: 68, x: 296, z: 356, y: null, hint: '카타콤 입구 길목' },
-    { id: 69, x: 204, z: 240, y: null, hint: '상점 지붕' }, { id: 70, x: 242, z: 206, y: null, hint: '은행 돔 뒤' },
-    { id: 71, x: 210, z: 220, y: null, hint: '경매장 로툰다 기둥' }, { id: 72, x: 234, z: 212, y: null, hint: '대장간 굴뚝 옆' },
-    { id: 73, x: 222, z: 190, y: null, hint: '인챈트 탑 발코니' }, { id: 74, x: 214, z: 252, y: null, hint: '시장 거리 차양 위' },
-    { id: 75, x: 236, z: 254, y: null, hint: '시장 동쪽 노점 뒤' }, { id: 76, x: 194, z: 210, y: null, hint: '미니언 관리소 뒤뜰' },
-    { id: 77, x: 246, z: 238, y: null, hint: '펫 상점 옆 골목' }, { id: 78, x: 224, z: 246, y: null, hint: '광장 남쪽 가로등' },
-    { id: 79, x: 264, z: 204, y: null, hint: '천문대 계단' }, { id: 80, x: 224, z: 262, y: null, hint: '대성당 앞뜰' },
-    { id: 81, x: 344, z: 224, y: null, hint: '풍차 날개 아래' }, { id: 82, x: 372, z: 250, y: null, hint: '동쪽 코티지 지붕' },
-    { id: 83, x: 356, z: 276, y: null, hint: '과수원 울타리' }, { id: 84, x: 300, z: 286, y: null, hint: '정자 옆 연못돌' },
-    { id: 85, x: 264, z: 316, y: null, hint: '야영지 모닥불 뒤' }, { id: 86, x: 186, z: 282, y: null, hint: '목장 여물통' },
-    { id: 87, x: 162, z: 226, y: null, hint: '서쪽 타운하우스 골목' }, { id: 88, x: 180, z: 180, y: null, hint: '북서 가로등 언덕' },
-    { id: 89, x: 268, z: 158, y: null, hint: '북동 순환로 생울타리' }, { id: 90, x: 264, z: 268, y: null, hint: '남동 순환로 바위' },
-    // V9: 테마 월드 소울 12개
-    { id: 12, world: 'park', x: 72, z: 72, y: null, hint: '파크 중앙섬' },
-    { id: 13, world: 'park', x: 72, z: 26, y: null, hint: '설원 가문비 부속섬' },
-    { id: 14, world: 'barn', x: 70, z: 64, y: null, hint: '헛간 뒤' },
-    { id: 15, world: 'mushroom', x: 40, z: 72, y: null, hint: '거대 버섯 아래' },
-    { id: 16, world: 'gold', x: 56, z: 30, y: null, hint: '노천광 꼭대기' },
-    { id: 17, world: 'deep', x: 48, z: 48, y: 8, hint: '다이아 심층' },
-    { id: 18, world: 'spider', x: 64, z: 64, y: null, hint: '거미산 정상' },
-    { id: 19, world: 'spider', x: 96, z: 40, y: null, hint: '아라크네 성소' },
-    { id: 20, world: 'nether', x: 64, z: 40, y: 22, hint: '위더 홀' },
-    { id: 21, world: 'nether', x: 40, z: 40, y: 34, hint: '블레이즈 첨탑' },
-    { id: 22, world: 'end', x: 64, z: 64, y: 6, hint: '드래곤 둥지 제단' },
-    { id: 23, world: 'end', x: 64, z: 98, y: null, hint: '보이드 세펄처 꼭대기' },
-  ];
-  // V112: 위키 실측 총 273개 — 수작업 배치(91개) 외 나머지를 각 월드에 결정적(deterministic) 분산 배치.
-  //   id 기반 고정 좌표(Math.random 미사용)로 세이브·재접속 간 위치 안정. surfaceTop로 지표에 안착 → 수집 가능.
-  (function fillFairySouls() {
-    const worlds = [['hub', 224, 224, 190], ['spider', 64, 64, 50], ['deep', 48, 48, 40], ['gold', 56, 46, 40], ['nether', 64, 64, 52], ['end', 64, 64, 60], ['park', 72, 82, 42], ['mushroom', 60, 72, 42], ['barn', 72, 72, 44]];
-    let id = FAIRY_SPOTS.reduce((mx, s) => Math.max(mx, s.id), -1) + 1;
-    while (FAIRY_SPOTS.length < 273) {
-      const w = worlds[id % worlds.length];
-      const ang = (id * 2.399963);                        // 황금각 유사 분산
-      const rad = w[3] * (0.22 + ((id * 0.618034) % 1) * 0.72);
-      const x = Math.round(w[1] + Math.cos(ang) * rad);
-      const z = Math.round(w[2] + Math.sin(ang) * rad);
-      FAIRY_SPOTS.push({ id, world: w[0], x, z, y: null, hint: w[0] + ' 요정 소울' });
-      id++;
-    }
-  })();
+  // V115: 페어리 소울 기능 완전 제거 — 데이터/스폰/메시/UI 전부 삭제(사용자 요청)
+  const FAIRY_SPOTS = [];
 
   /* ---------------- 상태 ---------------- */
   let running = false, contextLost = false, raf = 0, lastT = 0;
@@ -9621,16 +9543,12 @@
     const el = document.getElementById('econ3dScoreboard'); if (!el) return;
     const P0 = econApi().getP(); if (!P0) return;
     const loc = ((WORLD_DEFS[worldMode] || {}).name || '스카이블럭').replace(/\s*\([^)]*\)/, '');   // 괄호 부제 제거
-    const ED = window.ECON_DATA || {};
-    const total = (ED.FAIRY_SOULS && ED.FAIRY_SOULS.total) || 273;
-    const nsoul = P0.fairySouls ? P0.fairySouls.length : 0;
     el.innerHTML = `<div class="sb-title">SKYBLOCK</div>`
       + `<div class="sb-line">${sbTimeStr()}</div>`
       + `<div class="sb-line sb-loc">⏣ ${loc}</div>`
       + `<div class="sb-gap"></div>`
       + `<div class="sb-line">Purse: <span class="sb-purse">${P0.gold.toLocaleString('en-US')}</span></div>`
       + `<div class="sb-line">Bank: <span class="sb-purse">${(P0.bank || 0).toLocaleString('en-US')}</span></div>`
-      + `<div class="sb-line">Fairy Souls: ${nsoul}/${total}</div>`
       + `<div class="sb-gap"></div>`
       + `<div class="sb-foot">ⓢ 나의 스카이블럭</div>`;
   }
@@ -9639,7 +9557,6 @@
     updateScoreboard();
     const g = document.getElementById('econ3dGold'); if (g) g.textContent = '💰 ' + P0.gold.toLocaleString('ko-KR') + 'G';
     const pg = document.getElementById('econ3dPanelGold'); if (pg) pg.textContent = '💰 ' + P0.gold.toLocaleString('ko-KR') + 'G · 🏦 ' + (P0.bank || 0).toLocaleString('ko-KR') + 'G';
-    const fs = document.getElementById('econ3dSouls'); if (fs) fs.textContent = '✨ ' + (P0.fairySouls ? P0.fairySouls.length : 0) + '/' + ((window.ECON_DATA && window.ECON_DATA.FAIRY_SOULS && window.ECON_DATA.FAIRY_SOULS.total) || 24);
     // V24-E(감사 #14): XP 바 — 최근 획득 스킬의 레벨 내 진행도(실제 MC 경험치 바 위치)
     const api2 = econApi();
     if (api2.skillBar) {
@@ -9748,7 +9665,6 @@
       <div class="econ3d-banner" id="econ3dBanner"></div>
       <div class="econ3d-top">
         <div class="econ3d-gold" id="econ3dGold">💰 0G</div>
-        <div class="econ3d-zone" id="econ3dSouls">✨ 0/91</div>
         <button class="btn btn--ghost" data-act="econ3d_fs" title="전체화면 (Ctrl 달리기 가능)">⛶</button>
         <button class="btn btn--ghost" data-act="backHome">✕</button>
       </div>

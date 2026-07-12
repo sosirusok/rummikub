@@ -1207,8 +1207,7 @@
     }
   }
 
-  /* ---------------- 페어리 소울(3D 월드 12개 은닉) ---------------- */
-  const FAIRY_SOULS = { total: 273, goldPerSoul: 200, mpPerSoul: 2, per5Bonus: { hp: 10, str: 2 } };   // V112: 위키 실측 총 273개(수작업 91 + 결정적 분산 배치 182)
+  // V115: 페어리 소울 기능 완전 제거(데이터 삭제) — 사용자 요청
 
   /* ---------------- 은행 ---------------- */
   // V107: 실측 은행 — 7티어(스타터~팔라티얼), 이자는 트랜치(브래킷) 방식·티어별 최대이자 상한. 시즌(31시간)마다 지급.
@@ -1497,7 +1496,6 @@
     { key: 'quest_50', name: '의뢰 전문가', desc: '일일 퀘스트 50회 완료', stat: 'questsDone', gte: 50, gold: 25000 },
     { key: 'gear_100', name: '수집가', desc: '장비 도감 100종 등록', stat: 'equipLog', gte: 100, gold: 10000 },
     { key: 'gear_400', name: '박물관장', desc: '장비 도감 400종 등록', stat: 'equipLog', gte: 400, gold: 50000, item: 'fuming_potato_book' },
-    { key: 'souls_24', name: '요정의 친구', desc: '페어리 소울 24개 수집', stat: 'fairySouls', gte: 24, gold: 20000 },
     { key: 'minion_30', name: '자동화 제국', desc: '미니언 슬롯 30칸 달성', stat: 'minionSlots', gte: 30, gold: 20000 },
     { key: 'star_15', name: '별을 삼킨 자', desc: '스타포스 15성 달성', stat: 'starMax', gte: 15, gold: 30000 },
     { key: 'combat_30', name: '무의 극의', desc: '전투 스킬 30레벨', stat: 'combatLv', gte: 30, gold: 100000, item: 'fuming_potato_book' },
@@ -1636,7 +1634,7 @@
     { key: 'enid', name: '낚시꾼 에니드', world: 'hub', x: 320, z: 322, color: 0x3f9fd0, region: 22, blurb: '낚시 튜토리얼' },
     { key: 'lumber_jack', name: '나무꾼', world: 'hub', x: 150, z: 134, color: 0x5d8a3a, region: 24, blurb: '벌목 튜토리얼' },
     { key: 'rigby', name: '농부 릭비', world: 'hub', x: 322, z: 214, color: 0xd8b23a, region: 24, blurb: '첫 수확' },
-    { key: 'tia', name: '요정 티아', world: 'hub', x: 196, z: 150, color: 0xff7ad9, region: 22, blurb: '페어리 소울을 모아오세요' },
+    { key: 'tia', name: '티아', world: 'hub', x: 196, z: 150, color: 0xff7ad9, region: 22, blurb: '장신구(부적)를 감정해 드려요' },
     { key: 'village_guide', name: '안내인', world: 'hub', x: 230, z: 244, color: 0xb8a24a, region: 20, blurb: '탐험가 — 스카이블럭 곳곳을 여행' },
     // 각 섬
     { key: 'farmhand', name: '일꾼', world: 'barn', x: 72, z: 100, color: 0xd8b23a, region: 18, blurb: '헛간으로 돌아가서' },
@@ -1709,10 +1707,7 @@
       story: '스카이블럭은 넓어요! 허브의 구역들과 다른 섬까지, 서로 다른 장소 14곳을 방문해 보세요.',
       objective: { type: 'zones', target: null, count: 14, label: '장소 14곳 방문' },
       reward: { gold: 50, items: [] } },
-    { key: 'fairy_souls_quest', giver: 'tia', name: '요정 티아', req: null,
-      story: '흩어진 페어리 소울들이 절 애타게 기다리고 있어요. 다섯 개만 찾아 주시겠어요?',
-      objective: { type: 'souls', target: null, count: 5, label: '페어리 소울 5개 수집' },
-      reward: { sbXp: 10, items: [] } },
+    // V115: fairy_souls_quest 제거(페어리 소울 기능 삭제)
     // ===== 각 섬 =====
     { key: 'barnyard', giver: 'farmhand', name: '헛간으로 돌아가서', req: null,
       story: '일손이 부족해요! 밀 미니언을 하나 조합해서 농장을 자동화해 보세요.',
@@ -1797,7 +1792,7 @@
     TRAITS, EQUIP_SETS, FIELD_DIFF, ARENA, ACHIEVEMENTS, DAILY_QUESTS, FETCHUR, FETCHUR_REWARD, COMMISSIONS, COMMISSION_REWARD, SALVAGE, WEEKLY, HPB, QUESTS, QUEST_NPCS, BUILDER_SHOP, DYES,
     TALISMANS, MAGICAL_POWER, PETS, PET_ITEMS, PET_ABILITIES, PET_XP_BASE, PET_XP_EXP, PET_MAX_LEVEL,
     ENCHANTS, CHAOS_ENCHANT, RECIPES, MASTER_MODE,
-    FAIRY_SOULS, BANK, DAILY_DEALS, DUNGEON_CLASSES, ZONES, EASTER_EGGS,
+    BANK, DAILY_DEALS, DUNGEON_CLASSES, ZONES, EASTER_EGGS,
     SKILL_XP_TABLE, SKILL_MAX_LEVEL, SKILL_MAX_BY, BASE_STATS, BASE_STATS2, GEM_TYPES, GEM_QUALITY, GEM_BASE, GEM_STAT_VALUES, GEM_SLOTS_BY_TIER, RECOMB, ENCHANTED_RES, ENCHANTED_BLOCK_RES, SLAYER_XP_LEVELS, SLAYER_QUEST, VANILLA_NAMES,
   };
 })();
