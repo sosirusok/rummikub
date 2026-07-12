@@ -14,7 +14,7 @@
     { key: 'legendary', name: '전설', colorHex: '#FFAA00', statMultiplier: 1.8, reforgeCost: 5000, magicalPower: 16 },// §6 금색
     { key: 'mythic', name: '신화', colorHex: '#FF55FF', statMultiplier: 2.0, reforgeCost: 9000, magicalPower: 22 },   // §d 밝은 분홍
     { key: 'ancient', name: '고대', colorHex: '#5DECD5', statMultiplier: 2.4, reforgeCost: 15000, magicalPower: 28 },
-    { key: 'divine', name: '신성', colorHex: '#66E0FF', statMultiplier: 2.8, reforgeCost: 25000, magicalPower: 34 },   // V11
+    { key: 'divine', name: '신성', colorHex: '#55FFFF', statMultiplier: 2.8, reforgeCost: 25000, magicalPower: 34 },   // V11 · V126: DIVINE 아쿠아 §b 정합
     { key: 'primal', name: '태초', colorHex: '#FF5470', statMultiplier: 3.2, reforgeCost: 40000, magicalPower: 40 },   // V11
   ];
 

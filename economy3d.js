@@ -6881,10 +6881,14 @@
     return { group: g, legs };
   }
   function makeLabel(text) {
+    // V126: 실제 MC 네임태그 — 텍스트 폭에 밀착한 반투명 배경(전체 박스 폐기), 픽셀 폰트 + 그림자
     const cv = document.createElement('canvas'); cv.width = 256; cv.height = 72; const c = cv.getContext('2d');
-    c.fillStyle = 'rgba(0,0,0,0.55)'; c.fillRect(0, 0, 256, 72);
-    c.fillStyle = '#fff'; c.textAlign = 'center'; c.font = 'bold 26px sans-serif';
-    c.fillText(String(text || ''), 128, 44);
+    const s = String(text || '');
+    c.font = '26px "Minecraft", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    const w = Math.min(248, c.measureText(s).width);
+    c.fillStyle = 'rgba(0,0,0,0.28)'; c.fillRect(128 - w / 2 - 6, 24, w + 12, 26);
+    c.fillStyle = 'rgba(0,0,0,0.85)'; c.fillText(s, 129.5, 38.5);
+    c.fillStyle = '#fff'; c.fillText(s, 128, 37);
     const tex = new THREE.CanvasTexture(cv); tex.needsUpdate = true;
     const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
     spr.scale.set(1.7, 0.48, 1); return spr;
@@ -8514,20 +8518,21 @@
     //   [Lv] 회색 · 이름 적색(적대)/초록(소극) · 현재 HP 초록 · ❤ 빨강. 체력바 없음(실제와 동일)
     const c = mob.labelCv.getContext('2d');
     c.clearRect(0, 0, 256, 64);
-    const fmt = n => Math.max(0, Math.ceil(n)).toLocaleString('en-US');
+    // V126: 큰 HP 축약(6M/250k) — 실제 스블 네임태그식, 픽셀 폰트 + 검정 그림자
+    const ab = n => { n = Math.max(0, Math.ceil(n)); if (n >= 1e9) return (n / 1e9).toFixed(n >= 1e10 ? 0 : 1).replace(/\.0$/, '') + 'B'; if (n >= 1e6) return (n / 1e6).toFixed(n >= 1e7 ? 0 : 1).replace(/\.0$/, '') + 'M'; if (n >= 1e4) return Math.round(n / 1e3) + 'k'; return n.toLocaleString('en-US'); };
     const segs = [];
     if (mob.elite) segs.push(['★ ', '#ff7ad9']);
     segs.push([`[Lv${mob.lv}] `, '#aaaaaa']);
     segs.push([mob.def.name + ' ', mob.def.passive ? '#55ff55' : '#ff5555']);
-    segs.push([`${fmt(mob.hp)}/${fmt(mob.maxHp)}`, '#55ff55']);
+    segs.push([`${ab(mob.hp)}/${ab(mob.maxHp)}`, '#55ff55']);
     segs.push(['❤', '#ff5555']);
-    c.font = 'bold 19px sans-serif'; c.textAlign = 'left';
+    c.font = '20px "Minecraft", sans-serif'; c.textAlign = 'left'; c.textBaseline = 'alphabetic';
     let total = 0; for (const [t] of segs) total += c.measureText(t).width;
     const scale = total > 244 ? 244 / total : 1;
-    if (scale < 1) { c.font = `bold ${Math.floor(19 * scale)}px sans-serif`; total = 0; for (const [t] of segs) total += c.measureText(t).width; }
+    if (scale < 1) { c.font = `${Math.floor(20 * scale)}px "Minecraft", sans-serif`; total = 0; for (const [t] of segs) total += c.measureText(t).width; }
     let x = 128 - total / 2;
-    c.fillStyle = 'rgba(0,0,0,0.45)'; c.fillRect(x - 6, 8, total + 12, 30);
-    for (const [t, col] of segs) { c.fillStyle = col; c.fillText(t, x, 30); x += c.measureText(t).width; }
+    c.fillStyle = 'rgba(0,0,0,0.32)'; c.fillRect(x - 5, 9, total + 10, 28);   // 텍스트에 밀착한 반투명 배경
+    for (const [t, col] of segs) { c.fillStyle = 'rgba(0,0,0,0.85)'; c.fillText(t, x + 2, 31); c.fillStyle = col; c.fillText(t, x, 29); x += c.measureText(t).width; }
     mob.label.material.map.needsUpdate = true;
   }
   function addEyes(g, y, z, col, gap) {
@@ -9047,11 +9052,15 @@
   // 떠오르는 피해 숫자
   let dmgTexts = [];
   function spawnDmgText(pos, dmg, crit) {
-    const cv = document.createElement('canvas'); cv.width = 128; cv.height = 48;
-    const c = cv.getContext('2d'); c.textAlign = 'center'; c.font = `bold ${crit ? 30 : 24}px sans-serif`;
-    c.fillStyle = crit ? '#ffb020' : '#ffffff'; c.strokeStyle = '#000'; c.lineWidth = 3;
-    const txt = (crit ? '✧' : '') + Math.round(dmg).toLocaleString();
-    c.strokeText(txt, 64, 32); c.fillText(txt, 64, 32);
+    const cv = document.createElement('canvas'); cv.width = 160; cv.height = 48;
+    const c = cv.getContext('2d'); c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.font = `${crit ? 30 : 22}px "Minecraft", sans-serif`;
+    const txt = Math.round(dmg).toLocaleString('en-US');
+    // V126: 실제 스블 데미지 스플래시 — 크리는 흰→노랑→금→빨강 그라디언트, 일반은 회색. 검정 외곽
+    if (crit) { const w = c.measureText(txt).width; const g = c.createLinearGradient(80 - w / 2, 0, 80 + w / 2, 0); g.addColorStop(0, '#ffffff'); g.addColorStop(0.4, '#ffff55'); g.addColorStop(0.72, '#ffaa00'); g.addColorStop(1, '#ff5555'); c.fillStyle = g; }
+    else c.fillStyle = '#c0c0c0';
+    c.strokeStyle = '#000'; c.lineWidth = 4; c.lineJoin = 'round';
+    c.strokeText(txt, 80, 26); c.fillText(txt, 80, 26);
     const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false, transparent: true }));
     spr.scale.set(1.4, 0.55, 1);
     spr.position.set(pos.x + (Math.random() - 0.5) * 0.6, pos.y + 1.8, pos.z + (Math.random() - 0.5) * 0.6);
@@ -9083,8 +9092,7 @@
     const apiG = econApi();
     if (apiG.guardPct) dmg *= (1 - apiG.guardPct());   // V11: 수호 특성(받는 피해 감소)
     php.hp -= dmg; php.lastHitAt = performance.now();
-    _hurtT = 0.4;   // V24: 화면 붉은 플래시(맞았다는 확실한 피드백)
-    spawnDmgText({ x: P.x, y: P.y, z: P.z }, dmg, false);
+    _hurtT = 0.4;   // V24: 화면 붉은 플래시(맞았다는 확실한 피드백) — V126: 자기 피해 플로팅 숫자 제거(실제 MC엔 없음, 붉은 비네트만)
     if (php.hp <= 0) {
       const api = econApi();
       if (api.playerDied) api.playerDied();
@@ -9123,14 +9131,11 @@
     const api = econApi();
     if (row && api.hudStats) {
       const st = api.hudStats();
-      const buffs = api.activeBuffs ? api.activeBuffs() : [];   // V10 ㉖: 물약 버프 잔여시간
       const curHp = php ? Math.max(0, Math.ceil(php.hp)) : st.hp;
-      // V15: 하이픽셀 액션바 정확 재현 — 숫자 뒤 기호, 체력 빨강/방어 초록/마나 하늘, 속도는 보조
+      // V126: 실제 스카이블럭 액션바 = 체력/방어/마나 3구획만(속도·물약 표기 제거 — 실제엔 없음)
       row.innerHTML = `<span class="ab ab-hp">${curHp}/${st.hp}<b>❤</b></span>`
         + `<span class="ab ab-def">${st.def}<b>❈</b> Defense</span>`
-        + `<span class="ab ab-mana">${st.mana}/${st.mana}<b>✎</b> Mana</span>`
-        + `<span class="ab ab-spd">✦ ${st.speed}</span>`
-        + buffs.map(bf => `<span class="ab ab-buff">🧪 ${bf.name} ${Math.floor(bf.left / 60)}:${String(bf.left % 60).padStart(2, '0')}</span>`).join('');
+        + `<span class="ab ab-mana">${st.mana}/${st.mana}<b>✎</b> Mana</span>`;
     }
   }
 
@@ -9661,7 +9666,7 @@
       const sb = api2.skillBar();
       const fill = document.getElementById('econ3dXpFill'), txt = document.getElementById('econ3dXpTxt');
       if (fill && sb) { fill.style.width = (sb.need > 0 ? Math.min(100, sb.cur / sb.need * 100) : 100) + '%'; }
-      if (txt && sb) { txt.textContent = `${sb.name} Lv.${sb.lv}` + (sb.need > 0 ? ` · ${Math.floor(sb.cur)}/${sb.need}` : ' · MAX'); }
+      if (txt && sb) { txt.textContent = sb.lv; txt.title = `${sb.name} Lv.${sb.lv}` + (sb.need > 0 ? ` · ${Math.floor(sb.cur)}/${sb.need}` : ' · MAX'); }   // V126: 실제 MC 경험치바 = 초록 레벨 숫자만 중앙
     }
   }
   // V13-B: 우측 중앙 위치기반 퀘스트 HUD(진행 중 퀘스트 + 근처 NPC 수락 제안)

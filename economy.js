@@ -2684,9 +2684,10 @@
     if (sdef.sellPrice > 0) lines.push(`판매가: ${fmtGold(sdef.sellPrice)}`);
     // V90: 실제 스카이블럭 등급 푸터 = "RARITY CATEGORY"(예: LEGENDARY SWORD)
     // V95: 실제 티어(sdef.tier)가 있는 아이템만 RARITY/CATEGORY 푸터 — 레거시(한글 등급명) 유출 방지
-    if (sdef.tier && sdef.category) lines.push(`◆ ${String(sdef.tier).replace(/_/g, ' ')} ${String(sdef.category).replace(/_/g, ' ')}`);
-    else if (sdef.tier) lines.push(`◆ ${String(sdef.tier).replace(/_/g, ' ')}`);
-    else if (canUseHotbar) lines.push('◆ COMMON');
+    // V126: 실제 MC/스블 등급 푸터 = 기호 없이 굵은 등급색 텍스트(예: LEGENDARY SWORD). =등급줄 마커(비표시)
+    if (sdef.tier && sdef.category) lines.push(`${String(sdef.tier).replace(/_/g, ' ')} ${String(sdef.category).replace(/_/g, ' ')}`);
+    else if (sdef.tier) lines.push(`${String(sdef.tier).replace(/_/g, ' ')}`);
+    else if (canUseHotbar) lines.push('COMMON');
     return lines.join('\n');
   }
   // V90: 실제 스카이블럭 스탯 표기(공식 API 스탯키 → 심볼/한글명/퍼센트여부). 순서 = 실제 로어 순서.
@@ -2734,8 +2735,8 @@
     if (!sdef) return '';
     const tc = tierColorOf(sdef);
     return itemLore(sdef).split('\n').map((ln, i) => {
-      if (i === 0) return `<div style="color:${tc};font-weight:900;font-size:14px;margin-bottom:3px">${escHtml(ln)}</div>`;
-      if (/^◆/.test(ln)) return `<div style="color:${tc};font-weight:900;margin-top:5px;letter-spacing:1px">${escHtml(ln)}</div>`;
+      if (i === 0) return `<div style="color:${tc};font-weight:900;font-size:15px;margin-bottom:3px">${escHtml(ln)}</div>`;
+      if (/^[A-Z][A-Z0-9 '\-]+$/.test(ln)) return `<div style="color:${tc};font-weight:900;margin-top:5px;letter-spacing:1px">${escHtml(ln)}</div>`;   // V126: 등급 푸터(전부 대문자) = 굵은 등급색, 기호 없음
       if (/^"/.test(ln)) return `<div style="color:#8b8fa3;font-style:italic">${escHtml(ln)}</div>`;
       for (const [re, c] of TT_LINE_COLOR) if (re.test(ln)) return `<div style="color:${c}">${escHtml(ln)}</div>`;
       return `<div style="color:#c9cede">${escHtml(ln)}</div>`;
