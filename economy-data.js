@@ -162,8 +162,8 @@
     4300000, 4600000, 4900000, 5200000, 5500000, 5800000, 6100000, 6400000, 6700000, 7000000,
   ];
   const SKILL_MAX_LEVEL = 60;
-  // 실제 스카이블럭 스킬별 상한: 전투/채광/농사/마법부여/조련 60, 낚시/벌목 50, 사교 25
-  const SKILL_MAX_BY = { combat: 60, mining: 60, farming: 60, enchanting: 60, taming: 60, foraging: 50, fishing: 50, social: 25 };
+  // 실제 스카이블럭 스킬별 상한(공식 Hypixel API resources/skyblock/skills 대조): 전투/채광/농사/마법부여/조련 60, 벌목/낚시/연금술 50, 사교/사냥 25
+  const SKILL_MAX_BY = { combat: 60, mining: 60, farming: 60, enchanting: 60, taming: 60, foraging: 50, fishing: 50, alchemy: 50, social: 25, hunting: 25 };
   const SKILLS = [
     { key: 'combat', name: '전투', bonusText: '레벨당 최종 피해 +4%, 크리 확률 +0.5%' },
     { key: 'mining', name: '채광', bonusText: '레벨당 방어력 +1' },
