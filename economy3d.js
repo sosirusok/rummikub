@@ -205,6 +205,12 @@
   // V21-E2: 사다리 제네릭 아이템 → 설치 시 벽면 방향 재계산, 변형은 제네릭 드롭
   PLACE_BLOCK.ladder = ID.ladder_0;
   for (let f = 0; f < 4; f++) BLOCK_DROP['ladder_' + f] = 'ladder';
+  // V94: 블럭 키 ≠ 바닐라 아이템 키 정규화 — 채굴 시 실제 아이템 드롭 + 그 아이템으로 재설치(팬텀 아이템 제거)
+  const BLOCK_ITEM_FIX = { mushroom_red_block: 'red_mushroom_block', mushroom_brown_block: 'brown_mushroom_block', end_bricks: 'end_stone_bricks', purpur: 'purpur_block' };
+  for (const bk in BLOCK_ITEM_FIX) {
+    const item = BLOCK_ITEM_FIX[bk];
+    if (ID[bk] != null) { BLOCK_DROP[bk] = item; if (ID[item] == null && PLACE_BLOCK[item] == null) PLACE_BLOCK[item] = ID[bk]; }   // 별도 동명 블럭이 없을 때만 설치 별칭 등록
+  }
   function isPlaceable(key) { return key != null && PLACE_BLOCK[key] != null; }
   function isStairsItem(key) { return typeof key === 'string' && /_stairs$/.test(key); }
   function isDoorItem(key) { return typeof key === 'string' && /_door$/.test(key); }
@@ -259,6 +265,12 @@
     oaklog: 0x8a6a3a, birchlog: 0xd7d3c8, sprucelog: 0x4a3722,
     rawfish: 0x3a6ee0, clay: 0xa4a8b6,
     raw_porkchop: 0xe8a0a0, raw_chicken: 0xe8d8b0, raw_mutton: 0xd8c8b8,   // V76
+    // V94: 나머지 미니언 자원 색상(전부 회색으로 렌더되던 21종 보완)
+    dark_oak_log: 0x3b2a17, acacia_log: 0xa8532a, jungle_log: 0x9a7a4a,
+    rotten_flesh: 0x8a5a48, bone: 0xe8e6d8, string: 0xdddddd, slime_ball: 0x7fd36a, blaze_rod: 0xf6c141,
+    leather: 0x9a6a3a, ghast_tear: 0xe8f0ee, apple: 0xd63b34, salmon: 0xd9705a, clownfish: 0xe08a2a,
+    pufferfish: 0xe0c040, prismarine: 0x4aa89a, sponge: 0xd8c84a, magma_cream: 0xd8641f,
+    spider_eye: 0x8a2a2a, gunpowder: 0x555559, ender_shard: 0x1a5a52, ender_pearl: 0x1f7a6a,
   };
   // V24: 미니언 슬롯 좌표 현행화 — 구 192² 레이아웃 좌표가 공허/엉뚱한 존에 떠 있던 버그.
   //   각 존 실제 중심 인근(광산 96,208 / 농장 330,224 / 숲 140,130 / 연못 322,322)으로 재배치
@@ -556,11 +568,21 @@
     })();
     return _hubMapPromise;
   }
+  // V94: 실제 스블 맵 팔레트(바닐라 단수형 키) → 내부 블럭 키 별칭 — 임포트 시 무손실 매핑(슬랩/계단/버섯/퍼퍼)
+  const MAP_PAL_ALIAS = {
+    red_mushroom_block: 'mushroom_red_block', brown_mushroom_block: 'mushroom_brown_block', purpur_block: 'purpur',
+    crimson_slab: 'crimson_planks_slab', warped_slab: 'warped_planks_slab',
+    crimson_stairs: 'crimson_planks_stairs_0', warped_stairs: 'warped_planks_stairs_0',
+    nether_brick_slab: 'nether_bricks_slab', nether_brick_stairs: 'nether_bricks_stairs_0',
+    red_nether_brick_slab: 'red_nether_bricks_slab', red_nether_brick_stairs: 'red_nether_bricks_stairs_0',
+    end_stone_brick_slab: 'end_stone_bricks_slab', end_stone_brick_stairs: 'end_stone_bricks_stairs_0',
+    polished_blackstone_brick_slab: 'polished_blackstone_bricks_slab', polished_blackstone_brick_stairs: 'polished_blackstone_bricks_stairs_0',
+  };
   function genWorldFromMap(M) {
     W = M.W; H = M.H; Dp = M.D;
     world = new Uint16Array(W * H * Dp);
     const remap = new Int32Array(M.palette.length);
-    for (let i = 0; i < M.palette.length; i++) { const k = M.palette[i]; remap[i] = (k === 'air') ? 0 : (ID[k] != null ? ID[k] : ID.stone); }
+    for (let i = 0; i < M.palette.length; i++) { let k = M.palette[i]; if (MAP_PAL_ALIAS[k]) k = MAP_PAL_ALIAS[k]; remap[i] = (k === 'air') ? 0 : (ID[k] != null ? ID[k] : ID.stone); }
     const g = M.grid, n = g.length;
     for (let i = 0; i < n; i++) { const pi = g[i]; if (pi) world[i] = remap[pi]; }
     applyHubRealAnchors();   // 게임플레이 레이어(구역/NPC/워프)를 실제 마을에 정렬
@@ -598,12 +620,16 @@
     _islandMapPromises[key] = (async () => { try { const m = await _parseMapFile(file); if (m) ISLAND_MAPS[key] = m; return m; } catch (e) { console.error('island map ' + key, e); return null; } })();
     return _islandMapPromises[key];
   }
+  let _mapWorldActive = false;   // V94: 현재 월드가 실제 섬 맵 파일로 로드됐는지(리스폰/스폰 좌표 분기용)
   function genIslandFromMap(M) {
+    const cells = M.W * M.H * M.D;
+    if (!cells || cells > 60e6) { console.warn('경제: 섬 맵이 너무 큽니다(' + cells + ' 셀) — 절차 생성으로 폴백'); return false; }   // V94: OOM 방지(≈120MB Uint16 상한) — 초대형 맵(크림슨)은 절차 생성 유지
     W = M.W; H = M.H; Dp = M.D;
     world = new Uint16Array(W * H * Dp);
     const remap = new Int32Array(M.palette.length);
-    for (let i = 0; i < M.palette.length; i++) { const k = M.palette[i]; remap[i] = (k === 'air') ? 0 : (ID[k] != null ? ID[k] : ID.stone); }
+    for (let i = 0; i < M.palette.length; i++) { let k = M.palette[i]; if (MAP_PAL_ALIAS[k]) k = MAP_PAL_ALIAS[k]; remap[i] = (k === 'air') ? 0 : (ID[k] != null ? ID[k] : ID.stone); }
     const g = M.grid; for (let i = 0; i < g.length; i++) { const pi = g[i]; if (pi) world[i] = remap[pi]; }
+    return true;
   }
   // 실제 허브 맵의 마을 광장(스폰) 기준으로 구역 라벨·NPC·워프 패드를 재배치
   let _hubAnchored = false;
@@ -3520,15 +3546,16 @@
     ambientMobs = []; fairyMeshes = {}; _minionSig = ''; dynamicInteractables = [];
     const def = WORLD_DEFS[mode] || WORLD_DEFS.hub;
     W = def.size[0]; H = def.size[1]; Dp = def.size[2];
+    _mapWorldActive = false;
     if (mode === 'home') genHome();
     else if (mode === 'visit') genHome(visitData && visitData.homeEdits);
     else if (worldCache[mode]) { const c = worldCache[mode]; world = c.world; W = c.W; H = c.H; Dp = c.Dp; }
     else if (mode === 'hub') genWorld();
-    else if (ISLAND_MAPS[mode]) { genIslandFromMap(ISLAND_MAPS[mode]); }   // 실제 섬 맵 파일이 있으면 그대로 로드
+    else if (ISLAND_MAPS[mode] && genIslandFromMap(ISLAND_MAPS[mode])) { _mapWorldActive = true; buildWarpPads(); }   // 실제 섬 맵 파일 로드 성공 시(용량 초과면 false→절차 폴백) + 워프 패드 배치(탈출 가능)
     else if (def.gen) { def.gen(); scatterWorldDetail(mode); buildThemeStructures(mode); if (mode === 'park') buildParkGates(); }   // V16 데코 + V18-C 테마 건물 + V21-D2 파크 게이트(맨 마지막)
     if (mode === 'hub') resetPlayerToSpawn();
     else if (mode === 'home' || mode === 'visit') { P.x = 96.5; P.z = 104.5; P.y = surfaceTop(96, 104) + 0.02; P.yaw = Math.PI; }   // V13-A: 스폰섬
-    else if (ISLAND_MAPS[mode]) { const cx = W >> 1, cz = Dp >> 1; P.x = cx + 0.5; P.z = cz + 0.5; P.y = surfaceTop(cx, cz) + 0.02; P.yaw = Math.PI; }   // 실제 섬 맵 중앙 지표
+    else if (_mapWorldActive) { const cx = W >> 1, cz = Dp >> 1; P.x = cx + 0.5; P.z = cz + 0.5; P.y = surfaceTop(cx, cz) + 0.02; P.yaw = Math.PI; }   // 실제 섬 맵 중앙 지표
     else { const sp = def.spawn || [W >> 1, Dp >> 1]; P.x = sp[0] + 0.5; P.z = sp[1] + 0.5; P.y = surfaceTop(sp[0], sp[1]) + 0.02; P.yaw = Math.PI; }
     P.vx = P.vy = P.vz = 0;
     buildIslandMesh((mode === 'home' || mode === 'visit') ? HOME_BOUNDS : null);   // 플레이어 주변 청크부터 즉시 빌드
@@ -7241,6 +7268,7 @@
         }
       } else { P.x = 96.5; P.z = 104.5; P.y = sy + 0.02; }
     }
+    else if (_mapWorldActive) { const cx = W >> 1, cz = Dp >> 1; P.x = cx + 0.5; P.z = cz + 0.5; P.y = surfaceTop(cx, cz) + 0.02; }   // V94: 실제 섬 맵은 def.spawn(절차 좌표)이 지형 밖 → 맵 중앙 지표로 리스폰(공허 사망 루프 방지)
     else if (worldMode !== 'hub') { const sp = (WORLD_DEFS[worldMode] || {}).spawn || [W >> 1, Dp >> 1]; P.x = sp[0] + 0.5; P.z = sp[1] + 0.5; P.y = surfaceTop(sp[0], sp[1]) + 0.02; }
     else { P.x = spawnX; P.y = spawnY; P.z = spawnZ; }
     P.vx = P.vy = P.vz = 0;
@@ -7323,7 +7351,7 @@
     else if (!P.onGround) P._fallPeak = P._fallPeak == null ? P.y : Math.max(P._fallPeak, P.y);
     else if (P._fallPeak != null) {
       const fd = P._fallPeak - P.y; P._fallPeak = null;
-      if (fd > 3.5) { damagePlayer((fd - 3) * 5); if (typeof toast === 'function') toast('💥 낙하 데미지!', false); }   // V24-B: 고정 데미지(블럭당 5)
+      if (fd > 3) { damagePlayer((fd - 3) * 5); if (typeof toast === 'function') toast('💥 낙하 데미지!', false); }   // V24-B: 고정 데미지(블럭당 5) — MC 실측(낙하거리 3블럭 초과부터)
     }
     // V22-K: 익사(머리가 물속 15초 후 초당 최대체력 10%)
     const headInWater = getBlockLocal(Math.floor(P.x), Math.floor(P.y + 1.5), Math.floor(P.z)) === ID.water;
