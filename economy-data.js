@@ -164,7 +164,7 @@
   ];
   const SKILL_MAX_LEVEL = 60;
   // 실제 스카이블럭 스킬별 상한(공식 Hypixel API resources/skyblock/skills 대조): 전투/채광/농사/마법부여/조련 60, 벌목/낚시/연금술 50, 사교/사냥 25
-  const SKILL_MAX_BY = { combat: 60, mining: 60, farming: 60, enchanting: 60, taming: 60, foraging: 50, fishing: 50, alchemy: 50, social: 25, hunting: 25 };
+  const SKILL_MAX_BY = { combat: 60, mining: 60, farming: 60, enchanting: 60, taming: 60, foraging: 54, fishing: 50, alchemy: 50, social: 25, hunting: 25 };
   const SKILLS = [
     { key: 'combat', name: '전투', bonusText: '레벨당 최종 피해 +4%, 크리 확률 +0.5%' },
     { key: 'mining', name: '채광', bonusText: '레벨당 방어력 +1' },
@@ -188,15 +188,15 @@
   const GEM_TYPES = [
     { key: 'ruby', name: '루비', stat: 'hp' }, { key: 'jasper', name: '재스퍼', stat: 'str' },
     { key: 'sapphire', name: '사파이어', stat: 'intelligence' }, { key: 'amethyst_gem', name: '자수정 젬', stat: 'defense' },
-    { key: 'jade', name: '제이드', stat: 'miningFortune' }, { key: 'amber', name: '앰버', stat: 'farmingFortune' },
-    { key: 'topaz', name: '토파즈', stat: 'critChance' }, { key: 'opal', name: '오팔', stat: 'critDamage' },
+    { key: 'jade', name: '제이드', stat: 'miningFortune' }, { key: 'amber', name: '앰버', stat: 'miningSpeed' },
+    { key: 'topaz', name: '토파즈', stat: 'pristine' }, { key: 'opal', name: '오팔', stat: 'trueDefense' },
   ];
   // 품질별 배율(러프→완벽). 스탯별 기본값 × 배율
   const GEM_QUALITY = [
     { key: 'rough', name: '러프', mul: 1 }, { key: 'flawed', name: '플로드', mul: 2 },
     { key: 'fine', name: '파인', mul: 4 }, { key: 'flawless', name: '플로리스', mul: 8 }, { key: 'perfect', name: '퍼펙트', mul: 15 },
   ];
-  const GEM_BASE = { hp: 12, str: 3, intelligence: 6, defense: 4, miningFortune: 5, farmingFortune: 5, critChance: 0.6, critDamage: 4 };
+  const GEM_BASE = { hp: 12, str: 3, intelligence: 6, defense: 4, miningFortune: 5, farmingFortune: 5, critChance: 0.6, critDamage: 4, miningSpeed: 20, trueDefense: 2, pristine: 0.4 };   // V106: 앰버=채굴속도, 오팔=진방어, 토파즈=프리스틴(위키 실측)
   // 아이템 등급별 젬 소켓 수
   const GEM_SLOTS_BY_TIER = { common: 0, uncommon: 0, rare: 1, epic: 1, legendary: 2, mythic: 2, ancient: 3, divine: 3, primal: 4 };
   // 리컴보뷸레이터 3000: 아이템 등급 1단계 상승(수치 +18%) — 실제 스블 상징 아이템
@@ -816,11 +816,11 @@
     pet('squid', '오징어', 'rare', 'fishing', { hp: 0.5 }, '레벨당 체력 +0.5', 9000),
     pet('elephant', '코끼리', 'epic', 'farming', { hp: 1.0 }, '레벨당 체력 +1', 25000),
     pet('wolf', '늑대', 'epic', 'combat', { str: 1.0 }, '레벨당 힘 +1', 8000),
-    pet('bee', '꿀벌', 'legendary', 'combat', { str: 0.8, def: 0.3 }, '레벨당 힘 +0.8, 방어 +0.3', 60000),
+    pet('bee', '꿀벌', 'legendary', 'farming', { str: 0.8, def: 0.3 }, '레벨당 힘 +0.8, 방어 +0.3', 60000),
     pet('blue_whale', '흰수염고래', 'legendary', 'fishing', { hp: 2.0 }, '레벨당 체력 +2', 70000),
     pet('enderman', '엔더맨', 'legendary', 'combat', { str: 1.4 }, '레벨당 힘 +1.4', 0),
     pet('ender_dragon', '엔더 드래곤', 'mythic', 'combat', { str: 1.5, def: 0.5, hp: 1.0 }, '레벨당 힘 +1.5, 방어 +0.5, 체력 +1', 0),
-    pet('griffin', '그리핀', 'ancient', 'combat', { str: 2.0, def: 0.7, hp: 1.5 }, '레벨당 힘 +2, 방어 +0.7, 체력 +1.5', 0),
+    pet('griffin', '그리핀', 'mythic', 'combat', { str: 2.0, def: 0.7, hp: 1.5 }, '레벨당 힘 +2, 방어 +0.7, 체력 +1.5', 0),
     pet('spider', '거미 펫', 'rare', 'combat', { str: 0.4, def: 0.1 }, '레벨당 힘 +0.4, 방어 +0.1', 0),   // V101: statsPerLv 오타 스키마 → pet()(perLvl)로 교정(petStats 크래시 수정)
     pet('blaze', '블레이즈 펫', 'epic', 'combat', { str: 0.5, hp: 0.5 }, '레벨당 힘 +0.5, 체력 +0.5', 0),
   ];   // V101: 중복 'enderman' 펫(위 821행에 이미 존재) 제거 — 죽은 데이터 + 스키마 불일치
@@ -860,19 +860,19 @@
     { key: 'triple_strike', name: '삼연격', target: 'weapon', maxLvl: 5, fx: { firstThree: 10 }, desc: '처음 3회 공격 +10%/레벨', bookBasePrice: 950 },
     { key: 'giant_killer', name: '거인 사냥꾼', target: 'weapon', maxLvl: 7, fx: { dmgBig: 8 }, desc: '최대체력 10만+ 적에게 +8%/레벨', bookBasePrice: 1500 },
     { key: 'titan_killer', name: '타이탄 킬러', target: 'weapon', maxLvl: 7, fx: { dmgBig: 6 }, desc: '최대체력 10만+ 적에게 +6%/레벨', bookBasePrice: 1300 },
-    { key: 'execute', name: '처형', target: 'weapon', maxLvl: 5, fx: { dmgLow: 6 }, desc: '적 체력 50% 이하 +6%/레벨', bookBasePrice: 1400 },
-    { key: 'prosecute', name: '기소', target: 'weapon', maxLvl: 7, fx: { dmgHigh: 4 }, desc: '적 체력 50% 이상 +4%/레벨', bookBasePrice: 1200 },
+    { key: 'execute', name: '처형', target: 'weapon', maxLvl: 6, fx: { dmgLow: 6 }, desc: '적 체력 50% 이하 +6%/레벨', bookBasePrice: 1400 },
+    { key: 'prosecute', name: '기소', target: 'weapon', maxLvl: 6, fx: { dmgHigh: 4 }, desc: '적 체력 50% 이상 +4%/레벨', bookBasePrice: 1200 },
     { key: 'smite', name: '강타', target: 'weapon', maxLvl: 7, fx: { dmgVs: 'zombie_slayer', v: 8 }, desc: '좀비 슬레이어 +8%/레벨', bookBasePrice: 800 },
-    { key: 'bane_of_arthropods', name: '살충', target: 'weapon', maxLvl: 7, fx: { dmgVs: 'spider_slayer', v: 8 }, desc: '거미 슬레이어 +8%/레벨', bookBasePrice: 800 },
+    { key: 'bane_of_arthropods', name: '살충', target: 'weapon', maxLvl: 6, fx: { dmgVs: 'spider_slayer', v: 8 }, desc: '거미 슬레이어 +8%/레벨', bookBasePrice: 800 },
     { key: 'ender_slayer', name: '엔더 슬레이어', target: 'weapon', maxLvl: 7, fx: { dmgVs: 'enderman_slayer', v: 18 }, desc: '엔더맨 슬레이어 +18%/레벨(VII≈130%)', bookBasePrice: 1600 },
-    { key: 'cubism', name: '큐비즘', target: 'weapon', maxLvl: 5, fx: { dmgVs: 'blaze_slayer', v: 10 }, desc: '블레이즈 슬레이어 +10%/레벨', bookBasePrice: 1400 },
+    { key: 'cubism', name: '큐비즘', target: 'weapon', maxLvl: 6, fx: { dmgVs: 'blaze_slayer', v: 10 }, desc: '블레이즈 슬레이어 +10%/레벨', bookBasePrice: 1400 },
     { key: 'dragon_hunter', name: '용 사냥꾼', target: 'weapon', maxLvl: 5, fx: { dmgBoss: 8 }, desc: '던전 보스 +8%/레벨', bookBasePrice: 1800 },
-    { key: 'thunderlord', name: '뇌제', target: 'weapon', maxLvl: 7, fx: { third: 15 }, desc: '3번째 공격마다 +15%/레벨', bookBasePrice: 1700 },
+    { key: 'thunderlord', name: '뇌제', target: 'weapon', maxLvl: 6, fx: { third: 15 }, desc: '3번째 공격마다 +15%/레벨', bookBasePrice: 1700 },
     { key: 'fire_aspect', name: '발화', target: 'weapon', maxLvl: 3, fx: { dmg: 3 }, desc: '레벨당 최종 피해 +3%', bookBasePrice: 700 },
-    { key: 'venomous', name: '맹독', target: 'weapon', maxLvl: 5, fx: { dmgHigh: 3 }, desc: '적 체력 50% 이상 +3%/레벨', bookBasePrice: 900 },
+    { key: 'venomous', name: '맹독', target: 'weapon', maxLvl: 6, fx: { dmgHigh: 3 }, desc: '적 체력 50% 이상 +3%/레벨', bookBasePrice: 900 },
     { key: 'looting', name: '약탈', target: 'weapon', maxLvl: 5, fx: { coin: 15 }, desc: '전투 보상 골드 +15%/레벨', bookBasePrice: 1200 },
-    { key: 'experience', name: '경험', target: 'weapon', maxLvl: 4, fx: { xp: 10 }, desc: '전투 스킬 XP +10%/레벨', bookBasePrice: 1000 },
-    { key: 'vampirism', name: '흡혈', target: 'weapon', maxLvl: 5, fx: { lifesteal: 1 }, desc: '가한 피해의 1%/레벨 회복', bookBasePrice: 1600 },
+    { key: 'experience', name: '경험', target: 'weapon', maxLvl: 5, fx: { xp: 10 }, desc: '전투 스킬 XP +10%/레벨', bookBasePrice: 1000 },
+    { key: 'vampirism', name: '흡혈', target: 'weapon', maxLvl: 6, fx: { lifesteal: 1 }, desc: '가한 피해의 1%/레벨 회복', bookBasePrice: 1600 },
     { key: 'life_steal', name: '생명 강탈', target: 'weapon', maxLvl: 5, fx: { healHit: 3 }, desc: '공격마다 HP +3/레벨', bookBasePrice: 1500 },
     // ── 방어구 12종 ──  fx: def(방어), hp(체력), thorns(반사%), healHit, lastStand(HP30%↓ 방어),
     //                    roomHeal(던전 방이동 회복%p), speed(이동속도%), sell(판매가%), coin
@@ -890,13 +890,13 @@
     { key: 'magnet', name: '자석', target: 'armor', maxLvl: 5, fx: { coin: 5 }, desc: '전투 보상 골드 +5%/레벨', bookBasePrice: 900 },
     // ── 도구 3종 ──  fx: mineSpeed(채집 속도%), fortune(추가 드롭%), area(주변 블록 동시 파괴 개수)
     { key: 'efficiency', name: '효율', target: 'tool', maxLvl: 7, fx: { mineSpeed: 12 }, desc: '채집 속도 +12%/레벨', bookBasePrice: 800 },
-    { key: 'fortune', name: '행운', target: 'tool', maxLvl: 5, fx: { fortune: 20 }, desc: '추가 드롭 확률 +20%/레벨', bookBasePrice: 1400 },
+    { key: 'fortune', name: '행운', target: 'tool', maxLvl: 4, fx: { fortune: 20 }, desc: '추가 드롭 확률 +20%/레벨', bookBasePrice: 1400 },
     { key: 'area_mining', name: '광역 채집', target: 'tool', maxLvl: 5, fx: { area: 1 }, desc: '파괴 시 주변 블록 +1개/레벨 동시 파괴(혼돈으로 최대 10)', bookBasePrice: 2200 },
     // ── V19: 얼티밋 인챈트(실제 스카이블럭) — 중복 인챈트북 합성으로 레벨업, 무기당 1종만 장착 가능(강력) ──
     { key: 'one_for_all', name: '원 포 올', target: 'weapon', ultimate: true, maxLvl: 1, fx: { dmg: 100 }, desc: '최종 피해 +100% (단, 다른 무기 인챈트 무효 — 극단 특화)', bookBasePrice: 8000 },
     { key: 'soul_eater', name: '소울 이터', target: 'weapon', ultimate: true, maxLvl: 5, fx: { first: 8 }, desc: '처치 후 다음 타격 강화 +8%/레벨(첫타 보정)', bookBasePrice: 5000 },
-    { key: 'combo_ult', name: '콤보', target: 'weapon', ultimate: true, maxLvl: 10, fx: { third: 8 }, desc: '연속 공격 누적 피해 +8%/레벨', bookBasePrice: 5500 },
-    { key: 'legion', name: '리전', target: 'weapon', ultimate: true, maxLvl: 7, fx: { dmg: 2 }, desc: '주변 협동 시 스탯 강화 +2%/레벨', bookBasePrice: 5200 },
+    { key: 'combo_ult', name: '콤보', target: 'weapon', ultimate: true, maxLvl: 5, fx: { third: 8 }, desc: '연속 공격 누적 피해 +8%/레벨', bookBasePrice: 5500 },
+    { key: 'legion', name: '리전', target: 'weapon', ultimate: true, maxLvl: 5, fx: { dmg: 2 }, desc: '주변 협동 시 스탯 강화 +2%/레벨', bookBasePrice: 5200 },
     { key: 'swarm', name: '스웜', target: 'weapon', ultimate: true, maxLvl: 5, fx: { dmgBig: 5 }, desc: '거대 적(체력 10만+)에게 +5%/레벨', bookBasePrice: 5800 },
     { key: 'fatal_tempo', name: '페이탈 템포', target: 'weapon', ultimate: true, maxLvl: 5, fx: { dmg: 6 }, desc: '연타 유지 시 +6%/레벨(공속→피해)', bookBasePrice: 7000 },
     { key: 'ultimate_jerry', name: '얼티밋 제리', target: 'weapon', ultimate: true, maxLvl: 5, fx: { first: 5 }, desc: '첫 타격 폭발 +5%/레벨', bookBasePrice: 6000 },
@@ -905,7 +905,7 @@
     { key: 'wisdom', name: '위즈덤', target: 'weapon', ultimate: true, maxLvl: 5, fx: { xp: 12 }, desc: '전투 XP +12%/레벨', bookBasePrice: 4800 },
     { key: 'bank', name: '뱅크', target: 'armor', ultimate: true, maxLvl: 5, fx: { coin: 8 }, desc: '전투 골드 +8%/레벨', bookBasePrice: 4600 },
     // ── V19: 바닐라 마인크래프트 인챈트 명시(활 계열) — vanilla:true ──
-    { key: 'power', name: '힘(Power)', target: 'weapon', vanilla: true, maxLvl: 5, fx: { dmg: 5 }, desc: '바닐라: 원거리 피해 +5%/레벨(혼돈으로 초과 가능)', bookBasePrice: 600 },
+    { key: 'power', name: '힘(Power)', target: 'weapon', vanilla: true, maxLvl: 7, fx: { dmg: 5 }, desc: '바닐라: 원거리 피해 +5%/레벨(혼돈으로 초과 가능)', bookBasePrice: 600 },
     { key: 'punch', name: '밀치기(Punch)', target: 'weapon', vanilla: true, maxLvl: 2, fx: { first: 6 }, desc: '바닐라: 넉백 + 첫타 +6%/레벨', bookBasePrice: 700 },
   ];
   // 인챈트북 부여 비용 = bookBasePrice × 현재 레벨(첫 부여는 무료)

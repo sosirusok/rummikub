@@ -627,21 +627,21 @@
     const rw = reforgeOf('weapon');
     const B2 = D().BASE_STATS2, gs = gemStats(), pw = powerStats();   // V20-I: 전능의 힘
     const st = {
-      hp: B.hp + skillLevel('farming') * 2 + skillLevel('fishing') + enchSum('hp') + ts.hp + ps.hp + fb.hp
+      hp: B.hp + skillLevel('farming') * 4 + skillLevel('fishing') * 4 + enchSum('hp') + ts.hp + ps.hp + fb.hp
         + (rw.hp || 0) + armorRfHp + starHpFlat() + buffBonus('hp') + attrBonus('hp')
         + armorHp + traitSum('vitality') + setStat('hp') + weaponStat('hp') + (gs.hp || 0) + pw.hp,
-      defense: B.defense + buffBonus('defense') + attrBonus('defense') + skillLevel('mining') + ts.def + ps.def + enchSum('def')
+      defense: B.defense + buffBonus('defense') + attrBonus('defense') + Math.round(skillLevel('mining') * 1.77) + ts.def + ps.def + enchSum('def')
         + armorRfDef + starDefFlat() + armorDef + traitSum('bulwark') + setStat('def') + weaponStat('defense') + (gs.defense || 0) + pw.def,
-      strength: B.strength + skillLevel('foraging') + ts.str + ps.str + fb.str + buffBonus('strength') + setStat('str')
+      strength: B.strength + Math.round(skillLevel('foraging') * 1.74) + ts.str + ps.str + fb.str + buffBonus('strength') + setStat('str')
         + weaponStat('str') + (rw.str || 0) + armorRfStr + (gs.str || 0) + pw.str,
       speed: B.speed + enchSum('speed') + buffBonus('speed') + attrBonus('speed') + traitSum('swift') + traitSum('swiftness') + setStat('speed'),
       critChance: Math.min(100, B.critChance + buffBonus('critChance') + skillLevel('combat') * 0.5 + traitSum('crit_eye') + setStat('critChance') + weaponStat('critChance') + (gs.critChance || 0) + pw.critChance),
-      critDamage: B.critDamage + buffBonus('critDamage') + skillLevel('combat') + traitSum('brutality') + setStat('critDamage') + weaponStat('critDamage') + (rw.critDamage || 0) + armorRfCd + (gs.critDamage || 0) + (ps.critDamage || 0) + pw.critDamage,
+      critDamage: B.critDamage + buffBonus('critDamage') + traitSum('brutality') + setStat('critDamage') + weaponStat('critDamage') + (rw.critDamage || 0) + armorRfCd + (gs.critDamage || 0) + (ps.critDamage || 0) + pw.critDamage,
       // V17: 광포(추가타) — 무기/리포지/특성/세트. 실제: floor(광포/100) 확정 추가타 + 나머지% 확률(기댓값 1+광포/100배)
       ferocity: weaponStat('ferocity') + (rw.ferocity || 0) + armorRfFero + traitSum('ferocity') + setStat('ferocity'),
-      intelligence: B.intelligence + skillLevel('enchanting') * 4 + skillLevel('alchemy') + buffBonus('intelligence') + attrBonus('intelligence') + traitSum('mana_well') + setStat('intelligence') + weaponStat('intelligence') + Math.round(magicalPower() * 0.6) + (gs.intelligence || 0) + (ps.intelligence || 0) + pw.intelligence,
+      intelligence: B.intelligence + Math.round(skillLevel('enchanting') * 1.77) + Math.round(skillLevel('alchemy') * 1.72) + buffBonus('intelligence') + attrBonus('intelligence') + traitSum('mana_well') + setStat('intelligence') + weaponStat('intelligence') + Math.round(magicalPower() * 0.6) + (gs.intelligence || 0) + (ps.intelligence || 0) + pw.intelligence,
       // V20: 신규 스탯 — 매직파인드/포춘/공격속도
-      magicFind: B2.magicFind + buffBonus('magicFind') + attrBonus('magicFind') + setStat('magicFind') + traitSum('lucky') + Math.floor(skillLevel('combat') / 5) + (ps.magicFind || 0),
+      magicFind: B2.magicFind + buffBonus('magicFind') + attrBonus('magicFind') + setStat('magicFind') + traitSum('lucky') + (ps.magicFind || 0),
       miningFortune: B2.miningFortune + skillLevel('mining') * 4 + (gs.miningFortune || 0) + setStat('miningFortune') + (ps.miningFortune || 0) + hotmMiningFortune() + colMiningFortune(),   // V20-G HotM
       miningSpeed: (B2.miningSpeed || 0) + hotmMiningSpeed(),   // V20-G HotM 채광 속도
       farmingFortune: B2.farmingFortune + skillLevel('farming') * 4 + (gs.farmingFortune || 0) + setStat('farmingFortune'),
@@ -659,7 +659,7 @@
   function playerAttackPower(heldKey) {
     const st = playerStats();
     const flat = 5 + (equippedWeaponDmg() || vanillaToolDmg(heldKey));
-    const additive = 1 + skillLevel('combat') * 0.04 + enchSum('dmg') / 100 + bestiaryBonusPct() / 100
+    const additive = 1 + (Math.min(50, skillLevel('combat')) * 0.04 + Math.max(0, skillLevel('combat') - 50) * 0.01) + enchSum('dmg') / 100 + bestiaryBonusPct() / 100
       + (reforgeOf('weapon').dmgPct || 0) / 100 + (reforgeOf('bow').dmgPct || 0) * 0.3 / 100
       + starAtkPct() / 100 + setStat('dmgPct') / 100;
     const w = equippedWeapon();
