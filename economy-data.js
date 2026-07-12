@@ -1152,6 +1152,17 @@
   addRecipe({ key: 'sandstone', needs: { sand: 4 }, gives: 1, unlock: null });
   addRecipe({ key: 'hay_block', needs: { wheat: 9 }, gives: 1, unlock: null });
 
+  // V89: 바닐라 전 아이템(974)·조합법(economy-vanilla.js, PrismarineJS 데이터) 병합.
+  //   기존 게임 조합법이 배열 앞이라 우선 매칭 → 기존 크래프팅 그대로, 바닐라는 미보유 키만 채움(변형 다수 허용).
+  const VANILLA_NAMES = {};
+  {
+    const VAN = (typeof window !== 'undefined' && window.ECON_VANILLA) ? window.ECON_VANILLA : null;
+    if (VAN) {
+      (VAN.items || []).forEach(it => { if (!(it.key in VANILLA_NAMES)) VANILLA_NAMES[it.key] = it.name; });
+      (VAN.recipes || []).forEach(r => { if (!_recipeKeys.has(r.key)) { RECIPES.push(r); } });   // 신규 키만
+    }
+  }
+
   /* ---------------- 페어리 소울(3D 월드 12개 은닉) ---------------- */
   const FAIRY_SOULS = { total: 91, goldPerSoul: 200, mpPerSoul: 2, per5Bonus: { hp: 10, str: 2 } };   // V32: 실제 허브 79개(수작업 배치) + 테마 12개
 
@@ -1718,6 +1729,6 @@
     TALISMANS, MAGICAL_POWER, PETS, PET_ITEMS, PET_ABILITIES, PET_XP_BASE, PET_XP_EXP, PET_MAX_LEVEL,
     ENCHANTS, CHAOS_ENCHANT, RECIPES, MASTER_MODE,
     FAIRY_SOULS, BANK, DAILY_DEALS, DUNGEON_CLASSES, ZONES, EASTER_EGGS,
-    SKILL_XP_TABLE, SKILL_MAX_LEVEL, SKILL_MAX_BY, BASE_STATS, BASE_STATS2, GEM_TYPES, GEM_QUALITY, GEM_BASE, GEM_SLOTS_BY_TIER, RECOMB, ENCHANTED_RES, ENCHANTED_BLOCK_RES, SLAYER_XP_LEVELS, SLAYER_QUEST,
+    SKILL_XP_TABLE, SKILL_MAX_LEVEL, SKILL_MAX_BY, BASE_STATS, BASE_STATS2, GEM_TYPES, GEM_QUALITY, GEM_BASE, GEM_SLOTS_BY_TIER, RECOMB, ENCHANTED_RES, ENCHANTED_BLOCK_RES, SLAYER_XP_LEVELS, SLAYER_QUEST, VANILLA_NAMES,
   };
 })();
