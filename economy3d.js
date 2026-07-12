@@ -9617,7 +9617,8 @@
     setTimeout(() => { line.classList.add('fade'); setTimeout(() => { if (line.parentNode) line.parentNode.removeChild(line); }, 900); }, 7000);
   }
   window.economy3dChat = chatFeed;
-  // V114: 실제 스카이블럭 우측 스코어보드 — 시간/위치/소지금/은행/페어리소울
+  // V124: 실제 하이픽셀 스카이블럭 우측 스코어보드 — 영어 + 바닐라 스코어보드 스타일(폰트 균일)
+  const SB_LOC = { hub: 'Hub', home: 'Private Island', visit: "Friend's Island", park: 'The Park', barn: 'The Barn', gold: 'Gold Mine', deep: 'Deep Caverns', spider: "Spider's Den", nether: 'Blazing Fortress', end: 'The End', mushroom: 'Mushroom Desert', dungeon: 'The Catacombs' };
   function sbTimeStr() {
     const frac = (((worldTime % DAY_LEN) + DAY_LEN) % DAY_LEN) / DAY_LEN;
     const totalMin = ((frac * 1440) + 360) % 1440;   // worldTime 0.25=정오 기준
@@ -9626,18 +9627,28 @@
     const ap = h < 12 ? 'am' : 'pm'; let h12 = h % 12; if (h12 === 0) h12 = 12;
     return `${icon} ${h12}:${String(m).padStart(2, '0')}${ap}`;
   }
+  // 실제 스블 달력: 1 스블일=20 실분(=DAY_LEN), 1달=31일, 12달(계절)
+  const SB_MONTHS = ['Early Spring', 'Spring', 'Late Spring', 'Early Summer', 'Summer', 'Late Summer', 'Early Autumn', 'Autumn', 'Late Autumn', 'Early Winter', 'Winter', 'Late Winter'];
+  function sbDateStr() {
+    const day = Math.floor((Date.now() / 1000) / 1200);   // 총 스블 일수(20분/일)
+    const dom = (day % 31) + 1;
+    const mon = SB_MONTHS[Math.floor(day / 31) % 12];
+    const suf = (dom % 10 === 1 && dom !== 11) ? 'st' : (dom % 10 === 2 && dom !== 12) ? 'nd' : (dom % 10 === 3 && dom !== 13) ? 'rd' : 'th';
+    return `${mon} ${dom}${suf}`;
+  }
   function updateScoreboard() {
     const el = document.getElementById('econ3dScoreboard'); if (!el) return;
     const P0 = econApi().getP(); if (!P0) return;
-    const loc = ((WORLD_DEFS[worldMode] || {}).name || '스카이블럭').replace(/\s*\([^)]*\)/, '');   // 괄호 부제 제거
+    const loc = SB_LOC[worldMode] || 'SkyBlock';
     el.innerHTML = `<div class="sb-title">SKYBLOCK</div>`
+      + `<div class="sb-gap"></div>`
+      + `<div class="sb-line">${sbDateStr()}</div>`
       + `<div class="sb-line">${sbTimeStr()}</div>`
-      + `<div class="sb-line sb-loc">⏣ ${loc}</div>`
       + `<div class="sb-gap"></div>`
       + `<div class="sb-line">Purse: <span class="sb-purse">${P0.gold.toLocaleString('en-US')}</span></div>`
       + `<div class="sb-line">Bank: <span class="sb-purse">${(P0.bank || 0).toLocaleString('en-US')}</span></div>`
       + `<div class="sb-gap"></div>`
-      + `<div class="sb-foot">ⓢ 나의 스카이블럭</div>`;
+      + `<div class="sb-line sb-loc">⏣ ${loc}</div>`;
   }
   function updateHud() {
     const P0 = econApi().getP(); if (!P0) return;

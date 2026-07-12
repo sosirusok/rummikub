@@ -1365,23 +1365,24 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .econ3d-map{position:absolute; right:10px; top:52px; width:140px; height:140px; z-index:5; border:2px solid rgba(255,255,255,.35); border-radius:10px; background:#0a0e1a; opacity:.92; transition:width .2s,height .2s; image-rendering:pixelated;}
 .econ3d-map.is-big{width:320px; height:320px;}
 /* V114: 실제 스카이블럭 우측 스코어보드 사이드바 */
-.econ3d-scoreboard{position:absolute; right:10px; top:200px; z-index:5; pointer-events:none;
-  background:rgba(10,12,20,.5); padding:5px 10px 6px; border-radius:4px;
-  font-family:'Segoe UI',system-ui,sans-serif; font-size:12.5px; line-height:1.55; color:#fff;
-  text-shadow:1px 1px 0 rgba(0,0,0,.85); min-width:132px; max-width:190px;}
-.econ3d-scoreboard .sb-title{font-weight:900; color:#ffd23f; text-align:center; letter-spacing:1.5px; margin-bottom:2px; font-size:13.5px;}
+/* V124: 실제 바닐라 마인크래프트 사이드바 스코어보드 — 반투명 흑색 블럭, MC 폰트, 각진 픽셀 */
+.econ3d-scoreboard{position:absolute; right:0; top:196px; z-index:5; pointer-events:none;
+  background:rgba(0,0,0,.44); padding:2px 8px 4px 6px; border-radius:0;
+  font-family:'Minecraft','Segoe UI',system-ui,sans-serif; -webkit-font-smoothing:none;
+  font-size:16px; line-height:1.05; color:#fff;
+  text-shadow:2px 2px 0 rgba(0,0,0,.9); min-width:150px;}
+.econ3d-scoreboard .sb-title{color:#fff; text-align:center; margin:0 0 1px; font-size:16px; padding:1px 6px 2px;}
 .econ3d-scoreboard .sb-line{white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-.econ3d-scoreboard .sb-loc{color:#8be9fd;}
+.econ3d-scoreboard .sb-loc{color:#55ffff;}   /* 아쿠아 위치 */
 .econ3d-scoreboard .sb-purse{color:#ffd23f;}
-.econ3d-scoreboard .sb-foot{color:#ffd23f;}
-.econ3d-scoreboard .sb-gap{height:7px;}
-@media (max-width:640px){ .econ3d-scoreboard{font-size:11px; top:180px; min-width:112px; padding:4px 7px;} }
-/* V117: 실제 스카이블럭식 아이템 획득 채팅 피드(좌측 하단) */
-.econ3d-chat{position:absolute; left:10px; bottom:118px; z-index:5; pointer-events:none; display:flex; flex-direction:column; gap:2px; max-width:340px; font-family:'Segoe UI',system-ui,sans-serif; font-size:13px;}
-.econ3d-chatline{background:rgba(0,0,0,.42); padding:2px 8px; border-radius:3px; color:#fff; text-shadow:1px 1px 0 rgba(0,0,0,.75); transition:opacity .85s ease; align-self:flex-start; white-space:nowrap;}
+.econ3d-scoreboard .sb-gap{height:8px;}
+@media (max-width:640px){ .econ3d-scoreboard{font-size:13px; top:172px; min-width:120px;} }
+/* V117/V124: 실제 바닐라 채팅(좌측 하단) — 반투명 흑색 줄, MC 폰트, 각진 픽셀 */
+.econ3d-chat{position:absolute; left:8px; bottom:118px; z-index:5; pointer-events:none; display:flex; flex-direction:column; gap:0; max-width:360px; font-family:'Minecraft','Segoe UI',system-ui,sans-serif; -webkit-font-smoothing:none; font-size:16px;}
+.econ3d-chatline{background:rgba(0,0,0,.5); padding:1px 6px 2px; border-radius:0; color:#fff; text-shadow:2px 2px 0 rgba(0,0,0,.85); transition:opacity .85s ease; align-self:flex-start; white-space:nowrap; line-height:1.15;}
 .econ3d-chatline.fade{opacity:0;}
-.econ3d-chat .c-item{color:#6bff6b;} .econ3d-chat .c-coin{color:#ffd23f;} .econ3d-chat .c-rare{color:#c661ff;} .econ3d-chat .c-book{color:#57d0ff;}
-@media (max-width:640px){ .econ3d-chat{bottom:104px; font-size:11px; max-width:60vw;} }
+.econ3d-chat .c-item{color:#55ff55;} .econ3d-chat .c-coin{color:#ffd23f;} .econ3d-chat .c-rare{color:#ff55ff;} .econ3d-chat .c-book{color:#55ffff;}
+@media (max-width:640px){ .econ3d-chat{bottom:104px; font-size:13px; max-width:66vw;} }
 .econ-hubtabs{display:flex; flex-wrap:wrap; gap:6px; padding-bottom:8px; border-bottom:1px solid var(--line);}
 
 /* ---- 경제 V3: 게임풍 메뉴/상점 UI + 아이콘 + 강화/제작/던전 ---- */
