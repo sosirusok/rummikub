@@ -8423,19 +8423,33 @@
     enderman: { src: 'entity/enderman/enderman.png', c: [8, 8, 8, 8], p: [0, 1.76, 0.17], s: [0.5, 0.5] },
     ghast: { src: 'entity/ghast/ghast.png', c: [16, 16, 16, 16], p: [0, 1.6, 0.67], s: [1.26, 1.26] },
     blaze: { src: 'entity/blaze.png', c: [8, 8, 8, 8], p: [0, 1.45, 0.34], s: [0.6, 0.6] },
-    // V31-C: 업로드 예정 스킨 선매핑 — entity/ 하위에 파일이 올라오면 즉시 자동 적용(없으면 무시)
-    zombie: { src: 'entity/zombie/zombie.png', c: [8, 8, 8, 8], p: [0, 1.76, 0.17], s: [0.5, 0.5] },
-    crypt_ghoul: { src: 'entity/zombie/zombie.png', c: [8, 8, 8, 8], p: [0, 1.76, 0.17], s: [0.5, 0.5] },
-    golden_ghoul: { src: 'entity/zombie/zombie.png', c: [8, 8, 8, 8], p: [0, 1.76, 0.17], s: [0.5, 0.5] },
-    miner_zombie: { src: 'entity/zombie/zombie.png', c: [8, 8, 8, 8], p: [0, 1.76, 0.17], s: [0.5, 0.5] },
-    lapis_zombie: { src: 'entity/zombie/zombie.png', c: [8, 8, 8, 8], p: [0, 1.76, 0.17], s: [0.5, 0.5] },
-    diamond_zombie: { src: 'entity/zombie/zombie.png', c: [8, 8, 8, 8], p: [0, 1.76, 0.17], s: [0.5, 0.5] },
-    skeleton: { src: 'entity/skeleton/skeleton.png', c: [8, 8, 8, 8], p: [0, 1.76, 0.17], s: [0.5, 0.5] },
-    spider: { src: 'entity/spider/spider.png', c: [40, 12, 8, 8], p: [0, 0.62, 0.66], s: [0.44, 0.4] },
-    pig: { src: 'entity/pig/pig.png', c: [8, 8, 8, 8], p: [0, 0.62, 0.62], s: [0.42, 0.42] },
-    sheep: { src: 'entity/sheep/sheep.png', c: [8, 8, 6, 6], p: [0, 0.62, 0.62], s: [0.38, 0.38] },
-    wolf: { src: 'entity/wolf/wolf.png', c: [4, 4, 6, 6], p: [0, 0.62, 0.62], s: [0.36, 0.36] },
+    // V91: 업로드된 실제 MC 스킨(entity/ 플랫 경로) 정합 — 잘못된 서브폴더 경로 → 실제 파일 경로로 수정, 신규 스킨 추가
+    _humanFace: 1,   // 마커(아래 헬퍼용)
   };
+  // 휴머노이드 얼굴(64×64 표준 스킨, 얼굴=[8,8,8,8]) 일괄 등록
+  const _HF = (src) => ({ src, c: [8, 8, 8, 8], p: [0, 1.76, 0.17], s: [0.5, 0.5] });
+  delete MOB_FACE_SKIN._humanFace;
+  Object.assign(MOB_FACE_SKIN, {
+    zombie: _HF('entity/zombie.png'), zombie_villager: _HF('entity/zombie_villager.png'),
+    crypt_ghoul: _HF('entity/zombie.png'), golden_ghoul: _HF('entity/zombie.png'),
+    miner_zombie: _HF('entity/zombie.png'), lapis_zombie: _HF('entity/zombie.png'), diamond_zombie: _HF('entity/zombie.png'),
+    husk: _HF('entity/husk.png'), drowned: _HF('entity/drowned.png'),
+    skeleton: _HF('entity/skeleton.png'), gravel_skeleton: _HF('entity/skeleton.png'), diamond_skeleton: _HF('entity/skeleton.png'),
+    stray: _HF('entity/stray.png'), wither_skeleton: _HF('entity/wither_skeleton.png'),
+    pig: _HF('entity/pig.png'), pigman: _HF('entity/piglin.png'), redstone_pigman: _HF('entity/piglin.png'),
+    witch: _HF('entity/witch.png'), guardian: _HF('entity/guardian.png'),
+    spider: { src: 'entity/spider.png', c: [40, 12, 8, 8], p: [0, 0.62, 0.66], s: [0.44, 0.4] },
+    cave_spider: { src: 'entity/cave_spider.png', c: [40, 12, 8, 8], p: [0, 0.5, 0.55], s: [0.36, 0.32] },
+    sheep: { src: 'entity/sheep.png', c: [8, 8, 6, 6], p: [0, 0.62, 0.62], s: [0.38, 0.38] },
+    wolf: { src: 'entity/wolf.png', c: [4, 4, 6, 6], p: [0, 0.62, 0.62], s: [0.36, 0.36] },
+    old_wolf: { src: 'entity/wolf_ashen.png', c: [4, 4, 6, 6], p: [0, 0.62, 0.62], s: [0.36, 0.36] },
+    slime: { src: 'entity/slime.png', c: [26, 18, 6, 6], p: [0, 0.5, 0.5], s: [0.4, 0.4] },
+    magma_cube: { src: 'entity/slime.png', c: [26, 18, 6, 6], p: [0, 0.5, 0.5], s: [0.4, 0.4] },
+    endermite: { src: 'entity/endermite.png', c: [2, 2, 4, 3], p: [0, 0.28, 0.28], s: [0.28, 0.2] },
+    silverfish: { src: 'entity/silverfish.png', c: [0, 4, 4, 3], p: [0, 0.28, 0.3], s: [0.28, 0.2] },
+    creeper: { src: 'entity/creeper.png', c: [8, 8, 8, 8], p: [0, 1.2, 0.24], s: [0.5, 0.5] },
+    zealot: _HF('entity/enderman.png'), watcher: _HF('entity/enderman.png'), obsidian_defender: _HF('entity/enderman.png'),
+  });
   const _faceSkinTex = {};
   function faceSkinPlane(spec) {
     const key = spec.src + spec.c.join(',');
