@@ -123,6 +123,9 @@
   /* ---------------- 인벤토리/골드 유틸 ---------------- */
   function stat(k, n) { if (!P) return; if (!P.stats) P.stats = {}; P.stats[k] = (P.stats[k] || 0) + (n == null ? 1 : n); }
   function statMax(k, v) { if (!P) return; if (!P.stats) P.stats = {}; if (v > (P.stats[k] || 0)) P.stats[k] = v; }
+  // V117: 실제 스카이블럭식 아이템 획득 피드(좌측 하단 채팅) — economy3d.js가 렌더
+  function pickupFeed(html) { if (typeof window !== 'undefined' && typeof window.economy3dChat === 'function') window.economy3dChat(html); }
+  function feedItem(key, n) { pickupFeed(`<span class="c-item">+${n} ${itemName(key)}</span>`); }
   function addItem(k, n) {
     if ((n == null || n > 0)) { if (!P.gained) P.gained = {}; P.gained[k] = (P.gained[k] || 0) + (n == null ? 1 : n); }   // V26-B: 퀘스트용 총 획득 카운터
     if (n <= 0) return;
@@ -1837,6 +1840,7 @@
       hotmAwardPowder(n);
     }
     addItem(resKey, n); addCollection(resKey, n);
+    feedItem(resKey, n);   // V117: 채집 획득 피드
     addSkillXp(sk === 'combat' ? 'combat' : sk, RES_XP[resKey] || 2);
     stat('blocksMined');   // V11 카운터(전 채집 공통) + 계열별
     if (sk === 'foraging') stat('treesChopped');
@@ -1852,6 +1856,7 @@
     for (const d of table.drops) { if (r < d.weight) { pick = d; break; } r -= d.weight; }
     const qty = Math.max(1, Math.round((pick.min + Math.floor(Math.random() * (pick.max - pick.min + 1))) * bestToolMul('rod')));
     addItem(pick.key, qty); addCollection(pick.key, qty);
+    feedItem(pick.key, qty);   // V117: 낚시 획득 피드
     addSkillXp('fishing', RES_XP[pick.key] || 20);
     stat('fishCaught');   // V11
     let extra = null;
@@ -1923,7 +1928,7 @@
     const xpMul = 1 + (traitSum('wisdom') + traitSum('scholar') + setStat('xpPct')) / 100;
     const rewardMul = mob.rewardMul || 1;                       // V11: 필드 난이도/주간 보스 배율
     const coins = Math.round((mob.coins || 0) * enchCoinMul() * goldMul * rewardMul);
-    if (coins) addGold(coins);
+    if (coins) { addGold(coins); pickupFeed(`<span class="c-coin">+${coins.toLocaleString('en-US')} coins</span>`); }   // V117
     const xpGain = Math.round((mob.xp || 5) * enchXpMul() * xpMul * rewardMul);
     addSkillXp('combat', xpGain);
     stat('kills');
@@ -1941,7 +1946,9 @@
       let n = d.chance != null ? (d.n || 1) : (d.n || 1) + Math.floor(Math.random() * (lootLv + 1));
       if (n <= 0) continue;
       addItem(d.key, n); addCollection(d.key, n);
-      if ((d.chance == null ? 1 : d.chance) <= 0.25) msgs.push(`✨ ${itemName(d.key)} ×${n}`);
+      const rare = (d.chance == null ? 1 : d.chance) <= 0.25;
+      pickupFeed(`<span class="${rare ? 'c-rare' : 'c-item'}">+${n} ${itemName(d.key)}</span>`);   // V117
+      if (rare) msgs.push(`✨ ${itemName(d.key)} ×${n}`);
     }
     // V28-B: 이 몹 '고유' 드롭 테이블 — 아이템별 고유 확률(디아블로식 공용 풀 폐기)
     if (mob.type) {
@@ -1949,6 +1956,7 @@
       for (const de of mobDropTable(mob.type)) {
         if (Math.random() >= de.chance * luckMul) continue;
         addItem(de.key, 1);
+        pickupFeed(`<span class="c-rare">+1 ${de.name}</span>`);   // V117
         msgs.push(`🎁 ${de.name}`);
       }
     }
@@ -1962,6 +1970,7 @@
       const bk = mob.books[Math.floor(Math.random() * mob.books.length)];
       addItem(`enchant_book_${bk}`, 1);
       const bdef = enchantDef(bk);
+      pickupFeed(`<span class="c-book">📖 ${bdef ? bdef.name : bk} 인챈트북</span>`);   // V117
       msgs.push(`📖 인챈트북: ${bdef ? bdef.name : bk}!`);
     }
     if (msgs.length) toastFn(`${mob.name} 처치! ${msgs.join(' · ')}`, true);

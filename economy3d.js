@@ -9552,6 +9552,15 @@
     }
     if (msg !== _promptLast) { _promptLast = msg; el.textContent = msg; el.style.display = msg ? 'block' : 'none'; }
   }
+  // V117: 실제 스카이블럭식 아이템 획득 채팅 피드(좌측 하단) — "+N 아이템"이 쌓였다 서서히 사라짐
+  function chatFeed(html) {
+    const el = document.getElementById('econ3dChat'); if (!el) return;
+    const line = document.createElement('div'); line.className = 'econ3d-chatline'; line.innerHTML = html;
+    el.appendChild(line);
+    while (el.children.length > 10) el.removeChild(el.firstChild);
+    setTimeout(() => { line.classList.add('fade'); setTimeout(() => { if (line.parentNode) line.parentNode.removeChild(line); }, 900); }, 7000);
+  }
+  window.economy3dChat = chatFeed;
   // V114: 실제 스카이블럭 우측 스코어보드 — 시간/위치/소지금/은행/페어리소울
   function sbTimeStr() {
     const frac = (((worldTime % DAY_LEN) + DAY_LEN) % DAY_LEN) / DAY_LEN;
@@ -9698,6 +9707,7 @@
       <div class="econ3d-xpbar" id="econ3dXpBar"><i id="econ3dXpFill"></i><span id="econ3dXpTxt"></span></div>
       <div class="econ3d-hotbar" id="econ3dHotbar">${Array.from({ length: 9 }, (_, i) => `<button class="econ3d-slot" data-act="econ3d_hotbar" data-i="${i}" id="econ3dSlot${i}"></button>`).join('')}</div>
       <div class="econ3d-buildbar" id="econ3dBuildBar" style="display:none"></div>
+      <div class="econ3d-chat" id="econ3dChat"></div>
       <div class="econ3d-questhud" id="econ3dQuestHud" style="display:none"></div>
       <div class="econ3d-questbanner" id="econ3dQuestBanner" style="display:none"></div>
       ${isTouch ? '<div class="econ3d-jump" data-act="econ3d_jump">⤒</div>' : '<div class="econ3d-controlhint">WASD 이동 · Space 점프 · W 더블탭 달리기 · 좌클릭 공격/꾹 눌러 채집 · 우클릭 설치/상호작용/낚시 · E 인벤토리 · M 지도</div>'}
