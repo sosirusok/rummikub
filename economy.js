@@ -618,11 +618,11 @@
     const B = D().BASE_STATS, HB = D().HPB;
     const ts = talismanStats(), ps = petStats(), fb = fairyBonus();
     // V11: 4부위 방어구 합산(초기롤 + 핫포북 + 아이템 HP)
-    let armorDef = 0, armorHp = 0, armorRfDef = 0, armorRfHp = 0, armorRfStr = 0, armorRfCd = 0, armorRfFero = 0;
+    let armorDef = 0, armorHp = 0, armorRfDef = 0, armorRfHp = 0, armorRfStr = 0, armorRfCd = 0, armorRfFero = 0, armorRfInt = 0;
     for (const sl of ARMOR_SLOTS) {
       const p = equippedPiece(sl);
       if (p) { const rm = recombMul(p.key); armorDef += (rolledStat(p.key, p.defense) + hpbOf(p.key) * HB.armorDefPerBook) * rm; armorHp += ((p.hp || 0) + hpbOf(p.key) * HB.armorHpPerBook) * rm; }
-      const rf = reforgeOf(sl); armorRfDef += rf.def || 0; armorRfHp += rf.hp || 0; armorRfStr += rf.str || 0; armorRfCd += rf.critDamage || 0; armorRfFero += rf.ferocity || 0;
+      const rf = reforgeOf(sl); armorRfDef += rf.def || 0; armorRfHp += rf.hp || 0; armorRfStr += rf.str || 0; armorRfCd += rf.critDamage || 0; armorRfFero += rf.ferocity || 0; armorRfInt += rf.int || 0;   // V107: 지력 리포지(현명한/괴사의) 반영
     }
     const rw = reforgeOf('weapon');
     const B2 = D().BASE_STATS2, gs = gemStats(), pw = powerStats();   // V20-I: 전능의 힘
@@ -633,13 +633,14 @@
       defense: B.defense + buffBonus('defense') + attrBonus('defense') + Math.round(skillLevel('mining') * 1.77) + ts.def + ps.def + enchSum('def')
         + armorRfDef + starDefFlat() + armorDef + traitSum('bulwark') + setStat('def') + weaponStat('defense') + (gs.defense || 0) + pw.def,
       strength: B.strength + Math.round(skillLevel('foraging') * 1.74) + ts.str + ps.str + fb.str + buffBonus('strength') + setStat('str')
-        + weaponStat('str') + (rw.str || 0) + armorRfStr + (gs.str || 0) + pw.str,
+        + weaponStat('str') + (rw.str || 0) + armorRfStr + (gs.str || 0) + pw.str
+        + (equippedWeapon() ? hpbOf(equippedWeapon().key) * (HB.weaponStrPerBook || 0) : 0),   // V107: 무기 핫포북 힘+2/권
       speed: B.speed + enchSum('speed') + buffBonus('speed') + attrBonus('speed') + traitSum('swift') + traitSum('swiftness') + setStat('speed'),
       critChance: Math.min(100, B.critChance + buffBonus('critChance') + skillLevel('combat') * 0.5 + traitSum('crit_eye') + setStat('critChance') + weaponStat('critChance') + (gs.critChance || 0) + pw.critChance),
       critDamage: B.critDamage + buffBonus('critDamage') + traitSum('brutality') + setStat('critDamage') + weaponStat('critDamage') + (rw.critDamage || 0) + armorRfCd + (gs.critDamage || 0) + (ps.critDamage || 0) + pw.critDamage,
       // V17: 광포(추가타) — 무기/리포지/특성/세트. 실제: floor(광포/100) 확정 추가타 + 나머지% 확률(기댓값 1+광포/100배)
       ferocity: weaponStat('ferocity') + (rw.ferocity || 0) + armorRfFero + traitSum('ferocity') + setStat('ferocity'),
-      intelligence: B.intelligence + Math.round(skillLevel('enchanting') * 1.77) + Math.round(skillLevel('alchemy') * 1.72) + buffBonus('intelligence') + attrBonus('intelligence') + traitSum('mana_well') + setStat('intelligence') + weaponStat('intelligence') + Math.round(magicalPower() * 0.6) + (gs.intelligence || 0) + (ps.intelligence || 0) + pw.intelligence,
+      intelligence: B.intelligence + Math.round(skillLevel('enchanting') * 1.77) + Math.round(skillLevel('alchemy') * 1.72) + buffBonus('intelligence') + attrBonus('intelligence') + traitSum('mana_well') + setStat('intelligence') + weaponStat('intelligence') + Math.round(magicalPower() * 0.6) + (gs.intelligence || 0) + (ps.intelligence || 0) + pw.intelligence + armorRfInt + (rw.int || 0),
       // V20: 신규 스탯 — 매직파인드/포춘/공격속도
       magicFind: B2.magicFind + buffBonus('magicFind') + attrBonus('magicFind') + setStat('magicFind') + traitSum('lucky') + (ps.magicFind || 0),
       miningFortune: B2.miningFortune + skillLevel('mining') * 4 + (gs.miningFortune || 0) + setStat('miningFortune') + (ps.miningFortune || 0) + hotmMiningFortune() + colMiningFortune(),   // V20-G HotM
@@ -2035,7 +2036,7 @@
     if (!P.hpb) P.hpb = {};
     P.hpb[itemKey] = cur + 1;
     const isW = sd.category === '무기';
-    toastFn(`🥔 ${sd.name} +${cur + 1}권! (${isW ? `공격 +${HB.weaponDmgPerBook}` : `방어 +${HB.armorDefPerBook}·체력 +${HB.armorHpPerBook}`})`, true);
+    toastFn(`🥔 ${sd.name} +${cur + 1}권! (${isW ? `공격 +${HB.weaponDmgPerBook}·힘 +${HB.weaponStrPerBook}` : `방어 +${HB.armorDefPerBook}·체력 +${HB.armorHpPerBook}`})`, true);
     saveNow(); renderZone(); return true;
   }
   function salvageItem(key) {
@@ -3376,7 +3377,7 @@
       const cost = reforgeSlotCost(slot);
       return `<div class="econ-starcard">
         <h4>${label} — ${eq ? `<span style="color:${tierColorByKey(eq.tierKey)}">${cur ? `[${cur.name}] ` : ''}${eq.name}</span>` : '<span class="muted">장비 없음</span>'}</h4>
-        <p class="muted">${cur ? `현재 보너스: ${cur.dmgPct ? `공격 +${cur.dmgPct}% ` : ''}${cur.def ? `방어 +${cur.def} ` : ''}${cur.hp ? `체력 +${cur.hp} ` : ''}${cur.sellBonus ? `판매가 +${cur.sellBonus}%` : ''}` : '리포지 없음 — 무작위 접두어를 부여해보세요'}</p>
+        <p class="muted">${cur ? `현재 보너스: ${cur.dmgPct ? `공격 +${cur.dmgPct}% ` : ''}${cur.str ? `힘 +${cur.str} ` : ''}${cur.critDamage ? `크리피해 +${cur.critDamage}% ` : ''}${cur.critChance ? `크리% +${cur.critChance} ` : ''}${cur.ferocity ? `광포 +${cur.ferocity} ` : ''}${cur.int ? `지력 +${cur.int} ` : ''}${cur.def ? `방어 +${cur.def} ` : ''}${cur.hp ? `체력 +${cur.hp} ` : ''}${cur.sellBonus ? `판매가 +${cur.sellBonus}%` : ''}` : '리포지 없음 — 무작위 접두어를 부여해보세요'}</p>
         <button class="btn btn--sm" data-act="econ_reforge_slot" data-slot="${slot}" ${eq ? '' : 'disabled'}>🎲 무작위 리포지 ${cost != null ? `(${fmtGold(cost)})` : ''}</button>
         <button class="btn btn--sm btn--ghost" data-act="econ_reforge_premium" data-slot="${slot}" ${eq && hasItem('reforge_stone_rare') ? '' : 'disabled'}>💎 스톤 확정 [${D().REFORGES.premium[reforgePoolType(slot)].name}] (스톤 1 + ${cost != null ? fmtGold(cost * 2) : '-'})</button>
         <button class="btn btn--sm btn--ghost" data-act="econ_reforge_apex" data-slot="${slot}" ${eq && hasItem('reforge_stone_apex') ? '' : 'disabled'}>🐉 전설 확정 [${D().REFORGES.premiumApex[reforgePoolType(slot)].name}] (신룡의 룬석 1 + ${cost != null ? fmtGold(cost * 3) : '-'})</button>
