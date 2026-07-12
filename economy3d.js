@@ -467,6 +467,20 @@
     for (let y = Math.min(H - 1, Math.floor(refY)); y >= 1; y--) if (solidAt(x, y, z)) return y + 1;
     return surfaceTop(x, z);
   }
+  // V99b: 개방/밀폐 지형 모두에서 '서 있을 수 있는' 바닥 y 탐색(임포트 맵 실내 스폰용).
+  //   위에서 내려오며 첫 솔리드(지표 or 지붕) 덩어리를 지나 그 아래 공동이 있으면 실내 바닥을,
+  //   없으면(개방 지형) 그 지표를 반환 → 밀폐 맵에서 지붕 위 스폰 방지.  {y, ceil} 반환.
+  function standInfo(x, z) {
+    let y = H - 1;
+    while (y >= 1 && !solidAt(x, y, z)) y--;                 // 하늘 공기 스킵
+    if (y < 1) return { y: SEA + 1, ceil: SEA + 1 };
+    const surf = y + 1;                                      // 첫 솔리드 상단(개방이면 지표, 밀폐면 지붕)
+    while (y >= 1 && solidAt(x, y, z)) y--;                  // 첫 솔리드 덩어리 통과
+    if (y < 1) return { y: surf, ceil: surf };               // 아래가 전부 솔리드 → 개방 지표
+    while (y >= 1 && !solidAt(x, y, z)) y--;                 // 공동 공기 스킵
+    if (y < 1) return { y: surf, ceil: surf };               // 실내 바닥 없음 → 지표
+    return { y: y + 1, ceil: surf };                         // 실내 바닥 상단(y+1), 지붕(surf)
+  }
   // V97(A8): 맵파일 월드 중앙 스폰 높이. 네더는 베드락 지붕이 최상단이라 surfaceTop이 지붕을 반환 → 중간 높이에서 아래로 첫 바닥을 찾는다(지붕 위 스폰 방지).
   function mapCenterTop(cx, cz) { return worldMode === 'nether' ? groundBelow(cx, cz, Math.floor(H * 0.55)) : surfaceTop(cx, cz); }
 
@@ -8443,21 +8457,28 @@
     field.forEach(a => { loMin = Math.min(loMin, a.lv[0]); loMax = Math.max(loMax, a.lv[1]); });
     if (loMin > loMax) { loMin = 1; loMax = 5; }
     const cx = W >> 1, cz = Dp >> 1, pad = 8, step = 44, added = [];
-    // 필드 스폰 구역을 맵 지표 전역에 격자 타일링(유효 지표만, 최대 44곳)
+    // 밀폐(실내) 구역이면 spawnMob이 groundBelow로 실내 바닥을 찾도록 스캔 시작 y를 부여.
+    //   개방 지표면 y 미부여(surfaceTop). ceil-floor 간격이 크면 실내로 판정.
+    const areaYFor = (x, z) => { const si = standInfo(x, z); if (si.y <= SEA + 1) return null; const enclosed = (si.ceil - si.y) > 4; return { valid: true, y: enclosed ? Math.floor((si.y + si.ceil) / 2) : undefined }; };
+    // 필드 스폰 구역을 맵 전역에 격자 타일링(유효 바닥만, 최대 44곳)
     if (types.length) {
       for (let x = pad; x < W - pad && added.length < 44; x += step) {
         for (let z = pad; z < Dp - pad && added.length < 44; z += step) {
-          if (surfaceTop(x, z) <= SEA + 1) continue;                 // 물/공허 위는 스킵
-          added.push({ world: wk, x, z, r: 20, types, lv: [loMin, loMax], cap: 5, respawn: 10, _mapGen: true });
+          const info = areaYFor(x, z); if (!info) continue;          // 물/공허 위는 스킵
+          const a = { world: wk, x, z, r: 20, types, lv: [loMin, loMax], cap: 5, respawn: 10, _mapGen: true };
+          if (info.y != null) a.y = info.y;                          // 실내면 스캔 시작 y(→ groundBelow 실내 바닥)
+          added.push(a);
         }
       }
     }
-    // 특수 구역(보스/미니보스/hellOnly)은 맵 안쪽 링으로 재배치해 유지(지표 스폰)
+    // 특수 구역(보스/미니보스/hellOnly)은 맵 안쪽 링의 유효 바닥으로 재배치해 유지
     special.forEach((a, i) => {
       const ang = i / Math.max(1, special.length) * Math.PI * 2;
       const rx = Math.max(pad, Math.min(W - pad, Math.round(cx + Math.cos(ang) * Math.min(cx, cz) * 0.4)));
       const rz = Math.max(pad, Math.min(Dp - pad, Math.round(cz + Math.sin(ang) * Math.min(cx, cz) * 0.4)));
-      const na = Object.assign({}, a, { x: rx, z: rz, _mapGen: true }); delete na.y;   // y 절차 좌표 제거 → 지표 탐색
+      const info = areaYFor(rx, rz);
+      const na = Object.assign({}, a, { x: rx, z: rz, _mapGen: true }); delete na.y;
+      if (info && info.y != null) na.y = info.y;                     // 실내면 실내 바닥 스캔, 개방이면 지표
       added.push(na);
     });
     SPAWN_AREAS = SPAWN_AREAS.concat(added);
