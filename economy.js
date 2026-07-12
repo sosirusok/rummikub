@@ -375,9 +375,13 @@
     if (ctx.hitIdx === 0) pct += enchSum('first');
     if (ctx.hitIdx < 3) pct += enchSum('firstThree');
     if ((ctx.hitIdx + 1) % 3 === 0) pct += enchSum('third');
-    if (ctx.targetMaxHp >= 100000) pct += enchSum('dmgBig');
-    if (ctx.targetHp < ctx.targetMaxHp * 0.5) pct += enchSum('dmgLow');
-    else pct += enchSum('dmgHigh');
+    // V129: 자이언트킬러 실측 — fx.dmgBig=1(합=레벨) · 레벨당 (대상 최대HP가 내 HP 초과한 %)%, 레벨당 +5% 캡
+    const gkLv = enchSum('dmgBig');
+    if (gkLv > 0 && ctx.targetMaxHp > 0) { const selfHp = (ctx.selfHp || playerStats().hp) || 100; const excess = Math.max(0, (ctx.targetMaxHp / selfHp - 1) * 100); pct += gkLv * Math.min(5, excess); }
+    // V129: 처형 실측 — fx.dmgLow=1(합=레벨) · 레벨당 0.5% × 대상 잃은 체력 %
+    const exLv = enchSum('dmgLow');
+    if (exLv > 0 && ctx.targetMaxHp > 0) pct += 0.5 * exLv * Math.max(0, (1 - ctx.targetHp / ctx.targetMaxHp) * 100);
+    if (ctx.targetHp >= ctx.targetMaxHp * 0.5) pct += enchSum('dmgHigh');
     if (ctx.slayerKey) pct += enchVsSum(ctx.slayerKey);
     if (ctx.mobType && CUBE_MOBS.has(ctx.mobType)) pct += enchVsSum('cube');   // V109: 큐비즘 — 큐브형 몹 특효
     if (ctx.isBoss) pct += enchSum('dmgBoss');
@@ -631,7 +635,7 @@
         + (equippedWeapon() ? hpbOf(equippedWeapon().key) * (HB.weaponStrPerBook || 0) : 0),   // V107: 무기 핫포북 힘+2/권
       speed: B.speed + enchSum('speed') + buffBonus('speed') + attrBonus('speed') + traitSum('swift') + traitSum('swiftness') + setStat('speed'),
       critChance: Math.min(100, B.critChance + buffBonus('critChance') + skillLevel('combat') * 0.5 + traitSum('crit_eye') + setStat('critChance') + weaponStat('critChance') + (gs.critChance || 0) + pw.critChance),
-      critDamage: B.critDamage + buffBonus('critDamage') + traitSum('brutality') + setStat('critDamage') + weaponStat('critDamage') + (rw.critDamage || 0) + armorRfCd + (gs.critDamage || 0) + (ps.critDamage || 0) + pw.critDamage,
+      critDamage: B.critDamage + buffBonus('critDamage') + traitSum('brutality') + setStat('critDamage') + weaponStat('critDamage') + (rw.critDamage || 0) + armorRfCd + (gs.critDamage || 0) + (ps.critDamage || 0) + pw.critDamage + enchSum('critDamage'),   // V129: 치명 인챈트 = 크리 피해
       // V17: 광포(추가타) — 무기/리포지/특성/세트. 실제: floor(광포/100) 확정 추가타 + 나머지% 확률(기댓값 1+광포/100배)
       ferocity: weaponStat('ferocity') + (rw.ferocity || 0) + armorRfFero + traitSum('ferocity') + setStat('ferocity'),
       intelligence: B.intelligence + Math.round(skillLevel('enchanting') * 1.77) + Math.round(skillLevel('alchemy') * 1.72) + buffBonus('intelligence') + attrBonus('intelligence') + traitSum('mana_well') + setStat('intelligence') + weaponStat('intelligence') + Math.round(magicalPower() * 0.6) + (gs.intelligence || 0) + (ps.intelligence || 0) + pw.intelligence + armorRfInt + (rw.int || 0) + enchSum('intelligence'),   // V109: 빅 브레인 지력 인챈트 반영
