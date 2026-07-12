@@ -1922,8 +1922,8 @@
     const lootLv = enchantLvl('weapon', 'looting');
     for (const d of mob.drops || []) {
       if (d.chance != null && Math.random() > d.chance * (1 + lootLv * 0.15) * (1 + lucky / 100)) continue;   // 약탈: 희귀 드롭 확률도 +15%/레벨
-      // V9: 기본 드롭은 약탈 0 기준 0~n개 랜덤(마인크래프트식), 약탈 레벨당 최대 +1
-      let n = d.chance != null ? (d.n || 1) : Math.floor(Math.random() * ((d.n || 1) + 1 + lootLv));
+      // V94: 확정 드롭(chance==null)은 위키 100% 보장 — 최소 d.n개 확정 + 약탈 레벨당 +0~1개 보너스
+      let n = d.chance != null ? (d.n || 1) : (d.n || 1) + Math.floor(Math.random() * (lootLv + 1));
       if (n <= 0) continue;
       addItem(d.key, n); addCollection(d.key, n);
       if ((d.chance == null ? 1 : d.chance) <= 0.25) msgs.push(`✨ ${itemName(d.key)} ×${n}`);

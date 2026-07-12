@@ -209,6 +209,8 @@
       { key: 'lapis', weight: 8, min: 1, max: 3 }, { key: 'redstone', weight: 7, min: 1, max: 3 },
       { key: 'diamond', weight: 3, min: 1, max: 1 }, { key: 'emerald', weight: 2, min: 1, max: 1 },
       { key: 'obsidian', weight: 1, min: 1, max: 1 },
+      // V94: 기초 자재 출처 부재(모래/자갈/석영 → 유리·TNT·화강암 등 90여 레시피 잠금) 해소
+      { key: 'sand', weight: 10, min: 1, max: 3 }, { key: 'gravel', weight: 9, min: 1, max: 3 }, { key: 'quartz', weight: 5, min: 1, max: 2 },
     ] },
     farm: { skill: 'farming', toolFamily: 'hoe', drops: [
       { key: 'wheat', weight: 28, min: 1, max: 4 }, { key: 'carrot', weight: 22, min: 1, max: 3 },
@@ -954,9 +956,11 @@
   const ENCH_BLOCK_T = { stone: 5, coal: 7, iron: 7, gold: 8, lapis: 7, redstone: 8, diamond: 8, emerald: 7, bone: 10, slime_ball: 8, gunpowder: 6, ender_pearl: 6 };
   // 광물은 한 단계 더: 인챈티드 160개 → 인챈티드 블록
   const ENCHANTED_BLOCK_RES = ['stone', 'coal', 'iron', 'gold', 'lapis', 'redstone', 'diamond', 'emerald', 'bone', 'slime_ball', 'gunpowder', 'ender_pearl'];   // V10: 12종
+  // V94: 컬렉션에 없는 자원(EXTRA_RES: apple/ender_shard)은 티어가 없어 unlock이 영구 false → 인챈티드 레시피 영구 잠금. 컬렉션 자원만 티어 잠금, 그 외는 항상 해금.
+  const COLL_RES_SET = new Set(COLLECTIONS.reduce((a, c) => a.concat(c.resources.map(r => r.key)), []));
   const RECIPES = [
     ...ENCHANTED_RES.map(rk => ({
-      key: `enchanted_${rk}`, needs: { [rk]: 160 }, gives: 1, unlock: { resource: rk, tier: ENCH_UNLOCK_T[rk] || 2 },
+      key: `enchanted_${rk}`, needs: { [rk]: 160 }, gives: 1, unlock: COLL_RES_SET.has(rk) ? { resource: rk, tier: ENCH_UNLOCK_T[rk] || 2 } : null,
     })),
     ...ENCHANTED_BLOCK_RES.map(rk => ({
       key: `enchanted_${rk}_block`, needs: { [`enchanted_${rk}`]: 160 }, gives: 1, unlock: { resource: rk, tier: ENCH_BLOCK_T[rk] || 5 },
@@ -1142,12 +1146,12 @@
     _recipeKeys.add(r.key);
   }
   [
-    ['stone', null], ['quartz_block', null], ['sandstone', null], ['bricks', null], ['purpur', null],
+    ['stone', null], ['quartz_block', null], ['sandstone', null], ['bricks', null], ['purpur', null, 'purpur_block'],   // V94: 퍼퍼 블럭 아이템 키는 purpur_block(채굴 드롭)
     ['smooth_stone', null], ['prismarine', null], ['mossy_cobblestone', null], ['polished_andesite', null],
     ['chiseled_stone_bricks', null],
-  ].forEach(([mat, unlock]) => {
-    addRecipe({ key: mat + '_slab', needs: { [mat]: 3 }, gives: 6, unlock });
-    addRecipe({ key: mat + '_stairs', needs: { [mat]: 6 }, gives: 4, unlock });
+  ].forEach(([mat, unlock, needKey]) => {
+    addRecipe({ key: mat + '_slab', needs: { [needKey || mat]: 3 }, gives: 6, unlock });
+    addRecipe({ key: mat + '_stairs', needs: { [needKey || mat]: 6 }, gives: 4, unlock });
   });
   addRecipe({ key: 'sandstone', needs: { sand: 4 }, gives: 1, unlock: null });
   addRecipe({ key: 'hay_block', needs: { wheat: 9 }, gives: 1, unlock: null });
@@ -1157,9 +1161,12 @@
   const VANILLA_NAMES = {};
   {
     const VAN = (typeof window !== 'undefined' && window.ECON_VANILLA) ? window.ECON_VANILLA : null;
+    // V94: 바닐라 재료 키 → 게임 자원 키 별칭(게임은 sugarcane/oaklog 등 무언더스코어 키 사용) — 미스매치로 조합 불가되던 체인 복구
+    const VAN_ING_ALIAS = { sugar_cane: 'sugarcane', oak_log: 'oaklog', birch_log: 'birchlog', spruce_log: 'sprucelog' };
+    const normIng = needs => { if (!needs) return needs; const o = {}; for (const k in needs) o[VAN_ING_ALIAS[k] || k] = needs[k]; return o; };
     if (VAN) {
       (VAN.items || []).forEach(it => { if (!(it.key in VANILLA_NAMES)) VANILLA_NAMES[it.key] = it.name; });
-      (VAN.recipes || []).forEach(r => { if (!_recipeKeys.has(r.key)) { RECIPES.push(r); } });   // 신규 키만
+      (VAN.recipes || []).forEach(r => { if (!_recipeKeys.has(r.key)) { if (r.needs) r.needs = normIng(r.needs); RECIPES.push(r); } });   // 신규 키만 + 재료 키 정규화
     }
   }
 
@@ -1702,6 +1709,7 @@
     { in: 'raw_copper', inN: 1, out: 'copper', n: 1, name: '원시 구리 → 구리 주괴' },   // V23-C
     { in: 'cobbled_deepslate', inN: 1, out: 'deepslate', n: 1, name: '조각난 딥슬레이트 → 딥슬레이트' },
     { in: 'deepslate_bricks', inN: 1, out: 'cracked_deepslate_bricks', n: 1, name: '딥슬레이트 벽돌 → 금 간 벽돌' },
+    { in: 'oaklog', inN: 1, out: 'charcoal', n: 1, name: '원목 → 숯' },   // V94: 숯 출처 부재(횃불/모닥불/화염구 35레시피) 해소 — 바닐라 원목 제련
   ];
   const PORTAL_ITEMS = {
     portal_barn: { name: '🌾 더 반 포탈', dest: 'barn' },
