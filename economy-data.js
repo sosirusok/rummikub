@@ -335,11 +335,15 @@
   // V17: 실제 하이픽셀 보스 HP — 리븐넌트(좀비) 500/20k/400k/1.5M/10M 확정 앵커 기준, 계열별 실측 스케일.
   //   HP는 명시 테이블(hpTable), 피해는 계열배율(mulScale)^0.30로 완만화(실제 HP에서도 엔드게임 유효체력으로 생존 가능).
   //   피해 감소·유효체력이 함께 실제 규모로 커지므로(V17-A/C) 만렙이 10M~수억 HP 보스를 실제처럼 잡을 수 있음.
-  function mkSlayerTiers(hpTable, baseDmg, baseXp, baseCoin, mulScale, lootByTier) {
-    const costMul = [1, 4, 16, 60, 200], dmgMul = [1, 2.6, 6.8, 17.6, 45.7], xpMul = [1, 5, 20, 100, 300], coinMul = [1, 8, 24, 80, 240];
+  // V107: 실측 슬레이어 소환 비용 — 표준 계열(좀비/거미/늑대/엔더맨)은 티어별 동일, 인페르노(블레이즈)만 상이
+  const SLAYER_COST_STD = [2000, 7500, 20000, 50000, 100000];
+  const SLAYER_COST_INFERNO = [10000, 25000, 60000, 150000, 350000];
+  function mkSlayerTiers(hpTable, baseDmg, baseXp, baseCoin, mulScale, lootByTier, costTable) {
+    const dmgMul = [1, 2.6, 6.8, 17.6, 45.7], xpMul = [1, 5, 20, 100, 300], coinMul = [1, 8, 24, 80, 240];
+    const cost = costTable || SLAYER_COST_STD;
     return lootByTier.map((loot, i) => ({
       tier: i + 1,
-      turnInGold: Math.round(500 * costMul[i] * Math.pow(mulScale, 0.5)),
+      turnInGold: cost[i],
       hp: hpTable[i],
       dmg: Math.round(baseDmg * dmgMul[i] * Math.pow(mulScale, 0.30)),
       xpReward: Math.round(baseXp * xpMul[i]),
@@ -386,7 +390,7 @@
       ['blaze_rod', 'midas_sword', 'enchant_book_sharpness'],
       ['blaze_rod', 'talisman_primal_shard', 'pet_egg_ender_dragon'],
       ['blaze_rod', 'fuming_potato_book', 'pet_egg_ender_dragon'],
-    ]) },
+    ], SLAYER_COST_INFERNO) },   // V107: 인페르노 실측 소환비용
   ];
 
   /* ---------------- 던전 — 카타콤 7층(F1~F7, 실제 보스 라인업) ---------------- */
@@ -1198,9 +1202,26 @@
   const FAIRY_SOULS = { total: 91, goldPerSoul: 200, mpPerSoul: 2, per5Bonus: { hp: 10, str: 2 } };   // V32: 실제 허브 79개(수작업 배치) + 테마 12개
 
   /* ---------------- 은행 ---------------- */
-  const BANK = { interestPctPerDay: 2, interestCapBalance: 100000,
-    // V9: 잔고 상한 업그레이드(골드 싱크): 10만 → 50만 → 250만 → 1000만
-    upgrades: [{ cap: 100000, cost: 0, pct: 2 }, { cap: 500000, cost: 50000, pct: 2.5 }, { cap: 2500000, cost: 400000, pct: 3 }, { cap: 10000000, cost: 2500000, pct: 3.5 }] };   // V10: 티어별 이자율
+  // V107: 실측 은행 — 7티어(스타터~팔라티얼), 이자는 트랜치(브래킷) 방식·티어별 최대이자 상한. 시즌(31시간)마다 지급.
+  //   각 티어: cap(잔고 상한)/cost(골드)/egb(인챈티드 골드블럭 수)/goldColl(골드 컬렉션 요구)/maxInterest(시즌 최대이자)/brackets([구간상한, 이율%])
+  const BANK_BRK = {
+    starter: [[10000000, 2], [15000000, 1]],
+    gold: [[10000000, 2], [20000000, 1]],
+    deluxe: [[10000000, 2], [20000000, 1], [30000000, 0.5]],
+    superdeluxe: [[10000000, 2], [20000000, 1], [30000000, 0.5], [50000000, 0.2]],
+    premier: [[10000000, 2], [20000000, 1], [30000000, 0.5], [50000000, 0.2], [160000000, 0.1]],
+    luxurious: [[10000000, 2], [20000000, 1], [30000000, 0.5], [50000000, 0.2], [160000000, 0.1], [5100000000, 0.01]],
+  };
+  const BANK = { interestPctPerDay: 2, interestCapBalance: 10000000, interestSeasonHours: 31, unlockBalance: 10000000,
+    upgrades: [
+      { name: 'Starter', cap: 50000000, cost: 0, egb: 0, goldColl: 0, maxInterest: 250000, brackets: BANK_BRK.starter },
+      { name: 'Gold', cap: 100000000, cost: 5000000, egb: 1, goldColl: 100000, maxInterest: 300000, brackets: BANK_BRK.gold },
+      { name: 'Deluxe', cap: 250000000, cost: 10000000, egb: 5, goldColl: 250000, maxInterest: 350000, brackets: BANK_BRK.deluxe },
+      { name: 'Super Deluxe', cap: 500000000, cost: 25000000, egb: 20, goldColl: 500000, maxInterest: 390000, brackets: BANK_BRK.superdeluxe },
+      { name: 'Premier', cap: 1000000000, cost: 50000000, egb: 50, goldColl: 1000000, maxInterest: 500000, brackets: BANK_BRK.premier },
+      { name: 'Luxurious', cap: 6000000000, cost: 100000000, egb: 100, goldColl: 2000000, maxInterest: 1000000, brackets: BANK_BRK.luxurious },
+      { name: 'Palatial', cap: 60000000000, cost: 200000000, egb: 200, goldColl: 3000000, maxInterest: 1500000, brackets: BANK_BRK.luxurious },
+    ] };
 
   /* ---------------- 일일 특가(경매인) ---------------- */
   const DAILY_DEALS = { count: 5, jackpotMul: 5, normalMul: 2.5 };   // V9: 수집상 5종 + 잭팟 1종(시세 ×5)

@@ -1391,7 +1391,7 @@
     const day = todayStr();
     if (P.lastInterestDay === day) return;
     if (P.lastInterestDay && P.bank > 0) {
-      const interest = Math.round(Math.min(P.bank, bankTierInfo().cap) * (bankTierInfo().pct || D().BANK.interestPctPerDay) / 100);
+      const interest = bankSeasonInterest(Math.min(P.bank, bankTierInfo().cap));
       if (interest > 0) { P.bank += interest; toastFn(`🏦 은행 이자 +${fmtGold(interest)} 입금!`, true); }
     }
     P.lastInterestDay = day;
@@ -3185,14 +3185,28 @@
     toastFn(`🧱 ${b.name} ×${b.amount} 구매! (소지금 ${fmtGold(P.gold)})`, true);
     saveNow(); renderZone();
   }
-  function bankTierInfo() { const U = D().BANK.upgrades; const t = Math.min(P.bankTier || 0, U.length - 1); return { tier: t, cap: U[t].cap, pct: U[t].pct, next: U[t + 1] || null }; }
+  function bankTierInfo() { const U = D().BANK.upgrades; const t = Math.min(P.bankTier || 0, U.length - 1); const u = U[t]; return { tier: t, name: u.name, cap: u.cap, maxInterest: u.maxInterest, brackets: u.brackets, next: U[t + 1] || null }; }
+  // V107: 실측 트랜치(브래킷) 이자 — 구간별 이율 합산 후 티어 최대이자로 상한
+  function bankSeasonInterest(balance) {
+    const bi = bankTierInfo(); let interest = 0, prev = 0;
+    for (const [upper, rate] of bi.brackets) {
+      if (balance <= prev) break;
+      interest += (Math.min(balance, upper) - prev) * rate / 100;
+      prev = upper;
+    }
+    return Math.min(Math.round(interest), bi.maxInterest);
+  }
   function upgradeBank() {
     const info = bankTierInfo();
     if (!info.next) { toastFn('은행이 최고 등급이에요', false); return; }
-    if (P.gold < info.next.cost) { toastFn('업그레이드 비용이 부족해요', false); return; }
-    addGold(-info.next.cost);
+    const nx = info.next;
+    if (P.gold < nx.cost) { toastFn(`업그레이드 골드가 부족해요 (${fmtGold(nx.cost)})`, false); return; }
+    if (nx.egb && !hasItem('enchanted_gold_block', nx.egb)) { toastFn(`인챈티드 골드블럭 ${nx.egb}개가 필요해요`, false); return; }
+    if (nx.goldColl && (P.collections.gold || 0) < nx.goldColl) { toastFn(`골드 컬렉션 ${fmtNum(nx.goldColl)} 필요 (현재 ${fmtNum(P.collections.gold || 0)})`, false); return; }
+    addGold(-nx.cost);
+    if (nx.egb) removeItem('enchanted_gold_block', nx.egb);
     P.bankTier = (P.bankTier || 0) + 1;
-    toastFn(`🏦 은행 업그레이드! 잔고 상한 ${fmtGold(bankTierInfo().cap)}`, true);
+    toastFn(`🏦 은행 [${bankTierInfo().name}] 업그레이드! 잔고 상한 ${fmtGold(bankTierInfo().cap)}`, true);
     saveNow(); renderZone();
   }
   function bankHTML() {
@@ -3201,8 +3215,8 @@
     const pad9 = (arr) => { const out = arr.slice(); while (out.length % 9) out.push('<div class="mc-slot mc-empty2"></div>'); return out.join(''); };
     const dep = (amt, icon, label) => `<div class="mc-slot mc-menuslot" data-act="econ_bank_deposit" data-amt="${amt}" data-ttn="예치 ${label}" data-ttd="클릭: 소지금에서 ${label} 예치">${iconImg(icon)}</div>`;
     const wd = (amt, icon, label) => `<div class="mc-slot mc-menuslot" data-act="econ_bank_withdraw" data-amt="${amt}" data-ttn="출금 ${label}" data-ttd="클릭: 예치금에서 ${label} 출금">${iconImg(icon)}</div>`;
-    const up = bi.next ? `<div class="mc-slot mc-menuslot" data-act="econ_bank_upgrade" data-ttn="🏦 금고 업그레이드" data-ttd="상한 ${fmtGold(bi.next.cap)} · 비용 ${fmtGold(bi.next.cost)} — 클릭: 업그레이드">${iconImg('emerald')}</div>` : `<div class="mc-slot mc-menuslot mc-colmax" data-ttn="🏆 최고 등급 금고" data-ttd="상한 ${fmtGold(bi.cap)}">${iconImg('emerald')}</div>`;
-    return `<div class="mc-chest"><div class="mc-chesttitle">🏦 은행 — 예치 ${fmtGold(P.bank)} · 소지 ${fmtGold(P.gold)} (하루 ${bi.pct}% 이자 · 상한 ${fmtGold(bi.cap)})</div>
+    const up = bi.next ? `<div class="mc-slot mc-menuslot" data-act="econ_bank_upgrade" data-ttn="🏦 금고 업그레이드 → ${bi.next.name}" data-ttd="상한 ${fmtGold(bi.next.cap)} · 골드 ${fmtGold(bi.next.cost)}${bi.next.egb ? ` · 인챈티드 골드블럭 ${bi.next.egb}` : ''}${bi.next.goldColl ? ` · 골드 컬렉션 ${fmtNum(bi.next.goldColl)}` : ''} — 클릭: 업그레이드">${iconImg('emerald')}</div>` : `<div class="mc-slot mc-menuslot mc-colmax" data-ttn="🏆 최고 등급 금고 (${bi.name})" data-ttd="상한 ${fmtGold(bi.cap)}">${iconImg('emerald')}</div>`;
+    return `<div class="mc-chest"><div class="mc-chesttitle">🏦 은행 [${bi.name}] — 예치 ${fmtGold(P.bank)} · 소지 ${fmtGold(P.gold)} (시즌 이자 최대 ${fmtGold(bi.maxInterest)} · 상한 ${fmtGold(bi.cap)})</div>
       <div class="mc-chesttitle" style="margin-top:8px">예치 (금괴 클릭)</div>
       <div class="mc-grid">${pad9([dep(1000, 'gold', '1,000G'), dep(10000, 'gold', '10,000G'), dep('all', 'gold_block', '전부'), up])}</div>
       <div class="mc-chesttitle" style="margin-top:8px">출금</div>
