@@ -5753,9 +5753,10 @@
       warpCharge = null;
       return;
     }
-    // V21-C: 포탈 설치 게이트(단일) — 허브/홈/던전 제외, 해당 섬 포탈을 제작해 프라이빗 섬에 설치(버튼 또는 직접 배치)해야 워프 가능
-    if (dest !== 'hub' && dest !== 'home' && dest !== 'dungeon' && !hasHomePortal(dest)) {
-      if (typeof toast === 'function') toast(`🌀 ${WORLD_DEFS[dest].name} 포탈을 제작해 프라이빗 섬에 설치해야 워프할 수 있어요 (제작 탭)`, false);
+    // V116: 허브 워프패드는 실제 스카이블럭 '빠른 이동'처럼 포탈 제작 없이도 작동(스킬 해금만).
+    //   포탈 제작 게이트는 프라이빗 섬(home)에서 개인 포탈로 워프할 때만 적용(편의 기능).
+    if (worldMode === 'home' && dest !== 'hub' && dest !== 'home' && dest !== 'dungeon' && !hasHomePortal(dest)) {
+      if (typeof toast === 'function') toast(`🌀 프라이빗 섬에서 바로 가려면 ${WORLD_DEFS[dest].name} 포탈을 제작·설치하세요 — 아니면 허브의 워프패드로 이동할 수 있어요`, false);
       warpCharge = null;
       return;
     }
@@ -7183,20 +7184,41 @@
         if (solidAt(x, fy, z)) return false;   // 발밑 어딘가 지면 있으면 안전
     return true;
   }
+  // V116: 플레이어 AABB가 임의 위치에서 고체 블럭과 겹치는지 검사(자동 스텝업 헤드룸 확인용)
+  function playerCollidesAt(px, py, pz) {
+    const minX = px - P.w / 2, maxX = px + P.w / 2, minZ = pz - P.w / 2, maxZ = pz + P.w / 2, minY = py, maxY = py + P.h;
+    for (let x = Math.floor(minX); x <= Math.floor(maxX); x++) for (let z = Math.floor(minZ); z <= Math.floor(maxZ); z++) for (let y = Math.floor(minY); y <= Math.floor(maxY); y++) {
+      const bb = BLOCKS[getBlockLocal(x, y, z)]; if (!bb || !bb.solid) continue;
+      for (const box of blockLocalBoxes(bb, x, y, z, false)) {
+        if (minX >= box.x1 || maxX <= box.x0 || minY >= box.y1 || maxY <= box.y0 || minZ >= box.z1 || maxZ <= box.z0) continue;
+        return true;
+      }
+    }
+    return false;
+  }
   function moveAxis(ax, amt) {
     if (amt === 0) return;
     const before = P[ax];
     P[ax] += amt;
     const minX = P.x - P.w / 2, maxX = P.x + P.w / 2, minZ = P.z - P.w / 2, maxZ = P.z + P.w / 2, minY = P.y, maxY = P.y + P.h;
+    let firstHit = null, maxTop = -Infinity;
     for (let x = Math.floor(minX); x <= Math.floor(maxX); x++) for (let z = Math.floor(minZ); z <= Math.floor(maxZ); z++) for (let y = Math.floor(minY); y <= Math.floor(maxY); y++) {
       const bb = BLOCKS[getBlockLocal(x, y, z)]; if (!bb || !bb.solid) continue;
       const boxes = blockLocalBoxes(bb, x, y, z, false);
       for (const box of boxes) {
         if (minX >= box.x1 || maxX <= box.x0 || minY >= box.y1 || maxY <= box.y0 || minZ >= box.z1 || maxZ <= box.z0) continue;
         if (ax === 'y') { if (amt > 0) { P.y = box.y0 - P.h - 0.0001; P.vy = 0; } else { P.y = box.y1 + 0.0001; P.vy = 0; P.onGround = true; } return; }
-        if (ax === 'x') { if (amt > 0) P.x = box.x0 - P.w / 2 - 0.0001; else P.x = box.x1 + P.w / 2 + 0.0001; P.vx = 0; P._hColl = true; return; }
-        if (ax === 'z') { if (amt > 0) P.z = box.z0 - P.w / 2 - 0.0001; else P.z = box.z1 + P.w / 2 + 0.0001; P.vz = 0; P._hColl = true; return; }
+        if (!firstHit) firstHit = box; if (box.y1 > maxTop) maxTop = box.y1;   // V116: 수평 충돌 전부 스캔(스텝업 대상 결정)
       }
+    }
+    if (firstHit) {   // ax === 'x' || 'z'
+      // V116: 자동 스텝업(MC 0.6블럭) — 반블럭·계단 등 낮은 장애물은 자동 등반(머리 위 여유가 있을 때만)
+      if (P.onGround && maxTop > P.y && (maxTop - P.y) <= 0.6 + 1e-4 && !playerCollidesAt(P.x, maxTop + 0.0001, P.z)) {
+        P.y = maxTop + 0.0001; return;   // 올라섰으므로 수평 이동 유지
+      }
+      if (ax === 'x') { if (amt > 0) P.x = firstHit.x0 - P.w / 2 - 0.0001; else P.x = firstHit.x1 + P.w / 2 + 0.0001; P.vx = 0; P._hColl = true; }
+      else { if (amt > 0) P.z = firstHit.z0 - P.w / 2 - 0.0001; else P.z = firstHit.z1 + P.w / 2 + 0.0001; P.vz = 0; P._hColl = true; }
+      return;
     }
     if ((ax === 'x' || ax === 'z') && P._sneaking && P.onGround && wouldFallOffEdge()) { P[ax] = before; P['v' + ax] = 0; }
   }
