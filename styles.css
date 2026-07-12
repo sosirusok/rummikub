@@ -1627,3 +1627,42 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 /* 패널 상단바(닫기) MC 평면화 */
 .econ3d-panelbar{ background:#2b2b2b !important; border-bottom:3px solid #1c1c1c !important; }
 .econ3d-panelbar span{ color:#ffe28a !important; }
+
+/* ============ V120: MC 인벤토리 — 무기칸 제거 + 픽셀 스티브 플레이어 미리보기 ============ */
+.mc-invtop{ display:flex; align-items:flex-start; gap:14px; margin-bottom:10px; }
+.mc-armorcol{ display:flex; flex-direction:column; gap:4px; }
+.mc-armorcol .mc-slot{ width:44px; height:44px; }
+.mc-preview{ width:96px; min-height:132px; background:#8b8b8b; border:2px solid; border-color:#373737 #ffffff #ffffff #373737; display:flex; align-items:center; justify-content:center; padding:8px; }
+/* 픽셀 스티브 */
+.mc-steve{ image-rendering:pixelated; }
+.mc-steve .s-head{ width:36px; height:36px; margin:0 auto; background:#b5876a; box-shadow:inset 0 -4px 0 rgba(0,0,0,.12); position:relative; }
+.mc-steve .s-head::before{ content:""; position:absolute; left:0; top:0; right:0; height:9px; background:#3a2718; } /* 머리카락 */
+.mc-steve .s-eye{ position:absolute; top:20px; left:8px; width:6px; height:6px; background:#3b3bcf; box-shadow:2px 0 0 #fff inset; }
+.mc-steve .s-eye.r{ left:auto; right:8px; box-shadow:-2px 0 0 #fff inset; }
+.mc-steve .s-mid{ display:flex; justify-content:center; margin-top:2px; }
+.mc-steve .s-body{ width:24px; height:36px; background:#159c94; }  /* 스티브 청록 셔츠 */
+.mc-steve .s-arm{ width:9px; height:34px; background:#b5876a; }
+.mc-steve .s-legrow{ display:flex; justify-content:center; }
+.mc-steve .s-leg{ width:12px; height:30px; background:#3a3aa0; }   /* 파란 바지 */
+.mc-steve .s-leg:first-child{ margin-right:1px; }
+
+/* ============ V121: 인벤토리 = 실제 바닐라 창(탭바/골드바 없이, 어두운 오버레이 + 중앙 MC 창) ============ */
+/* 인벤토리 모드: 상단 골드/닫기 바 숨김(실제 MC 인벤토리엔 없음), E로 닫기 */
+.econ3d-panelwrap.mc-invmode{ background:rgba(0,0,0,.62) !important; justify-content:center; align-items:center; }
+.econ3d-panelwrap.mc-invmode .econ3d-panelbar{ display:none !important; }
+.econ3d-panelwrap.mc-invmode .econ3d-body{ flex:none; overflow:visible; display:flex; justify-content:center; align-items:center; }
+/* 실제 인벤토리 창 규격 — 밝은 회색 판 + MC 베벨 테두리, 중앙 정렬 */
+.mc-invwindow{ background:#c6c6c6; padding:14px; border:4px solid; border-color:#ffffff #555555 #555555 #ffffff; box-shadow:0 6px 26px rgba(0,0,0,.5); max-width:460px; }
+.mc-invwindow .mc-grid,.mc-invwindow .mc-hotbar{ margin-left:auto; margin-right:auto; }
+.mc-invwindow .mc-hotbar{ background:transparent; border:0; padding:0; margin-top:8px; }
+/* 방어구 빈칸 = 실제 MC 반투명 실루엣(회색 유령 아이콘) */
+.mc-armor .mc-armormark{ opacity:.26; filter:grayscale(1) brightness(.4); font-size:20px; }
+/* 인벤토리 열림 = 실제 MC처럼 게임 HUD(골드/전체화면/나가기/핫바/스탯/경험치/조작힌트) 숨김. 스코어보드·미니맵·채팅은 유지 */
+.econ3d-screen.mc-invopen .econ3d-top,
+.econ3d-screen.mc-invopen .econ3d-hotbar,
+.econ3d-screen.mc-invopen .econ3d-statsrow,
+.econ3d-screen.mc-invopen .econ3d-xpbar,
+.econ3d-screen.mc-invopen .econ3d-buildbar,
+.econ3d-screen.mc-invopen .econ3d-itemtitle,
+.econ3d-screen.mc-invopen .econ3d-controlhint,
+.econ3d-screen.mc-invopen .econ3d-cross{ display:none !important; }

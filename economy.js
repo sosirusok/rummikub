@@ -2596,8 +2596,13 @@
   function renderZone() {
     const body = document.getElementById('econBody'); if (!body) return;
     if (invCursor && hubTab !== 'inv') { invCursor = null; invCursorGhost(); }   // V27-C: 커서 아이템은 자동 회수(ensureInvSlots가 재배치)
+    // V121: 인벤토리 탭 = 실제 바닐라 인벤토리 창(탭바/골드바/게임HUD 없이) — 패널·화면루트에 클래스 부여
+    const isInv = (zone === 'hub' && hubTab === 'inv');
+    const pw = document.getElementById('econ3dPanelWrap'); if (pw && pw.classList) pw.classList.toggle('mc-invmode', isInv);
+    const scr = document.querySelector && document.querySelector('.econ3d-screen'); if (scr && scr.classList) scr.classList.toggle('mc-invopen', isInv);
     if (activeCombat) { body.innerHTML = combatHTML(); return; }
     if (dungeonRun) { body.innerHTML = dungeonRoomHTML(); return; }
+    if (isInv) { body.innerHTML = `<div class="mc-invwindow">${invHTML()}</div>`; return; }
     body.innerHTML = selfMenuHTML() + zoneBodyHTML(zone);
   }
 
@@ -3004,6 +3009,16 @@
   }
   if (typeof document !== 'undefined') document.addEventListener('mousemove', e => invCursorGhost(e.clientX, e.clientY));
   // V12-D: 실제 마인크래프트 인벤토리 — 방어구 4슬롯 + 9×4 그리드 + 핫바 9칸
+  // V120: 실제 MC 인벤토리 좌측 플레이어 미리보기(픽셀 스티브 + 착용 방어구 색)
+  function mcPlayerPreview() {
+    const col = (sl) => { const p = equippedPiece(sl); if (!p) return null; const sd = shopDef(p.key); return sd && sd.tierKey ? tierColorByKey(sd.tierKey) : '#b7c0cc'; };
+    const h = col('helmet'), c = col('chest'), l = col('leggings'), b = col('boots');
+    return `<div class="mc-steve">
+      <div class="s-head"${h ? ` style="background:${h}"` : ''}><i class="s-eye"></i><i class="s-eye r"></i></div>
+      <div class="s-mid"><div class="s-arm"${c ? ` style="background:${c}"` : ''}></div><div class="s-body"${c ? ` style="background:${c}"` : ''}></div><div class="s-arm"${c ? ` style="background:${c}"` : ''}></div></div>
+      <div class="s-legrow"><div class="s-leg"${l ? ` style="background:${l}"` : ''}${b ? '' : ''}></div><div class="s-leg"${l ? ` style="background:${l}"` : ''}></div></div>
+    </div>`;
+  }
   function invHTML() {
     const overflow = ensureInvSlots();
     const slotCell = (i) => {
@@ -3020,17 +3035,15 @@
       const p = equippedPiece(sl);
       return `<div class="mc-slot mc-armor" data-act="econ_inv_armor" data-slot="${sl}"${p ? ttAttr(p) : ` title="${SLOT_NAMES[sl]} 칸 — 장비를 커서에 들고 클릭하면 장착"`}>${p ? iconImg(p.key) : `<span class="mc-armormark">${emoji}</span>`}</div>`;
     };
-    const wpn = equippedPiece('weapon'), bow = equippedPiece('bow');
     const grid = []; for (let i = 9; i < 36; i++) grid.push(slotCell(i));
     const hotRow = []; for (let i = 0; i < 9; i++) hotRow.push(slotCell(i));
-    return `<h4>🎒 인벤토리</h4>
-      <div class="mc-invtop">
+    // V120: 실제 MC 인벤토리 — 무기칸 제거(무기는 핫바/손). 방어구 4칸 + 플레이어 미리보기만.
+    return `<div class="mc-invtop">
         <div class="mc-armorcol">${armorSlot('helmet', '🪖')}${armorSlot('chest', '🛡')}${armorSlot('leggings', '👖')}${armorSlot('boots', '🥾')}</div>
-        <div class="mc-charhint"><div class="mc-slot mc-armor"${wpn ? ttAttr(wpn) : ' title="무기(자동 장착)"'}>${wpn ? iconImg(wpn.key) : '⚔️'}</div><div class="mc-slot mc-armor"${bow ? ttAttr(bow) : ' title="활(자동 장착)"'}>${bow ? iconImg(bow.key) : '🏹'}</div><span class="muted">방어구: 클릭 장착/해제<br>무기·활: 손에 든 것(핫바 선택)</span></div>
+        <div class="mc-preview">${mcPlayerPreview()}</div>
       </div>
       <div class="mc-grid">${grid.join('')}</div>
       <div class="mc-hotbar">${hotRow.join('')}</div>
-      <p class="mc-hint">클릭: 집기/놓기/맞바꾸기 · Shift+클릭: 방어구 즉시 장착 · ⓘ: 상세 — 핫바(아래 9칸)와 인벤토리는 하나입니다</p>
       ${invCursor ? `<p class="mc-carry">커서에 들고 있음: ${iconImg(invCursor)} <b>${itemName(invCursor)}</b> — 빈 칸을 클릭해 놓으세요</p>` : ''}
       ${overflow.length ? `<details class="econ-ownedonly"><summary>보관함 초과분 ${overflow.length}종</summary><div class="mc-grid">${overflow.map(k => { const sd = shopDef(k) || { key: k, name: itemName(k) }; return `<div class="mc-slot"${ttAttr(sd)} data-act="econ_invcell" data-key="${k}">${iconImg(k)}${(P.inv[k] || 0) > 1 ? `<span class="mc-cnt">${fmtNum(P.inv[k])}</span>` : ''}</div>`; }).join('')}</div></details>` : ''}
       ${invDetailKey ? invCellActions(invDetailKey) : ''}`;
