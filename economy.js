@@ -124,8 +124,10 @@
   function stat(k, n) { if (!P) return; if (!P.stats) P.stats = {}; P.stats[k] = (P.stats[k] || 0) + (n == null ? 1 : n); }
   function statMax(k, v) { if (!P) return; if (!P.stats) P.stats = {}; if (v > (P.stats[k] || 0)) P.stats[k] = v; }
   // V117: 실제 스카이블럭식 아이템 획득 피드(좌측 하단 채팅) — economy3d.js가 렌더
+  // V118: 실제 스블 채팅은 영어 — 아이템 키를 Title Case 영문으로 변환
+  function enName(key) { return String(key || '').replace(/^enchant_book_/, '').split('_').filter(Boolean).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '); }
   function pickupFeed(html) { if (typeof window !== 'undefined' && typeof window.economy3dChat === 'function') window.economy3dChat(html); }
-  function feedItem(key, n) { pickupFeed(`<span class="c-item">+${n} ${itemName(key)}</span>`); }
+  function feedItem(key, n) { pickupFeed(`<span class="c-item">+${n} ${enName(key)}</span>`); }
   function addItem(k, n) {
     if ((n == null || n > 0)) { if (!P.gained) P.gained = {}; P.gained[k] = (P.gained[k] || 0) + (n == null ? 1 : n); }   // V26-B: 퀘스트용 총 획득 카운터
     if (n <= 0) return;
@@ -1947,7 +1949,7 @@
       if (n <= 0) continue;
       addItem(d.key, n); addCollection(d.key, n);
       const rare = (d.chance == null ? 1 : d.chance) <= 0.25;
-      pickupFeed(`<span class="${rare ? 'c-rare' : 'c-item'}">+${n} ${itemName(d.key)}</span>`);   // V117
+      pickupFeed(`<span class="${rare ? 'c-rare' : 'c-item'}">+${n} ${enName(d.key)}</span>`);   // V117/V118: 영문
       if (rare) msgs.push(`✨ ${itemName(d.key)} ×${n}`);
     }
     // V28-B: 이 몹 '고유' 드롭 테이블 — 아이템별 고유 확률(디아블로식 공용 풀 폐기)
@@ -1970,7 +1972,7 @@
       const bk = mob.books[Math.floor(Math.random() * mob.books.length)];
       addItem(`enchant_book_${bk}`, 1);
       const bdef = enchantDef(bk);
-      pickupFeed(`<span class="c-book">📖 ${bdef ? bdef.name : bk} 인챈트북</span>`);   // V117
+      pickupFeed(`<span class="c-book">+1 ${enName(bk)} Book</span>`);   // V117/V118: 영문
       msgs.push(`📖 인챈트북: ${bdef ? bdef.name : bk}!`);
     }
     if (msgs.length) toastFn(`${mob.name} 처치! ${msgs.join(' · ')}`, true);
