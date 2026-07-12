@@ -359,14 +359,14 @@
       ['rotten_flesh', 'talisman_dragon_claw', 'pet_egg_enderman'],
       ['rotten_flesh', 'reforge_stone_rare', 'hot_potato_book'],
     ]) },
-    { key: 'spider_slayer', uniqueDrop: 'scorpion_foil', name: '거미 슬레이어', flavor: '타란튤라 브루드파더', dropResource: 'string', tiers: mkSlayerTiers([1000, 40000, 900000, 3200000, 12000000], 25, 5, 300, 6.9, [
+    { key: 'spider_slayer', uniqueDrop: 'scorpion_foil', name: '거미 슬레이어', flavor: '타란튤라 브루드파더', dropResource: 'string', tiers: mkSlayerTiers([750, 40000, 900000, 3200000, 12000000], 25, 5, 300, 6.9, [   // V96 C13: T1 위키 실측 750
       ['string', 'reforge_stone_common', 'talisman_spider_ring'],
       ['string', 'enchant_book_critical', 'talisman_wolf_claw'],
       ['string', 'armor_epic', 'enchant_book_protection'],
       ['string', 'talisman_lava_charm', 'pet_egg_wolf'],
       ['string', 'reforge_stone_rare', 'hot_potato_book'],
     ]) },
-    { key: 'wolf_slayer', uniqueDrop: 'pooch_sword', name: '늑대 슬레이어', flavor: '스벤 팩마스터', dropResource: 'bone', tiers: mkSlayerTiers([2500, 60000, 1200000, 5000000, 20000000], 25, 6, 400, 47.6, [
+    { key: 'wolf_slayer', uniqueDrop: 'pooch_sword', name: '늑대 슬레이어', flavor: '스벤 팩마스터', dropResource: 'bone', tiers: mkSlayerTiers([2000, 60000, 1200000, 5000000, 20000000], 25, 6, 400, 47.6, [   // V96 C13: T1 위키 실측 2000
       ['bone', 'reforge_stone_rare', 'talisman_wolf_claw'],
       ['bone', 'enchant_book_first_strike', 'talisman_fisher_anklet'],
       ['bone', 'weapon_legendary', 'enchant_book_growth'],
