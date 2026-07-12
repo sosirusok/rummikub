@@ -1603,3 +1603,27 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .econ3d-scoreboard, .econ3d-chatline, .econ3d-questhud, .econ3d-questbanner,
 .econ3d-banner, .econ3d-prompt, .mc-chest, .mc-slot, .econ-starcard { border-radius:0 !important; }
 .econ3d-chatline{ letter-spacing:.3px; }
+
+/* ============ V119: 인벤토리/메뉴 패널을 실제 MC GUI 창처럼 — HTML 느낌 제거 ============ */
+/* 중앙 정렬 컴팩트 창 + 단색 MC 회색 + 각진 픽셀 베벨(양각) */
+.econ3d-body .econ-panel{
+  background:#c6c6c6 !important; color:#222 !important;
+  border:4px solid !important; border-color:#fefefe #555555 #555555 #fefefe !important;
+  border-radius:0 !important; box-shadow:0 0 0 4px #2b2b2b, 0 10px 26px rgba(0,0,0,.45) !important;
+  max-width:680px; margin:14px auto !important; padding:12px 14px !important;
+}
+.econ3d-body .econ-panel h3,.econ3d-body .econ-panel h4{ color:#3a3a3a !important; text-shadow:none; border-bottom:2px solid #8a8a8a; }
+/* 상단 메뉴 탭 → 각진 MC 회색 버튼(눌린/올라온 베벨) */
+.econ3d-body .econ-zonenav{ background:#3a3a3a; border-bottom:3px solid #1c1c1c; }
+.econ3d-body .econ-zonebtn{
+  background:#8b8b8b !important; color:#f4f4f4 !important;
+  border:2px solid !important; border-color:#ffffff #373737 #373737 #ffffff !important;
+  border-radius:0 !important; box-shadow:none !important; text-shadow:1px 1px 0 rgba(0,0,0,.55);
+}
+.econ3d-body .econ-zonebtn.is-active{
+  background:#5a5a5a !important; color:#ffe28a !important;
+  border-color:#373737 #ffffff #ffffff #373737 !important;   /* 눌린 베벨(반전) */
+}
+/* 패널 상단바(닫기) MC 평면화 */
+.econ3d-panelbar{ background:#2b2b2b !important; border-bottom:3px solid #1c1c1c !important; }
+.econ3d-panelbar span{ color:#ffe28a !important; }
