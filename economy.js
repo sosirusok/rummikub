@@ -3032,7 +3032,8 @@
       const sd = shopDef(k) || { key: k, name: itemName(k) };
       const n = P.inv[k] || 0;
       const border = sd.tierKey ? tierColorByKey(sd.tierKey) : null;
-      return `<div class="mc-slot ${i < 9 ? 'mc-hot' : ''}"${border ? ` style="box-shadow:inset 0 0 0 1px ${border}"` : ''}${ttAttr(sd)} data-act="econ_inv_slot" data-i="${i}">
+      const glint = (/^enchanted_/.test(k) || /^enchant_book_/.test(k) || (sd.slot && (P.itemEnch && P.itemEnch[k] && Object.keys(P.itemEnch[k]).length))) ? ' mc-glint' : '';   // V129: 인챈트 글린트
+      return `<div class="mc-slot${glint} ${i < 9 ? 'mc-hot' : ''}"${border ? ` style="box-shadow:inset 0 0 0 1px ${border}"` : ''}${ttAttr(sd)} data-act="econ_inv_slot" data-i="${i}">
         ${iconImg(k)}${n > 1 ? `<span class="mc-cnt">${n > 9999 ? fmtNum(n) : n}</span>` : ''}
         <button class="mc-info" data-act="econ_invcell" data-key="${k}" title="상세(판매/분해/잠금)">ⓘ</button></div>`;
     };

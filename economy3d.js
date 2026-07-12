@@ -9529,7 +9529,7 @@
     if (key && key !== curBannerKey) {
       curBannerKey = key;
       const el = document.getElementById('econ3dBanner');
-      if (el && name) { el.textContent = name; el.classList.add('show'); bannerT = 2.6; }
+      if (el && name) { el.innerHTML = `<div class="b-title">${name}</div><div class="b-sub">⏣ ${SB_LOC[worldMode] || 'SkyBlock'}</div>`; el.classList.add('show'); bannerT = 2.6; }   // V129: 실제 MC 타이틀+서브타이틀 2줄
     }
   }
   function tickBanner(dt) {
