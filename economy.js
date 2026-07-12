@@ -586,9 +586,11 @@
     for (const it of items) {
       const gems = (P.gems || {})[it.key]; if (!gems) continue;
       gems.slice(0, gemSlotsOf(it)).forEach(g => {
-        const gt = D().GEM_TYPES.find(x => x.key === g.t), gq = D().GEM_QUALITY.find(x => x.key === g.q);
-        if (!gt || !gq) return;
-        out[gt.stat] = (out[gt.stat] || 0) + (D().GEM_BASE[gt.stat] || 0) * gq.mul;
+        const gt = D().GEM_TYPES.find(x => x.key === g.t);
+        const qi = D().GEM_QUALITY.findIndex(x => x.key === g.q);
+        if (!gt || qi < 0) return;
+        const tbl = (D().GEM_STAT_VALUES || {})[gt.stat];   // V111: 실측 젬 스탯표(전설 기준) 우선, 없으면 구 base×mul
+        out[gt.stat] = (out[gt.stat] || 0) + (tbl ? tbl[qi] : (D().GEM_BASE[gt.stat] || 0) * D().GEM_QUALITY[qi].mul);
       });
     }
     return out;
