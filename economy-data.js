@@ -1186,7 +1186,12 @@
     const normIng = needs => { if (!needs) return needs; const o = {}; for (const k in needs) o[VAN_ING_ALIAS[k] || k] = needs[k]; return o; };
     if (VAN) {
       (VAN.items || []).forEach(it => { if (!(it.key in VANILLA_NAMES)) VANILLA_NAMES[it.key] = it.name; });
-      (VAN.recipes || []).forEach(r => { if (!_recipeKeys.has(r.key)) { if (r.needs) r.needs = normIng(r.needs); RECIPES.push(r); } });   // 신규 키만 + 재료 키 정규화
+      // 정책: 게임 조합법(RECIPES 앞)이 이미 있는 키는 바닐라 정의를 '의도적으로' 무시(게임 레시피 우선).
+      //   → 겹치는 562키는 죽은 데이터이므로 로드하지 않음. 신규 키만 편입 + 재료 키 정규화.
+      (VAN.recipes || []).forEach(r => { if (!_recipeKeys.has(r.key)) { if (r.needs) r.needs = normIng(r.needs); RECIPES.push(r); } });
+      // V97 (E2): 병합 후 원본 바닐라 배열(1198 레시피·974 아이템)은 어디서도 다시 읽지 않음 —
+      //   이름은 VANILLA_NAMES로 복사됐고 신규 레시피는 RECIPES로 복사됨. 참조를 끊어 파싱본 메모리 회수.
+      try { if (typeof window !== 'undefined' && window.ECON_VANILLA) { window.ECON_VANILLA.recipes = null; window.ECON_VANILLA.items = null; } } catch (e) {}
     }
   }
 
