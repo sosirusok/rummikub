@@ -113,7 +113,7 @@
   // V27-E: 채굴/농사/벌목 티어 요구량 = wiki.hypixel.net 확정값(3표 검증). 전투/낚시도 V30에서 위키 정합.
   const COLLECTIONS = [
     { category: '채굴', key: 'mining', resources: [
-      res('stone', '돌', 2, 0, [50, 100, 250, 1000, 2500, 5000, 10000, 25000, 40000, 70000]),   /* 위키 확정: IX/X=40k/70k */   /* V23-B: '조약돌' 중복 이름 해소 — 채집/제련 돌='돌', 건축 블럭 cobblestone='조약돌' */ res('coal', '석탄', 3, 0, [50, 100, 250, 1000, 2500, 5000, 10000, 25000, 50000, 100000]), res('iron', '철 주괴', 6, 0, [50, 100, 250, 1000, 2500, 5000, 10000, 25000, 50000, 100000, 200000, 400000]),   /* 위키 확정 12티어 */
+      res('stone', '돌', 2, 0, [50, 100, 250, 1000, 2500, 5000, 10000, 25000, 40000, 70000]),   /* 위키 확정: IX/X=40k/70k */   /* V23-B: '조약돌' 중복 이름 해소 — 채집/제련 돌='돌', 건축 블럭 cobblestone='조약돌' */   /* V23-B: '조약돌' 중복 이름 해소 — 채집/제련 돌='돌', 건축 블럭 cobblestone='조약돌' */ res('coal', '석탄', 3, 0, [50, 100, 250, 1000, 2500, 5000, 10000, 25000, 50000, 100000]), res('iron', '철 주괴', 6, 0, [50, 100, 250, 1000, 2500, 5000, 10000, 25000, 50000, 100000, 200000, 400000]),   /* 위키 확정 12티어 */
       res('gold', '금 주괴', 12, 0, [50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 500000]),   /* 위키 확정: X=500k */ res('lapis', '청금석', 8, 0, [250, 500, 1000, 2000, 10000, 25000, 50000, 100000, 150000, 250000]), res('redstone', '레드스톤', 7, 0, [100, 250, 750, 1500, 3000, 5000, 10000, 25000, 50000, 200000, 400000, 600000, 800000, 1000000, 1200000, 1400000]),   /* 위키 확정 16티어 */
       res('diamond', '다이아몬드', 45, 0, [50, 100, 250, 1000, 2500, 5000, 10000, 25000, 50000]), res('emerald', '에메랄드', 25, 0, [50, 100, 250, 1000, 5000, 15000, 30000, 50000, 100000]), res('obsidian', '흑요석', 18, 0, [50, 100, 250, 1000, 2500, 5000, 10000, 25000, 50000, 100000]),
     ] },
@@ -164,7 +164,8 @@
   ];
   const SKILL_MAX_LEVEL = 60;
   // 실제 스카이블럭 스킬별 상한(공식 Hypixel API resources/skyblock/skills 대조): 전투/채광/농사/마법부여/조련 60, 벌목/낚시/연금술 50, 사교/사냥 25
-  const SKILL_MAX_BY = { combat: 60, mining: 60, farming: 60, enchanting: 60, taming: 60, foraging: 54, fishing: 50, alchemy: 50, social: 25, hunting: 25 };
+  // V126: 실제 상한 정합 — 조련/벌목/낚시/연금술/사냥 50, 전투/채광/농사/마법부여 60, 사교 25
+  const SKILL_MAX_BY = { combat: 60, mining: 60, farming: 60, enchanting: 60, taming: 50, foraging: 50, fishing: 50, alchemy: 50, social: 25, hunting: 50 };
   const SKILLS = [
     { key: 'combat', name: '전투', bonusText: '레벨당 최종 피해 +4%, 크리 확률 +0.5%' },
     { key: 'mining', name: '채광', bonusText: '레벨당 방어력 +1' },
@@ -175,7 +176,7 @@
     { key: 'alchemy', name: '연금술', bonusText: '레벨당 지력 +1 (실제 스카이블럭) — 물약 양조로 성장, 레벨이 오르면 양조 물약 티어 상승' },
     { key: 'taming', name: '조련', bonusText: '레벨당 펫 경험치 +1%' },
     { key: 'social', name: '사교', bonusText: '5레벨마다 상점 판매가 +1%(최대 +10%)' },
-    { key: 'hunting', name: '사냥', bonusText: '속성 파편 사이펀 해금(희귀도별 요구 레벨: 고급5/희귀10/영웅15/전설20 — 실제 스카이블럭)' },
+    { key: 'hunting', name: '사냥', bonusText: '속성 파편 사이펀 해금(희귀도별 요구 레벨: 고급5/희귀10/영웅15/전설20 — 실제 스카이블럭). 상한 50' },
   ];
 
   /* ---------------- 기본 스탯(실제 스카이블럭 기본값 그대로) ---------------- */
@@ -260,17 +261,19 @@
   // 실제 스카이블럭식: 미니언은 골드 구매가 아니라 "자원으로 조합"한다.
   //   T1 = 원자재 80개 · T2~T6 = 원자재 160/320/512/1024/2048 · T7~T11 = 인챈티드 자원 8/16/32/64/128
   // V109: 실측 미니언 저장량 — 티어 밴드별(위키 그대로): I~II 64, III~V 192, VI~VII 320, VIII~IX 448, X~XI 576, XII 704
-  const MINION_STORAGE_BY_TIER = { 1: 64, 2: 64, 3: 192, 4: 192, 5: 192, 6: 320, 7: 320, 8: 448, 9: 448, 10: 576, 11: 576, 12: 704 };
+  // V126: 실측 미니언 내장 저장 — 64→960(티어 XI=960). 대부분 미니언 최대 티어 XI
+  const MINION_STORAGE_BY_TIER = { 1: 64, 2: 64, 3: 192, 4: 192, 5: 192, 6: 320, 7: 320, 8: 448, 9: 448, 10: 576, 11: 960 };
   function mkMinionTiers(baseInterval, resource) {
     const rawCost = [80, 160, 320, 512, 1024, 2048];
     const tiers = [];
-    for (let t = 1; t <= 12; t++) {   // V109: 티어 XII까지(실측 최대 티어)
+    for (let t = 1; t <= 11; t++) {   // V126: 실측 최대 티어 XI(대부분 미니언)
       const mat = t <= 6 ? { key: resource, n: rawCost[t - 1] } : { key: `enchanted_${resource}`, n: 8 * Math.pow(2, t - 7) };
-      tiers.push({ tier: t, intervalSec: +(baseInterval * Math.pow(0.9, t - 1)).toFixed(1), craftCost: mat, storage: MINION_STORAGE_BY_TIER[t] });
+      // V126: 기하감쇠 과속 폐기 → 실측식 완만 감소(티어 XI ≈ 기본의 57%)
+      tiers.push({ tier: t, intervalSec: +(baseInterval * (1 - 0.043 * (t - 1))).toFixed(1), craftCost: mat, storage: MINION_STORAGE_BY_TIER[t] });
     }
     return tiers;
   }
-  function minion(key, name, resource, baseInterval, baseCost) { return { key, name, resource, tiers: mkMinionTiers(baseInterval, resource), maxTier: 12, unlockCollection: resource }; }
+  function minion(key, name, resource, baseInterval, baseCost) { return { key, name, resource, tiers: mkMinionTiers(baseInterval, resource), maxTier: 11, unlockCollection: resource }; }
   const MINIONS = [
     minion('cobblestone_minion', '돌 미니언', 'stone', 27, 80),   /* V23-B: 생산 자원(돌)과 이름 일치 */
     minion('coal_minion', '석탄 미니언', 'coal', 27, 80),
@@ -336,8 +339,8 @@
     { key: 'golem_core', name: '골렘의 코어', category: '전리품', buyPrice: 0, sellPrice: 2200 },
     { key: 'mushroom_crown', name: '무쉬룸 킹의 왕관', category: '전리품', buyPrice: 0, sellPrice: 1500 },
   ];
-  const MINION_FUEL = { key: 'minion_fuel_coal', name: '석탄 연료(24시간 +25%)', speedMul: 1.25, durationHours: 24, price: 800 };
-  const MINION_FUEL2 = { key: 'minion_fuel_lava', name: '인챈티드 용암 양동이(72시간 +40%)', speedMul: 1.4, durationHours: 72 };   // V10
+  const MINION_FUEL = { key: 'minion_fuel_coal', name: '석탄 연료 (+5%)', speedMul: 1.05, durationHours: 0.39, price: 800 };   // V126: 실측 — 석탄 +5%, 23.4분
+  const MINION_FUEL2 = { key: 'minion_fuel_lava', name: '인챈티드 용암 양동이 (+25%)', speedMul: 1.25, durationHours: 0 };   // V126: 실측 — +25%, 무한(비소모)
 
   /* ---------------- 슬레이어 5종(실제 스카이블럭 라인업) ---------------- */
   // rareDropTable: 실제 아이템 키 배열(승리 시 인벤토리에 실제 지급). [자주(60%), 가끔(30%), 희귀(10%)]
@@ -345,7 +348,7 @@
   //   HP는 명시 테이블(hpTable), 피해는 계열배율(mulScale)^0.30로 완만화(실제 HP에서도 엔드게임 유효체력으로 생존 가능).
   //   피해 감소·유효체력이 함께 실제 규모로 커지므로(V17-A/C) 만렙이 10M~수억 HP 보스를 실제처럼 잡을 수 있음.
   // V107: 실측 슬레이어 소환 비용 — 표준 계열(좀비/거미/늑대/엔더맨)은 티어별 동일, 인페르노(블레이즈)만 상이
-  const SLAYER_COST_STD = [2000, 7500, 20000, 50000, 100000];
+  const SLAYER_COST_STD = [100, 2000, 10000, 50000, 100000];   // V126: 실제 스블 표준 슬레이어 의뢰 비용(T1=100…T5=100k)
   const SLAYER_COST_INFERNO = [10000, 25000, 60000, 150000, 350000];
   function mkSlayerTiers(hpTable, baseDmg, baseXp, baseCoin, mulScale, lootByTier, costTable) {
     const dmgMul = [1, 2.6, 6.8, 17.6, 45.7], xpMul = [1, 5, 20, 100, 300], coinMul = [1, 8, 24, 80, 240];
@@ -832,7 +835,7 @@
     pet('bee', '꿀벌', 'legendary', 'farming', { str: 0.8, def: 0.3 }, '레벨당 힘 +0.8, 방어 +0.3', 60000),
     pet('blue_whale', '흰수염고래', 'legendary', 'fishing', { hp: 2.0 }, '레벨당 체력 +2', 70000),
     pet('enderman', '엔더맨', 'legendary', 'combat', { str: 1.4 }, '레벨당 힘 +1.4', 0),
-    pet('ender_dragon', '엔더 드래곤', 'mythic', 'combat', { str: 1.5, def: 0.5, hp: 1.0 }, '레벨당 힘 +1.5, 방어 +0.5, 체력 +1', 0),
+    pet('ender_dragon', '엔더 드래곤', 'legendary', 'combat', { str: 1.5, def: 0.5, hp: 1.0 }, '레벨당 힘 +1.5, 방어 +0.5, 체력 +1', 0),   // V126: 최대등급 전설(신화 아님)
     pet('griffin', '그리핀', 'mythic', 'combat', { str: 2.0, def: 0.7, hp: 1.5 }, '레벨당 힘 +2, 방어 +0.7, 체력 +1.5', 0),
     pet('spider', '거미 펫', 'rare', 'combat', { str: 0.4, def: 0.1 }, '레벨당 힘 +0.4, 방어 +0.1', 0),   // V101: statsPerLv 오타 스키마 → pet()(perLvl)로 교정(petStats 크래시 수정)
     pet('blaze', '블레이즈 펫', 'epic', 'combat', { str: 0.5, hp: 0.5 }, '레벨당 힘 +0.5, 체력 +0.5', 0),
@@ -867,9 +870,9 @@
     // ── 무기 20종 ──  fx: dmg(상시%), first(첫타%), dmgBig(체력10만+%), dmgLow(적HP50%↓), dmgHigh(적HP50%↑),
     //                  dmgVs(특정 슬레이어%), dmgBoss(던전보스%), third(3타마다%), coin(골드%), xp(전투XP%),
     //                  lifesteal(가한 피해%회복), healHit(타격당 고정회복)
-    { key: 'sharpness', name: '예리함', target: 'weapon', vanilla: true, maxLvl: 7, fx: { dmg: 9 }, desc: '레벨당 최종 피해 +9%(VII=63%, 실제 스블 램프 근사)', bookBasePrice: 500 },
+    { key: 'sharpness', name: '예리함', target: 'weapon', vanilla: true, maxLvl: 7, fx: { dmg: 5 }, desc: '레벨당 근접 피해 +5%(V=25%, VII=35% — 실제 스블)', bookBasePrice: 500 },
     { key: 'critical', name: '치명', target: 'weapon', maxLvl: 7, fx: { dmg: 13 }, desc: '레벨당 최종 피해 +13%(VII≈100%)', bookBasePrice: 600 },
-    { key: 'first_strike', name: '선제공격', target: 'weapon', maxLvl: 5, fx: { first: 25 }, desc: '첫 공격 피해 +25%/레벨', bookBasePrice: 900 },
+    { key: 'first_strike', name: '선제공격', target: 'weapon', maxLvl: 4, fx: { first: 25 }, desc: '첫 공격 피해 +25%/레벨(IV=+100%)', bookBasePrice: 900 },
     { key: 'triple_strike', name: '삼연격', target: 'weapon', maxLvl: 5, fx: { firstThree: 10 }, desc: '처음 3회 공격 +10%/레벨', bookBasePrice: 950 },
     { key: 'giant_killer', name: '거인 사냥꾼', target: 'weapon', maxLvl: 7, fx: { dmgBig: 8 }, desc: '최대체력 10만+ 적에게 +8%/레벨', bookBasePrice: 1500 },
     { key: 'titan_killer', name: '타이탄 킬러', target: 'weapon', maxLvl: 7, fx: { dmgBig: 6 }, desc: '최대체력 10만+ 적에게 +6%/레벨', bookBasePrice: 1300 },
@@ -889,7 +892,7 @@
     { key: 'life_steal', name: '생명 강탈', target: 'weapon', maxLvl: 5, fx: { healHit: 3 }, desc: '공격마다 HP +3/레벨', bookBasePrice: 1500 },
     // ── 방어구 12종 ──  fx: def(방어), hp(체력), thorns(반사%), healHit, lastStand(HP30%↓ 방어),
     //                    roomHeal(던전 방이동 회복%p), speed(이동속도%), sell(판매가%), coin
-    { key: 'protection', name: '보호', target: 'armor', maxLvl: 7, fx: { def: 4 }, desc: '레벨당 방어 +4', bookBasePrice: 500 },
+    { key: 'protection', name: '보호', target: 'armor', maxLvl: 7, fx: { def: 3 }, desc: '레벨당 방어 +3(VI=+18, VII=+21 — 실제 스블)', bookBasePrice: 500 },
     { key: 'growth', name: '성장', target: 'armor', maxLvl: 7, fx: { hp: 15 }, desc: '레벨당 체력 +15', bookBasePrice: 700 },
     { key: 'true_protection', name: '진정한 보호', target: 'armor', maxLvl: 1, fx: { def: 15 }, desc: '방어 +15', bookBasePrice: 4000 },
     { key: 'hardened', name: '경화', target: 'armor', maxLvl: 5, fx: { def: 2, hp: 5 }, desc: '레벨당 방어 +2, 체력 +5', bookBasePrice: 900 },
@@ -902,7 +905,7 @@
     { key: 'big_brain', name: '빅 브레인', target: 'armor', maxLvl: 5, fx: { intelligence: 5 }, desc: '지력 +5/레벨', bookBasePrice: 1000 },   /* V109: 실측 — 빅 브레인은 지력 부여(XP 아님) */
     { key: 'magnet', name: '자석', target: 'armor', maxLvl: 5, fx: { coin: 5 }, desc: '전투 보상 골드 +5%/레벨', bookBasePrice: 900 },
     // ── 도구 3종 ──  fx: mineSpeed(채집 속도%), fortune(추가 드롭%), area(주변 블록 동시 파괴 개수)
-    { key: 'efficiency', name: '효율', target: 'tool', maxLvl: 7, fx: { mineSpeed: 12 }, desc: '채집 속도 +12%/레벨', bookBasePrice: 800 },
+    { key: 'efficiency', name: '효율', target: 'tool', maxLvl: 5, fx: { mineSpeed: 12 }, desc: '채집 속도 +12%/레벨(기본 최대 V, 실렉스로만 X)', bookBasePrice: 800 },
     { key: 'fortune', name: '행운', target: 'tool', maxLvl: 4, fx: { fortune: 20 }, desc: '추가 드롭 확률 +20%/레벨', bookBasePrice: 1400 },
     { key: 'area_mining', name: '광역 채집', target: 'tool', maxLvl: 5, fx: { area: 1 }, desc: '파괴 시 주변 블록 +1개/레벨 동시 파괴(혼돈으로 최대 10)', bookBasePrice: 2200 },
     // ── V19: 얼티밋 인챈트(실제 스카이블럭) — 중복 인챈트북 합성으로 레벨업, 무기당 1종만 장착 가능(강력) ──
@@ -1549,7 +1552,7 @@
   // 주간 순환 보스 — ISO 주차마다 한 계열이 강화(⭐ HP·보상 2배)
   const WEEKLY = { families: ['zombie_slayer', 'spider_slayer', 'wolf_slayer', 'enderman_slayer', 'blaze_slayer'], hpMul: 2, rewardMul: 2 };
   // 핫 포테이토 북 규칙
-  const HPB = { maxBooks: 10, fumingMax: 15, weaponDmgPerBook: 2, weaponStrPerBook: 2, armorDefPerBook: 2, armorHpPerBook: 4 };   /* V107: 실측 — 무기 핫포북은 공격+2·힘+2 동시 부여 */
+  const HPB = { maxBooks: 10, fumingMax: 15, weaponDmgPerBook: 2, weaponStrPerBook: 2, armorDefPerBook: 2, armorHpPerBook: 2 };   /* V107: 무기 핫포북 공격+2·힘+2 · V126: 방어구 핫포북 체력+2(실측, +4 오류 수정) */
 
   /* V15: 마인크래프트 16색 염료 팔레트 — 양털/콘크리트/테라코타 생성의 단일 출처 */
   const DYES = [
