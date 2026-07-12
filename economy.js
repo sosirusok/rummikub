@@ -593,7 +593,7 @@
   }
   // V20: 리컴보뷸레이터 — 적용된 아이템 주스탯 +18%
   function recombMul(itemKey) { return (P.recomb || {})[itemKey] ? (1 + D().RECOMB.statBoostPct / 100) : 1; }
-  function equipItemDef(itemKey) { return D().EQUIPMENT.weapons.find(x => x.key === itemKey) || D().EQUIPMENT.armor.find(x => x.key === itemKey); }
+  function equipItemDef(itemKey) { const E = D().EQUIPMENT; return E.weapons.find(x => x.key === itemKey) || E.armor.find(x => x.key === itemKey) || (E.accessories || []).find(x => x.key === itemKey); }   // V95: 부적/장신구(accessories)도 검색 — 스탯 로어 해결
   function socketGem(itemKey, gemType, quality) {
     const it = equipItemDef(itemKey); if (!it) { toastFn('장비가 아니에요', false); return false; }
     const slots = D().GEM_SLOTS_BY_TIER[it.tierKey] || 0;
@@ -2549,6 +2549,8 @@
   /* ---------------- 렌더링 ---------------- */
   function fmtGold(n) { return fmtNum(n) + 'G'; }
   function fmtNum(n) {   // V10: 컴팩트 표기(1.2M, 3.4k)
+    if (n == null || isNaN(n)) return '0';   // V95: null/NaN 가드('NaN'/'undefined' 방지)
+    if (n >= 1e12) return (n / 1e12).toFixed(n % 1e12 ? 1 : 0) + 'T';   // V95: 조(T) 단위 추가
     if (n >= 1e9) return (n / 1e9).toFixed(n % 1e9 ? 1 : 0) + 'B';
     if (n >= 1e6) return (n / 1e6).toFixed(n % 1e6 ? 1 : 0) + 'M';
     if (n >= 10000) return (n / 1000).toFixed(n % 1000 ? 1 : 0) + 'k';
@@ -2653,8 +2655,9 @@
     }
     if (sdef.sellPrice > 0) lines.push(`판매가: ${fmtGold(sdef.sellPrice)}`);
     // V90: 실제 스카이블럭 등급 푸터 = "RARITY CATEGORY"(예: LEGENDARY SWORD)
+    // V95: 실제 티어(sdef.tier)가 있는 아이템만 RARITY/CATEGORY 푸터 — 레거시(한글 등급명) 유출 방지
     if (sdef.tier && sdef.category) lines.push(`◆ ${String(sdef.tier).replace(/_/g, ' ')} ${String(sdef.category).replace(/_/g, ' ')}`);
-    else if (sdef.tierKey) { const t = D().ITEM_TIERS.find(x => x.key === sdef.tierKey); if (t) lines.push(`◆ ${t.name.toUpperCase()}`); }
+    else if (sdef.tier) lines.push(`◆ ${String(sdef.tier).replace(/_/g, ' ')}`);
     else if (canUseHotbar) lines.push('◆ COMMON');
     return lines.join('\n');
   }
@@ -2690,10 +2693,10 @@
   const TT_LINE_COLOR = [
     [/^\[/, '#9aa0b4'],
     [/^공격력/, '#ff5555'], [/^방어력/, '#55ff55'], [/^체력/, '#ff5555'],
-    // V90: 실제 스블 스탯 심볼 색(공격계=적, 치명/지능=청, 방어/행운=녹)
-    [/^⚔|^❁|^⫽|^❤/, '#ff5555'], [/^☣|^☠|^✎|^α/, '#55ffff'], [/^❈|^❂|^☘|^๑/, '#55ff55'],
-    [/^✦|^⸕|^☂|^⇄/, '#ffe066'], [/^✯/, '#5cc8ff'],
-    [/^◈/, '#e0a6ff'], [/^✦/, '#ffe066'],
+    // V90: 실제 스블 스탯 심볼 색(공격계=적, 치명/지능=청, 방어=녹)
+    [/^⚔|^❁|^⫽|^❤/, '#ff5555'], [/^☣|^☠|^✎|^α/, '#55ffff'], [/^❈|^❂|^๑/, '#55ff55'],
+    [/^☘/, '#ffd700'], [/^✦/, '#ffffff'], [/^⸕|^☂|^⇄/, '#ffe066'], [/^✯/, '#5cc8ff'],   // V95: 행운(☘)=금, 이동속도(✦)=백
+    [/^◈/, '#e0a6ff'],   // V95: 죽은 중복 ✦ 규칙 제거(위 ✦ 규칙이 선점)
     [/^장착 중|^✔/, '#7dff7d'],
     [/^⛏/, '#ff7b7b'], [/^채집 효율/, '#55ffff'], [/^판매가/, '#ffe066'],
     [/^획득/, '#ffb14d'],
@@ -2729,7 +2732,7 @@
       if (!sdef || !P) { richTTHide(); return; }
       html = itemLoreHTML(sdef);
     } else {   // V27-C: 커스텀 이름/설명 툴팁(메뉴 슬롯 등)
-      html = `<div style="color:#ffe066;font-weight:900;font-size:14px;margin-bottom:3px">${t.dataset.ttn}</div>${t.dataset.ttd ? `<div style="color:#c9cede">${t.dataset.ttd}</div>` : ''}`;
+      html = `<div style="color:#ffe066;font-weight:900;font-size:14px;margin-bottom:3px">${escHtml(t.dataset.ttn)}</div>${t.dataset.ttd ? `<div style="color:#c9cede">${escHtml(t.dataset.ttd)}</div>` : ''}`;   // V95: ttn/ttd 이스케이프(XSS/라벨깨짐 방지)
     }
     if (!_ttEl) { _ttEl = document.createElement('div'); _ttEl.className = 'econ-richtt'; document.body.appendChild(_ttEl); }
     _ttEl.innerHTML = html;
@@ -2884,11 +2887,11 @@
     const IC = { combat: '⚔️', mining: '⛏️', farming: '🌾', foraging: '🪓', fishing: '🎣', enchanting: '✨', alchemy: '🧪', taming: '🐾', social: '💬', hunting: '🏹' };
     const slots = D().SKILLS.map(sk => {
       const lv = skillLevel(sk.key), pr = skillXpProgress(sk.key);
-      const desc = `레벨 ${lv} · ${pr.need ? `${pr.cur.toLocaleString()}/${pr.need.toLocaleString()} XP` : 'MAX'} · ${sk.bonusText}`;
+      const desc = `레벨 ${lv}/${skillMaxLevel(sk.key)} · ${pr.need ? `${pr.cur.toLocaleString()}/${pr.need.toLocaleString()} XP` : 'MAX'} · ${sk.bonusText}`;   // V95: 스킬별 실제 상한(SKILL_MAX_BY)
       return `<div class="mc-slot mc-menuslot" data-ttn="${escHtml(sk.name)} Lv.${lv}" data-ttd="${escHtml(desc)}"><span>${IC[sk.key] || '📗'}</span><span class="mc-cnt">${lv}</span></div>`;
     });
     while (slots.length % 9) slots.push('<div class="mc-slot mc-empty2"></div>');
-    return `<div class="mc-chest"><div class="mc-chesttitle">🧠 스킬 (실제 스카이블럭 XP 테이블 · 최대 ${D().SKILL_MAX_LEVEL}레벨)</div>
+    return `<div class="mc-chest"><div class="mc-chesttitle">🧠 스킬 (실제 스카이블럭 XP 테이블 · 상한 스킬별 상이)</div>
       <div class="mc-grid">${slots.join('')}</div>${chestNavRow('menu')}</div>`;
   }
   function invCatOf(k, sdef) {
@@ -3618,20 +3621,23 @@
   function statsHTML() {
     const w = equippedWeapon(), a = equippedArmor();
     const st = playerStats();
+    const g = k => (STAT_DISPLAY[k] || {}).sym || '◆';   // V95: 스탯 시트도 STAT_DISPLAY 글리프 재사용(하드코딩 이모지 폐기)
     return `<h4>📊 내 스탯 (실제 스카이블럭 공식)</h4>
       <div class="econ-colgrid">
         <div class="econ-colrow"><span>✦ 스카이블럭 XP</span><span>${(P.sbXp || 0).toLocaleString()}</span><span class="muted">컬렉션 티어마다 +4 (실제 위키 구조)</span></div>
-        <div class="econ-colrow"><span>❤ 체력</span><span>${st.hp}</span><span class="muted">기본 100 + 농사/낚시/인챈트/부적/펫</span></div>
-        <div class="econ-colrow"><span>🛡 방어</span><span>${st.defense}</span><span class="muted">피해 감소 ${(playerDefensePct() * 100).toFixed(1)}% = 방어/(방어+100)</span></div>
-        <div class="econ-colrow"><span>💪 힘</span><span>${st.strength}</span><span class="muted">피해 ×(1+힘/100)</span></div>
-        <div class="econ-colrow"><span>⚔ 공격력</span><span>${Math.round(playerAttackPower()).toLocaleString('ko-KR')}</span><span class="muted">무기: ${w ? w.name : '없음'}${w && w.caster ? ' (캐스터)' : ''}</span></div>
-        <div class="econ-colrow"><span>☠ 크리 확률</span><span>${st.critChance.toFixed(1)}%</span><span class="muted">크리 피해 +${st.critDamage.toFixed(0)}%</span></div>
-        <div class="econ-colrow"><span>⚡ 광포(추가타)</span><span>${st.ferocity}</span><span class="muted">100당 확정 추가타 · 피해 ×(1+광포/100)</span></div>
-        <div class="econ-colrow"><span>✦ 이동속도</span><span>${st.speed}</span><span class="muted">100 = 기준(슈가 러시로 증가)</span></div>
-        <div class="econ-colrow"><span>✎ 지능(마나)</span><span>${st.intelligence}</span><span class="muted">마법부여 레벨당 +4 · 캐스터 어빌리티 스케일</span></div>
-        <div class="econ-colrow"><span>🍀 매직파인드</span><span>${st.magicFind}</span><span class="muted">희귀 드롭 확률 +${st.magicFind}%</span></div>
-        <div class="econ-colrow"><span>⛏ 채광 포춘</span><span>${st.miningFortune}</span><span class="muted">광물 추가 드롭 +${st.miningFortune}%</span></div>
-        <div class="econ-colrow"><span>🌾 농사 포춘</span><span>${st.farmingFortune}</span><span class="muted">작물 추가 드롭 +${st.farmingFortune}%</span></div>
+        <div class="econ-colrow"><span>${g('hp')} 체력</span><span>${st.hp}</span><span class="muted">기본 100 + 농사/낚시/인챈트/부적/펫</span></div>
+        <div class="econ-colrow"><span>${g('defense')} 방어</span><span>${st.defense}</span><span class="muted">피해 감소 ${(playerDefensePct() * 100).toFixed(1)}% = 방어/(방어+100)</span></div>
+        <div class="econ-colrow"><span>${g('strength')} 힘</span><span>${st.strength}</span><span class="muted">피해 ×(1+힘/100)</span></div>
+        <div class="econ-colrow"><span>${g('damage')} 공격력</span><span>${Math.round(playerAttackPower()).toLocaleString('ko-KR')}</span><span class="muted">무기: ${w ? w.name : '없음'}${w && w.caster ? ' (캐스터)' : ''}</span></div>
+        <div class="econ-colrow"><span>${g('crit_chance')} 크리 확률</span><span>${st.critChance.toFixed(1)}%</span><span class="muted">크리 피해 +${st.critDamage.toFixed(0)}%</span></div>
+        <div class="econ-colrow"><span>${g('ferocity')} 광포(추가타)</span><span>${st.ferocity}</span><span class="muted">100당 확정 추가타 · 피해 ×(1+광포/100)</span></div>
+        ${st.attackSpeed != null ? `<div class="econ-colrow"><span>${g('attack_speed')} 공격속도</span><span>+${st.attackSpeed}%</span><span class="muted">타격 쿨다운 감소</span></div>` : ''}
+        ${st.trueDefense != null ? `<div class="econ-colrow"><span>${g('true_defense')} 진방어</span><span>${st.trueDefense}</span><span class="muted">방어 무시 피해도 경감</span></div>` : ''}
+        <div class="econ-colrow"><span>${g('speed')} 이동속도</span><span>${st.speed}</span><span class="muted">100 = 기준(슈가 러시로 증가)</span></div>
+        <div class="econ-colrow"><span>${g('intelligence')} 지능(마나)</span><span>${st.intelligence}</span><span class="muted">마법부여 레벨당 +4 · 캐스터 어빌리티 스케일</span></div>
+        <div class="econ-colrow"><span>${g('magic_find')} 매직파인드</span><span>${st.magicFind}</span><span class="muted">희귀 드롭 확률 +${st.magicFind}%</span></div>
+        <div class="econ-colrow"><span>${g('mining_fortune')} 채광 포춘</span><span>${st.miningFortune}</span><span class="muted">광물 추가 드롭 +${st.miningFortune}%</span></div>
+        <div class="econ-colrow"><span>${g('farming_fortune')} 농사 포춘</span><span>${st.farmingFortune}</span><span class="muted">작물 추가 드롭 +${st.farmingFortune}%</span></div>
         <div class="econ-colrow"><span>🛡 방어구</span><span>${a ? a.name : '없음'}</span><span class="muted">마력 ${magicalPower()}</span></div>
       </div>
       <h4>스킬</h4>

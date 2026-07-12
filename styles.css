@@ -1256,7 +1256,7 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .mc-arrow{font-size:20px; color:#3a3a3a;}
 .mc-store{display:grid; grid-template-columns:repeat(9,var(--sl)); gap:3px; margin-bottom:10px;}
 .mc-hot{display:grid; grid-template-columns:repeat(9,var(--sl)); gap:3px; padding-top:8px; border-top:3px solid #a0a0a0;}
-.mc-slot{position:relative; width:var(--sl); height:var(--sl); padding:0; background:#8b8b8b; border:2px solid; border-color:#373737 #ffffff #ffffff #373737; cursor:pointer;}
+/* V95: .mc-slot 기본 규칙은 아래(V12-D 인벤토리) 규칙으로 일원화 — 사이징은 그리드 트랙이 담당(width/height:var(--sl) 중복/모순 제거) */
 .mc-slot:active{background:#a0a0a0;}
 .mc-slot.mc-hot{border-color:#2a2a2a #d8d8d8 #d8d8d8 #2a2a2a;}
 .mc-out{width:calc(var(--sl)*1.15); height:calc(var(--sl)*1.15); background:#9a9a8b;}
@@ -1509,7 +1509,8 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .mc-grid{display:grid; grid-template-columns:repeat(9, 1fr); gap:4px; max-width:440px;}
 .mc-hotbar{display:grid; grid-template-columns:repeat(9, 1fr); gap:4px; max-width:440px; margin-top:4px; padding:5px; background:#c6c6c6; border:3px solid; border-color:#f7f7f7 #555 #555 #f7f7f7; border-radius:3px;}
 .mc-hotbar-label{margin-top:12px; font-size:12px; color:#aab2c0;}
-.mc-slot{position:relative; aspect-ratio:1; border-radius:0; border:2px solid; border-color:#373737 #ffffff #ffffff #373737; background:#8b8b8b; display:flex; align-items:center; justify-content:center; cursor:pointer; overflow:hidden;}
+/* V95: 유일한 .mc-slot 기본 규칙(그리드 트랙이 폭 결정 → aspect-ratio로 정사각, 고정 var(--sl) 모순 제거) */
+.mc-slot{position:relative; aspect-ratio:1; padding:0; border-radius:0; border:2px solid; border-color:#373737 #ffffff #ffffff #373737; background:#8b8b8b; display:flex; align-items:center; justify-content:center; cursor:pointer; overflow:hidden;}
 .mc-slot img{width:88%; height:88%; image-rendering:pixelated;}
 .mc-slot.mc-empty{cursor:default; background:#777;}
 .mc-slot:hover:not(.mc-empty){border-color:#fff7a8 #5a4d00 #5a4d00 #fff7a8;}
