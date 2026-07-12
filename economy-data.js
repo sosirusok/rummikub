@@ -6,12 +6,13 @@
    ========================================================================= */
 (function () {
   const ITEM_TIERS = [
-    { key: 'common', name: '일반', colorHex: '#D1D5D8', statMultiplier: 1, reforgeCost: 250, magicalPower: 3 },
-    { key: 'uncommon', name: '고급', colorHex: '#41A85F', statMultiplier: 1.2, reforgeCost: 500, magicalPower: 5 },
-    { key: 'rare', name: '희귀', colorHex: '#2C82C9', statMultiplier: 1.4, reforgeCost: 1000, magicalPower: 8 },
-    { key: 'epic', name: '영웅', colorHex: '#9365B8', statMultiplier: 1.6, reforgeCost: 2500, magicalPower: 12 },
-    { key: 'legendary', name: '전설', colorHex: '#FAC51C', statMultiplier: 1.8, reforgeCost: 5000, magicalPower: 16 },
-    { key: 'mythic', name: '신화', colorHex: '#E048C4', statMultiplier: 2.0, reforgeCost: 9000, magicalPower: 22 },
+    // V95: 등급 색을 하이픽셀 스카이블럭 공식(마인크래프트 채팅 색코드)에 정렬 — key/name/magicalPower는 불변.
+    { key: 'common', name: '일반', colorHex: '#FFFFFF', statMultiplier: 1, reforgeCost: 250, magicalPower: 3 },       // §f 흰색
+    { key: 'uncommon', name: '고급', colorHex: '#55FF55', statMultiplier: 1.2, reforgeCost: 500, magicalPower: 5 },   // §a 초록
+    { key: 'rare', name: '희귀', colorHex: '#5555FF', statMultiplier: 1.4, reforgeCost: 1000, magicalPower: 8 },      // §9 파랑
+    { key: 'epic', name: '영웅', colorHex: '#AA00AA', statMultiplier: 1.6, reforgeCost: 2500, magicalPower: 12 },     // §5 암보라
+    { key: 'legendary', name: '전설', colorHex: '#FFAA00', statMultiplier: 1.8, reforgeCost: 5000, magicalPower: 16 },// §6 금색
+    { key: 'mythic', name: '신화', colorHex: '#FF55FF', statMultiplier: 2.0, reforgeCost: 9000, magicalPower: 22 },   // §d 밝은 분홍
     { key: 'ancient', name: '고대', colorHex: '#5DECD5', statMultiplier: 2.4, reforgeCost: 15000, magicalPower: 28 },
     { key: 'divine', name: '신성', colorHex: '#66E0FF', statMultiplier: 2.8, reforgeCost: 25000, magicalPower: 34 },   // V11
     { key: 'primal', name: '태초', colorHex: '#FF5470', statMultiplier: 3.2, reforgeCost: 40000, magicalPower: 40 },   // V11
@@ -719,6 +720,25 @@
     }
     EQUIPMENT.weapons.forEach(w => { if (!w.real) assignReal(w, w.wclass === 'bow' ? 'bow' : w.wclass === 'staff' ? 'staff' : 'weapon'); });
     EQUIPMENT.armor.forEach(a => { if (!a.real) assignReal(a, 'armor'); });
+    EQUIPMENT.weapons.sort((x, y) => (x.dmg || 0) - (y.dmg || 0) || (x.key < y.key ? -1 : 1));
+    EQUIPMENT.armor.sort((x, y) => (x.defense || 0) - (y.defense || 0) || (x.key < y.key ? -1 : 1));
+    // V95 (E11): 던전 클래스 어빌리티 의사 아이템(빈 스탯, 장착 불가)은 무기 목록에서 제외 — 실제 장비가 아님.
+    const ABILITY_KEYS = new Set(['archer_dungeon_ability_2', 'archer_dungeon_ability_3', 'aspect_of_the_leech_1', 'aspect_of_the_leech_2', 'aspect_of_the_leech_3']);
+    const emptyStats = e => !e.stats || Object.keys(e.stats).length === 0;
+    const isAbilityPseudo = e => ABILITY_KEYS.has(e.key) || (/_ability_\d+$/.test(e.key || '') && emptyStats(e) && !(e.dmg > 0));
+    EQUIPMENT.weapons = EQUIPMENT.weapons.filter(w => !isAbilityPseudo(w));
+    // V95 (E5): 실제 아이템인데 API가 빈 스탯·0 데미지/방어로 들어와 죽은 아이템을 티어 기준 최소 스탯으로 백필.
+    //   티어 순서(ITEM_TIERS)가 높을수록 큰 값. UNOBTAINABLE/노벨티(saneGear 제외분)는 손대지 않음.
+    const WEAPON_DMG_BASELINE = [20, 40, 70, 110, 160, 220, 280, 340, 400];   // 일반→태초(ancient/divine/primal은 신화 위로)
+    const ARMOR_DEF_BASELINE = [15, 30, 50, 80, 115, 155, 195, 235, 275];
+    const tierIdx = tk => { const i = TIER_ORDER.indexOf(tk); return i < 0 ? 0 : i; };
+    EQUIPMENT.weapons.forEach(w => {
+      if (w.real && w.tier !== 'UNOBTAINABLE' && emptyStats(w) && !(w.dmg > 0)) w.dmg = WEAPON_DMG_BASELINE[tierIdx(w.tierKey)];
+    });
+    EQUIPMENT.armor.forEach(a => {
+      if (a.real && a.tier !== 'UNOBTAINABLE' && emptyStats(a) && !(a.defense > 0) && !(a.hp > 0)) a.defense = ARMOR_DEF_BASELINE[tierIdx(a.tierKey)];
+    });
+    // 백필로 dmg/defense가 바뀌었으니 재정렬.
     EQUIPMENT.weapons.sort((x, y) => (x.dmg || 0) - (y.dmg || 0) || (x.key < y.key ? -1 : 1));
     EQUIPMENT.armor.sort((x, y) => (x.defense || 0) - (y.defense || 0) || (x.key < y.key ? -1 : 1));
   }
