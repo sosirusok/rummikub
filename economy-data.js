@@ -529,11 +529,11 @@
       { key: 'draconic', name: '신룡의(Draconic)', dmgPct: 22, str: 35, critDamage: 25, ferocity: 10, stone: true },
     ],
     armor: [
-      { key: 'wise', name: '현명한', def: 4, hp: 15 }, { key: 'pure', name: '순수한', def: 6, hp: 6 },
+      { key: 'wise', name: '현명한(Wise)', int: 30 }, { key: 'pure', name: '순수한', def: 6, hp: 6 },   /* V107: 실측 — 현명한은 지력 리포지(와이즈 드래곤 프래그먼트) */
       { key: 'titanic', name: '타이타닉', def: 8, hp: 8 }, { key: 'heavy', name: '묵직한', def: 12 },
       { key: 'clean', name: '깔끔한', def: 5, hp: 10 },
       // V17: 엔드게임 방어구 리포지(부위당 힘/치명피해/광포 — 4부위 합산으로 대폭 성장). stone=스톤 전용
-      { key: 'necrotic', name: '괴사의(Necrotic)', def: 10, hp: 30, str: 42, stone: true },
+      { key: 'necrotic', name: '괴사의(Necrotic)', def: 5, hp: 5, int: 90, stone: true },   /* V107: 실측 — 괴사의는 지력 리포지(네크로맨서 브로치), str→int */
       { key: 'renowned', name: '명성의(Renowned)', def: 8, hp: 40, str: 28, critDamage: 8, stone: true },
       { key: 'ancient_r', name: '고대의(Ancient)', def: 14, hp: 20, str: 12, ferocity: 4, stone: true },
       { key: 'necron_r', name: '지배자의(Necron)', def: 12, hp: 25, str: 22, critDamage: 6, stone: true },
@@ -541,7 +541,7 @@
       { key: 'celestial', name: '천상의(Celestial)', def: 12, hp: 45, str: 45, critDamage: 12, ferocity: 6, stone: true },
     ],
     // 리포지 스톤 전용(확정 최상급): reforge_stone_rare 소모
-    premium: { weapon: { key: 'withered', name: '시든(Withered)', dmgPct: 18, str: 25, critDamage: 20 }, armor: { key: 'necrotic', name: '괴사의(Necrotic)', def: 10, hp: 30, str: 42 } },
+    premium: { weapon: { key: 'withered', name: '시든(Withered)', dmgPct: 18, str: 25, critDamage: 20 }, armor: { key: 'necrotic', name: '괴사의(Necrotic)', def: 5, hp: 5, int: 90 } },   /* V107: 괴사의 str→int */
     // V20-D: 신룡의 룬석(reforge_stone_apex, F11 드롭) 전용 — +α 최상급 리포지(신룡/천상)
     premiumApex: { weapon: { key: 'draconic', name: '신룡의(Draconic)', dmgPct: 22, str: 35, critDamage: 25, ferocity: 10 }, armor: { key: 'celestial', name: '천상의(Celestial)', def: 12, hp: 45, str: 45, critDamage: 12, ferocity: 6 } },
   };
@@ -1521,7 +1521,7 @@
   // 주간 순환 보스 — ISO 주차마다 한 계열이 강화(⭐ HP·보상 2배)
   const WEEKLY = { families: ['zombie_slayer', 'spider_slayer', 'wolf_slayer', 'enderman_slayer', 'blaze_slayer'], hpMul: 2, rewardMul: 2 };
   // 핫 포테이토 북 규칙
-  const HPB = { maxBooks: 10, fumingMax: 15, weaponDmgPerBook: 2, armorDefPerBook: 2, armorHpPerBook: 4 };
+  const HPB = { maxBooks: 10, fumingMax: 15, weaponDmgPerBook: 2, weaponStrPerBook: 2, armorDefPerBook: 2, armorHpPerBook: 4 };   /* V107: 실측 — 무기 핫포북은 공격+2·힘+2 동시 부여 */
 
   /* V15: 마인크래프트 16색 염료 팔레트 — 양털/콘크리트/테라코타 생성의 단일 출처 */
   const DYES = [
