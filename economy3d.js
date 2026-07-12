@@ -467,6 +467,8 @@
     for (let y = Math.min(H - 1, Math.floor(refY)); y >= 1; y--) if (solidAt(x, y, z)) return y + 1;
     return surfaceTop(x, z);
   }
+  // V97(A8): 맵파일 월드 중앙 스폰 높이. 네더는 베드락 지붕이 최상단이라 surfaceTop이 지붕을 반환 → 중간 높이에서 아래로 첫 바닥을 찾는다(지붕 위 스폰 방지).
+  function mapCenterTop(cx, cz) { return worldMode === 'nether' ? groundBelow(cx, cz, Math.floor(H * 0.55)) : surfaceTop(cx, cz); }
 
   /* ---------------- 지형 생성(하늘섬 하이트필드) ---------------- */
   function islandField(isl, x, z) {   // (구 호환) 존 중심 거리 필드
@@ -3555,7 +3557,7 @@
     else if (def.gen) { def.gen(); scatterWorldDetail(mode); buildThemeStructures(mode); if (mode === 'park') buildParkGates(); }   // V16 데코 + V18-C 테마 건물 + V21-D2 파크 게이트(맨 마지막)
     if (mode === 'hub') resetPlayerToSpawn();
     else if (mode === 'home' || mode === 'visit') { P.x = 96.5; P.z = 104.5; P.y = surfaceTop(96, 104) + 0.02; P.yaw = Math.PI; }   // V13-A: 스폰섬
-    else if (_mapWorldActive) { const cx = W >> 1, cz = Dp >> 1; P.x = cx + 0.5; P.z = cz + 0.5; P.y = surfaceTop(cx, cz) + 0.02; P.yaw = Math.PI; }   // 실제 섬 맵 중앙 지표
+    else if (_mapWorldActive) { const cx = W >> 1, cz = Dp >> 1; P.x = cx + 0.5; P.z = cz + 0.5; P.y = mapCenterTop(cx, cz) + 0.02; P.yaw = Math.PI; }   // 실제 섬 맵 중앙 지표 (V97(A8): 네더 지붕 회피)
     else { const sp = def.spawn || [W >> 1, Dp >> 1]; P.x = sp[0] + 0.5; P.z = sp[1] + 0.5; P.y = surfaceTop(sp[0], sp[1]) + 0.02; P.yaw = Math.PI; }
     P.vx = P.vy = P.vz = 0;
     buildIslandMesh((mode === 'home' || mode === 'visit') ? HOME_BOUNDS : null);   // 플레이어 주변 청크부터 즉시 빌드
@@ -7268,7 +7270,7 @@
         }
       } else { P.x = 96.5; P.z = 104.5; P.y = sy + 0.02; }
     }
-    else if (_mapWorldActive) { const cx = W >> 1, cz = Dp >> 1; P.x = cx + 0.5; P.z = cz + 0.5; P.y = surfaceTop(cx, cz) + 0.02; }   // V94: 실제 섬 맵은 def.spawn(절차 좌표)이 지형 밖 → 맵 중앙 지표로 리스폰(공허 사망 루프 방지)
+    else if (_mapWorldActive) { const cx = W >> 1, cz = Dp >> 1; P.x = cx + 0.5; P.z = cz + 0.5; P.y = mapCenterTop(cx, cz) + 0.02; }   // V94: 실제 섬 맵은 def.spawn(절차 좌표)이 지형 밖 → 맵 중앙 지표로 리스폰(공허 사망 루프 방지) + V97(A8): 네더 지붕 회피
     else if (worldMode !== 'hub') { const sp = (WORLD_DEFS[worldMode] || {}).spawn || [W >> 1, Dp >> 1]; P.x = sp[0] + 0.5; P.z = sp[1] + 0.5; P.y = surfaceTop(sp[0], sp[1]) + 0.02; }
     else { P.x = spawnX; P.y = spawnY; P.z = spawnZ; }
     P.vx = P.vy = P.vz = 0;
@@ -8292,12 +8294,12 @@
     wither_skeleton: { name: '위더 스켈레톤', kind: 'tall', color: 0x2a2a2a, hp: 900, dmg: 65, xp: 45, coins: 10, speed: 2.2, books: ['titan_killer', 'dragon_hunter'], drops: [{ key: 'bone', n: 2 }, { key: 'coal', n: 3, chance: 0.5 }, { key: 'obsidian', n: 1, chance: 0.1 }], tierCap: 4 },
     magma_cube: { name: '마그마 큐브', kind: 'slime', color: 0xd2541f, hp: 350, dmg: 35, xp: 22, coins: 6, speed: 1.5, books: ['hardened', 'thorns'], drops: [{ key: 'magma_cream', n: 1 }, { key: 'blaze_rod', n: 1, chance: 0.15 }], tierCap: 3 },   // V79: 위키 — 마그마 크림 100%(컬렉션 공급원)
     pigman: { name: '피그맨', kind: 'humanoid', color: 0xe6a8ad, hp: 450, dmg: 48, xp: 28, coins: 8, speed: 2.1, books: ['vitality'], drops: [{ key: 'gold', n: 2, chance: 0.6 }], tierCap: 3 },
-    enderman: { name: '엔더맨', kind: 'tall', color: 0x1a1a22, hp: 800, dmg: 60, hpAnchors: [[42, 4500], [45, 6000], [50, 9000]], dmgAnchors: [[42, 500], [45, 600], [50, 700]], xp: 40, coins: 8, speed: 2.6, books: ['ender_slayer', 'sugar_rush'], drops: [{ key: 'ender_pearl', n: 1, chance: 0.5 }], tierCap: 4 },   // V81: 위키 HP/공격 앵커(엔드 L42~50)
+    enderman: { name: '엔더맨', kind: 'tall', color: 0x1a1a22, hp: 800, dmg: 60, hpAnchors: [[42, 4500], [45, 6000], [50, 9000]], fixedStats: true, xp: 40, coins: 8, speed: 2.6, books: ['ender_slayer', 'sugar_rush'], drops: [{ key: 'ender_pearl', n: 1, chance: 0.5 }], tierCap: 4 },   // V81 HP앵커 유지 + V97(C11): 데미지 앵커(500~700, 동일구역 젤롯63·워처72의 8배로 즉사) 제거 → fixedStats로 고정 dmg 60(HP는 hpAnchors가 먼저 평가되어 탱키 유지, dmg만 피어 정렬)
     endermite: { name: '엔더마이트', kind: 'quad', color: 0x5a3a6a, hp: 320, dmg: 66, fixedStats: true,   /* V96: 엔드 고정몹(공격력 폭주 수정) */ xp: 20, coins: 5, speed: 3.2, scale: 0.5, books: [], drops: [{ key: 'ender_shard', n: 1 }, { key: 'ender_pearl', n: 1, chance: 0.15 }], tierCap: 3 },
     zealot: { name: '젤롯', kind: 'tall', color: 0x2a1a3a, hp: 655, dmg: 63, fixedStats: true,   /* V96: 엔드 Lv55 고정 파밍몹 — 위키 실HP 655 유지 */ xp: 6, coins: 2, speed: 2.6, books: ['ender_slayer', 'last_stand', 'true_protection'], drops: [{ key: 'ender_pearl', n: 2 }, { key: 'ender_shard', n: 2 }, { key: 'enchanted_ender_pearl', n: 1, chance: 0.02 }, { key: 'summoning_eye', n: 1, chance: 1 / 420 }, { key: 'talisman_void_eye', n: 1, chance: 0.01 }], tierCap: 5 },   // V80: 위키 — 엔더진주100%+인챈티드2%+소환의눈1/420
     obsidian_defender: { name: '흑요석 수호자', kind: 'tall', color: 0x2a2040, hp: 500, dmg: 29, fixedStats: true,   /* V96: 엔드 Lv55 고정몹(워처 쌍) */ xp: 30, coins: 8, speed: 1.8, books: ['protection', 'hardened'], drops: [{ key: 'obsidian', n: 2 }], tierCap: 5 },
     watcher: { name: '워처', kind: 'tall', color: 0x3a2a52, hp: 480, dmg: 72, fixedStats: true,   /* V96: 엔드 Lv55 고정몹(공격력 폭주 수정) */ xp: 32, coins: 8, speed: 2.4, books: ['venomous'], drops: [{ key: 'ender_shard', n: 1 }, { key: 'ender_pearl', n: 1, chance: 0.4 }], tierCap: 5 },
-    ender_dragon: { name: '엔더 드래곤', kind: 'dragon', color: 0x1a0a2a, hp: 9000000, dmg: 1100, hpAnchors: [[100, 9000000]], dmgAnchors: [[100, 1100]], xp: 500, coins: 300, scale: 1.0, books: ['dragon_hunter', 'growth', 'venomous'], drops: [{ key: 'ender_pearl', n: 8 }, { key: 'aspect_of_the_dragon', n: 1, chance: 0.08 }, { key: 'pet_egg_ender_dragon', n: 1, chance: 0.04 }, { key: 'talisman_dragon_claw', n: 1, chance: 0.06 }, { key: 'talisman_dragon_heart', n: 1, chance: 0.03 }], tierCap: 6 },
+    // V97(C15): standalone ender_dragon 제거 — DRAGON_TYPES(8종)로 스폰되며 이 키는 어디서도 참조되지 않던 죽은 정의였음
     sea_walker: { name: '바다 보행자', kind: 'humanoid', color: 0x2a6a8a, hp: 300, dmg: 25, xp: 20, coins: 6, speed: 1.6, books: ['vampirism', 'protection'], drops: [{ key: 'prismarine', n: 2 }, { key: 'talisman_deep_pearl', n: 1, chance: 0.02 }, { key: 'pet_egg_squid', n: 1, chance: 0.01 }], tierCap: 3 },
     cow: { name: '소', kind: 'quad', color: 0x4a3a2c, hp: 50, dmg: 0, xp: 4, coins: 2, speed: 1.0, passive: true, books: [], drops: [{ key: 'raw_beef', n: 1 }, { key: 'leather', n: 1 }], tierCap: 0 },   // V75: 위키 — 생소고기+가죽 100%
     pig: { name: '돼지', kind: 'quad', color: 0xe6a8ad, hp: 45, dmg: 0, xp: 4, coins: 2, speed: 1.0, passive: true, books: [], drops: [{ key: 'raw_porkchop', n: 1 }], tierCap: 0 },   // V75: 위키 — 생돼지고기 100%
@@ -8331,9 +8333,9 @@
     ['protector_dragon', '프로텍터 드래곤', 0x8a94b8, 100, 9000000, 1100, 1 / 60, 1 / 120],
     ['unstable_dragon', '언스테이블 드래곤', 0x1a1a2a, 100, 9000000, 1100, 1 / 45, 1 / 90],
     ['strong_dragon', '스트롱 드래곤', 0xc0392b, 100, 9000000, 1100, 1 / 35, 1 / 70],
-    ['wise_dragon', '와이즈 드래곤', 0x54c8e8, 100, 9000000, 2200, 1 / 50, 1 / 100],
+    ['wise_dragon', '와이즈 드래곤', 0x54c8e8, 100, 9000000, 1100, 1 / 50, 1 / 100],   // V97(C14): 데미지 티어역전 수정 — old와 값 교환(9M HP는 1100)
     ['superior_dragon', '슈페리어 드래곤', 0xf2d75c, 100, 12000000, 1650, 1 / 20, 1 / 40],
-    ['old_dragon', '올드 드래곤', 0x9a8a6a, 100, 15000000, 1100, 1 / 55, 1 / 110],
+    ['old_dragon', '올드 드래곤', 0x9a8a6a, 100, 15000000, 2200, 1 / 55, 1 / 110],   // V97(C14): 15M HP 최상위권이 1100→2200(HP 오름차순과 데미지 단조 정렬)
     ['holy_dragon', '홀리 드래곤(+α)', 0xfff4d8, 200, 20000000, 2600, 1 / 12, 1 / 25],   // α(실제 미존재 유형)
   ];
   DRAGON_TYPES.forEach(dt => {
@@ -8632,8 +8634,11 @@
       for (let i = 1; i < a.length; i++) if (L <= a[i][0]) { const [x0, y0] = a[i - 1], [x1, y1] = a[i]; return y0 + (y1 - y0) * (L - x0) / (x1 - x0); }
       const n = a.length, [x0, y0] = a[n - 2] || a[0], [x1, y1] = a[n - 1]; return x1 === x0 ? y1 : y0 + (y1 - y0) * (L - x0) / (x1 - x0);
     };
-    const baseHp = def.hpAnchors ? anchorStat(def.hpAnchors, lv) : (def.fixedStats ? def.hp : def.hp * mul);   // V96: 고정스탯 몹(던전/크립트/명명 좀비/엔드 고정)은 레벨배수 미적용 — 위키 실HP 유지
-    const baseDmg = def.dmgAnchors ? anchorStat(def.dmgAnchors, lv) : (def.fixedStats ? def.dmg : def.dmg * mul);   // V96
+    let baseHp = def.hpAnchors ? anchorStat(def.hpAnchors, lv) : (def.fixedStats ? def.hp : def.hp * mul);   // V96: 고정스탯 몹(던전/크립트/명명 좀비/엔드 고정)은 레벨배수 미적용 — 위키 실HP 유지
+    let baseDmg = def.dmgAnchors ? anchorStat(def.dmgAnchors, lv) : (def.fixedStats ? def.dmg : def.dmg * mul);   // V96
+    // V97(C8): 아레나 등 커스텀 스케일은 앵커/고정 결과 위에 곱한다 — 앵커몹(엔더맨/좀비/스켈레톤/거미)이 아레나 배율을 무시하던 문제 수정
+    if (def.arenaHpMul) baseHp *= def.arenaHpMul;
+    if (def.arenaDmgMul) baseDmg *= def.arenaDmgMul;
     const mob = {
       type: typeKey, def, lv, elite, rewardMul, weekly,
       maxHp: Math.round(Math.max(1, baseHp) * (elite ? 2.5 : 1) * hpMulD),
@@ -8691,8 +8696,9 @@
       const base = MOB_TYPES[tk];
       const def = Object.assign({}, base, {
         name: `🏟️ ${base.name}`, passive: false,
-        hp: Math.round(base.hp * ad.hpMul * (1 + arenaState.wave * 0.25)),
-        dmg: Math.round(base.dmg * (0.8 + ad.hpMul * 0.25)),
+        // V97(C8): hp/dmg 직접 덮어쓰기는 앵커몹(엔더맨/좀비/스켈레톤/거미)에서 무시됐음 → 배율로 전달해 앵커/고정 결과 위에 곱해지게 함. 비앵커몹은 base.hp*mul*배율로 기존과 동치
+        arenaHpMul: ad.hpMul * (1 + arenaState.wave * 0.25),
+        arenaDmgMul: 0.8 + ad.hpMul * 0.25,
       });
       const mob = spawnMob({ x: ARENA_POS.x, z: ARENA_POS.z, r: ARENA_POS.r, world: 'hub' }, tk, ad.lv + arenaState.wave, def);
       if (mob) { mob.arena = true; mob.state = 'chase'; }
