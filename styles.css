@@ -1667,3 +1667,36 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .econ3d-screen.mc-invopen .econ3d-itemtitle,
 .econ3d-screen.mc-invopen .econ3d-controlhint,
 .econ3d-screen.mc-invopen .econ3d-cross{ display:none !important; }
+
+/* ============ V125: 전 메뉴 패널 HTML 느낌 제거 — 실제 MC 상자 GUI 요소로 통일 ============ */
+/* 패널 전체 픽셀 폰트(라틴/숫자=MC폰트, 한글=시스템 폴백) + 안티에일리어싱 제거 */
+.econ3d-body{ font-family:'Minecraft','Segoe UI',system-ui,sans-serif; -webkit-font-smoothing:none; }
+.econ3d-body h3, .econ3d-body h4, .econ3d-body p, .econ3d-body span, .econ3d-body button,
+.econ3d-body div, .econ3d-body summary, .econ3d-body b{ font-family:inherit; }
+/* 상자 GUI 컨테이너 — MC 회색 판, 각진 픽셀 베벨 */
+.econ3d-body .mc-chest{ background:#c6c6c6; border:4px solid; border-color:#ffffff #555 #555 #ffffff; border-radius:0 !important; box-shadow:0 6px 22px rgba(0,0,0,.42); max-width:660px; margin:12px auto; padding:12px 14px; color:#2b2b2b; }
+/* 상자 제목 = 어두운 회색, 하단 구분선(실제 상자 상단 타이틀바 느낌) */
+.econ3d-body .mc-chest .mc-chesttitle, .econ3d-body h3, .econ3d-body h4{ color:#3f3f3f !important; font-weight:400; font-size:15px; margin:2px 0 8px; padding-bottom:5px; border-bottom:2px solid rgba(80,80,80,.35); text-shadow:none; letter-spacing:.3px; }
+/* HTML 카드형 행(econ-colrow/shopitem) → MC 인셋 슬롯 줄(각진, 오목한 회색 홈) */
+.econ3d-body .econ-colrow, .econ3d-body .econ-shopitem, .econ3d-body .econ-minionrow,
+.econ3d-body .econ-slayercard, .econ3d-body .econ-floorcard, .econ3d-body .econ-cellact{
+  background:#8b8b8b !important; border:2px solid !important; border-color:#5a5a5a #d6d6d6 #d6d6d6 #5a5a5a !important;
+  border-radius:0 !important; color:#f4f4f4 !important; text-shadow:1px 1px 0 rgba(0,0,0,.5); box-shadow:none !important; padding:6px 9px !important; }
+.econ3d-body .econ-colrow span:first-child, .econ3d-body .econ-shopitem span:first-child{ font-weight:400; }
+.econ3d-body .econ-colrow .muted, .econ3d-body .econ-shopitem .muted, .econ3d-body .muted{ color:#d8d8d8 !important; }
+/* 설명 문구 = MC식 옅은 회색 소형 힌트(웹 카드 느낌 제거) */
+.econ3d-body .econ-note{ background:transparent !important; border:0 !important; color:#4a4a4a !important; font-size:12px; padding:0 2px 6px !important; text-shadow:none; }
+/* 버튼 = 각진 MC 회색 버튼 */
+.econ3d-body .btn{ border-radius:0 !important; background:#8b8b8b !important; border:2px solid !important; border-color:#f4f4f4 #4a4a4a #4a4a4a #f4f4f4 !important; color:#161616 !important; text-shadow:none !important; box-shadow:none !important; font-family:inherit; }
+.econ3d-body .btn:hover:not([disabled]){ background:#9ea9c0 !important; }
+.econ3d-body .btn[disabled]{ opacity:.5; }
+/* 하단 상자 네비 슬롯(뒤로/닫기)도 각진 유지 */
+.econ3d-body .mc-menuslot{ border-radius:0 !important; }
+/* 상단 탭 네비(스탯/컬렉션/…) = 각진 MC 회색 버튼(웹 알약형 폐기) */
+.econ3d-body .econ-zonenav{ gap:3px; margin-bottom:8px; }
+.econ3d-body .econ-zonebtn{ border-radius:0 !important; background:#8b8b8b !important; border:2px solid !important; border-color:#f4f4f4 #4a4a4a #4a4a4a #f4f4f4 !important; color:#1a1a1a !important; text-shadow:none !important; box-shadow:none !important; font-family:inherit; padding:5px 9px !important; }
+.econ3d-body .econ-zonebtn.is-active{ background:#c6c6c6 !important; border-color:#4a4a4a #f4f4f4 #f4f4f4 #4a4a4a !important; color:#000 !important; }
+/* 패널 상단바: 중복 골드 표기 숨김(스코어보드 Purse/Bank로 대체), 닫기만 MC식 유지 */
+#econ3dPanelGold{ display:none !important; }
+.econ3d-panelbar{ justify-content:flex-end !important; padding:6px 10px !important; }
+.econ3d-panelbar .btn{ border-radius:0 !important; background:#8b8b8b !important; border:2px solid !important; border-color:#f4f4f4 #4a4a4a #4a4a4a #f4f4f4 !important; color:#161616 !important; text-shadow:none !important; }
