@@ -151,7 +151,8 @@
    ['soul_soil', 'soul_soil'], ['red_nether_bricks', 'red_nether_bricks'], ['chiseled_nether_bricks', 'chiseled_nether_bricks'], ['cracked_nether_bricks', 'cracked_nether_bricks'],
    ['nether_gold_ore', 'nether_gold_ore'], ['nether_quartz_ore', 'nether_quartz_ore'], ['netherite_block', 'netherite_block'], ['crying_obsidian', 'crying_obsidian'],
    ['nether_wart_block', 'nether_wart_block'], ['warped_wart_block', 'warped_wart_block'], ['shroomlight', 'shroomlight'],
-   ['end_stone_bricks', 'end_stone_bricks'], ['honeycomb_block', 'honeycomb_block'], ['red_sand', 'red_sand'], ['target', 'target'], ['sea_lantern', 'sea_lantern'], ['dark_prismarine', 'dark_prismarine'], ['prismarine_bricks', 'prismarine_bricks']].forEach(([k, tex]) => BLOCKS.push({ key: k, tex }));
+   ['end_stone_bricks', 'end_stone_bricks'], ['honeycomb_block', 'honeycomb_block'], ['red_sand', 'red_sand'], ['target', 'target'], ['sea_lantern', 'sea_lantern'], ['dark_prismarine', 'dark_prismarine'], ['prismarine_bricks', 'prismarine_bricks'],
+   ['slime_block', 'slime_block']].forEach(([k, tex]) => BLOCKS.push({ key: k, tex }));   // V123: 슬라임 블럭 — 섬 간 이동 발사대(런치패드) 재료
   [['crimson_stem', { top: 'crimson_stem_top', side: 'crimson_stem', bottom: 'crimson_stem_top' }], ['warped_stem', { top: 'warped_stem_top', side: 'warped_stem', bottom: 'warped_stem_top' }],
    ['basalt', { top: 'basalt_top', side: 'basalt_side', bottom: 'basalt_top' }], ['polished_basalt', { top: 'polished_basalt_top', side: 'polished_basalt_side', bottom: 'polished_basalt_top' }],
    ['bone_block', { top: 'bone_block_top', side: 'bone_block_side', bottom: 'bone_block_top' }], ['purpur_pillar', { top: 'purpur_pillar_top', side: 'purpur_pillar', bottom: 'purpur_pillar_top' }],
@@ -5705,10 +5706,17 @@
 
   // 워프 패드 지형(흑요석 링 + 글로우스톤 심)
   function buildWarpPads() {
+    // V123: 실제 스카이블럭식 슬라임 블럭 런치패드 — 3×3 슬라임 발판 + 에메랄드 테두리(밟으면 발사)
     const list = WARPS[worldMode] || [];
+    const slime = ID.slime_block != null ? ID.slime_block : ID.emerald_block;
+    const frame = ID.smooth_stone != null ? ID.smooth_stone : (ID.stone_bricks != null ? ID.stone_bricks : ID.stone);   // 슬라임 대비용 중립 회색 테두리
     for (const wp of list) {
       const y = surfaceTop(wp.x, wp.z) - 1;
-      for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) setW(wp.x + dx, y, wp.z + dz, (dx === 0 && dz === 0) ? ID.glowstone : ID.obsidian);
+      // 5×5 에메랄드 테두리 + 3×3 슬라임 코어
+      for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) {
+        const inner = (Math.abs(dx) <= 1 && Math.abs(dz) <= 1);
+        setW(wp.x + dx, y, wp.z + dz, inner ? slime : frame);
+      }
       clearAbove(wp.x, wp.z, y + 1, 4);
       wp._y = y + 1;
     }
@@ -6274,6 +6282,13 @@
       case 'quartz': fillNoise('#ece6e0', '#e0dad2', '#f6f0ea'); break;
       case 'magma': { fillNoise('#3a1e14', '#2e160e', '#48281a'); for (let i = 0; i < 9; i++) { const bx = (r() * 14) | 0, by = (r() * 14) | 0; c.fillStyle = r() < 0.5 ? '#e8632a' : '#f7a02a'; c.fillRect(ox + bx, oy + by, 2, 1); } break; }
       case 'coarse_dirt': for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.3 ? '#5a4630' : t < 0.6 ? '#6a5238' : t < 0.85 ? '#75593c' : '#4e3c28'); } break;
+      case 'slime_block': {   // V123: 슬라임 블럭 — 반투명 연두 외곽 + 내부 슬라임 젤 사각(발사대)
+        for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const t = r(); f(x, y, t < 0.5 ? '#6fc04a' : t < 0.8 ? '#63b23f' : '#7ccf57'); }
+        for (let i2 = 0; i2 < 16; i2++) { f(i2, 0, '#82d95e'); f(i2, 15, '#4f9a34'); f(0, i2, '#7ccf57'); f(15, i2, '#569a3a'); }
+        // 내부 젤리 코어(밝은 반투명 사각)
+        for (let y = 4; y <= 11; y++) for (let x = 4; x <= 11; x++) { const edge = (x === 4 || x === 11 || y === 4 || y === 11); f(x, y, edge ? '#4c8f30' : (r() < 0.5 ? '#8ee06a' : '#a2ea82')); }
+        break;
+      }
       default: fillNoise('#888', '#666', '#aaa');
     }
   }
@@ -7884,6 +7899,7 @@
     if (k === 'netherrack') return 0.4;
     if (k === 'end_stone') return 3;
     if (k === 'glowstone' || /glass/.test(k)) return 0.3;
+    if (k === 'slime_block') return 0.1;   // V123: 슬라임 — 거의 즉시 파괴
     if (k === 'ice' || k === 'packed_ice') return 0.5;
     if (k === 'magma' || k === 'soul_sand') return 0.5;
     if (k === 'bed') return 0.2;
