@@ -6353,7 +6353,7 @@
         } catch (e) {}
       };
       let applied = 0, done = 0;
-      const fin = () => { done++; if (done === list.length && applied > 0 && typeof toast === 'function') toast(`🎨 리소스팩 ${applied}개 타일 적용됨`, true); };
+      const fin = () => { done++; if (done === list.length && applied > 0 && typeof console !== 'undefined') console.log(`[resourcepack] ${applied} tiles applied`); };   // V121: 팝업 토스트 제거(실제 MC엔 없음) — 콘솔 로그만
       // V27-B: colormap 샘플링을 먼저 끝낸 뒤 타일 오버레이 실행(틴트가 페인트 시점에 결정되므로)
       let _cmPend = 2;
       const cmDone = () => { if (--_cmPend <= 0) runOverlay(); };
@@ -9254,7 +9254,7 @@
     if (lookS.locked && document.exitPointerLock) try { document.exitPointerLock(); } catch (e) {}
     gathering = false; mouseHeld = false; useHeld = false; breaking = null;   // V12-D: 패널 열면 채집/파괴 중단(화면 전환 시 계속 캐지는 버그 수정)
   }
-  function hidePanel() { const wrap = document.getElementById('econ3dPanelWrap'); if (wrap) wrap.style.display = 'none'; updateBuildHud(); updateHotbar(); }
+  function hidePanel() { const wrap = document.getElementById('econ3dPanelWrap'); if (wrap) { wrap.style.display = 'none'; wrap.classList.remove('mc-invmode'); } const scr = document.querySelector('.econ3d-screen'); if (scr) scr.classList.remove('mc-invopen'); updateBuildHud(); updateHotbar(); }   // V121: 닫을 때 인벤토리 모드 클래스 해제(게임 HUD 복원)
 
   function setupOutline() {
     const eg = new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1));
