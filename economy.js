@@ -368,6 +368,7 @@
     }
     return s;
   }
+  const CUBE_MOBS = new Set(['slime', 'magma_cube']);   // V109: 큐비즘 대상 큐브형 몹
   function enchVsSum(slayerKey) {
     let s = 0;
     const ofa = enchantLvl('weapon', 'one_for_all');
@@ -388,6 +389,7 @@
     if (ctx.targetHp < ctx.targetMaxHp * 0.5) pct += enchSum('dmgLow');
     else pct += enchSum('dmgHigh');
     if (ctx.slayerKey) pct += enchVsSum(ctx.slayerKey);
+    if (ctx.mobType && CUBE_MOBS.has(ctx.mobType)) pct += enchVsSum('cube');   // V109: 큐비즘 — 큐브형 몹 특효
     if (ctx.isBoss) pct += enchSum('dmgBoss');
     // V22-K: 조건부 얼티밋 실동작(기존엔 무조건 적용되거나 죽은 데이터였음)
     const ofa = enchantLvl('weapon', 'one_for_all');
@@ -640,7 +642,7 @@
       critDamage: B.critDamage + buffBonus('critDamage') + traitSum('brutality') + setStat('critDamage') + weaponStat('critDamage') + (rw.critDamage || 0) + armorRfCd + (gs.critDamage || 0) + (ps.critDamage || 0) + pw.critDamage,
       // V17: 광포(추가타) — 무기/리포지/특성/세트. 실제: floor(광포/100) 확정 추가타 + 나머지% 확률(기댓값 1+광포/100배)
       ferocity: weaponStat('ferocity') + (rw.ferocity || 0) + armorRfFero + traitSum('ferocity') + setStat('ferocity'),
-      intelligence: B.intelligence + Math.round(skillLevel('enchanting') * 1.77) + Math.round(skillLevel('alchemy') * 1.72) + buffBonus('intelligence') + attrBonus('intelligence') + traitSum('mana_well') + setStat('intelligence') + weaponStat('intelligence') + Math.round(magicalPower() * 0.6) + (gs.intelligence || 0) + (ps.intelligence || 0) + pw.intelligence + armorRfInt + (rw.int || 0),
+      intelligence: B.intelligence + Math.round(skillLevel('enchanting') * 1.77) + Math.round(skillLevel('alchemy') * 1.72) + buffBonus('intelligence') + attrBonus('intelligence') + traitSum('mana_well') + setStat('intelligence') + weaponStat('intelligence') + Math.round(magicalPower() * 0.6) + (gs.intelligence || 0) + (ps.intelligence || 0) + pw.intelligence + armorRfInt + (rw.int || 0) + enchSum('intelligence'),   // V109: 빅 브레인 지력 인챈트 반영
       // V20: 신규 스탯 — 매직파인드/포춘/공격속도
       magicFind: B2.magicFind + buffBonus('magicFind') + attrBonus('magicFind') + setStat('magicFind') + traitSum('lucky') + (ps.magicFind || 0),
       miningFortune: B2.miningFortune + skillLevel('mining') * 4 + (gs.miningFortune || 0) + setStat('miningFortune') + (ps.miningFortune || 0) + hotmMiningFortune() + colMiningFortune(),   // V20-G HotM
@@ -1474,7 +1476,12 @@
     if (P.gold < D().MINION_STORAGE_UPGRADE_COST) { toastFn('골드가 부족해요', false); return; }
     addGold(-D().MINION_STORAGE_UPGRADE_COST); m.storageUpgraded = true; saveNow(); renderZone();
   }
-  function minionStorageCap(m) { return m.storageUpgraded ? D().MINION_STORAGE_UPGRADED : D().MINION_STORAGE_BASE; }
+  // V109: 실측 티어별 저장량 — 미니언 티어 밴드값 사용, 저장 확장(미니언 익스팬더)은 +2슬롯(+128)
+  function minionStorageCap(m) {
+    const tinfo = minionTierInfo(m.key, m.tier);
+    const base = (tinfo && tinfo.storage) || D().MINION_STORAGE_BASE || 64;
+    return base + (m.storageUpgraded ? 128 : 0);
+  }
   function tickMinions() {
     const now = Date.now(); const autoSell = hasItem('auto_shipping_module');
     const speedMul = minionSpeedMul();
