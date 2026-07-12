@@ -107,13 +107,17 @@
     // V18-B: 석재/장식 계열 확장(계단·반블럭 더 다양하게)
     { k: 'quartz_block', tex: 'quartz' }, { k: 'sandstone', tex: 'sandstone' }, { k: 'bricks', tex: 'bricks' },
     { k: 'purpur', tex: 'purpur' }, { k: 'smooth_stone', tex: 'smooth_stone' }, { k: 'prismarine', tex: 'prismarine' },
+    // V87: 크림슨/뒤틀린/블랙스톤/현무암 계열(네더·엔드 섬 계단·반블럭)
+    { k: 'crimson_planks', tex: 'crimson_planks' }, { k: 'warped_planks', tex: 'warped_planks' },
+    { k: 'blackstone', tex: 'blackstone' }, { k: 'polished_blackstone', tex: 'polished_blackstone' }, { k: 'polished_blackstone_bricks', tex: 'polished_blackstone_bricks' },
+    { k: 'red_nether_bricks', tex: 'red_nether_bricks' }, { k: 'nether_bricks', tex: 'nether_bricks' }, { k: 'end_stone_bricks', tex: 'end_stone_bricks' }, { k: 'polished_basalt', tex: { top: 'polished_basalt_top', side: 'polished_basalt_side', bottom: 'polished_basalt_top' } },
   ];
   SHAPE_MATS.forEach(m => {
     BLOCKS.push({ key: m.k + '_slab', tex: m.tex, shape: 'slab', opaque: false });
     for (let f = 0; f < 4; f++) BLOCKS.push({ key: m.k + '_stairs_' + f, tex: m.tex, shape: 'stairs', facing: f, opaque: false });
   });
   // V17-B: 울타리(자동 연결) + 트랩도어 — 모든 나무
-  const WOOD_SHAPES = [['oak', 'planks'], ['birch', 'birch_planks'], ['spruce', 'spruce_planks'], ['dark_oak', 'dark_oak_planks'], ['jungle', 'jungle_planks'], ['acacia', 'acacia_planks']];
+  const WOOD_SHAPES = [['oak', 'planks'], ['birch', 'birch_planks'], ['spruce', 'spruce_planks'], ['dark_oak', 'dark_oak_planks'], ['jungle', 'jungle_planks'], ['acacia', 'acacia_planks'], ['crimson', 'crimson_planks'], ['warped', 'warped_planks']];
   WOOD_SHAPES.forEach(([w, tex]) => {
     BLOCKS.push({ key: w + '_fence', tex, shape: 'fence', opaque: false });
     BLOCKS.push({ key: w + '_trapdoor', tex, shape: 'trapdoor', opaque: false, collTop: 0.1875 });
@@ -140,6 +144,20 @@
    ['copper_ore', 'copper_ore'], ['raw_copper_block', 'raw_copper_block'], ['copper_block', 'copper_block'], ['cut_copper', 'cut_copper'],
    ['chiseled_copper', 'chiseled_copper'], ['exposed_copper', 'exposed_copper'], ['weathered_copper', 'weathered_copper'],
    ['oxidized_copper', 'oxidized_copper']].forEach(([k, tex]) => BLOCKS.push({ key: k, tex }));
+  // V87: 실제 스블 맵(크림슨/엔드/네더 섬) 손실 없는 임포트용 바닐라 블럭 — 타일명=공식 MC 파일명(리소스팩 자동)
+  [['crimson_planks', 'crimson_planks'], ['warped_planks', 'warped_planks'],
+   ['blackstone', 'blackstone'], ['polished_blackstone', 'polished_blackstone'], ['polished_blackstone_bricks', 'polished_blackstone_bricks'],
+   ['gilded_blackstone', 'gilded_blackstone'], ['chiseled_polished_blackstone', 'chiseled_polished_blackstone'], ['cracked_polished_blackstone_bricks', 'cracked_polished_blackstone_bricks'],
+   ['soul_soil', 'soul_soil'], ['red_nether_bricks', 'red_nether_bricks'], ['chiseled_nether_bricks', 'chiseled_nether_bricks'], ['cracked_nether_bricks', 'cracked_nether_bricks'],
+   ['nether_gold_ore', 'nether_gold_ore'], ['nether_quartz_ore', 'nether_quartz_ore'], ['netherite_block', 'netherite_block'], ['crying_obsidian', 'crying_obsidian'],
+   ['nether_wart_block', 'nether_wart_block'], ['warped_wart_block', 'warped_wart_block'], ['shroomlight', 'shroomlight'],
+   ['end_stone_bricks', 'end_stone_bricks'], ['honeycomb_block', 'honeycomb_block'], ['red_sand', 'red_sand'], ['target', 'target'], ['sea_lantern', 'sea_lantern'], ['dark_prismarine', 'dark_prismarine'], ['prismarine_bricks', 'prismarine_bricks']].forEach(([k, tex]) => BLOCKS.push({ key: k, tex }));
+  [['crimson_stem', { top: 'crimson_stem_top', side: 'crimson_stem', bottom: 'crimson_stem_top' }], ['warped_stem', { top: 'warped_stem_top', side: 'warped_stem', bottom: 'warped_stem_top' }],
+   ['basalt', { top: 'basalt_top', side: 'basalt_side', bottom: 'basalt_top' }], ['polished_basalt', { top: 'polished_basalt_top', side: 'polished_basalt_side', bottom: 'polished_basalt_top' }],
+   ['bone_block', { top: 'bone_block_top', side: 'bone_block_side', bottom: 'bone_block_top' }], ['purpur_pillar', { top: 'purpur_pillar_top', side: 'purpur_pillar', bottom: 'purpur_pillar_top' }],
+   ['crimson_nylium', { top: 'crimson_nylium', side: 'crimson_nylium_side', bottom: 'netherrack' }], ['warped_nylium', { top: 'warped_nylium', side: 'warped_nylium_side', bottom: 'netherrack' }],
+   ['ancient_debris', { top: 'ancient_debris_top', side: 'ancient_debris_side', bottom: 'ancient_debris_top' }], ['carved_pumpkin', { top: 'pumpkin_top', side: 'carved_pumpkin', bottom: 'pumpkin_top' }],
+   ['dried_kelp_block', { top: 'dried_kelp_top', side: 'dried_kelp_side', bottom: 'dried_kelp_bottom' }], ['barrel', { top: 'barrel_top', side: 'barrel_side', bottom: 'barrel_bottom' }]].forEach(([k, tex]) => BLOCKS.push({ key: k, tex }));
   // V21-E2: 사다리(4방향 벽 부착, 오르기 가능) + 침대(수면) + 보트(물 위 탈것)
   for (let f = 0; f < 4; f++) BLOCKS.push({ key: 'ladder_' + f, tex: 'ladder', shape: 'ladder', facing: f, opaque: false, solid: false, climb: true });
   BLOCKS.push({ key: 'bed', tex: { top: 'bed_top', side: 'bed_side', bottom: 'planks' }, shape: 'bed', opaque: false, interact: true });
