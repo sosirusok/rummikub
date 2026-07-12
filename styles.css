@@ -299,12 +299,14 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
   box-shadow:0 -1px 0 var(--line),0 -6px 16px -10px rgba(0,0,0,.6);}
 
 /* 토스트 / 1장 / 콤보 배너 */
-.toast{position:fixed; left:50%; bottom:120px; transform:translateX(-50%);
-  background:var(--panel3); color:var(--ink); border:1px solid var(--line);
-  padding:10px 14px; border-radius:10px; font-size:13px; max-width:90vw; z-index:60;
-  box-shadow:var(--sh-3); border-left:3px solid var(--accent); animation:toastIn var(--t-med) var(--ease-out);}
-.toast.toast--ok{border-left-color:var(--ok);}
-.toast.toast--err{border-left-color:var(--danger);}
+/* V129: MC 도전과제식 토스트 — 어두운 패널 + 각진 픽셀 테두리 + 픽셀 폰트(HTML 카드 느낌 제거) */
+.toast{position:fixed; left:50%; bottom:150px; transform:translateX(-50%);
+  background:rgba(20,20,26,.95); color:#fff; border:2px solid; border-color:#5a5a6a #26262e #26262e #5a5a6a;
+  padding:8px 14px; border-radius:0; font-size:15px; max-width:90vw; z-index:60;
+  font-family:'Minecraft','Segoe UI',system-ui,sans-serif; -webkit-font-smoothing:none;
+  text-shadow:1px 1px 0 rgba(0,0,0,.8); box-shadow:0 4px 16px rgba(0,0,0,.5); animation:toastIn var(--t-med) var(--ease-out);}
+.toast.toast--ok{border-left:4px solid #55ff55; padding-left:11px;}
+.toast.toast--err{border-left:4px solid #ff5555; padding-left:11px;}
 .banner-1tile{position:fixed; top:42%; left:50%; transform:translate(-50%,-50%); font-size:40px; font-weight:900;
   color:var(--danger); text-shadow:0 0 18px var(--danger-glow),0 2px 10px #000; z-index:70; animation:popIn .4s;}
 
@@ -1360,7 +1362,10 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .econ3d-panelbar{display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:rgba(10,12,20,.72); border-bottom:1px solid rgba(255,255,255,.12);}
 .econ3d-panelbar span{font-weight:800; color:#facc15;}
 .econ3d-body{flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; background:transparent;}   /* V31-B: 배경은 panelwrap의 MC 텍스처 */
-.econ3d-banner{position:absolute; left:50%; top:18%; transform:translateX(-50%) scale(.9); z-index:6; font-size:30px; font-weight:900; color:#fff; text-shadow:0 2px 8px rgba(0,0,0,.8),0 0 24px rgba(0,0,0,.5); opacity:0; transition:opacity .5s, transform .5s; pointer-events:none; white-space:nowrap;}
+/* V129: 실제 MC 타이틀/서브타이틀 — 큰 제목 + 작은 부제(2줄), 픽셀 폰트 */
+.econ3d-banner{position:absolute; left:50%; top:16%; transform:translateX(-50%) scale(.9); z-index:6; text-align:center; opacity:0; transition:opacity .5s, transform .5s; pointer-events:none; white-space:nowrap;}
+.econ3d-banner .b-title{font-size:40px; font-weight:400; color:#fff; text-shadow:2px 2px 0 rgba(0,0,0,.85);}
+.econ3d-banner .b-sub{font-size:19px; font-weight:400; color:#ffd23f; text-shadow:2px 2px 0 rgba(0,0,0,.85); margin-top:4px;}
 .econ3d-banner.show{opacity:1; transform:translateX(-50%) scale(1);}
 .econ3d-map{position:absolute; right:10px; top:52px; width:140px; height:140px; z-index:5; border:2px solid rgba(255,255,255,.35); border-radius:10px; background:#0a0e1a; opacity:.92; transition:width .2s,height .2s; image-rendering:pixelated;}
 .econ3d-map.is-big{width:320px; height:320px;}
@@ -1665,6 +1670,11 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .mc-invwindow .mc-hotbar{ background:transparent; border:0; padding:0; margin-top:8px; }
 /* 방어구 빈칸 = 실제 MC 반투명 실루엣(회색 유령 아이콘) */
 .mc-armor .mc-armormark{ opacity:.26; filter:grayscale(1) brightness(.4); font-size:20px; }
+/* V129: 인챈트 글린트 — 인챈트된 아이템 슬롯에 흐르는 보라 반짝임(실제 MC 마법 광택) */
+.mc-slot.mc-glint::after{ content:""; position:absolute; inset:0; pointer-events:none; mix-blend-mode:screen; opacity:.55;
+  background:linear-gradient(115deg, transparent 32%, rgba(170,80,255,.5) 46%, rgba(224,168,255,.9) 50%, rgba(170,80,255,.5) 54%, transparent 68%);
+  background-size:260% 260%; animation:mcglint 2.6s linear infinite; }
+@keyframes mcglint{ 0%{background-position:130% 0;} 100%{background-position:-30% 0;} }
 /* 인벤토리 열림 = 실제 MC처럼 게임 HUD(골드/전체화면/나가기/핫바/스탯/경험치/조작힌트) 숨김. 스코어보드·미니맵·채팅은 유지 */
 .econ3d-screen.mc-invopen .econ3d-top,
 .econ3d-screen.mc-invopen .econ3d-hotbar,
