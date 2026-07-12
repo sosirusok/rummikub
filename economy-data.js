@@ -182,9 +182,10 @@
   /* ---------------- 기본 스탯(실제 스카이블럭 기본값 그대로) ---------------- */
   // 피해 = (5+무기공격)×(1+힘/100)×(스킬/인챈트/리포지/스타포스 배율)×크리티컬
   // 피해 감소 = 방어/(방어+100), 이동속도 100 = 기준 속도
-  const BASE_STATS = { hp: 100, defense: 0, strength: 0, speed: 100, critChance: 30, critDamage: 50, intelligence: 100 };
-  // V20: 신규 스탯 기본치 — 매직파인드(희귀드롭%)·포춘(추가채집)·공격속도
-  const BASE_STATS2 = { magicFind: 0, miningFortune: 0, farmingFortune: 0, foragingFortune: 0, attackSpeed: 0, miningSpeed: 0 };
+  // V126: 실측 기본스탯 — 지능 0(마나 = 100 + 지능), 해양생물확률 20, 진방어 0, 펫운 0
+  const BASE_STATS = { hp: 100, defense: 0, strength: 0, speed: 100, critChance: 30, critDamage: 50, intelligence: 0 };
+  // V20: 신규 스탯 기본치 — 매직파인드(희귀드롭%)·포춘(추가채집)·공격속도 · V126: 해양생물/진방어/펫운 추가
+  const BASE_STATS2 = { magicFind: 0, miningFortune: 0, farmingFortune: 0, foragingFortune: 0, attackSpeed: 0, miningSpeed: 0, seaCreatureChance: 20, trueDefense: 0, petLuck: 0 };
   /* ---------------- V20: 젬스톤(장비 소켓) — 실제 스카이블럭 8종 × 5품질 ---------------- */
   const GEM_TYPES = [
     { key: 'ruby', name: '루비', stat: 'hp' }, { key: 'jasper', name: '재스퍼', stat: 'str' },

@@ -642,8 +642,13 @@
       farmingFortune: B2.farmingFortune + skillLevel('farming') * 4 + (gs.farmingFortune || 0) + setStat('farmingFortune'),
       foragingFortune: B2.foragingFortune + skillLevel('foraging') * 4 + setStat('foragingFortune'),
       attackSpeed: B2.attackSpeed + attrBonus('attackSpeed') + setStat('attackSpeed') + traitSum('swiftness'),
+      // V126: 진방어/해양생물확률 — 실제 스블 기본치 반영
+      trueDefense: (B2.trueDefense || 0) + (gs.trueDefense || 0) + setStat('trueDefense') + weaponStat('trueDefense') + attrBonus('trueDefense'),
+      seaCreatureChance: (B2.seaCreatureChance || 0) + setStat('seaCreatureChance') + weaponStat('seaCreatureChance'),
     };
     st.defense = Math.round(st.defense * mpStatMul());
+    st.speed = Math.min(400, Math.round(st.speed));   // V126: 실측 이동속도 연성 상한 400
+    st.mana = 100 + st.intelligence;                  // V126: 실측 최대 마나 = 100 + 지능
     st.hp = Math.round(st.hp);
     return st;
   }
@@ -3692,8 +3697,9 @@
         <div class="econ-colrow"><span>${g('ferocity')} 광포(추가타)</span><span>${st.ferocity}</span><span class="muted">100당 확정 추가타 · 피해 ×(1+광포/100)</span></div>
         ${st.attackSpeed != null ? `<div class="econ-colrow"><span>${g('attack_speed')} 공격속도</span><span>+${st.attackSpeed}%</span><span class="muted">타격 쿨다운 감소</span></div>` : ''}
         ${st.trueDefense != null ? `<div class="econ-colrow"><span>${g('true_defense')} 진방어</span><span>${st.trueDefense}</span><span class="muted">방어 무시 피해도 경감</span></div>` : ''}
-        <div class="econ-colrow"><span>${g('speed')} 이동속도</span><span>${st.speed}</span><span class="muted">100 = 기준(슈가 러시로 증가)</span></div>
-        <div class="econ-colrow"><span>${g('intelligence')} 지능(마나)</span><span>${st.intelligence}</span><span class="muted">마법부여 레벨당 +4 · 캐스터 어빌리티 스케일</span></div>
+        <div class="econ-colrow"><span>${g('speed')} 이동속도</span><span>${st.speed}</span><span class="muted">100 = 기준 · 연성 상한 400</span></div>
+        <div class="econ-colrow"><span>${g('intelligence')} 지능</span><span>${st.intelligence}</span><span class="muted">마나 = 100 + 지능 = ${st.mana} · 캐스터 어빌리티 스케일</span></div>
+        <div class="econ-colrow"><span>❂ 진방어</span><span>${st.trueDefense}</span><span class="muted">방어 무시(진짜) 피해 경감</span></div>
         <div class="econ-colrow"><span>${g('magic_find')} 매직파인드</span><span>${st.magicFind}</span><span class="muted">희귀 드롭 확률 +${st.magicFind}%</span></div>
         <div class="econ-colrow"><span>${g('mining_fortune')} 채광 포춘</span><span>${st.miningFortune}</span><span class="muted">광물 추가 드롭 +${st.miningFortune}%</span></div>
         <div class="econ-colrow"><span>${g('farming_fortune')} 농사 포춘</span><span>${st.farmingFortune}</span><span class="muted">작물 추가 드롭 +${st.farmingFortune}%</span></div>
@@ -4181,7 +4187,7 @@
     statSpeed: () => playerStats().speed,
     skillLv: k => skillLevel(k),
     // V8 스탯 HUD(체력/방어/마나/속도) — 3D updateHpHud가 0.5초마다 조회
-    hudStats: () => { const st = playerStats(); return { hp: st.hp, def: st.defense, mana: st.intelligence, speed: st.speed }; },
+    hudStats: () => { const st = playerStats(); return { hp: st.hp, def: st.defense, mana: st.mana, speed: st.speed }; },   // V126: 마나 = 100 + 지능
     slayerQuest: () => (P ? P.slayerQuest : null),          // V10 ⑰: 퀘스트 중 계열 스폰 부스트용
     slayerMobMap: SLAYER_MOB_MAP,
     activeBuffs: () => {                                     // V10 ㉖: HUD 버프 잔여시간
