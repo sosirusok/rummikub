@@ -2611,9 +2611,14 @@
         lines.push(`획득: ${nm} 처치 (${(equipDropChanceOf(sdef.key, sdef.tierKey) * 100).toFixed(2)}%)`);
       }
     }
-    if (sdef.dmg) lines.push(`공격력: +${hasItem(sdef.key) ? rolledStat(sdef.key, sdef.dmg) : sdef.dmg}${hpbOf(sdef.key) ? ` (🥔+${hpbOf(sdef.key) * D().HPB.weaponDmgPerBook})` : ''}`);
-    if (sdef.defense) lines.push(`방어력: +${hasItem(sdef.key) ? rolledStat(sdef.key, sdef.defense) : sdef.defense}${hpbOf(sdef.key) ? ` (🥔+${hpbOf(sdef.key) * D().HPB.armorDefPerBook})` : ''}`);
-    if (sdef.hp) lines.push(`체력: +${sdef.hp}`);
+    // V90: 실제 스카이블럭 스탯 블럭(공식 API 원본 스탯 전체) — 심볼+등급색 로어
+    if (sdef.stats && typeof sdef.stats === 'object' && Object.keys(sdef.stats).length) {
+      for (const k of STAT_ORDER) { const v = sdef.stats[k]; if (v) { const s = STAT_DISPLAY[k]; lines.push(`${s.sym} ${s.kr}: ${v > 0 ? '+' : ''}${v}${s.pct ? '%' : ''}`); } }
+    } else {
+      if (sdef.dmg) lines.push(`공격력: +${hasItem(sdef.key) ? rolledStat(sdef.key, sdef.dmg) : sdef.dmg}${hpbOf(sdef.key) ? ` (🥔+${hpbOf(sdef.key) * D().HPB.weaponDmgPerBook})` : ''}`);
+      if (sdef.defense) lines.push(`방어력: +${hasItem(sdef.key) ? rolledStat(sdef.key, sdef.defense) : sdef.defense}${hpbOf(sdef.key) ? ` (🥔+${hpbOf(sdef.key) * D().HPB.armorDefPerBook})` : ''}`);
+      if (sdef.hp) lines.push(`체력: +${sdef.hp}`);
+    }
     // V11: 특성 라인(실동작 설명)
     if (sdef.traits && sdef.traits.length) {
       const T = D().TRAITS;
@@ -2647,15 +2652,37 @@
       }
     }
     if (sdef.sellPrice > 0) lines.push(`판매가: ${fmtGold(sdef.sellPrice)}`);
-    if (sdef.tierKey) { const t = D().ITEM_TIERS.find(x => x.key === sdef.tierKey); if (t) lines.push(`◆ ${t.name.toUpperCase()}`); }
+    // V90: 실제 스카이블럭 등급 푸터 = "RARITY CATEGORY"(예: LEGENDARY SWORD)
+    if (sdef.tier && sdef.category) lines.push(`◆ ${String(sdef.tier).replace(/_/g, ' ')} ${String(sdef.category).replace(/_/g, ' ')}`);
+    else if (sdef.tierKey) { const t = D().ITEM_TIERS.find(x => x.key === sdef.tierKey); if (t) lines.push(`◆ ${t.name.toUpperCase()}`); }
     else if (canUseHotbar) lines.push('◆ COMMON');
     return lines.join('\n');
   }
+  // V90: 실제 스카이블럭 스탯 표기(공식 API 스탯키 → 심볼/한글명/퍼센트여부). 순서 = 실제 로어 순서.
+  const STAT_DISPLAY = {
+    damage: { sym: '⚔', kr: '데미지' }, strength: { sym: '❁', kr: '힘' },
+    crit_chance: { sym: '☣', kr: '치명타 확률', pct: 1 }, crit_damage: { sym: '☠', kr: '치명타 피해', pct: 1 },
+    critChance: { sym: '☣', kr: '치명타 확률', pct: 1 }, critDamage: { sym: '☠', kr: '치명타 피해', pct: 1 },
+    health: { sym: '❤', kr: '생명력' }, hp: { sym: '❤', kr: '생명력' }, defense: { sym: '❈', kr: '방어력' },
+    true_defense: { sym: '❂', kr: '진짜 방어력' }, trueDefense: { sym: '❂', kr: '진짜 방어력' },
+    intelligence: { sym: '✎', kr: '지능' }, ferocity: { sym: '⫽', kr: '광포' },
+    attack_speed: { sym: '⚔', kr: '공격 속도', pct: 1 }, attackSpeed: { sym: '⚔', kr: '공격 속도', pct: 1 },
+    speed: { sym: '✦', kr: '이동 속도' }, walk_speed: { sym: '✦', kr: '이동 속도' },
+    sea_creature_chance: { sym: 'α', kr: '바다 생물 확률', pct: 1 }, seaCreatureChance: { sym: 'α', kr: '바다 생물 확률', pct: 1 },
+    magic_find: { sym: '✯', kr: '매직 파인드' }, magicFind: { sym: '✯', kr: '매직 파인드' },
+    mining_speed: { sym: '⸕', kr: '채굴 속도' }, miningSpeed: { sym: '⸕', kr: '채굴 속도' },
+    mining_fortune: { sym: '☘', kr: '채굴 행운' }, miningFortune: { sym: '☘', kr: '채굴 행운' },
+    farming_fortune: { sym: '☘', kr: '농사 행운' }, farmingFortune: { sym: '☘', kr: '농사 행운' },
+    foraging_fortune: { sym: '☘', kr: '벌목 행운' }, foragingFortune: { sym: '☘', kr: '벌목 행운' },
+    fishing_speed: { sym: '☂', kr: '낚시 속도' }, fishingSpeed: { sym: '☂', kr: '낚시 속도' },
+    swing_range: { sym: '⇄', kr: '휘두르기 범위' }, ability_damage_percent: { sym: '๑', kr: '능력 피해', pct: 1 },
+  };
+  const STAT_ORDER = ['damage', 'strength', 'crit_chance', 'critChance', 'crit_damage', 'critDamage', 'ability_damage_percent', 'health', 'hp', 'defense', 'true_defense', 'trueDefense', 'intelligence', 'ferocity', 'attack_speed', 'attackSpeed', 'speed', 'walk_speed', 'swing_range', 'sea_creature_chance', 'seaCreatureChance', 'magic_find', 'magicFind', 'mining_speed', 'miningSpeed', 'mining_fortune', 'miningFortune', 'farming_fortune', 'farmingFortune', 'foraging_fortune', 'foragingFortune', 'fishing_speed', 'fishingSpeed'].filter((v, i, a) => a.indexOf(v) === i);
   function ttAttr(keyOrDef) {
     const sdef = typeof keyOrDef === 'string' ? shopDef(keyOrDef) : keyOrDef;
     if (!sdef) return '';
     // V22-K: shopDef로 다시 찾을 수 있는 아이템은 알록달록 HTML 툴팁(data-ttk)으로
-    if (sdef.key && shopDef(sdef.key)) return ` data-ttk="${escHtml(sdef.key)}"`;
+    if (sdef.key && (shopDef(sdef.key) || equipItemDef(sdef.key))) return ` data-ttk="${escHtml(sdef.key)}"`;   // V90: 장비도 HTML 로어
     const lore = escHtml(itemLore(sdef));
     return ` data-tt="${lore}" title="${lore}"`;
   }
@@ -2663,9 +2690,13 @@
   const TT_LINE_COLOR = [
     [/^\[/, '#9aa0b4'],
     [/^공격력/, '#ff5555'], [/^방어력/, '#55ff55'], [/^체력/, '#ff5555'],
+    // V90: 실제 스블 스탯 심볼 색(공격계=적, 치명/지능=청, 방어/행운=녹)
+    [/^⚔|^❁|^⫽|^❤/, '#ff5555'], [/^☣|^☠|^✎|^α/, '#55ffff'], [/^❈|^❂|^☘|^๑/, '#55ff55'],
+    [/^✦|^⸕|^☂|^⇄/, '#ffe066'], [/^✯/, '#5cc8ff'],
     [/^◈/, '#e0a6ff'], [/^✦/, '#ffe066'],
     [/^장착 중|^✔/, '#7dff7d'],
-    [/^⚔|^⛏/, '#ff7b7b'], [/^채집 효율/, '#55ffff'], [/^판매가/, '#ffe066'],
+    [/^⛏/, '#ff7b7b'], [/^채집 효율/, '#55ffff'], [/^판매가/, '#ffe066'],
+    [/^획득/, '#ffb14d'],
   ];
   function tierColorOf(sdef) { const t = sdef && sdef.tierKey ? D().ITEM_TIERS.find(x => x.key === sdef.tierKey) : null; return t ? t.colorHex : '#ffffff'; }
   function itemLoreHTML(sdef) {
@@ -2694,7 +2725,7 @@
     if (!t) { richTTHide(); return; }
     let html = '';
     if (t.dataset.ttk) {
-      const sdef = shopDef(t.dataset.ttk);
+      const sdef = equipItemDef(t.dataset.ttk) || shopDef(t.dataset.ttk);   // V90: 장비는 풀스탯 def 우선(상점 def엔 스탯 없음)
       if (!sdef || !P) { richTTHide(); return; }
       html = itemLoreHTML(sdef);
     } else {   // V27-C: 커스텀 이름/설명 툴팁(메뉴 슬롯 등)
