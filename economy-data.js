@@ -197,6 +197,13 @@
     { key: 'fine', name: '파인', mul: 4 }, { key: 'flawless', name: '플로리스', mul: 8 }, { key: 'perfect', name: '퍼펙트', mul: 15 },
   ];
   const GEM_BASE = { hp: 12, str: 3, intelligence: 6, defense: 4, miningFortune: 5, farmingFortune: 5, critChance: 0.6, critDamage: 4, miningSpeed: 20, trueDefense: 2, pristine: 0.4 };   // V106: 앰버=채굴속도, 오팔=진방어, 토파즈=프리스틴(위키 실측)
+  // V111: 위키 실측 젬스톤 스탯값 — 전설(Legendary) 등급 기준, 품질 [러프,플로드,파인,플로리스,퍼펙트]
+  //   (실제는 아이템 희귀도별로 다르나 게임은 등급 비의존이라 엔드게임 표준인 전설 기준 채택)
+  const GEM_STAT_VALUES = {
+    hp: [5, 8, 10, 18, 24], defense: [5, 8, 10, 18, 24], str: [3, 4, 6, 10, 13],
+    intelligence: [6, 10, 11, 17, 24], miningFortune: [10, 14, 20, 27, 40],
+    miningSpeed: [20, 24, 36, 58, 80], trueDefense: [2, 3, 4, 8, 11], pristine: [0.4, 0.8, 1.2, 1.6, 2],
+  };
   // 아이템 등급별 젬 소켓 수
   const GEM_SLOTS_BY_TIER = { common: 0, uncommon: 0, rare: 1, epic: 1, legendary: 2, mythic: 2, ancient: 3, divine: 3, primal: 4 };
   // 리컴보뷸레이터 3000: 아이템 등급 1단계 상승(수치 +18%) — 실제 스블 상징 아이템
@@ -428,10 +435,10 @@
     { key: 'pet_egg_griffin', name: '펫 알: 그리핀', cost: 200, kind: 'item' },
     // V20: 젬스톤/리컴 — 정수로 교환(고급은 던전/슬레이어 드롭이 더 저렴)
     { key: 'recombobulator', name: '💠 리컴보뷸레이터 3000(등급↑ +18%)', cost: 300, kind: 'item' },
-    { key: 'gem_jasper_perfect', name: '💎 퍼펙트 재스퍼(힘+45)', cost: 120, kind: 'item' },
-    { key: 'gem_ruby_perfect', name: '💎 퍼펙트 루비(체력+180)', cost: 120, kind: 'item' },
-    { key: 'gem_sapphire_perfect', name: '💎 퍼펙트 사파이어(지력+90)', cost: 120, kind: 'item' },
-    { key: 'gem_amethyst_gem_perfect', name: '💎 퍼펙트 자수정(방어+60)', cost: 120, kind: 'item' },
+    { key: 'gem_jasper_perfect', name: '💎 퍼펙트 재스퍼(힘+13)', cost: 120, kind: 'item' },   /* V111: 실측 전설 기준 */
+    { key: 'gem_ruby_perfect', name: '💎 퍼펙트 루비(체력+24)', cost: 120, kind: 'item' },
+    { key: 'gem_sapphire_perfect', name: '💎 퍼펙트 사파이어(지력+24)', cost: 120, kind: 'item' },
+    { key: 'gem_amethyst_gem_perfect', name: '💎 퍼펙트 자수정(방어+24)', cost: 120, kind: 'item' },
     // V20-C: 펫 아이템(정수 교환)
     { key: 'petitem_tier_boost', name: '🐾 티어 부스트(펫 +10%)', cost: 250, kind: 'item' },
     { key: 'petitem_gold_claws', name: '🐾 황금 발톱(힘+30)', cost: 90, kind: 'item' },
@@ -1791,6 +1798,6 @@
     TALISMANS, MAGICAL_POWER, PETS, PET_ITEMS, PET_ABILITIES, PET_XP_BASE, PET_XP_EXP, PET_MAX_LEVEL,
     ENCHANTS, CHAOS_ENCHANT, RECIPES, MASTER_MODE,
     FAIRY_SOULS, BANK, DAILY_DEALS, DUNGEON_CLASSES, ZONES, EASTER_EGGS,
-    SKILL_XP_TABLE, SKILL_MAX_LEVEL, SKILL_MAX_BY, BASE_STATS, BASE_STATS2, GEM_TYPES, GEM_QUALITY, GEM_BASE, GEM_SLOTS_BY_TIER, RECOMB, ENCHANTED_RES, ENCHANTED_BLOCK_RES, SLAYER_XP_LEVELS, SLAYER_QUEST, VANILLA_NAMES,
+    SKILL_XP_TABLE, SKILL_MAX_LEVEL, SKILL_MAX_BY, BASE_STATS, BASE_STATS2, GEM_TYPES, GEM_QUALITY, GEM_BASE, GEM_STAT_VALUES, GEM_SLOTS_BY_TIER, RECOMB, ENCHANTED_RES, ENCHANTED_BLOCK_RES, SLAYER_XP_LEVELS, SLAYER_QUEST, VANILLA_NAMES,
   };
 })();
