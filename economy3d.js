@@ -8499,6 +8499,7 @@
     SPAWN_AREAS = SPAWN_AREAS.concat(added);
   }
   let mobs = [];               // {type,def,lv,elite,hp,maxHp,dmg,mesh,label,labelCv,area,state,tx,tz,atkCd,hitIdx,dead}
+  const NAMETAG_DIST = 22;     // V113: 실제 MC/스블처럼 근거리 이름표만 표시(먼 몹/NPC/플레이어 태그 숨김)
   let _spawnT = 0;
   function mkMobLabel(mob) {
     const cv = document.createElement('canvas'); cv.width = 256; cv.height = 64;
@@ -8860,6 +8861,7 @@
     for (let i = mobs.length - 1; i >= 0; i--) {
       const m = mobs[i];
       if (m.dead) continue;
+      if (m.label) { const _ld = Math.hypot(P.x - m.mesh.position.x, P.z - m.mesh.position.z); m.label.visible = _ld < NAMETAG_DIST; }   // V113: 근거리만 이름표
       if (m.ghost) {   // 파티 게스트: 호스트 스냅샷 보간
         if (m.tx3 != null) {
           const k = 1 - Math.exp(-dt * 10);
@@ -9196,7 +9198,7 @@
     const h = buildHumanoid(0x2b6cb0);   // 파란 스킨 = 다른 플레이어
     const tag = makeLabel(String(name || 'Player').slice(0, 12));
     tag.position.set(0, 2.35, 0);
-    h.group.add(tag);
+    h.group.add(tag); h.tag = tag;   // V113: 근거리 이름표 컬링용 참조
     // V11: 장비 오버레이(투구/흉갑/레깅스/부츠 색 + 손 무기) — 프레즌스 g 패킷으로 갱신
     const gearGrp = new THREE.Group();
     h.group.add(gearGrp);
@@ -9248,6 +9250,7 @@
     for (const id in others) {
       const o = others[id]; if (o.tx == null) continue;
       const k = 1 - Math.exp(-dt * 12);
+      if (o.tag) o.tag.visible = Math.hypot(P.x - o.mesh.position.x, P.z - o.mesh.position.z) < 32;   // V113: 근거리 플레이어 이름표만(MC 32칸)
       const dist = Math.hypot(o.tx - o.mesh.position.x, o.tz - o.mesh.position.z);
       o.mesh.position.x += (o.tx - o.mesh.position.x) * k;
       o.mesh.position.y += (o.ty - o.mesh.position.y) * k;
