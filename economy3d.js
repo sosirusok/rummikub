@@ -3549,11 +3549,12 @@
     const def = WORLD_DEFS[mode] || WORLD_DEFS.hub;
     W = def.size[0]; H = def.size[1]; Dp = def.size[2];
     _mapWorldActive = false;
+    clearMapSpawnAreas();   // V98: 이전 맵 월드의 임포트 스폰 구역 정리(절차 월드 오염 방지)
     if (mode === 'home') genHome();
     else if (mode === 'visit') genHome(visitData && visitData.homeEdits);
     else if (worldCache[mode]) { const c = worldCache[mode]; world = c.world; W = c.W; H = c.H; Dp = c.Dp; }
     else if (mode === 'hub') genWorld();
-    else if (ISLAND_MAPS[mode] && genIslandFromMap(ISLAND_MAPS[mode])) { _mapWorldActive = true; buildWarpPads(); }   // 실제 섬 맵 파일 로드 성공 시(용량 초과면 false→절차 폴백) + 워프 패드 배치(탈출 가능)
+    else if (ISLAND_MAPS[mode] && genIslandFromMap(ISLAND_MAPS[mode])) { _mapWorldActive = true; buildWarpPads(); genMapSpawnAreas(mode); }   // 실제 섬 맵 파일 로드 성공 시(용량 초과면 false→절차 폴백) + 워프 패드 + 지형 맞춤 몹 스폰 재생성
     else if (def.gen) { def.gen(); scatterWorldDetail(mode); buildThemeStructures(mode); if (mode === 'park') buildParkGates(); }   // V16 데코 + V18-C 테마 건물 + V21-D2 파크 게이트(맨 마지막)
     if (mode === 'hub') resetPlayerToSpawn();
     else if (mode === 'home' || mode === 'visit') { P.x = 96.5; P.z = 104.5; P.y = surfaceTop(96, 104) + 0.02; P.yaw = Math.PI; }   // V13-A: 스폰섬
@@ -8427,6 +8428,40 @@
     { world: 'end', x: 64, z: 64, r: 16, types: ['hell_voidtyrant'], lv: [96, 96], cap: 1, respawn: 150, hellOnly: true },
     { world: 'deep', x: 48, z: 48, r: 14, y: 10, types: ['hell_abysswarden'], lv: [85, 85], cap: 1, respawn: 150, hellOnly: true },
   ]);
+  // V98: 실제 섬 맵(임포트) 전용 스폰 재생성 — 하드코딩 절차 좌표는 임포트 맵과 어긋나 몹이 안 나옴.
+  //   해당 섬의 몹 팔레트(types/lv)를 실제 지표 전역에 타일링 + 보스/미니보스는 맵 안쪽으로 재배치.
+  function clearMapSpawnAreas() { SPAWN_AREAS = SPAWN_AREAS.filter(a => !a._mapGen); }
+  function genMapSpawnAreas(wk) {
+    clearMapSpawnAreas();
+    const tmpl = SPAWN_AREAS.filter(a => a.world === wk && !a._mapGen);
+    if (!tmpl.length) return;
+    const field = tmpl.filter(a => a.cap >= 2 && !a.hellOnly);       // 일반 필드 몹(다수 스폰)
+    const special = tmpl.filter(a => a.cap === 1 || a.hellOnly);     // 보스/미니보스/드래곤/지옥
+    const types = [...new Set(field.flatMap(a => a.types))];
+    if (!types.length && !special.length) return;
+    let loMin = 99, loMax = 1;
+    field.forEach(a => { loMin = Math.min(loMin, a.lv[0]); loMax = Math.max(loMax, a.lv[1]); });
+    if (loMin > loMax) { loMin = 1; loMax = 5; }
+    const cx = W >> 1, cz = Dp >> 1, pad = 8, step = 44, added = [];
+    // 필드 스폰 구역을 맵 지표 전역에 격자 타일링(유효 지표만, 최대 44곳)
+    if (types.length) {
+      for (let x = pad; x < W - pad && added.length < 44; x += step) {
+        for (let z = pad; z < Dp - pad && added.length < 44; z += step) {
+          if (surfaceTop(x, z) <= SEA + 1) continue;                 // 물/공허 위는 스킵
+          added.push({ world: wk, x, z, r: 20, types, lv: [loMin, loMax], cap: 5, respawn: 10, _mapGen: true });
+        }
+      }
+    }
+    // 특수 구역(보스/미니보스/hellOnly)은 맵 안쪽 링으로 재배치해 유지(지표 스폰)
+    special.forEach((a, i) => {
+      const ang = i / Math.max(1, special.length) * Math.PI * 2;
+      const rx = Math.max(pad, Math.min(W - pad, Math.round(cx + Math.cos(ang) * Math.min(cx, cz) * 0.4)));
+      const rz = Math.max(pad, Math.min(Dp - pad, Math.round(cz + Math.sin(ang) * Math.min(cx, cz) * 0.4)));
+      const na = Object.assign({}, a, { x: rx, z: rz, _mapGen: true }); delete na.y;   // y 절차 좌표 제거 → 지표 탐색
+      added.push(na);
+    });
+    SPAWN_AREAS = SPAWN_AREAS.concat(added);
+  }
   let mobs = [];               // {type,def,lv,elite,hp,maxHp,dmg,mesh,label,labelCv,area,state,tx,tz,atkCd,hitIdx,dead}
   let _spawnT = 0;
   function mkMobLabel(mob) {
