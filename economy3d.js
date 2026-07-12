@@ -3549,7 +3549,7 @@
     P._portalT = 0; setPortalFx(false);   // V23-A: 포탈 울렁임 해제
     if (worldMode === 'dungeon' && mode !== 'dungeon') { dungeonState = null; partyGuestMode = false; }
     if (world && worldMode !== 'visit' && worldMode !== 'dungeon') {   // 현재 월드 캐시(널 월드 금지)
-      worldCache[worldMode] = { world, W, H, Dp, _at: (worldCache[worldMode] && worldCache[worldMode]._at || 0) + 1 };
+      worldCache[worldMode] = { world, W, H, Dp, _at: (worldCache[worldMode] && worldCache[worldMode]._at || 0) + 1, _map: _mapWorldActive };   // V101: 맵 월드 여부 캐시(재방문 복원용)
       // V12: 캐시 상한 — home + 최근 2개만 유지(대형 hub Uint8Array 무한 누적 방지)
       const keys = Object.keys(worldCache).filter(k => k !== 'home' && k !== worldMode);
       if (keys.length > 2) { keys.sort((a, b) => worldCache[a]._at - worldCache[b]._at); delete worldCache[keys[0]]; }
@@ -3566,7 +3566,7 @@
     clearMapSpawnAreas();   // V98: 이전 맵 월드의 임포트 스폰 구역 정리(절차 월드 오염 방지)
     if (mode === 'home') genHome();
     else if (mode === 'visit') genHome(visitData && visitData.homeEdits);
-    else if (worldCache[mode]) { const c = worldCache[mode]; world = c.world; W = c.W; H = c.H; Dp = c.Dp; }
+    else if (worldCache[mode]) { const c = worldCache[mode]; world = c.world; W = c.W; H = c.H; Dp = c.Dp; if (c._map) { _mapWorldActive = true; buildWarpPads(); genMapSpawnAreas(mode); } }   // V101: 캐시 재방문 시 맵 월드 플래그·워프·지형 맞춤 스폰 복원(공허 낙사/오스폰 회귀 방지)
     else if (mode === 'hub') genWorld();
     else if (ISLAND_MAPS[mode] && genIslandFromMap(ISLAND_MAPS[mode])) { _mapWorldActive = true; buildWarpPads(); genMapSpawnAreas(mode); }   // 실제 섬 맵 파일 로드 성공 시(용량 초과면 false→절차 폴백) + 워프 패드 + 지형 맞춤 몹 스폰 재생성
     else if (def.gen) { def.gen(); scatterWorldDetail(mode); buildThemeStructures(mode); if (mode === 'park') buildParkGates(); }   // V16 데코 + V18-C 테마 건물 + V21-D2 파크 게이트(맨 마지막)

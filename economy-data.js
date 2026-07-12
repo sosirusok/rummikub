@@ -821,10 +821,9 @@
     pet('enderman', '엔더맨', 'legendary', 'combat', { str: 1.4 }, '레벨당 힘 +1.4', 0),
     pet('ender_dragon', '엔더 드래곤', 'mythic', 'combat', { str: 1.5, def: 0.5, hp: 1.0 }, '레벨당 힘 +1.5, 방어 +0.5, 체력 +1', 0),
     pet('griffin', '그리핀', 'ancient', 'combat', { str: 2.0, def: 0.7, hp: 1.5 }, '레벨당 힘 +2, 방어 +0.7, 체력 +1.5', 0),
-      { key: 'spider', name: '거미 펫', tierKey: 'rare', skill: 'combat', eggPrice: 0, statsPerLv: { str: 0.4, def: 0.1 }, bonusText: '레벨당 힘 +0.4' },
-    { key: 'blaze', name: '블레이즈 펫', tierKey: 'epic', skill: 'combat', eggPrice: 0, statsPerLv: { str: 0.5, hp: 0.5 }, bonusText: '레벨당 힘 +0.5, 체력 +0.5' },
-    { key: 'enderman', name: '엔더맨 펫', tierKey: 'legendary', skill: 'combat', eggPrice: 0, statsPerLv: { str: 0.7 }, bonusText: '레벨당 힘 +0.7' },
-  ];
+    pet('spider', '거미 펫', 'rare', 'combat', { str: 0.4, def: 0.1 }, '레벨당 힘 +0.4, 방어 +0.1', 0),   // V101: statsPerLv 오타 스키마 → pet()(perLvl)로 교정(petStats 크래시 수정)
+    pet('blaze', '블레이즈 펫', 'epic', 'combat', { str: 0.5, hp: 0.5 }, '레벨당 힘 +0.5, 체력 +0.5', 0),
+  ];   // V101: 중복 'enderman' 펫(위 821행에 이미 존재) 제거 — 죽은 데이터 + 스키마 불일치
   // V20-C: 펫 아이템(활성 펫 1개 장착) — 실제 스카이블럭. mul=펫 기본 능력치 배율, stat=고정 스탯
   const PET_ITEMS = [
     { key: 'petitem_tier_boost', name: '펫: 티어 부스트', desc: '펫 기본 능력치 +10%', mul: 1.1 },
@@ -1752,6 +1751,13 @@
     any_log: ['oaklog', 'birchlog', 'sprucelog'],
     any_wool: DYES.map(d => 'wool_' + d.k),   // V21-E2: 침대 등 — 아무 색 양털
   };
+  // V101: 이름에 남은 MC 포맷 코드 제거 — API 원본을 그대로 복사하다 §색상코드/%%color%% 토큰이
+  //   6종 아이템 이름에 남아 렌더러가 파싱 못 하면 raw로 노출되던 문제(예: '§4Sin§5seeker Scythe').
+  const stripFmt = s => (typeof s === 'string') ? s.replace(/§[0-9a-fk-orA-FK-OR]/g, '').replace(/%%[a-z_]+%%/gi, '').replace(/\s{2,}/g, ' ').trim() : s;
+  [EQUIPMENT.weapons, EQUIPMENT.armor, EQUIPMENT.accessories, SHOP].forEach(list => (list || []).forEach(it => { if (it && it.name) it.name = stripFmt(it.name); }));
+  // V101: 카탈로그 중복행 제거(키 기준 첫 항목 유지) — SHOP 재료 중복 8종·pet_egg_enderman, BUILDER_SHOP wool_white/red 중복
+  const dedupByKey = arr => { if (!arr) return; const seen = new Set(); for (let i = 0; i < arr.length; i++) { const k = arr[i] && arr[i].key; if (k == null) continue; if (seen.has(k)) { arr.splice(i, 1); i--; } else seen.add(k); } };
+  dedupByKey(SHOP); if (typeof BUILDER_SHOP !== 'undefined') dedupByKey(BUILDER_SHOP);
   window.ECON_DATA = {
     PORTAL_ITEMS, CRAFT_GROUPS, SMELT_RECIPES,
     ITEM_TIERS, COLLECTIONS, COL_TIER_REWARDS, COL_TIER_FX, ENCH_COL_DISCOUNT, EXTRA_RES, SKILLS, BREWS, ATTRIBUTES, ATTR_LADDER, ATTR_HUNT_REQ, GATHER_TABLE, TOOLS, MINIONS, MINION_STORAGE_BASE, MINION_STORAGE_UPGRADED,
