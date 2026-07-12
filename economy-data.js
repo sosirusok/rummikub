@@ -427,7 +427,7 @@
       // V19-B/D: 최종층 F11 — 스블 최강(보이드글룸 T4 2.1억)을 능가하는 창세 용신 보스(10억 HP, 실제×4.8, 게임 최강)
       { floor: 11, hell: true, apex: true, mobList: ['천공 수호병', '용의 그림자'], bossName: '창세의 용신 오리진', bossHp: 1000000000, bossDmg: 2200, lootTable: ['fuming_potato_book', 'hyperion', 'astraea', 'enchant_book_one_for_all', 'enchant_book_soul_eater', 'recombobulator', 'gem_ruby_perfect', 'reforge_stone_apex'], essenceReward: 600 },
     ],
-    scoreThresholds: [ ['F', -Infinity], ['D', 0], ['C', 100], ['B', 160], ['A', 230], ['S', 270], ['S+', 300] ],
+    scoreThresholds: [ ['D', -Infinity], ['C', 100], ['B', 160], ['A', 230], ['S', 270], ['S+', 300] ],   // V131: 실제 던전 최저 등급 D(F 없음)
     roomTypes: ['전투방', '퍼즐방', '함정방', '미니보스방', '보물방'],
   };
   const DUNGEON_ROOM_SCORE = { combat: 40, puzzleSuccess: 30, puzzleFail: -14, miniboss: 50, treasure: 20, secretDoor: 40 };

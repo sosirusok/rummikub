@@ -317,7 +317,8 @@
   function mpStatMul() { return 1 + (magicalPower() / 10) * (D().MAGICAL_POWER.statPctPer10MP / 100); }
   // V20-I: 전능의 힘 — 선택한 힘이 마력에 비례해 스탯 부여(mpScale = MP^scaleExp)
   function selectedPowerDef() { const MP = D().MAGICAL_POWER; return (MP.powers || []).find(p => p.key === (P.selectedPower || 'none')) || MP.powers[0]; }
-  function mpScale() { const mp = magicalPower(); return mp > 0 ? Math.pow(mp, D().MAGICAL_POWER.scaleExp) : 0; }
+  // V131: 실제 스블 마력→파워스톤 배수 = 29.97 × ln(0.0019 × MP + 1) (기존 MP^0.6 과대 보정)
+  function mpScale() { const mp = magicalPower(); return mp > 0 ? 29.97 * Math.log(0.0019 * mp + 1) : 0; }
   function powerStats() {
     const out = { str: 0, def: 0, hp: 0, intelligence: 0, critChance: 0, critDamage: 0 };
     const pw = selectedPowerDef(); if (!pw || !pw.per) return out;
@@ -650,7 +651,7 @@
       trueDefense: (B2.trueDefense || 0) + (gs.trueDefense || 0) + setStat('trueDefense') + weaponStat('trueDefense') + attrBonus('trueDefense'),
       seaCreatureChance: (B2.seaCreatureChance || 0) + setStat('seaCreatureChance') + weaponStat('seaCreatureChance'),
     };
-    st.defense = Math.round(st.defense * mpStatMul());
+    st.defense = Math.round(st.defense);   // V131: 마력 직접 %부스트 폐기(실제 스블 — 마력은 파워스톤만 증폭)
     st.speed = Math.min(400, Math.round(st.speed));   // V126: 실측 이동속도 연성 상한 400
     st.mana = 100 + st.intelligence;                  // V126: 실측 최대 마나 = 100 + 지능
     st.hp = Math.round(st.hp);
@@ -671,14 +672,14 @@
     const bowBuff = (equippedPiece('bow') || (heldKey && api_isBowKeySafe(heldKey))) ? 1 + buffBonus('bowDmg') / 100 : 1;
     const hpPct = typeof window.economy3dHpPct === 'function' ? window.economy3dHpPct() : 1;
     const domMul = hpPct >= 0.999 ? 1 + attrBonus('dominance') / 100 : 1;   // V43: 지배 — 풀피에서만
-    const melee = flat * (1 + st.strength / 100) * additive * feroMul * mpStatMul() * bowBuff * domMul;
+    const melee = flat * (1 + st.strength / 100) * additive * feroMul * bowBuff * domMul;   // V131: 마력 직접 %부스트 제거(파워스톤만 증폭)
     // V19-D 밸런스: 아키타입별 어빌리티 데미지 — 캐스터=지력, 근접/원거리 버서크=힘 게이트.
     //   ability = 기본어빌리티 × max(0, 주스탯/100 − 1) × 스케일 × 가산 × 광포 × 마력
     //   주스탯 100 이하면 0(초반 무보정) → 오직 엔드게임(고스탯)에서만 수백만 딜. 세 계열 모두 각자 스탯으로 수렴.
     if (w && w.abilityDmg) {
       const primary = (w.abilityStat === 'str') ? st.strength : st.intelligence;
       const factor = Math.max(0, primary / 100 - 1);
-      const ability = w.abilityDmg * recombMul(w.key) * factor * (w.abilityScaling || 0.6) * additive * feroMul * mpStatMul();   // V20: 리컴 +18%
+      const ability = w.abilityDmg * recombMul(w.key) * factor * (w.abilityScaling || 0.6) * additive * feroMul;   // V20: 리컴 +18% · V131: 마력 %부스트 제거
       return Math.max(melee, ability);
     }
     return melee;
@@ -3311,7 +3312,7 @@
     const owned = D().TALISMANS.filter(t => hasItem(t.key));
     const missing = D().TALISMANS.filter(t => !hasItem(t.key));
     const slot = (t, ownedFlag) => `<div class="mc-slot mc-menuslot ${ownedFlag ? '' : 'mc-locked'}" ${!ownedFlag && t.buyPrice > 0 ? `data-act="econ_buy" data-key="${t.key}"` : ''} data-ttn="${escHtml(t.name)}${ownedFlag ? ' ✔' : ''}" data-ttd="${escHtml(t.desc)}${!ownedFlag ? (t.buyPrice > 0 ? ` — 클릭: 구매 ${fmtGold(t.buyPrice)}` : ' — 보스/퀘스트 보상') : ''}">${iconImg(t.key)}</div>`;
-    return `<div class="mc-chest"><div class="mc-chesttitle">📿 장신구 가방 — 마력 ${magicalPower()} (최종 공격/방어 +${((mpStatMul() - 1) * 100).toFixed(1)}%)</div>
+    return `<div class="mc-chest"><div class="mc-chesttitle">📿 장신구 가방 — 마력 ${magicalPower()} (선택한 파워스톤 스탯 ×${mpScale().toFixed(1)} 증폭 — 실제 스블)</div>
       <p class="muted">✨ 전능의 힘: <b>${curPw.name}</b> (스케일 ${Math.round(mpScale())} → ${pwLine})</p>
       <div class="econ-tierbtns" style="margin-bottom:8px">${powerBtns}</div>
       <div class="mc-chesttitle">보유 장신구</div>
