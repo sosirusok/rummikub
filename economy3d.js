@@ -6922,6 +6922,18 @@
       group.add(m);
     }
   }
+  // V91: 업로드된 주민 직업 스킨(entity/*.png)을 NPC 얼굴에 적용
+  const NPC_SKIN = {
+    shopkeeper: 'villager', bankTeller: 'villager', minionManager: 'toolsmith', petKeeper: 'shepherd',
+    enchanter: 'librarian', auctioneer: 'cartographer', gladiator: 'weaponsmith', reforgeSmith: 'toolsmith',
+    guide: 'villager', craftsman: 'toolsmith', builder: 'mason', starSmith: 'weaponsmith',
+    mineForeman: 'toolsmith', farmForeman: 'farmer', lumberjack: 'fletcher', fisherman: 'fisherman',
+    slayerMaster: 'butcher', dungeonGatekeeper: 'armorer',
+  };
+  function npcFacePlane(key) {
+    const sk = NPC_SKIN[key]; if (!sk) return null;
+    return faceSkinPlane({ src: 'entity/' + sk + '.png', c: [8, 8, 8, 8], p: [0, 1.62, 0.26], s: [0.48, 0.48] });
+  }
   function buildNpcMeshes() {
     npcGroup = new THREE.Group(); scene.add(npcGroup);
     buildPaintingMeshes(npcGroup);   // V32: painting 벽걸이(허브)
@@ -6929,6 +6941,7 @@
     NPCS.forEach(n => {
       if ((n.world || 'hub') !== worldMode) return;
       const h = buildHumanoid(npcLook(n.key, n.color), { merged: true });
+      const fp = npcFacePlane(n.key); if (fp) h.group.add(fp);
       n._y = npcGroundY(n.x, n.z);
       h.group.position.set(n.x + 0.5, n._y, n.z + 0.5);
       h.group.rotation.y = hash3(n.x, 5, n.z) * Math.PI * 2;
