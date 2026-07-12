@@ -349,7 +349,7 @@
   const SLAYER_XP_LEVELS = [5, 15, 200, 1000, 5000, 20000, 100000, 400000, 1000000];
   const SLAYER_QUEST = { killsNeeded: [5, 10, 15, 20, 25], xpPerTier: [5, 25, 100, 500, 1500] };   // 티어별 처치 수/보스 XP
   const SLAYERS = [
-    { key: 'zombie_slayer', uniqueDrop: 'revenant_falchion', name: '좀비 슬레이어', flavor: '리븐넌트 호러', dropResource: 'rotten_flesh', tiers: mkSlayerTiers([500, 20000, 400000, 1500000, 10000000], 25, 5, 300, 1, [
+    { key: 'zombie_slayer', uniqueDrop: 'reaper_scythe', name: '좀비 슬레이어', flavor: '리븐넌트 호러', dropResource: 'rotten_flesh', tiers: mkSlayerTiers([500, 20000, 400000, 1500000, 10000000], 25, 5, 300, 1, [
       ['rotten_flesh', 'reforge_stone_common', 'talisman_zombie'],
       ['rotten_flesh', 'enchant_book_sharpness', 'talisman_campfire'],
       ['rotten_flesh', 'weapon_epic', 'enchant_book_growth'],
@@ -471,7 +471,7 @@
     { key: 'juju_shortbow', name: '주주 단궁', wclass: 'bow', tierKey: 'legendary', dmg: 310, str: 40, critChance: 10, critDamage: 110, buyPrice: 0, sellPrice: 30000 },
     { key: 'terminator_bow', name: '터미네이터', wclass: 'bow', tierKey: 'mythic', dmg: 300, str: 130, critChance: 25, critDamage: 40, buyPrice: 0, sellPrice: 45000 },
     // V10: 슬레이어 계열 전용 유니크 무기(보스 티어2+ 희귀 드롭)
-    { key: 'revenant_falchion', name: '리븐넌트 팔션', wclass: 'sword', tierKey: 'epic', dmg: 120, str: 40, buyPrice: 0, sellPrice: 3200 },
+    { key: 'reaper_scythe', name: '리븐넌트 팔션', wclass: 'sword', tierKey: 'epic', dmg: 120, str: 40, buyPrice: 0, sellPrice: 3200 },
     { key: 'scorpion_foil', name: '스콜피온 포일', wclass: 'sword', tierKey: 'epic', dmg: 130, critChance: 15, buyPrice: 0, sellPrice: 4200 },
     { key: 'pooch_sword', name: '푸치 소드', wclass: 'sword', tierKey: 'legendary', dmg: 160, str: 60, buyPrice: 0, sellPrice: 9000 },
     { key: 'voidedge_katana', name: '보이드엣지 카타나', wclass: 'sword', tierKey: 'mythic', dmg: 200, str: 80, critDamage: 30, buyPrice: 0, sellPrice: 18000 },

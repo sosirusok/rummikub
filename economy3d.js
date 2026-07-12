@@ -8195,7 +8195,7 @@
     zealot: { name: '젤롯', kind: 'tall', color: 0x2a1a3a, hp: 655, dmg: 63, xp: 6, coins: 2, speed: 2.6, books: ['ender_slayer', 'last_stand', 'true_protection'], drops: [{ key: 'ender_pearl', n: 2 }, { key: 'ender_shard', n: 2 }, { key: 'enchanted_ender_pearl', n: 1, chance: 0.02 }, { key: 'summoning_eye', n: 1, chance: 1 / 420 }, { key: 'talisman_void_eye', n: 1, chance: 0.01 }], tierCap: 5 },   // V80: 위키 — 엔더진주100%+인챈티드2%+소환의눈1/420
     obsidian_defender: { name: '흑요석 수호자', kind: 'tall', color: 0x2a2040, hp: 500, dmg: 29, xp: 30, coins: 8, speed: 1.8, books: ['protection', 'hardened'], drops: [{ key: 'obsidian', n: 2 }], tierCap: 5 },
     watcher: { name: '워처', kind: 'tall', color: 0x3a2a52, hp: 480, dmg: 72, xp: 32, coins: 8, speed: 2.4, books: ['venomous'], drops: [{ key: 'ender_shard', n: 1 }, { key: 'ender_pearl', n: 1, chance: 0.4 }], tierCap: 5 },
-    ender_dragon: { name: '엔더 드래곤', kind: 'dragon', color: 0x1a0a2a, hp: 45000, dmg: 220, xp: 500, coins: 300, scale: 1.0, books: ['dragon_hunter', 'growth', 'venomous'], drops: [{ key: 'ender_pearl', n: 8 }, { key: 'aspect_of_the_dragons', n: 1, chance: 0.08 }, { key: 'pet_egg_ender_dragon', n: 1, chance: 0.04 }, { key: 'talisman_dragon_claw', n: 1, chance: 0.06 }, { key: 'talisman_dragon_heart', n: 1, chance: 0.03 }], tierCap: 6 },
+    ender_dragon: { name: '엔더 드래곤', kind: 'dragon', color: 0x1a0a2a, hp: 9000000, dmg: 1100, hpAnchors: [[100, 9000000]], dmgAnchors: [[100, 1100]], xp: 500, coins: 300, scale: 1.0, books: ['dragon_hunter', 'growth', 'venomous'], drops: [{ key: 'ender_pearl', n: 8 }, { key: 'aspect_of_the_dragon', n: 1, chance: 0.08 }, { key: 'pet_egg_ender_dragon', n: 1, chance: 0.04 }, { key: 'talisman_dragon_claw', n: 1, chance: 0.06 }, { key: 'talisman_dragon_heart', n: 1, chance: 0.03 }], tierCap: 6 },
     sea_walker: { name: '바다 보행자', kind: 'humanoid', color: 0x2a6a8a, hp: 300, dmg: 25, xp: 20, coins: 6, speed: 1.6, books: ['vampirism', 'protection'], drops: [{ key: 'prismarine', n: 2 }, { key: 'talisman_deep_pearl', n: 1, chance: 0.02 }, { key: 'pet_egg_squid', n: 1, chance: 0.01 }], tierCap: 3 },
     cow: { name: '소', kind: 'quad', color: 0x4a3a2c, hp: 50, dmg: 0, xp: 4, coins: 2, speed: 1.0, passive: true, books: [], drops: [{ key: 'raw_beef', n: 1 }, { key: 'leather', n: 1 }], tierCap: 0 },   // V75: 위키 — 생소고기+가죽 100%
     pig: { name: '돼지', kind: 'quad', color: 0xe6a8ad, hp: 45, dmg: 0, xp: 4, coins: 2, speed: 1.0, passive: true, books: [], drops: [{ key: 'raw_porkchop', n: 1 }], tierCap: 0 },   // V75: 위키 — 생돼지고기 100%
@@ -8222,19 +8222,21 @@
   // 좀비 라인 보강
   MOB_TYPES.zombie_villager = { name: '좀비 주민', kind: 'humanoid', color: 0x5a7a3a, hp: 120, dmg: 24, xp: 7, coins: 1, speed: 1.7, drops: [{ key: 'rotten_flesh', n: 1 }, { key: 'carrot', n: 1, chance: 1 / 10 }], tierCap: 1 };
   // 엔더 드래곤 8종(실제 유형 + 신성) — 서로 다른 레벨/체력/드롭률
+  // 엔더 드래곤(용의 둥지) — 실제 위키(wiki.hypixel.net) HP·데미지 그대로. 레벨 100 고정.
+  // [key, 이름, 색, 고정레벨, 실제HP, 실제데미지, 드롭확률1, 드롭확률2]
   const DRAGON_TYPES = [
-    ['protector_dragon', '프로텍터 드래곤', 0x8a94b8, 80, 30000, 160, 1 / 60, 1 / 120],
-    ['old_dragon', '올드 드래곤', 0x9a8a6a, 90, 42000, 180, 1 / 55, 1 / 110],
-    ['wise_dragon', '와이즈 드래곤', 0x54c8e8, 100, 36000, 200, 1 / 50, 1 / 100],
-    ['unstable_dragon', '언스테이블 드래곤', 0x1a1a2a, 110, 38000, 240, 1 / 45, 1 / 90],
-    ['young_dragon', '영 드래곤', 0xdadde0, 120, 34000, 220, 1 / 45, 1 / 90],
-    ['strong_dragon', '스트롱 드래곤', 0xc0392b, 130, 48000, 280, 1 / 35, 1 / 70],
-    ['superior_dragon', '슈페리어 드래곤', 0xf2d75c, 150, 60000, 340, 1 / 20, 1 / 40],
-    ['holy_dragon', '홀리 드래곤', 0xfff4d8, 200, 90000, 400, 1 / 12, 1 / 25],
+    ['young_dragon', '영 드래곤', 0xdadde0, 100, 7500000, 1100, 1 / 45, 1 / 90],
+    ['protector_dragon', '프로텍터 드래곤', 0x8a94b8, 100, 9000000, 1100, 1 / 60, 1 / 120],
+    ['unstable_dragon', '언스테이블 드래곤', 0x1a1a2a, 100, 9000000, 1100, 1 / 45, 1 / 90],
+    ['strong_dragon', '스트롱 드래곤', 0xc0392b, 100, 9000000, 1100, 1 / 35, 1 / 70],
+    ['wise_dragon', '와이즈 드래곤', 0x54c8e8, 100, 9000000, 2200, 1 / 50, 1 / 100],
+    ['superior_dragon', '슈페리어 드래곤', 0xf2d75c, 100, 12000000, 1650, 1 / 20, 1 / 40],
+    ['old_dragon', '올드 드래곤', 0x9a8a6a, 100, 15000000, 1100, 1 / 55, 1 / 110],
+    ['holy_dragon', '홀리 드래곤(+α)', 0xfff4d8, 200, 20000000, 2600, 1 / 12, 1 / 25],   // α(실제 미존재 유형)
   ];
   DRAGON_TYPES.forEach(dt => {
-    MOB_TYPES[dt[0]] = { name: dt[1], kind: 'dragon', color: dt[2], hp: Math.round(dt[4] / (1 + (dt[3] - 1) * 0.35)), dmg: Math.round(dt[5] / (1 + (dt[3] - 1) * 0.35) * 3), xp: 40, coins: 30, speed: 2.8,
-      drops: [{ key: 'ender_pearl', n: 8 }, { key: 'aspect_of_the_dragons', n: 1, chance: dt[6] }, { key: 'pet_egg_ender_dragon', n: 1, chance: dt[7] / 4 }, { key: 'talisman_dragon_claw', n: 1, chance: dt[7] }, { key: 'talisman_dragon_heart', n: 1, chance: dt[7] / 2 }], tierCap: 6, fixedLv: dt[3] };
+    MOB_TYPES[dt[0]] = { name: dt[1], kind: 'dragon', color: dt[2], hp: dt[4], dmg: dt[5], hpAnchors: [[dt[3], dt[4]]], dmgAnchors: [[dt[3], dt[5]]], xp: 40, coins: 30, speed: 2.8,
+      drops: [{ key: 'ender_pearl', n: 8 }, { key: 'aspect_of_the_dragon', n: 1, chance: dt[6] }, { key: 'pet_egg_ender_dragon', n: 1, chance: dt[7] / 4 }, { key: 'talisman_dragon_claw', n: 1, chance: dt[7] }, { key: 'talisman_dragon_heart', n: 1, chance: dt[7] / 2 }], tierCap: 6, fixedLv: dt[3] };
   });
   // 던전 몹 105종 생성(층 7 × 원형 15) — 층이 오를수록 강하고 드롭률 상이
   const DG_ARCHETYPES = [
