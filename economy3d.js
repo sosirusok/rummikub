@@ -5995,7 +5995,7 @@
     return true;
   }
   function spawnDungeonMob(opt) {
-    const def = { name: opt.name, kind: opt.kind || 'humanoid', color: opt.color || 0x3a7d3a, hp: opt.hp, dmg: opt.dmg, xp: 10 + opt.lv, coins: 8 + opt.lv, speed: 2.0, drops: [{ key: 'dungeon_essence', n: 1, chance: 0.25 }], tierCap: Math.min(6, dungeonState ? dungeonState.floor : 2) };
+    const def = { name: opt.name, kind: opt.kind || 'humanoid', color: opt.color || 0x3a7d3a, hp: opt.hp, dmg: opt.dmg, fixedStats: true, xp: 10 + opt.lv, coins: 8 + opt.lv, speed: 2.0, drops: [{ key: 'dungeon_essence', n: 1, chance: 0.25 }], tierCap: Math.min(6, dungeonState ? dungeonState.floor : 2) };   // V96: 던전 보스/미니보스 HP는 fd.bossHp 등 확정값 — 레벨배수 이중적용 금지(F7 네크론 1.2M이 30M로 폭주하던 버그)
     const area = { x: opt.x, z: opt.z, r: 6, world: 'dungeon' };
     const mob = spawnMob(area, '_custom', opt.lv, def);
     if (mob) { mob.dungeonRoom = opt.roomIdx; mob.isBoss = !!opt.isBoss; }
@@ -8262,15 +8262,15 @@
     // ── 허브 ──  books: 이 몹이 떨어뜨리는 인챈트북(V7: 북은 몹 드롭 전용)
     zombie: { name: '좀비', kind: 'humanoid', color: 0x3a7d3a, hp: 100, dmg: 20, hpAnchors: [[1, 100], [15, 707]], dmgAnchors: [[1, 20], [15, 111]], xp: 6, coins: 1, speed: 1.7, books: ['sharpness', 'smite'], drops: [{ key: 'rotten_flesh', n: 1 }, { key: 'poisonous_potato', n: 1, chance: 0.02 }, { key: 'potato', n: 1, chance: 0.01 }, { key: 'carrot', n: 1, chance: 0.01 }], tierCap: 1 },   // V77 드롭 + V81 위키 HP/공격 앵커(L1~15)
     skeleton: { name: '스켈레톤', kind: 'humanoid', color: 0xcccccc, hp: 100, dmg: 15, hpAnchors: [[1, 100], [15, 707]], dmgAnchors: [[1, 15], [15, 83]], xp: 7, coins: 1, speed: 1.8, books: ['critical', 'prosecute'], drops: [{ key: 'bone', n: 1 }, { key: 'bone', n: 2, chance: 0.5 }], tierCap: 1 },   // V77 드롭 + V81 위키 HP/공격 앵커(L1~15)
-    crypt_ghoul: { name: '크립트 구울', kind: 'humanoid', color: 0x5a8a5a, hp: 2000, dmg: 31, gear: { sword: 0xf7d84a }, xp: 25, coins: 15, speed: 2.2, books: ['giant_killer', 'execute'], drops: [{ key: 'rotten_flesh', n: 3 }, { key: 'gold', n: 1, chance: 0.25 }], tierCap: 3 },
-    golden_ghoul: { name: '골든 구울', kind: 'humanoid', color: 0xd8b23a, hp: 4500, dmg: 45, gear: { helmet: 0xf7d84a, sword: 0xf7d84a }, xp: 45, coins: 60, speed: 2.3, books: ['looting'], drops: [{ key: 'gold', n: 3 }, { key: 'talisman_wealth_rune', n: 1, chance: 0.02 }], tierCap: 4 },
-    wraith: { name: '레이스', kind: 'tall', color: 0x8a94b8, hp: 250, dmg: 38, xp: 30, coins: 10, speed: 2.6, books: ['life_steal'], drops: [{ key: 'gunpowder', n: 1 }, { key: 'bone', n: 2 }, { key: 'lapis', n: 2, chance: 0.3 }], tierCap: 3 },
+    crypt_ghoul: { name: '크립트 구울', kind: 'humanoid', color: 0x5a8a5a, hp: 2000, dmg: 31, fixedStats: true,   /* V96: 크립트 고정몹 — 위키 실HP 유지 */ gear: { sword: 0xf7d84a }, xp: 25, coins: 15, speed: 2.2, books: ['giant_killer', 'execute'], drops: [{ key: 'rotten_flesh', n: 3 }, { key: 'gold', n: 1, chance: 0.25 }], tierCap: 3 },
+    golden_ghoul: { name: '골든 구울', kind: 'humanoid', color: 0xd8b23a, hp: 4500, dmg: 45, fixedStats: true,   /* V96: 크립트 고정몹 */ gear: { helmet: 0xf7d84a, sword: 0xf7d84a }, xp: 45, coins: 60, speed: 2.3, books: ['looting'], drops: [{ key: 'gold', n: 3 }, { key: 'talisman_wealth_rune', n: 1, chance: 0.02 }], tierCap: 4 },
+    wraith: { name: '레이스', kind: 'tall', color: 0x8a94b8, hp: 250, dmg: 38, fixedStats: true,   /* V96: 묘지/크립트 고정몹(골든구울과 동일 구역) */ xp: 30, coins: 10, speed: 2.6, books: ['life_steal'], drops: [{ key: 'gunpowder', n: 1 }, { key: 'bone', n: 2 }, { key: 'lapis', n: 2, chance: 0.3 }], tierCap: 3 },
     rat: { name: '쥐', kind: 'quad', color: 0x6a6258, hp: 40, dmg: 8, xp: 3, coins: 1, speed: 3.0, scale: 0.45, books: [], drops: [{ key: 'rawfish', n: 1, chance: 0.3 }], tierCap: 0 },
     wolf: { name: '늑대', kind: 'quad', color: 0x9a9a9a, hp: 160, dmg: 20, xp: 10, coins: 4, speed: 2.8, books: ['first_strike', 'looting'], drops: [{ key: 'bone', n: 1 }, { key: 'talisman_wolf_claw', n: 1, chance: 0.015 }], tierCap: 2 },   // V78: 위키 — 뼈 1개
     old_wolf: { name: '올드 울프', kind: 'quad', color: 0x5a5a62, hp: 900, dmg: 80, xp: 60, coins: 25, speed: 3.0, scale: 1.4, books: ['first_strike', 'experience'], drops: [{ key: 'bone', n: 4 }], tierCap: 4 },
     slime: { name: '슬라임', kind: 'slime', color: 0x5ac26a, hp: 120, dmg: 14, xp: 8, coins: 2, speed: 1.4, books: ['magnet', 'big_brain'], drops: [{ key: 'emerald', n: 1, chance: 0.08 }], tierCap: 2 },
-    miner_zombie: { name: '광부 좀비', kind: 'humanoid', color: 0x7a6a4a, hp: 200, dmg: 28, gear: { helmet: 0xd8d8d4, tool: 0x9c7a44 }, xp: 15, coins: 5, speed: 1.8, books: ['efficiency'], drops: [{ key: 'iron', n: 1, chance: 0.4 }, { key: 'coal', n: 2, chance: 0.5 }], tierCap: 2 },
-    lapis_zombie: { name: '청금석 좀비', kind: 'humanoid', color: 0x2a4fc0, hp: 260, dmg: 32, gear: { helmet: 0x1f4fc0, chest: 0x1f4fc0 }, xp: 18, coins: 6, speed: 1.8, books: ['fortune'], drops: [{ key: 'lapis', n: 3 }], tierCap: 3 },
+    miner_zombie: { name: '광부 좀비', kind: 'humanoid', color: 0x7a6a4a, hp: 200, dmg: 28, fixedStats: true,   /* V96: 골드광산 명명 좀비 고정몹 */ gear: { helmet: 0xd8d8d4, tool: 0x9c7a44 }, xp: 15, coins: 5, speed: 1.8, books: ['efficiency'], drops: [{ key: 'iron', n: 1, chance: 0.4 }, { key: 'coal', n: 2, chance: 0.5 }], tierCap: 2 },
+    lapis_zombie: { name: '청금석 좀비', kind: 'humanoid', color: 0x2a4fc0, hp: 260, dmg: 32, fixedStats: true,   /* V96: 딥캐번 명명 좀비 고정몹 */ gear: { helmet: 0x1f4fc0, chest: 0x1f4fc0 }, xp: 18, coins: 6, speed: 1.8, books: ['fortune'], drops: [{ key: 'lapis', n: 3 }], tierCap: 3 },
     // V11: 지옥 난이도 전용 필드 보스 5종(hellOnly 구역 — 전용 장비 풀 hell_boss)
     hell_reaper: { name: '지옥 사신 카론', kind: 'tall', color: 0x1a0a0a, hp: 5200, dmg: 60, xp: 400, coins: 500, speed: 2.6, scale: 2.0, fixedLv: 88, hellBoss: true, equipSrc: 'hell_boss', equipSrcChance: 0.6, books: ['giant_killer', 'execute'], drops: [{ key: 'fuming_potato_book', n: 1, chance: 0.3 }, { key: 'ender_shard', n: 4 }], tierCap: 8 },
     hell_broodmatron: { name: '지옥 모충 니드호그', kind: 'spider', color: 0x3a0a14, hp: 4400, dmg: 52, xp: 360, coins: 450, speed: 3.0, scale: 1.9, fixedLv: 82, hellBoss: true, equipSrc: 'hell_boss', equipSrcChance: 0.6, books: ['venomous', 'triple_strike'], drops: [{ key: 'spider_eye', n: 6 }, { key: 'hot_potato_book', n: 1, chance: 0.4 }], tierCap: 8 },
@@ -8281,9 +8281,9 @@
     yeti: { name: '❄ 예티', kind: 'tall', color: 0xe8f2f6, hp: 2400, dmg: 31, xp: 150, coins: 200, speed: 2.2, scale: 1.9, fixedLv: 40, miniboss: true, books: ['giant_killer', 'protection'], drops: [{ key: 'yeti_fur', n: 1, chance: 0.34 }, { key: 'diamond', n: 3, chance: 0.5 }, { key: 'emerald', n: 2, chance: 0.3 }], tierCap: 5 },
     gold_golem: { name: '⛏ 골드 골렘', kind: 'tall', color: 0xd8b23a, hp: 2200, dmg: 29, xp: 130, coins: 240, speed: 1.6, scale: 1.7, fixedLv: 35, miniboss: true, books: ['fortune', 'efficiency'], drops: [{ key: 'golem_core', n: 1, chance: 0.34 }, { key: 'gold', n: 6 }, { key: 'emerald', n: 2, chance: 0.4 }], tierCap: 5 },
     mushroom_king: { name: '🍄 무쉬룸 킹', kind: 'quad', color: 0xa83232, hp: 1500, dmg: 21, xp: 90, coins: 120, speed: 2.0, scale: 1.8, fixedLv: 25, miniboss: true, books: ['growth', 'magnet'], drops: [{ key: 'mushroom_crown', n: 1, chance: 0.34 }, { key: 'pumpkin', n: 4 }, { key: 'melon', n: 5 }], tierCap: 4 },
-    redstone_pigman: { name: '레드스톤 피그맨', kind: 'humanoid', color: 0xc86a6a, hp: 400, dmg: 42, xp: 24, coins: 8, speed: 2.0, books: ['fortune', 'efficiency'], drops: [{ key: 'redstone', n: 3 }], tierCap: 3 },
-    diamond_zombie: { name: '다이아 좀비', kind: 'humanoid', color: 0x5decd5, hp: 700, dmg: 60, gear: { helmet: 0x5decd5, chest: 0x5decd5, sword: 0x5decd5 }, xp: 40, coins: 12, speed: 2.0, books: ['area_mining'], drops: [{ key: 'diamond', n: 1, chance: 0.5 }], tierCap: 4 },
-    diamond_skeleton: { name: '다이아 스켈레톤', kind: 'humanoid', color: 0x8aeade, hp: 650, dmg: 65, xp: 40, coins: 12, speed: 2.1, books: ['area_mining', 'critical'], drops: [{ key: 'diamond', n: 1, chance: 0.5 }], tierCap: 4 },
+    redstone_pigman: { name: '레드스톤 피그맨', kind: 'humanoid', color: 0xc86a6a, hp: 400, dmg: 42, fixedStats: true,   /* V96: 딥캐번 레드스톤 고정몹 */ xp: 24, coins: 8, speed: 2.0, books: ['fortune', 'efficiency'], drops: [{ key: 'redstone', n: 3 }], tierCap: 3 },
+    diamond_zombie: { name: '다이아 좀비', kind: 'humanoid', color: 0x5decd5, hp: 700, dmg: 60, fixedStats: true,   /* V96: 딥캐번 다이아 챔버 고정몹 */ gear: { helmet: 0x5decd5, chest: 0x5decd5, sword: 0x5decd5 }, xp: 40, coins: 12, speed: 2.0, books: ['area_mining'], drops: [{ key: 'diamond', n: 1, chance: 0.5 }], tierCap: 4 },
+    diamond_skeleton: { name: '다이아 스켈레톤', kind: 'humanoid', color: 0x8aeade, hp: 650, dmg: 65, fixedStats: true,   /* V96: 다이아 챔버 고정몹(다이아 좀비 쌍) */ xp: 40, coins: 12, speed: 2.1, books: ['area_mining', 'critical'], drops: [{ key: 'diamond', n: 1, chance: 0.5 }], tierCap: 4 },
     spider: { name: '거미', kind: 'spider', color: 0x3a3040, hp: 120, dmg: 35, hpAnchors: [[1, 120], [15, 849]], dmgAnchors: [[1, 35], [15, 194]], xp: 6, coins: 2, speed: 2.4, books: ['bane_of_arthropods', 'triple_strike'], drops: [{ key: 'string', n: 1 }, { key: 'spider_eye', n: 1, chance: 0.5 }], tierCap: 1 },   // V77 드롭 + V81 위키 HP/공격 앵커(L1~15)
     gravel_skeleton: { name: '자갈 스켈레톤', kind: 'humanoid', color: 0x7d7873, hp: 220, dmg: 30, xp: 16, coins: 5, speed: 1.9, books: ['prosecute'], drops: [{ key: 'gunpowder', n: 1 }, { key: 'bone', n: 2 }, { key: 'string', n: 2, chance: 0.3 }, { key: 'arachne_crystal', n: 1, chance: 1 / 120 }], tierCap: 2 },
     broodmother: { name: '브루드마더', kind: 'spider', color: 0x4a2050, hp: 6000, dmg: 90, xp: 150, coins: 80, speed: 2.2, scale: 2.4, books: ['bane_of_arthropods', 'rejuvenate'], drops: [{ key: 'string', n: 8 }, { key: 'talisman_spider_ring', n: 1, chance: 0.08 }], tierCap: 5 },
@@ -8293,10 +8293,10 @@
     magma_cube: { name: '마그마 큐브', kind: 'slime', color: 0xd2541f, hp: 350, dmg: 35, xp: 22, coins: 6, speed: 1.5, books: ['hardened', 'thorns'], drops: [{ key: 'magma_cream', n: 1 }, { key: 'blaze_rod', n: 1, chance: 0.15 }], tierCap: 3 },   // V79: 위키 — 마그마 크림 100%(컬렉션 공급원)
     pigman: { name: '피그맨', kind: 'humanoid', color: 0xe6a8ad, hp: 450, dmg: 48, xp: 28, coins: 8, speed: 2.1, books: ['vitality'], drops: [{ key: 'gold', n: 2, chance: 0.6 }], tierCap: 3 },
     enderman: { name: '엔더맨', kind: 'tall', color: 0x1a1a22, hp: 800, dmg: 60, hpAnchors: [[42, 4500], [45, 6000], [50, 9000]], dmgAnchors: [[42, 500], [45, 600], [50, 700]], xp: 40, coins: 8, speed: 2.6, books: ['ender_slayer', 'sugar_rush'], drops: [{ key: 'ender_pearl', n: 1, chance: 0.5 }], tierCap: 4 },   // V81: 위키 HP/공격 앵커(엔드 L42~50)
-    endermite: { name: '엔더마이트', kind: 'quad', color: 0x5a3a6a, hp: 320, dmg: 66, xp: 20, coins: 5, speed: 3.2, scale: 0.5, books: [], drops: [{ key: 'ender_shard', n: 1 }, { key: 'ender_pearl', n: 1, chance: 0.15 }], tierCap: 3 },
-    zealot: { name: '젤롯', kind: 'tall', color: 0x2a1a3a, hp: 655, dmg: 63, xp: 6, coins: 2, speed: 2.6, books: ['ender_slayer', 'last_stand', 'true_protection'], drops: [{ key: 'ender_pearl', n: 2 }, { key: 'ender_shard', n: 2 }, { key: 'enchanted_ender_pearl', n: 1, chance: 0.02 }, { key: 'summoning_eye', n: 1, chance: 1 / 420 }, { key: 'talisman_void_eye', n: 1, chance: 0.01 }], tierCap: 5 },   // V80: 위키 — 엔더진주100%+인챈티드2%+소환의눈1/420
-    obsidian_defender: { name: '흑요석 수호자', kind: 'tall', color: 0x2a2040, hp: 500, dmg: 29, xp: 30, coins: 8, speed: 1.8, books: ['protection', 'hardened'], drops: [{ key: 'obsidian', n: 2 }], tierCap: 5 },
-    watcher: { name: '워처', kind: 'tall', color: 0x3a2a52, hp: 480, dmg: 72, xp: 32, coins: 8, speed: 2.4, books: ['venomous'], drops: [{ key: 'ender_shard', n: 1 }, { key: 'ender_pearl', n: 1, chance: 0.4 }], tierCap: 5 },
+    endermite: { name: '엔더마이트', kind: 'quad', color: 0x5a3a6a, hp: 320, dmg: 66, fixedStats: true,   /* V96: 엔드 고정몹(공격력 폭주 수정) */ xp: 20, coins: 5, speed: 3.2, scale: 0.5, books: [], drops: [{ key: 'ender_shard', n: 1 }, { key: 'ender_pearl', n: 1, chance: 0.15 }], tierCap: 3 },
+    zealot: { name: '젤롯', kind: 'tall', color: 0x2a1a3a, hp: 655, dmg: 63, fixedStats: true,   /* V96: 엔드 Lv55 고정 파밍몹 — 위키 실HP 655 유지 */ xp: 6, coins: 2, speed: 2.6, books: ['ender_slayer', 'last_stand', 'true_protection'], drops: [{ key: 'ender_pearl', n: 2 }, { key: 'ender_shard', n: 2 }, { key: 'enchanted_ender_pearl', n: 1, chance: 0.02 }, { key: 'summoning_eye', n: 1, chance: 1 / 420 }, { key: 'talisman_void_eye', n: 1, chance: 0.01 }], tierCap: 5 },   // V80: 위키 — 엔더진주100%+인챈티드2%+소환의눈1/420
+    obsidian_defender: { name: '흑요석 수호자', kind: 'tall', color: 0x2a2040, hp: 500, dmg: 29, fixedStats: true,   /* V96: 엔드 Lv55 고정몹(워처 쌍) */ xp: 30, coins: 8, speed: 1.8, books: ['protection', 'hardened'], drops: [{ key: 'obsidian', n: 2 }], tierCap: 5 },
+    watcher: { name: '워처', kind: 'tall', color: 0x3a2a52, hp: 480, dmg: 72, fixedStats: true,   /* V96: 엔드 Lv55 고정몹(공격력 폭주 수정) */ xp: 32, coins: 8, speed: 2.4, books: ['venomous'], drops: [{ key: 'ender_shard', n: 1 }, { key: 'ender_pearl', n: 1, chance: 0.4 }], tierCap: 5 },
     ender_dragon: { name: '엔더 드래곤', kind: 'dragon', color: 0x1a0a2a, hp: 9000000, dmg: 1100, hpAnchors: [[100, 9000000]], dmgAnchors: [[100, 1100]], xp: 500, coins: 300, scale: 1.0, books: ['dragon_hunter', 'growth', 'venomous'], drops: [{ key: 'ender_pearl', n: 8 }, { key: 'aspect_of_the_dragon', n: 1, chance: 0.08 }, { key: 'pet_egg_ender_dragon', n: 1, chance: 0.04 }, { key: 'talisman_dragon_claw', n: 1, chance: 0.06 }, { key: 'talisman_dragon_heart', n: 1, chance: 0.03 }], tierCap: 6 },
     sea_walker: { name: '바다 보행자', kind: 'humanoid', color: 0x2a6a8a, hp: 300, dmg: 25, xp: 20, coins: 6, speed: 1.6, books: ['vampirism', 'protection'], drops: [{ key: 'prismarine', n: 2 }, { key: 'talisman_deep_pearl', n: 1, chance: 0.02 }, { key: 'pet_egg_squid', n: 1, chance: 0.01 }], tierCap: 3 },
     cow: { name: '소', kind: 'quad', color: 0x4a3a2c, hp: 50, dmg: 0, xp: 4, coins: 2, speed: 1.0, passive: true, books: [], drops: [{ key: 'raw_beef', n: 1 }, { key: 'leather', n: 1 }], tierCap: 0 },   // V75: 위키 — 생소고기+가죽 100%
@@ -8356,7 +8356,7 @@
     DG_ARCHETYPES.forEach((a, i) => {
       const base = 60 * Math.pow(2.1, f - 1) * a[3];
       MOB_TYPES[`dg_f${f}_${i}`] = {
-        name: `${a[0]} F${f}`, kind: a[1], color: a[2], hp: Math.round(base), dmg: Math.round(8 * Math.pow(1.75, f - 1) * a[3]),
+        name: `${a[0]} F${f}`, kind: a[1], color: a[2], hp: Math.round(base), dmg: Math.round(8 * Math.pow(1.75, f - 1) * a[3]), fixedStats: true,   // V96: 던전몹은 층 공식으로 HP 확정 — 스폰레벨 배수 이중적용 금지(마스터/지옥 배수는 커스텀def에서 별도 적용)
         xp: Math.round(6 * f * a[3]), coins: Math.round(2 * f * a[3]), speed: 1.8 + (i % 5) * 0.25,
         drops: [
           { key: 'dungeon_essence', n: 1, chance: 1 / (4 + i % 4) },
@@ -8628,12 +8628,12 @@
     const mul = 1 + (lv - 1) * 0.35;
     // V81: 위키 실측 HP/공격력 앵커 보간 — 레벨 범위 몹의 비선형 커브 재현(단일 선형 공식으로 불가)
     const anchorStat = (a, L) => {
-      if (L <= a[0][0]) { const [x0, y0] = a[0], [x1, y1] = a[1] || a[0]; return x1 === x0 ? y0 : y0 + (y1 - y0) * (L - x0) / (x1 - x0); }
+      if (L <= a[0][0]) { const [x0, y0] = a[0], [x1, y1] = a[1] || a[0]; return x1 === x0 ? y0 : Math.max(0, y0 + (y1 - y0) * (L - x0) / (x1 - x0)); }   // V96(C9): 첫 앵커 미만 하향 외삽이 음수 되지 않도록 클램프
       for (let i = 1; i < a.length; i++) if (L <= a[i][0]) { const [x0, y0] = a[i - 1], [x1, y1] = a[i]; return y0 + (y1 - y0) * (L - x0) / (x1 - x0); }
       const n = a.length, [x0, y0] = a[n - 2] || a[0], [x1, y1] = a[n - 1]; return x1 === x0 ? y1 : y0 + (y1 - y0) * (L - x0) / (x1 - x0);
     };
-    const baseHp = def.hpAnchors ? anchorStat(def.hpAnchors, lv) : def.hp * mul;
-    const baseDmg = def.dmgAnchors ? anchorStat(def.dmgAnchors, lv) : def.dmg * mul;
+    const baseHp = def.hpAnchors ? anchorStat(def.hpAnchors, lv) : (def.fixedStats ? def.hp : def.hp * mul);   // V96: 고정스탯 몹(던전/크립트/명명 좀비/엔드 고정)은 레벨배수 미적용 — 위키 실HP 유지
+    const baseDmg = def.dmgAnchors ? anchorStat(def.dmgAnchors, lv) : (def.fixedStats ? def.dmg : def.dmg * mul);   // V96
     const mob = {
       type: typeKey, def, lv, elite, rewardMul, weekly,
       maxHp: Math.round(Math.max(1, baseHp) * (elite ? 2.5 : 1) * hpMulD),
