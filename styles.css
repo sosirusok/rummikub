@@ -1364,6 +1364,18 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .econ3d-banner.show{opacity:1; transform:translateX(-50%) scale(1);}
 .econ3d-map{position:absolute; right:10px; top:52px; width:140px; height:140px; z-index:5; border:2px solid rgba(255,255,255,.35); border-radius:10px; background:#0a0e1a; opacity:.92; transition:width .2s,height .2s; image-rendering:pixelated;}
 .econ3d-map.is-big{width:320px; height:320px;}
+/* V114: 실제 스카이블럭 우측 스코어보드 사이드바 */
+.econ3d-scoreboard{position:absolute; right:10px; top:200px; z-index:5; pointer-events:none;
+  background:rgba(10,12,20,.5); padding:5px 10px 6px; border-radius:4px;
+  font-family:'Segoe UI',system-ui,sans-serif; font-size:12.5px; line-height:1.55; color:#fff;
+  text-shadow:1px 1px 0 rgba(0,0,0,.85); min-width:132px; max-width:190px;}
+.econ3d-scoreboard .sb-title{font-weight:900; color:#ffd23f; text-align:center; letter-spacing:1.5px; margin-bottom:2px; font-size:13.5px;}
+.econ3d-scoreboard .sb-line{white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.econ3d-scoreboard .sb-loc{color:#8be9fd;}
+.econ3d-scoreboard .sb-purse{color:#ffd23f;}
+.econ3d-scoreboard .sb-foot{color:#ffd23f;}
+.econ3d-scoreboard .sb-gap{height:7px;}
+@media (max-width:640px){ .econ3d-scoreboard{font-size:11px; top:180px; min-width:112px; padding:4px 7px;} }
 .econ-hubtabs{display:flex; flex-wrap:wrap; gap:6px; padding-bottom:8px; border-bottom:1px solid var(--line);}
 
 /* ---- 경제 V3: 게임풍 메뉴/상점 UI + 아이콘 + 강화/제작/던전 ---- */
