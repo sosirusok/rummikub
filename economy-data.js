@@ -252,16 +252,18 @@
   // 실제 스카이블럭처럼 11티어(위키: 미니언은 최대 11~12티어) — 고티어는 기하급수 골드 싱크
   // 실제 스카이블럭식: 미니언은 골드 구매가 아니라 "자원으로 조합"한다.
   //   T1 = 원자재 80개 · T2~T6 = 원자재 160/320/512/1024/2048 · T7~T11 = 인챈티드 자원 8/16/32/64/128
+  // V109: 실측 미니언 저장량 — 티어 밴드별(위키 그대로): I~II 64, III~V 192, VI~VII 320, VIII~IX 448, X~XI 576, XII 704
+  const MINION_STORAGE_BY_TIER = { 1: 64, 2: 64, 3: 192, 4: 192, 5: 192, 6: 320, 7: 320, 8: 448, 9: 448, 10: 576, 11: 576, 12: 704 };
   function mkMinionTiers(baseInterval, resource) {
     const rawCost = [80, 160, 320, 512, 1024, 2048];
     const tiers = [];
-    for (let t = 1; t <= 11; t++) {
+    for (let t = 1; t <= 12; t++) {   // V109: 티어 XII까지(실측 최대 티어)
       const mat = t <= 6 ? { key: resource, n: rawCost[t - 1] } : { key: `enchanted_${resource}`, n: 8 * Math.pow(2, t - 7) };
-      tiers.push({ tier: t, intervalSec: +(baseInterval * Math.pow(0.9, t - 1)).toFixed(1), craftCost: mat });
+      tiers.push({ tier: t, intervalSec: +(baseInterval * Math.pow(0.9, t - 1)).toFixed(1), craftCost: mat, storage: MINION_STORAGE_BY_TIER[t] });
     }
     return tiers;
   }
-  function minion(key, name, resource, baseInterval, baseCost) { return { key, name, resource, tiers: mkMinionTiers(baseInterval, resource), maxTier: 11, unlockCollection: resource }; }
+  function minion(key, name, resource, baseInterval, baseCost) { return { key, name, resource, tiers: mkMinionTiers(baseInterval, resource), maxTier: 12, unlockCollection: resource }; }
   const MINIONS = [
     minion('cobblestone_minion', '돌 미니언', 'stone', 27, 80),   /* V23-B: 생산 자원(돌)과 이름 일치 */
     minion('coal_minion', '석탄 미니언', 'coal', 27, 80),
@@ -869,7 +871,7 @@
     { key: 'smite', name: '강타', target: 'weapon', maxLvl: 7, fx: { dmgVs: 'zombie_slayer', v: 8 }, desc: '좀비 슬레이어 +8%/레벨', bookBasePrice: 800 },
     { key: 'bane_of_arthropods', name: '살충', target: 'weapon', maxLvl: 6, fx: { dmgVs: 'spider_slayer', v: 8 }, desc: '거미 슬레이어 +8%/레벨', bookBasePrice: 800 },
     { key: 'ender_slayer', name: '엔더 슬레이어', target: 'weapon', maxLvl: 7, fx: { dmgVs: 'enderman_slayer', v: 18 }, desc: '엔더맨 슬레이어 +18%/레벨(VII≈130%)', bookBasePrice: 1600 },
-    { key: 'cubism', name: '큐비즘', target: 'weapon', maxLvl: 6, fx: { dmgVs: 'blaze_slayer', v: 10 }, desc: '블레이즈 슬레이어 +10%/레벨', bookBasePrice: 1400 },
+    { key: 'cubism', name: '큐비즘', target: 'weapon', maxLvl: 6, fx: { dmgVs: 'cube', v: 10 }, desc: '큐브형 몹(슬라임·마그마 큐브) +10%/레벨', bookBasePrice: 1400 },   /* V109: 실측 — 큐비즘은 큐브형 몹 대상(블레이즈 슬레이어 아님) */
     { key: 'dragon_hunter', name: '용 사냥꾼', target: 'weapon', maxLvl: 5, fx: { dmgBoss: 8 }, desc: '던전 보스 +8%/레벨', bookBasePrice: 1800 },
     { key: 'thunderlord', name: '뇌제', target: 'weapon', maxLvl: 6, fx: { third: 15 }, desc: '3번째 공격마다 +15%/레벨', bookBasePrice: 1700 },
     { key: 'fire_aspect', name: '발화', target: 'weapon', maxLvl: 3, fx: { dmg: 3 }, desc: '레벨당 최종 피해 +3%', bookBasePrice: 700 },
@@ -890,7 +892,7 @@
     { key: 'rejuvenate', name: '재생', target: 'armor', maxLvl: 5, fx: { roomHeal: 3 }, desc: '던전 방 이동 회복 +3%p/레벨', bookBasePrice: 1200 },
     { key: 'last_stand', name: '최후의 저항', target: 'armor', maxLvl: 5, fx: { lastStand: 8 }, desc: '내 HP 30% 이하일 때 방어 +8/레벨', bookBasePrice: 1500 },
     { key: 'sugar_rush', name: '슈가 러시', target: 'armor', maxLvl: 3, fx: { speed: 4 }, desc: '이동속도 +4%/레벨(3D 월드)', bookBasePrice: 1000 },
-    { key: 'big_brain', name: '빅 브레인', target: 'armor', maxLvl: 5, fx: { xp: 5 }, desc: '전투 XP +5%/레벨', bookBasePrice: 1000 },
+    { key: 'big_brain', name: '빅 브레인', target: 'armor', maxLvl: 5, fx: { intelligence: 5 }, desc: '지력 +5/레벨', bookBasePrice: 1000 },   /* V109: 실측 — 빅 브레인은 지력 부여(XP 아님) */
     { key: 'magnet', name: '자석', target: 'armor', maxLvl: 5, fx: { coin: 5 }, desc: '전투 보상 골드 +5%/레벨', bookBasePrice: 900 },
     // ── 도구 3종 ──  fx: mineSpeed(채집 속도%), fortune(추가 드롭%), area(주변 블록 동시 파괴 개수)
     { key: 'efficiency', name: '효율', target: 'tool', maxLvl: 7, fx: { mineSpeed: 12 }, desc: '채집 속도 +12%/레벨', bookBasePrice: 800 },
