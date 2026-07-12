@@ -566,6 +566,45 @@
     applyHubRealAnchors();   // 게임플레이 레이어(구역/NPC/워프)를 실제 마을에 정렬
     buildWarpPads();         // 실제 맵엔 절차 워프링이 없으므로 패드만 배치
   }
+  /* 범용 섬 맵 로더 — economy-maps/map_<key>.bin 이 있으면 그 섬을 실제 맵으로 로드(없으면 절차 생성 폴백).
+     맵 파일(.bin)은 리소스팩 텍스처처럼 사용자가 직접 넣는다(에이전트가 커밋하지 않음). 포맷은 HMAP 동일. */
+  const ISLAND_MAP_FILES = { gold: 'map_gold.bin', deep: 'map_deep.bin', spider: 'map_spider.bin', end: 'map_end.bin', park: 'map_park.bin', barn: 'map_farming.bin', nether: 'map_crimson.bin', mushroom: 'map_mushroom.bin' };
+  const ISLAND_MAPS = {}, _islandMapPromises = {};
+  async function _parseMapFile(file) {
+    if (typeof fetch !== 'function' || typeof DecompressionStream === 'undefined') return null;
+    const resp = await fetch('economy-maps/' + file, { cache: 'force-cache' });
+    if (!resp.ok) return null;
+    const buf = new Uint8Array(await resp.arrayBuffer());
+    if (String.fromCharCode(buf[0], buf[1], buf[2], buf[3]) !== 'HMAP') return null;
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let p = 5;
+    const mW = dv.getUint16(p, true); p += 2; const mH = dv.getUint16(p, true); p += 2; const mD = dv.getUint16(p, true); p += 2;
+    const ox = dv.getInt16(p, true); p += 2; const oy = dv.getInt16(p, true); p += 2; const oz = dv.getInt16(p, true); p += 2;
+    const palCount = dv.getUint16(p, true); p += 2;
+    const dec = new TextDecoder(); const palette = [];
+    for (let i = 0; i < palCount; i++) { const len = buf[p++]; palette.push(dec.decode(buf.subarray(p, p + len))); p += len; }
+    const gzLen = dv.getUint32(p, true); p += 4;
+    const gz = buf.subarray(p, p + gzLen);
+    const stream = new Response(gz).body.pipeThrough(new DecompressionStream('gzip'));
+    const ab = await new Response(stream).arrayBuffer();
+    const grid = new Uint16Array(ab);
+    if (grid.length !== mW * mH * mD) return null;
+    return { W: mW, H: mH, D: mD, ox, oy, oz, palette, grid };
+  }
+  function loadIslandMap(key) {
+    if (ISLAND_MAPS[key]) return Promise.resolve(ISLAND_MAPS[key]);
+    const file = ISLAND_MAP_FILES[key]; if (!file) return Promise.resolve(null);
+    if (_islandMapPromises[key]) return _islandMapPromises[key];
+    _islandMapPromises[key] = (async () => { try { const m = await _parseMapFile(file); if (m) ISLAND_MAPS[key] = m; return m; } catch (e) { console.error('island map ' + key, e); return null; } })();
+    return _islandMapPromises[key];
+  }
+  function genIslandFromMap(M) {
+    W = M.W; H = M.H; Dp = M.D;
+    world = new Uint16Array(W * H * Dp);
+    const remap = new Int32Array(M.palette.length);
+    for (let i = 0; i < M.palette.length; i++) { const k = M.palette[i]; remap[i] = (k === 'air') ? 0 : (ID[k] != null ? ID[k] : ID.stone); }
+    const g = M.grid; for (let i = 0; i < g.length; i++) { const pi = g[i]; if (pi) world[i] = remap[pi]; }
+  }
   // 실제 허브 맵의 마을 광장(스폰) 기준으로 구역 라벨·NPC·워프 패드를 재배치
   let _hubAnchored = false;
   function applyHubRealAnchors() {
@@ -3485,9 +3524,11 @@
     else if (mode === 'visit') genHome(visitData && visitData.homeEdits);
     else if (worldCache[mode]) { const c = worldCache[mode]; world = c.world; W = c.W; H = c.H; Dp = c.Dp; }
     else if (mode === 'hub') genWorld();
+    else if (ISLAND_MAPS[mode]) { genIslandFromMap(ISLAND_MAPS[mode]); }   // 실제 섬 맵 파일이 있으면 그대로 로드
     else if (def.gen) { def.gen(); scatterWorldDetail(mode); buildThemeStructures(mode); if (mode === 'park') buildParkGates(); }   // V16 데코 + V18-C 테마 건물 + V21-D2 파크 게이트(맨 마지막)
     if (mode === 'hub') resetPlayerToSpawn();
     else if (mode === 'home' || mode === 'visit') { P.x = 96.5; P.z = 104.5; P.y = surfaceTop(96, 104) + 0.02; P.yaw = Math.PI; }   // V13-A: 스폰섬
+    else if (ISLAND_MAPS[mode]) { const cx = W >> 1, cz = Dp >> 1; P.x = cx + 0.5; P.z = cz + 0.5; P.y = surfaceTop(cx, cz) + 0.02; P.yaw = Math.PI; }   // 실제 섬 맵 중앙 지표
     else { const sp = def.spawn || [W >> 1, Dp >> 1]; P.x = sp[0] + 0.5; P.z = sp[1] + 0.5; P.y = surfaceTop(sp[0], sp[1]) + 0.02; P.yaw = Math.PI; }
     P.vx = P.vy = P.vz = 0;
     buildIslandMesh((mode === 'home' || mode === 'visit') ? HOME_BOUNDS : null);   // 플레이어 주변 청크부터 즉시 빌드
@@ -5741,7 +5782,9 @@
     P.vy = 13;   // 슈퍼 점프 연출
     warpCharge = null;
     const go = () => setTimeout(() => { if (running) travelTo(dest); }, 420);
-    if (dest === 'hub' && !HUB_MAP) loadHubMap().then(go); else go();   // 첫 허브 진입 전 실제 맵 로드 보장
+    if (dest === 'hub' && !HUB_MAP) loadHubMap().then(go);   // 첫 허브 진입 전 실제 맵 로드 보장
+    else if (ISLAND_MAP_FILES[dest] && !ISLAND_MAPS[dest]) loadIslandMap(dest).then(go);   // 실제 섬 맵 파일 있으면 로드
+    else go();
   }
   function tickWarpPads(dt) {
     const list = WARPS[worldMode] || [];
