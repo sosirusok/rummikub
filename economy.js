@@ -6,7 +6,7 @@
 (function () {
   const D = () => window.ECON_DATA;
   const SAVE_KEY = 'econ_save_v1';
-  let running = false, tickTimer = null, zone = 'hub', hubTab = 'shop', invFilter = 'all', invDetailKey = null, craftSel = null, bazaarCat = 'farming', bazaarQty = 16, ahDur = 6;
+  let running = false, tickTimer = null, zone = 'hub', hubTab = 'shop', invFilter = 'all', invDetailKey = null, craftSel = null, bazaarCat = 'farming', bazaarQty = 16, ahDur = 6, bestiaryPage = 0;   // V97: 도감 페이지(54종 초과 시 페이지네이션)
   // V21-B: Shift 상태 추적(인벤토리 Shift+클릭 = 즉시 핫바 이동, MC 표준) — 테스트 스텁 환경 가드
   if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
     document.addEventListener('keydown', e => { if (e.key === 'Shift') window.__shiftDown = true; });
@@ -690,7 +690,7 @@
   function playerDefensePct(lowHp) {
     let def = playerStats().defense;
     if (lowHp) def += enchSum('lastStand');   // 최후의 저항: 내 HP 30% 이하일 때만
-    return Math.min(0.9, def / (def + 100));
+    return Math.min(0.99, def / (def + 100));   // V97 C10: 실제 스블은 def/(def+100) 점근식 — 0.9 하드캡 제거(고방어가 계속 반영). 0.99는 무적 방지 안전선(공식상 1 미도달)
   }
   function playerMaxHp() { return playerStats().hp; }
 
@@ -2874,12 +2874,21 @@
     const entries = Object.keys(b).sort((x, y) => b[y] - b[x]);
     const pad9 = (arr) => { const out = arr.slice(); while (out.length % 9) out.push('<div class="mc-slot mc-empty2"></div>'); return out.join(''); };
     const nameOf = t => (typeof window !== 'undefined' && window.economy3dMobName) ? window.economy3dMobName(t) : t;
-    const slots = entries.slice(0, 54).map(k => {
+    // V97: 54종 페이지네이션 — 종이 54개를 넘으면 조용히 잘리던 버그(도감 상자 6줄). 페이지 이동으로 전 종 열람.
+    const PER = 54, pages = Math.max(1, Math.ceil(entries.length / PER));
+    if (bestiaryPage >= pages) bestiaryPage = pages - 1;
+    if (bestiaryPage < 0) bestiaryPage = 0;
+    const pg = bestiaryPage, start = pg * PER;
+    const slots = entries.slice(start, start + PER).map(k => {
       const n = b[k]; const stars = MS.filter(m => n >= m).length; const next = MS.find(m => n < m);
       return `<div class="mc-slot mc-menuslot" data-ttn="${escHtml(nameOf(k))} ${'★'.repeat(stars)}${'☆'.repeat(4 - stars)}" data-ttd="${fmtNum(n)}마리 처치 · ${next ? `다음 ★까지 ${fmtNum(next - n)}` : '정복 완료!'} · 100마리당 전투 피해 +0.5%"><span>📕</span><span class="mc-cnt">${n > 999 ? fmtNum(n) : n}</span></div>`;
     });
+    const pageNav = pages > 1 ? `<div class="mc-chestnav" style="justify-content:center;gap:10px;margin-top:6px">
+      <button class="btn btn--sm" data-act="econ_bestiary_page" data-key="prev" ${pg <= 0 ? 'disabled' : ''}>◀ 이전</button>
+      <span class="muted">${pg + 1} / ${pages} 쪽 (총 ${fmtNum(entries.length)}종)</span>
+      <button class="btn btn--sm" data-act="econ_bestiary_page" data-key="next" ${pg >= pages - 1 ? 'disabled' : ''}>다음 ▶</button></div>` : '';
     return `<div class="mc-chest"><div class="mc-chesttitle">📕 도감 — 종별 100마리당 전투 피해 +0.5% (현재 +${bestiaryBonusPct()}%)</div>
-      ${entries.length ? `<div class="mc-grid">${pad9(slots)}</div>` : '<p class="muted">아직 처치 기록이 없어요. 사냥을 시작해보세요!</p>'}
+      ${entries.length ? `<div class="mc-grid">${pad9(slots)}</div>${pageNav}` : '<p class="muted">아직 처치 기록이 없어요. 사냥을 시작해보세요!</p>'}
       ${chestNavRow('menu')}</div>`;
   }
   function skillsHTML() {
@@ -3864,7 +3873,8 @@
       case 'hubtab': hubTab = el.dataset.key; renderZone(); break;
       case 'col_detail': colDetailKey = colDetailKey === el.dataset.key ? null : el.dataset.key; renderZone(); break;   // V23-B: 컬렉션 전체 티어 상세 토글
       case 'buildbuy': buildBuy(el.dataset.key); break;
-      case 'menu': zone = 'hub'; hubTab = el.dataset.key; renderZone(); break;
+      case 'menu': zone = 'hub'; hubTab = el.dataset.key; if (el.dataset.key === 'bestiary') bestiaryPage = 0; renderZone(); break;
+      case 'bestiary_page': bestiaryPage += (el.dataset.key === 'next' ? 1 : -1); renderZone(); break;   // V97: 도감 페이지 이동
       case 'warp': if (typeof window.economy3dWarp === 'function') window.economy3dWarp(el.dataset.key); break;
       case 'gather': gather(el.dataset.key); break;
       case 'buy': buyItem(el.dataset.key); break;
