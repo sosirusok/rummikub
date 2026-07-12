@@ -6880,15 +6880,15 @@
     [-1, 1].forEach(s => { const m = mkBox(0.05, 0.16, 0.05, 0xf0a030, s * 0.07, 0.08, 0); g.add(m); legs.push(m); });
     return { group: g, legs };
   }
-  function makeLabel(text) {
-    // V126: 실제 MC 네임태그 — 텍스트 폭에 밀착한 반투명 배경(전체 박스 폐기), 픽셀 폰트 + 그림자
+  function makeLabel(text, color) {
+    // V126: 실제 MC 네임태그 — 텍스트 폭에 밀착한 반투명 배경(전체 박스 폐기), 픽셀 폰트 + 그림자. V133: 색 지정(NPC 노랑 등)
     const cv = document.createElement('canvas'); cv.width = 256; cv.height = 72; const c = cv.getContext('2d');
     const s = String(text || '');
     c.font = '26px "Minecraft", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
     const w = Math.min(248, c.measureText(s).width);
     c.fillStyle = 'rgba(0,0,0,0.28)'; c.fillRect(128 - w / 2 - 6, 24, w + 12, 26);
     c.fillStyle = 'rgba(0,0,0,0.85)'; c.fillText(s, 129.5, 38.5);
-    c.fillStyle = '#fff'; c.fillText(s, 128, 37);
+    c.fillStyle = color || '#fff'; c.fillText(s, 128, 37);
     const tex = new THREE.CanvasTexture(cv); tex.needsUpdate = true;
     const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
     spr.scale.set(1.7, 0.48, 1); return spr;
@@ -7029,7 +7029,7 @@
       n._y = npcGroundY(n.x, n.z);
       h.group.position.set(n.x + 0.5, n._y, n.z + 0.5);
       h.group.rotation.y = hash3(n.x, 5, n.z) * Math.PI * 2;
-      const label = makeLabel(n.name); label.position.set(0, 2.2, 0); h.group.add(label);
+      const label = makeLabel(n.name, '#ffe98a'); label.position.set(0, 2.2, 0); h.group.add(label);   // V133: 실제 스블 NPC 이름 노랑
       npcGroup.add(h.group);
     });
     // V13-B: 위치기반 퀘스트 NPC(느낌표 표식) — 현재 월드 소속만
@@ -9658,6 +9658,10 @@
   function updateHud() {
     const P0 = econApi().getP(); if (!P0) return;
     updateScoreboard();
+    // V133: 우상단 물약 효과 아이콘(실제 MC 버프 표시) — 이름 약어 + 잔여 mm:ss
+    const eff = document.getElementById('econ3dEffects');
+    if (eff) { const api0 = econApi(); const buffs = api0.activeBuffs ? api0.activeBuffs() : [];
+      eff.innerHTML = buffs.slice(0, 7).map(bf => { const t = Math.max(0, bf.left); const mm = Math.floor(t / 60), ss = t % 60; return `<div class="econ3d-eff"><span class="ef-ic">🧪</span><span class="ef-nm">${(bf.name || '').slice(0, 8)}</span><span class="ef-t">${mm}:${String(ss).padStart(2, '0')}</span></div>`; }).join(''); }
     const g = document.getElementById('econ3dGold'); if (g) g.textContent = '💰 ' + P0.gold.toLocaleString('ko-KR') + 'G';
     const pg = document.getElementById('econ3dPanelGold'); if (pg) pg.textContent = '💰 ' + P0.gold.toLocaleString('ko-KR') + 'G · 🏦 ' + (P0.bank || 0).toLocaleString('ko-KR') + 'G';
     // V24-E(감사 #14): XP 바 — 최근 획득 스킬의 레벨 내 진행도(실제 MC 경험치 바 위치)
@@ -9772,6 +9776,7 @@
         <button class="btn btn--ghost" data-act="backHome">✕</button>
       </div>
       <canvas id="econ3dMap" class="econ3d-map" width="140" height="140" data-act="econ3d_map"></canvas>
+      <div class="econ3d-effects" id="econ3dEffects"></div>
       <div class="econ3d-scoreboard" id="econ3dScoreboard"></div>
       <!-- V13-A: 핫바 밑 초록 체력바 제거 — 체력은 핫바 위 스탯 액션바에 표시 -->
       <div class="econ3d-statsrow" id="econ3dStats"></div>
