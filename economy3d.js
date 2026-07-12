@@ -369,6 +369,21 @@
     { id: 22, world: 'end', x: 64, z: 64, y: 6, hint: '드래곤 둥지 제단' },
     { id: 23, world: 'end', x: 64, z: 98, y: null, hint: '보이드 세펄처 꼭대기' },
   ];
+  // V112: 위키 실측 총 273개 — 수작업 배치(91개) 외 나머지를 각 월드에 결정적(deterministic) 분산 배치.
+  //   id 기반 고정 좌표(Math.random 미사용)로 세이브·재접속 간 위치 안정. surfaceTop로 지표에 안착 → 수집 가능.
+  (function fillFairySouls() {
+    const worlds = [['hub', 224, 224, 190], ['spider', 64, 64, 50], ['deep', 48, 48, 40], ['gold', 56, 46, 40], ['nether', 64, 64, 52], ['end', 64, 64, 60], ['park', 72, 82, 42], ['mushroom', 60, 72, 42], ['barn', 72, 72, 44]];
+    let id = FAIRY_SPOTS.reduce((mx, s) => Math.max(mx, s.id), -1) + 1;
+    while (FAIRY_SPOTS.length < 273) {
+      const w = worlds[id % worlds.length];
+      const ang = (id * 2.399963);                        // 황금각 유사 분산
+      const rad = w[3] * (0.22 + ((id * 0.618034) % 1) * 0.72);
+      const x = Math.round(w[1] + Math.cos(ang) * rad);
+      const z = Math.round(w[2] + Math.sin(ang) * rad);
+      FAIRY_SPOTS.push({ id, world: w[0], x, z, y: null, hint: w[0] + ' 요정 소울' });
+      id++;
+    }
+  })();
 
   /* ---------------- 상태 ---------------- */
   let running = false, contextLost = false, raf = 0, lastT = 0;
