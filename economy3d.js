@@ -9608,8 +9608,35 @@
     }
     if (msg !== _promptLast) { _promptLast = msg; el.textContent = msg; el.style.display = msg ? 'block' : 'none'; }
   }
+  // V114: 실제 스카이블럭 우측 스코어보드 — 시간/위치/소지금/은행/페어리소울
+  function sbTimeStr() {
+    const frac = (((worldTime % DAY_LEN) + DAY_LEN) % DAY_LEN) / DAY_LEN;
+    const totalMin = ((frac * 1440) + 360) % 1440;   // worldTime 0.25=정오 기준
+    let h = Math.floor(totalMin / 60); let m = Math.floor((totalMin % 60) / 10) * 10;   // 스블처럼 10분 단위
+    const icon = (h >= 6 && h < 18) ? '☀' : '☽';
+    const ap = h < 12 ? 'am' : 'pm'; let h12 = h % 12; if (h12 === 0) h12 = 12;
+    return `${icon} ${h12}:${String(m).padStart(2, '0')}${ap}`;
+  }
+  function updateScoreboard() {
+    const el = document.getElementById('econ3dScoreboard'); if (!el) return;
+    const P0 = econApi().getP(); if (!P0) return;
+    const loc = ((WORLD_DEFS[worldMode] || {}).name || '스카이블럭').replace(/\s*\([^)]*\)/, '');   // 괄호 부제 제거
+    const ED = window.ECON_DATA || {};
+    const total = (ED.FAIRY_SOULS && ED.FAIRY_SOULS.total) || 273;
+    const nsoul = P0.fairySouls ? P0.fairySouls.length : 0;
+    el.innerHTML = `<div class="sb-title">SKYBLOCK</div>`
+      + `<div class="sb-line">${sbTimeStr()}</div>`
+      + `<div class="sb-line sb-loc">⏣ ${loc}</div>`
+      + `<div class="sb-gap"></div>`
+      + `<div class="sb-line">Purse: <span class="sb-purse">${P0.gold.toLocaleString('en-US')}</span></div>`
+      + `<div class="sb-line">Bank: <span class="sb-purse">${(P0.bank || 0).toLocaleString('en-US')}</span></div>`
+      + `<div class="sb-line">Fairy Souls: ${nsoul}/${total}</div>`
+      + `<div class="sb-gap"></div>`
+      + `<div class="sb-foot">ⓢ 나의 스카이블럭</div>`;
+  }
   function updateHud() {
     const P0 = econApi().getP(); if (!P0) return;
+    updateScoreboard();
     const g = document.getElementById('econ3dGold'); if (g) g.textContent = '💰 ' + P0.gold.toLocaleString('ko-KR') + 'G';
     const pg = document.getElementById('econ3dPanelGold'); if (pg) pg.textContent = '💰 ' + P0.gold.toLocaleString('ko-KR') + 'G · 🏦 ' + (P0.bank || 0).toLocaleString('ko-KR') + 'G';
     const fs = document.getElementById('econ3dSouls'); if (fs) fs.textContent = '✨ ' + (P0.fairySouls ? P0.fairySouls.length : 0) + '/' + ((window.ECON_DATA && window.ECON_DATA.FAIRY_SOULS && window.ECON_DATA.FAIRY_SOULS.total) || 24);
@@ -9726,6 +9753,7 @@
         <button class="btn btn--ghost" data-act="backHome">✕</button>
       </div>
       <canvas id="econ3dMap" class="econ3d-map" width="140" height="140" data-act="econ3d_map"></canvas>
+      <div class="econ3d-scoreboard" id="econ3dScoreboard"></div>
       <!-- V13-A: 핫바 밑 초록 체력바 제거 — 체력은 핫바 위 스탯 액션바에 표시 -->
       <div class="econ3d-statsrow" id="econ3dStats"></div>
       <div class="econ3d-itemtitle" id="econ3dItemTitle"></div>
