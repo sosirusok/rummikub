@@ -669,7 +669,7 @@
   //   실제 id·이름·등급·스탯·요구·판매가 그대로. 무기 220 / 방어구 830 / 장신구 553 / 도구 152.
   const STAT_FIELDS = ['str', 'critDamage', 'critChance', 'hp', 'defense', 'trueDefense', 'intelligence', 'ferocity', 'attackSpeed', 'speed', 'seaCreatureChance', 'magicFind', 'miningSpeed', 'miningFortune', 'farmingFortune', 'foragingFortune', 'fishingSpeed', 'swingRange', 'abilityDamage'];
   function mergeReal(it, list, isWeapon) {
-    const e = { key: it.key, id: it.id, name: it.name, real: true, tierKey: it.tierKey, tier: it.tier,
+    const e = { key: it.key, id: it.id, name: it.name, real: true, tierKey: it.tierKey, tier: it.tier, category: it.category,
       buyPrice: 0, sellPrice: it.sellPrice || 0, reqCombat: it.reqCombat || 0, req: it.req || null, stats: it.stats || {} };
     for (const f of STAT_FIELDS) if (it[f] != null) e[f] = it[f];
     if (isWeapon) { e.wclass = it.wclass || 'sword'; e.slot = it.slot === 'bow' ? 'bow' : 'weapon'; e.dmg = it.dmg || 0; }
@@ -683,14 +683,14 @@
     const aByKey = {}; EQUIPMENT.armor.forEach(x => aByKey[x.key] = x);
     function upsert(it, isWeapon) {
       const ex = isWeapon ? wByKey[it.key] : aByKey[it.key];
-      if (ex) { ex.name = it.name; ex.id = it.id; ex.real = true; ex.tierKey = it.tierKey; ex.tier = it.tier; ex.sellPrice = it.sellPrice || ex.sellPrice || 0; ex.stats = it.stats || {}; ex.req = it.req || ex.req || null; if (it.reqCombat) ex.reqCombat = it.reqCombat;
+      if (ex) { ex.name = it.name; ex.id = it.id; ex.real = true; ex.tierKey = it.tierKey; ex.tier = it.tier; ex.category = it.category; ex.sellPrice = it.sellPrice || ex.sellPrice || 0; ex.stats = it.stats || {}; ex.req = it.req || ex.req || null; if (it.reqCombat) ex.reqCombat = it.reqCombat;
         for (const f of STAT_FIELDS) if (it[f] != null) ex[f] = it[f];
         if (isWeapon) { ex.wclass = it.wclass || ex.wclass || 'sword'; ex.slot = it.slot === 'bow' ? 'bow' : 'weapon'; ex.dmg = it.dmg || 0; } else { ex.slot = it.slot; ex.defense = it.defense || 0; ex.hp = it.hp || 0; }
       } else mergeReal(it, isWeapon ? EQUIPMENT.weapons : EQUIPMENT.armor, isWeapon);
     }
     (GEAR.weapons || []).forEach(it => upsert(it, true));
     (GEAR.armor || []).forEach(it => upsert(it, false));
-    EQUIPMENT.accessories = (GEAR.accessories || []).map(it => ({ key: it.key, id: it.id, name: it.name, real: true, tierKey: it.tierKey, tier: it.tier, sellPrice: it.sellPrice || 0, slot: 'accessory', stats: it.stats || {}, magicalPower: (ITEM_TIERS.find(t => t.key === it.tierKey) || {}).magicalPower || 3 }));
+    EQUIPMENT.accessories = (GEAR.accessories || []).map(it => ({ key: it.key, id: it.id, name: it.name, real: true, tierKey: it.tierKey, tier: it.tier, category: it.category, sellPrice: it.sellPrice || 0, slot: 'accessory', stats: it.stats || {}, magicalPower: (ITEM_TIERS.find(t => t.key === it.tierKey) || {}).magicalPower || 3 }));
     EQUIPMENT.weapons.sort((x, y) => (x.dmg || 0) - (y.dmg || 0) || (x.key < y.key ? -1 : 1));
     EQUIPMENT.armor.sort((x, y) => (x.defense || 0) - (y.defense || 0) || (x.key < y.key ? -1 : 1));
     // 레거시 티어 장비(레시피/드롭이 참조하는 weapon_*/armor_* 등)를 동급 실제 아이템 이름·스탯으로 이식(키 유지 → 호환).
