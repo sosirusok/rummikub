@@ -668,18 +668,18 @@
       + (reforgeOf('weapon').dmgPct || 0) / 100 + (reforgeOf('bow').dmgPct || 0) * 0.3 / 100
       + starAtkPct() / 100 + setStat('dmgPct') / 100;
     const w = equippedWeapon();
-    const feroMul = 1 + st.ferocity / 100;
+    // V147: 광포(Ferocity)는 피해 배수(1+광포/100)가 아니라 이산 추가타 — feroHitCount로 타격 횟수에 반영. 여기선 원타 피해만 계산.
     const bowBuff = (equippedPiece('bow') || (heldKey && api_isBowKeySafe(heldKey))) ? 1 + buffBonus('bowDmg') / 100 : 1;
     const hpPct = typeof window.economy3dHpPct === 'function' ? window.economy3dHpPct() : 1;
     const domMul = hpPct >= 0.999 ? 1 + attrBonus('dominance') / 100 : 1;   // V43: 지배 — 풀피에서만
-    const melee = flat * (1 + st.strength / 100) * additive * feroMul * bowBuff * domMul;   // V131: 마력 직접 %부스트 제거(파워스톤만 증폭)
+    const melee = flat * (1 + st.strength / 100) * additive * bowBuff * domMul;   // V131: 마력 직접 %부스트 제거(파워스톤만 증폭)
     // V19-D 밸런스: 아키타입별 어빌리티 데미지 — 캐스터=지력, 근접/원거리 버서크=힘 게이트.
     //   ability = 기본어빌리티 × max(0, 주스탯/100 − 1) × 스케일 × 가산 × 광포 × 마력
     //   주스탯 100 이하면 0(초반 무보정) → 오직 엔드게임(고스탯)에서만 수백만 딜. 세 계열 모두 각자 스탯으로 수렴.
     if (w && w.abilityDmg) {
       const primary = (w.abilityStat === 'str') ? st.strength : st.intelligence;
       const factor = Math.max(0, primary / 100 - 1);
-      const ability = w.abilityDmg * recombMul(w.key) * factor * (w.abilityScaling || 0.6) * additive * feroMul;   // V20: 리컴 +18% · V131: 마력 %부스트 제거
+      const ability = w.abilityDmg * recombMul(w.key) * factor * (w.abilityScaling || 0.6) * additive;   // V20: 리컴 +18% · V131: 마력 %부스트 제거 · V147: 광포는 이산 추가타(어빌리티 미적용)
       return Math.max(melee, ability);
     }
     return melee;
@@ -691,6 +691,10 @@
     const st = playerStats();
     return Math.random() * 100 < st.critChance ? 1 + st.critDamage / 100 : 1;
   }
+  // V147: 광포(Ferocity) = 이산 추가타(실제 스블). 100당 확정 +1타, 나머지%는 확률로 +1타. 각 타는 원타 복제(동일 피해).
+  //   반환값 = 총 타격 횟수(기본 1타 포함). 예) 광포 0=1타, 100=2타, 150=2~3타, 250=3~4타.
+  function feroHitsFor(f, roll) { f = Math.max(0, f || 0); return 1 + Math.floor(f / 100) + ((roll != null ? roll : Math.random() * 100) < (f % 100) ? 1 : 0); }
+  function feroHitCount() { return feroHitsFor(playerStats().ferocity); }
   // 실제 공식: 피해 감소 = 방어 / (방어 + 100)
   function playerDefensePct(lowHp) {
     let def = playerStats().defense;
@@ -1767,7 +1771,7 @@
     if (!dungeonRun || !dungeonRun.mobs.length) return;
     const target = dungeonRun.mobs.find(m => m.hp > 0); if (!target) return;
     const cls = dungeonRun.cls || {};
-    let dmg = playerAttackPower() * (cls.dmgMul || 1) * playerCritRoll();
+    let dmg = playerAttackPower() * (cls.dmgMul || 1) * playerCritRoll() * feroHitCount();   // V147: 광포 이산 추가타
     if (cls.firstHitMul && target.hp === target.maxHp) dmg *= cls.firstHitMul;   // 아처: 첫 타격 보너스
     const hitIdx = target._hits || 0;
     dmg *= enchCondMul({ hitIdx, targetHp: target.hp, targetMaxHp: target.maxHp, isBoss: !!target.isBoss });
@@ -1896,9 +1900,10 @@
     dmg += traitSum('shred');                             // V11: 파쇄(고정 추가 피해)
     let ds = false;
     if (Math.random() * 100 < traitSum('double_strike')) { dmg *= 2; ds = true; }   // V11: 이도류
-    statMax('maxHit', Math.round(dmg));
-    const heal = enchHitHeal(dmg) + dmg * traitSum('lifesteal') / 100;   // V11: 흡혈
-    return { dmg, crit: crit > 1 || ds, heal };
+    statMax('maxHit', Math.round(dmg));   // 원타(단일 타격) 최대 피해
+    const hits = feroHitCount();          // V147: 광포 이산 추가타(각 타=원타 복제)
+    const heal = (enchHitHeal(dmg) + dmg * traitSum('lifesteal') / 100) * hits;   // V11: 흡혈(타격당)
+    return { dmg: dmg * hits, crit: crit > 1 || ds, heal, hits, hitDmg: dmg };
   }
   // V28-B: 전 장비 개별 드롭 — 아이템마다 '고유 드롭 몹' 1종(키 해시로 결정, 세션 불변) +
   //   고유 확률(티어 기준 × 0.6~1.5 개별 편차). 몹마다 자기만의 드롭 테이블이 생긴다.
@@ -2512,7 +2517,7 @@
   function combatAttack() {
     if (!activeCombat) return;
     const c = activeCombat;
-    let dmg = playerAttackPower() * playerCritRoll();
+    let dmg = playerAttackPower() * playerCritRoll() * feroHitCount();   // V147: 광포 이산 추가타
     dmg *= enchCondMul({ hitIdx: c._hits, targetHp: c.hp, targetMaxHp: c.maxHp, slayerKey: c.slayerKey });
     c._hits++;
     c.hp = Math.max(0, c.hp - dmg);
@@ -3711,7 +3716,7 @@
         <div class="econ-colrow"><span>${g('strength')} 힘</span><span>${st.strength}</span><span class="muted">피해 ×(1+힘/100)</span></div>
         <div class="econ-colrow"><span>${g('damage')} 공격력</span><span>${Math.round(playerAttackPower()).toLocaleString('ko-KR')}</span><span class="muted">무기: ${w ? w.name : '없음'}${w && w.caster ? ' (캐스터)' : ''}</span></div>
         <div class="econ-colrow"><span>${g('crit_chance')} 크리 확률</span><span>${st.critChance.toFixed(1)}%</span><span class="muted">크리 피해 +${st.critDamage.toFixed(0)}%</span></div>
-        <div class="econ-colrow"><span>${g('ferocity')} 광포(추가타)</span><span>${st.ferocity}</span><span class="muted">100당 확정 추가타 · 피해 ×(1+광포/100)</span></div>
+        <div class="econ-colrow"><span>${g('ferocity')} 광포(추가타)</span><span>${st.ferocity}</span><span class="muted">100당 확정 추가타 +1 · 나머지%는 확률로 +1 (각 타=원타 복제)</span></div>
         ${st.attackSpeed != null ? `<div class="econ-colrow"><span>${g('attack_speed')} 공격속도</span><span>+${st.attackSpeed}%</span><span class="muted">타격 쿨다운 감소</span></div>` : ''}
         ${st.trueDefense != null ? `<div class="econ-colrow"><span>${g('true_defense')} 진방어</span><span>${st.trueDefense}</span><span class="muted">방어 무시 피해도 경감</span></div>` : ''}
         <div class="econ-colrow"><span>${g('speed')} 이동속도</span><span>${st.speed}</span><span class="muted">100 = 기준 · 연성 상한 400</span></div>
@@ -4249,6 +4254,7 @@
   if (typeof window !== 'undefined' && window.__ECON_TEST) {
     window.__econ = {
       open, stop, act, getP: () => P, setP: v => { P = v; }, renderZone, itemName, itemLore, shopDef,
+      feroHitsFor, playerAttackPower,   // V147: 광포 이산 추가타 검증용
       gather, buyItem, sellItem, addItem, hasItem, removeItem, addGold,
       skillLevel, addSkillXp, addCollection, collectionTierIdx,
       acceptQuest, questProgress, tryCompleteQuest, questAvailable, questDef,
