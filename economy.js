@@ -2621,9 +2621,10 @@
   }
 
   // 스카이블럭 메뉴(셀프 서비스): 스탯/컬렉션/인벤토리/펫/장신구/멀티 — 나머지는 해당 NPC를 직접 찾아가야 함
-  const SELF_TABS = [['stats', '📊 스탯'], ['collections', '📚 컬렉션'], ['inv', '🎒 인벤토리'], ['pets', '🐾 펫'], ['talismans', '📿 장신구'], ['multi', '🌐 멀티']];
+  // V144: 탭 아이콘 = 이모지 → 실제 MC 아이템 텍스처(스탯=네더의별/컬렉션=책/인벤=상자/펫=뼈/장신구=엔더펄/멀티=엔더의눈)
+  const SELF_TABS = [['stats', 'nether_star', '스탯'], ['collections', 'book', '컬렉션'], ['inv', 'chest', '인벤토리'], ['pets', 'bone', '펫'], ['talismans', 'ender_pearl', '장신구'], ['multi', 'ender_eye', '멀티']];
   function selfMenuHTML() {
-    return `<div class="econ-zonenav">${SELF_TABS.map(([k, label]) => `<button class="econ-zonebtn ${zone === 'hub' && hubTab === k ? 'is-active' : ''}" data-act="econ_menu" data-key="${k}">${label}</button>`).join('')}</div>`;
+    return `<div class="econ-zonenav">${SELF_TABS.map(([k, ic, label]) => `<button class="econ-zonebtn ${zone === 'hub' && hubTab === k ? 'is-active' : ''}" data-act="econ_menu" data-key="${k}">${iconImg(ic)}<span>${label}</span></button>`).join('')}</div>`;
   }
 
   function zoneBodyHTML(z) {

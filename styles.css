@@ -1306,7 +1306,8 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .econ-body{flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch;}
 .econ-zonenav{display:flex; gap:6px; padding:10px 12px; overflow-x:auto; border-bottom:1px solid var(--line);}
 .econ-zonebtn{appearance:none; border:1px solid var(--line); background:var(--panel2); color:var(--ink);
-  border-radius:12px; padding:8px 12px; white-space:nowrap; font-size:13px;}
+  border-radius:12px; padding:8px 12px; white-space:nowrap; font-size:13px; display:inline-flex; align-items:center; gap:5px;}
+.econ-zonebtn .econ-icon{width:16px; height:16px; image-rendering:pixelated; flex:none;}
 .econ-zonebtn.is-active{border-color:#facc15; background:rgba(250,197,28,.15); color:#facc15; font-weight:700;}
 .econ-panel{padding:14px; display:flex; flex-direction:column; gap:12px;}
 .econ-panel h3,.econ-panel h4{margin:4px 0 0; font-size:15px;}
