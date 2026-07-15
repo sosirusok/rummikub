@@ -1373,8 +1373,12 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 /* V133: 우상단 물약 효과 아이콘 — MC 버프 표시(프레임 박스 + 잔여시간) */
 .econ3d-effects{position:absolute; right:8px; top:8px; z-index:6; display:flex; flex-direction:column; gap:3px; align-items:flex-end; pointer-events:none;
   font-family:'Minecraft','Segoe UI',sans-serif; -webkit-font-smoothing:none;}
-.econ3d-eff{display:flex; align-items:center; gap:5px; background:rgba(0,0,0,.5); border:2px solid; border-color:#5a5a6a #26262e #26262e #5a5a6a; padding:2px 6px; font-size:13px; color:#fff; text-shadow:1px 1px 0 rgba(0,0,0,.8);}
-.econ3d-eff .ef-ic{font-size:14px;}
+.econ3d-eff{display:flex; align-items:center; gap:6px; background:rgba(0,0,0,.55); border:2px solid; border-color:#5a5a6a #26262e #26262e #5a5a6a; padding:2px 6px 2px 2px; font-size:13px; color:#fff; text-shadow:1px 1px 0 rgba(0,0,0,.8);}
+/* V143: 실제 MC 효과 아이콘 프레임(effect_background.png 24×24) + mob_effect 텍스처 18×18 */
+.econ3d-eff .ef-frame{width:26px; height:26px; display:inline-flex; align-items:center; justify-content:center; flex:none; image-rendering:pixelated;
+  background:url('gui/sprites/hud/effect_background.png') no-repeat center/26px 26px;}
+.econ3d-eff .ef-ic{width:18px; height:18px; image-rendering:pixelated; display:block;}
+.econ3d-eff .ef-noic{width:18px; height:18px;}
 .econ3d-eff .ef-nm{color:#dcdcff;}
 .econ3d-eff .ef-t{color:#8be0ff;}
 /* V129: 실제 MC 타이틀/서브타이틀 — 큰 제목 + 작은 부제(2줄), 픽셀 폰트 */

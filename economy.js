@@ -4209,7 +4209,12 @@
     activeBuffs: () => {                                     // V10 ㉖: HUD 버프 잔여시간
       if (!P || !P.buffs) return [];
       const now = Date.now(), out = [];
-      for (const k in P.buffs) if (P.buffs[k] > now) out.push({ name: itemName(k).replace(/\(.*\)/, ''), left: Math.ceil((P.buffs[k] - now) / 1000) });
+      for (const k in P.buffs) {                             // V143: 오브젝트({until,lv})·숫자 두 포맷 모두 처리 + 효과키 반환(실제 mob_effect 텍스처 매핑용)
+        const e = P.buffs[k]; const until = (e && typeof e === 'object') ? e.until : e;
+        if (!(until > now)) continue;
+        const b = brewDef(k);
+        out.push({ key: b ? b.key : k, name: b ? b.name : itemName(k).replace(/\(.*\)/, ''), left: Math.ceil((until - now) / 1000), lv: (e && typeof e === 'object') ? e.lv : 1 });
+      }
       return out;
     },
     canEnterFloor,

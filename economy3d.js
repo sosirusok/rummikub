@@ -9124,6 +9124,10 @@
   // V19-C: 터치 가상 조이스틱 시각 표시 — 손가락 드래그를 따라 노브 이동, 손 떼면 중앙 복귀. 힌트는 8초 후 페이드.
   let _joyHintT = 0;
   // V141: 실제 MC 보스 체력바(상단 중앙, boss_bar 스프라이트) — 보스/드래곤/정예/초고체력 몹 활성 시
+  // V143: 스블 브루 키 → 실제 MC mob_effect 텍스처. 바닐라 효과가 없는 커스텀 효과(마나/치명/궁술/경험/기절/넉백/연소 등)는 프레임만.
+  const EFFECT_TEX = { speed: 'speed', strength: 'strength', healing: 'instant_health', regeneration: 'regeneration', haste: 'haste', rabbit: 'jump_boost', night_vision: 'night_vision', water_breathing: 'water_breathing', resistance: 'resistance', absorption: 'absorption', magic_find: 'luck', venomous: 'poison', dodge: 'speed' };
+  const _ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+  const roman = n => _ROMAN[n] || String(n);
   function updateBossBar() {
     const el = document.getElementById('econ3dBossBar'); if (!el) return;
     let boss = null, bd = 1e9;
@@ -9681,7 +9685,7 @@
     // V133: 우상단 물약 효과 아이콘(실제 MC 버프 표시) — 이름 약어 + 잔여 mm:ss
     const eff = document.getElementById('econ3dEffects');
     if (eff) { const api0 = econApi(); const buffs = api0.activeBuffs ? api0.activeBuffs() : [];
-      eff.innerHTML = buffs.slice(0, 7).map(bf => { const t = Math.max(0, bf.left); const mm = Math.floor(t / 60), ss = t % 60; return `<div class="econ3d-eff"><span class="ef-ic">🧪</span><span class="ef-nm">${(bf.name || '').slice(0, 8)}</span><span class="ef-t">${mm}:${String(ss).padStart(2, '0')}</span></div>`; }).join(''); }
+      eff.innerHTML = buffs.slice(0, 7).map(bf => { const t = Math.max(0, bf.left); const mm = Math.floor(t / 60), ss = t % 60; const tex = EFFECT_TEX[bf.key]; const ic = tex ? `<img class="ef-ic" src="mob_effect/${tex}.png" alt="">` : `<span class="ef-ic ef-noic"></span>`; return `<div class="econ3d-eff"><span class="ef-frame">${ic}</span><span class="ef-nm">${(bf.name || '').slice(0, 8)}${bf.lv > 1 ? ' ' + roman(bf.lv) : ''}</span><span class="ef-t">${mm}:${String(ss).padStart(2, '0')}</span></div>`; }).join(''); }
     const g = document.getElementById('econ3dGold'); if (g) g.textContent = '💰 ' + P0.gold.toLocaleString('ko-KR') + 'G';
     const pg = document.getElementById('econ3dPanelGold'); if (pg) pg.textContent = '💰 ' + P0.gold.toLocaleString('ko-KR') + 'G · 🏦 ' + (P0.bank || 0).toLocaleString('ko-KR') + 'G';
     // V24-E(감사 #14): XP 바 — 최근 획득 스킬의 레벨 내 진행도(실제 MC 경험치 바 위치)
