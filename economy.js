@@ -1852,7 +1852,9 @@
       hotmAwardPowder(n);
     }
     addItem(resKey, n); addCollection(resKey, n);
-    feedItem(resKey, n);   // V117: 채집 획득 피드
+    // V136: 실제 MC/스블은 채집 시 채팅에 아무것도 안 뜸(컬렉션만 조용히 증가) — 무작정 스팸 제거.
+    //   보너스(포춘·더블) 발동 등 '평소보다 많이' 얻을 때만 드물게 피드(확률적 강조).
+    if (n >= 3) feedItem(resKey, n);
     addSkillXp(sk === 'combat' ? 'combat' : sk, RES_XP[resKey] || 2);
     stat('blocksMined');   // V11 카운터(전 채집 공통) + 계열별
     if (sk === 'foraging') stat('treesChopped');
