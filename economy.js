@@ -978,10 +978,12 @@
       if (!k) { invCells.push('<div class="mc-slot mc-empty"></div>'); continue; }
       invCells.push(`<button class="mc-slot econ-tt" data-act="econ_chest_put" data-key="${k}"${ttAttr(shopDef(k) || { key: k, name: itemName(k) })}>${iconImg(k)}${P.inv[k] > 1 ? `<span class="mc-cnt">${P.inv[k]}</span>` : ''}</button>`);
     }
-    return `<h4>📦 상자 <span class="muted">(${activeChest}) — 클릭: 상자↔인벤토리 스택 이동</span></h4>
-      <div class="mc-grid mc-grid--craftinv">${cells.join('')}</div>
-      <h4 class="muted">내 인벤토리</h4>
-      <div class="mc-grid mc-grid--craftinv">${invCells.join('')}</div>`;
+    return `<div class="mc-chest">
+        <div class="mc-chesttitle">상자</div>
+        <div class="mc-grid mc-grid--craftinv">${cells.join('')}</div>
+        <div class="mc-chesttitle" style="margin-top:10px">인벤토리</div>
+        <div class="mc-grid mc-grid--craftinv">${invCells.join('')}</div>
+      </div>`;
   }
   // V21-D8: 화로 제련 — 화로 근처에서만(3D가 판정), 석탄 1 = 8회 연료(바닐라 비율)
   function smeltItem(inKey) {
@@ -1004,7 +1006,7 @@
   function smeltHTML() {
     const near = (typeof window.economy3dNearFurnace === 'function') ? window.economy3dNearFurnace() : true;
     const fuel = P.furnaceFuel || 0;
-    return `<div class="econ-panel"><h4>🔥 화로 제련 ${near ? '' : '<span class="muted">— 화로 근처가 아니에요</span>'}</h4>
+    return `<div class="econ-panel"><h4>화로 제련 ${near ? '' : '<span class="muted">— 화로 근처가 아니에요</span>'}</h4>
       <p class="econ-note">화로를 제작해 설치하고 가까이에서 제련하세요. 석탄 1개 = 8회 (남은 연료 ${fuel}/8, 석탄 ${P.inv.coal || 0}개)</p>
       <div class="econ-shopgrid">${(D().SMELT_RECIPES || []).map(r => {
         const inN = r.inN || 1, have = P.inv[r.in] || 0;
@@ -2906,7 +2908,7 @@
     return `<div class="mc-chest">
         <div class="mc-chesttitle">✦ 스카이블럭 메뉴</div>
         <div class="mc-grid">${pad(tiles.map(slot)).join('')}</div>
-        <div class="mc-chesttitle" style="margin-top:10px">🚀 빠른 이동 (워프)</div>
+        <div class="mc-chesttitle" style="margin-top:10px">빠른 이동 (워프)</div>
         <div class="mc-grid">${warpSlots.length ? pad(warpSlots).join('') : ''}</div>
         ${warpSlots.length ? '' : '<p class="muted">3D 월드에서 사용 가능</p>'}
       </div>

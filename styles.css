@@ -1725,6 +1725,9 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .econ3d-body div, .econ3d-body summary, .econ3d-body b{ font-family:inherit; }
 /* 상자 GUI 컨테이너 — MC 회색 판, 각진 픽셀 베벨 */
 .econ3d-body .mc-chest{ background:#c6c6c6; border:4px solid; border-color:#ffffff #555 #555 #ffffff; border-radius:0 !important; box-shadow:0 6px 22px rgba(0,0,0,.42); max-width:660px; margin:12px auto; padding:12px 14px; color:#2b2b2b; }
+/* V142: 이중 회색창 제거 — mc-chest(단일 MC 상자창)를 담은 외곽 패널은 프레임을 없애 상자 하나만 보이게 */
+.econ3d-body .econ-panel:has(> .mc-chest){ background:transparent !important; border:0 !important; box-shadow:none !important; padding:0 !important; margin:0 auto !important; max-width:680px; }
+.econ3d-body .econ-panel:has(> .mc-chest) > .muted{ text-align:center; color:#d8dbe0 !important; text-shadow:1px 1px 0 rgba(0,0,0,.7); }
 /* 상자 제목 = 어두운 회색, 하단 구분선(실제 상자 상단 타이틀바 느낌) */
 .econ3d-body .mc-chest .mc-chesttitle, .econ3d-body h3, .econ3d-body h4{ color:#3f3f3f !important; font-weight:400; font-size:15px; margin:2px 0 8px; padding-bottom:5px; border-bottom:2px solid rgba(80,80,80,.35); text-shadow:none; letter-spacing:.3px; }
 /* HTML 카드형 행(econ-colrow/shopitem) → MC 인셋 슬롯 줄(각진, 오목한 회색 홈) */
