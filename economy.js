@@ -3081,10 +3081,10 @@
     return `<div class="econ-cellact">
       <b>${iconImg(k)} ${itemName(k)} ×${P.inv[k] || 0}</b>
       <div class="econ-tierbtns">
-        ${(D().PORTAL_ITEMS || {})[k] ? `<button class="btn btn--sm" data-act="econ_portal_install" data-key="${k}">🌀 프라이빗 섬에 설치(워프 해금)</button>` : ''}
+        ${(D().PORTAL_ITEMS || {})[k] ? `<button class="btn btn--sm" data-act="econ_portal_install" data-key="${k}">프라이빗 섬에 설치(워프 해금)</button>` : ''}
         ${canHot ? `<button class="btn btn--sm" data-act="econ_assign_hotbar" data-key="${k}">${(P.hotbar || []).indexOf(k) >= 0 ? '핫바에서 빼기' : '➕ 핫바에 넣기'}</button>` : ''}
-        ${k.indexOf('potion_') === 0 ? `<button class="btn btn--sm" data-act="econ_potion_use" data-key="${k}">🧪 마시기</button>` : ''}
-        ${sdef && sdef.slot ? `<button class="btn btn--sm btn--ghost" data-act="econ_pin" data-key="${k}">${(P.equipPin || {})[sdef.slot] === k ? '📌 고정 해제' : '📌 고정 장착'}</button><button class="btn btn--sm btn--ghost" data-act="econ_lock" data-key="${k}">${(P.locked || {})[k] ? '🔓 잠금해제' : '🔒 잠금'}</button><button class="btn btn--sm btn--ghost" data-act="econ_salvage" data-key="${k}">⚒️ 분해</button>` : ''}
+        ${k.indexOf('potion_') === 0 ? `<button class="btn btn--sm" data-act="econ_potion_use" data-key="${k}">마시기</button>` : ''}
+        ${sdef && sdef.slot ? `<button class="btn btn--sm btn--ghost" data-act="econ_pin" data-key="${k}">${(P.equipPin || {})[sdef.slot] === k ? '📌 고정 해제' : '📌 고정 장착'}</button><button class="btn btn--sm btn--ghost" data-act="econ_lock" data-key="${k}">${(P.locked || {})[k] ? '🔓 잠금해제' : '🔒 잠금'}</button><button class="btn btn--sm btn--ghost" data-act="econ_salvage" data-key="${k}">분해</button>` : ''}
         ${sell ? `<button class="btn btn--sm btn--ghost" data-act="econ_sell" data-key="${k}">1개 판매 ${fmtGold(sell)}</button>${(P.inv[k] || 0) > 1 ? `<button class="btn btn--sm btn--ghost" data-act="econ_sell_all" data-key="${k}">전부 판매</button>` : ''}` : ''}
       </div>
     </div>`;
@@ -3129,9 +3129,9 @@
       <div class="econ-shopgrid">${list.map(p => `
         <div class="econ-shopitem">
           <span>👤 <b>${escHtml(p.name)}</b> <span class="muted">${p.world === 'hub' ? '허브' : '자기 섬'}</span></span>
-          <button class="btn btn--sm" data-act="econ_mp_trade" data-id="${p.id}">🤝 거래</button>
-          <button class="btn btn--sm" data-act="econ_mp_party" data-id="${p.id}">⚔️ 파티 던전</button>
-          <button class="btn btn--sm btn--ghost" data-act="econ_mp_visit" data-name="${escHtml(p.name)}">🏝️ 섬 방문</button>
+          <button class="btn btn--sm" data-act="econ_mp_trade" data-id="${p.id}">거래</button>
+          <button class="btn btn--sm" data-act="econ_mp_party" data-id="${p.id}">파티 던전</button>
+          <button class="btn btn--sm btn--ghost" data-act="econ_mp_visit" data-name="${escHtml(p.name)}">섬 방문</button>
         </div>`).join('')}</div>
       <h4 style="margin-top:12px">이름으로 섬 방문</h4>
       <div class="econ-tierbtns">
@@ -3160,8 +3160,8 @@
       </div>
       ${t.myLock ? '' : `<h4>내 인벤토리에서 추가 (클릭 = 1개)</h4><div class="econ-tierbtns">${invKeys.map(k => `<button class="btn btn--sm btn--ghost" data-act="econ_mp_offer_add" data-key="${k}">${itemName(k)} ×${P.inv[k]}</button>`).join('') || '<span class="muted">보유 아이템 없음</span>'}</div>`}
       <div class="econ-tierbtns" style="margin-top:10px">
-        ${t.myLock ? '' : '<button class="btn btn--sm" data-act="econ_mp_lock">🔒 오퍼 잠금</button>'}
-        ${t.myLock && t.theirLock && !t.myConfirm ? '<button class="btn btn--sm" data-act="econ_mp_confirm">✅ 최종 확정</button>' : ''}
+        ${t.myLock ? '' : '<button class="btn btn--sm" data-act="econ_mp_lock">오퍼 잠금</button>'}
+        ${t.myLock && t.theirLock && !t.myConfirm ? '<button class="btn btn--sm" data-act="econ_mp_confirm">최종 확정</button>' : ''}
         ${t.myLock && !t.theirLock ? '<span class="muted">상대의 잠금을 기다리는 중...</span>' : ''}
         ${t.myConfirm && !t.theirConfirm ? '<span class="muted">상대의 확정을 기다리는 중...</span>' : ''}
         <button class="btn btn--sm btn--ghost" data-act="econ_mp_trade_cancel">거래 취소</button>
@@ -3184,7 +3184,7 @@
         <div class="econ-mobrow ${m.hp <= 0 ? 'is-dead' : ''}"><span>${m.isBoss ? '👹' : '🧟'} ${escHtml(m.name)}</span>
           <div class="econ-hpbar"><div class="econ-hpbar__fill" style="width:${Math.max(0, m.hp / m.maxHp * 100)}%"></div><span>${Math.max(0, Math.round(m.hp))}/${m.maxHp}</span></div></div>`).join('')}</div>
       <div class="econ-tierbtns" style="margin-top:10px">
-        <button class="btn" data-act="econ_mp_pt_attack">⚔️ 공격! (내 공격력 ${Math.round(playerAttackPower())})</button>
+        <button class="btn" data-act="econ_mp_pt_attack">공격! (내 공격력 ${Math.round(playerAttackPower())})</button>
         <button class="btn btn--sm btn--ghost" data-act="econ_mp_pt_leave">파티 떠나기</button>
       </div>
       <p class="muted">호스트가 방을 이동하면 화면이 자동 갱신돼요. 클리어 보상은 던전 종료 시 지급!</p>`;
@@ -3273,8 +3273,8 @@
     const storedTotal = P.minions.reduce((n, m) => n + m.storage, 0);
     return `<h4>미니언 (슬롯 ${P.minions.length}/${P.maxMinionSlots})</h4>
       <div class="econ-tierbtns">
-        <button class="btn btn--sm" data-act="econ_minion_fuel" data-key="${F1.key}" ${hasItem(F1.key) ? '' : 'disabled'}>🔥 ${F1.name} (보유 ${P.inv[F1.key] || 0})</button>
-        <button class="btn btn--sm" data-act="econ_minion_fuel" data-key="${F2.key}" ${hasItem(F2.key) ? '' : 'disabled'}>🌋 ${F2.name} (보유 ${P.inv[F2.key] || 0})</button>
+        <button class="btn btn--sm" data-act="econ_minion_fuel" data-key="${F1.key}" ${hasItem(F1.key) ? '' : 'disabled'}>${F1.name} (보유 ${P.inv[F1.key] || 0})</button>
+        <button class="btn btn--sm" data-act="econ_minion_fuel" data-key="${F2.key}" ${hasItem(F2.key) ? '' : 'disabled'}>${F2.name} (보유 ${P.inv[F2.key] || 0})</button>
         <button class="btn btn--sm btn--ghost" data-act="econ_minion_collect_all" ${storedTotal > 0 ? '' : 'disabled'}>📦 전체 수거(${storedTotal})</button>
         ${fuelLeft ? `<span class="muted">🔥 연료 가동 중(~${fuelLeft}시간, 속도 ×${P.minionFuelMul || F1.speedMul})</span>` : ''}
       </div>
@@ -3432,9 +3432,9 @@
       return `<div class="econ-starcard">
         <h4>${label} — ${eq ? `<span style="color:${tierColorByKey(eq.tierKey)}">${cur ? `[${cur.name}] ` : ''}${eq.name}</span>` : '<span class="muted">장비 없음</span>'}</h4>
         <p class="muted">${cur ? `현재 보너스: ${cur.dmgPct ? `공격 +${cur.dmgPct}% ` : ''}${cur.str ? `힘 +${cur.str} ` : ''}${cur.critDamage ? `크리피해 +${cur.critDamage}% ` : ''}${cur.critChance ? `크리% +${cur.critChance} ` : ''}${cur.ferocity ? `광포 +${cur.ferocity} ` : ''}${cur.int ? `지력 +${cur.int} ` : ''}${cur.def ? `방어 +${cur.def} ` : ''}${cur.hp ? `체력 +${cur.hp} ` : ''}${cur.sellBonus ? `판매가 +${cur.sellBonus}%` : ''}` : '리포지 없음 — 무작위 접두어를 부여해보세요'}</p>
-        <button class="btn btn--sm" data-act="econ_reforge_slot" data-slot="${slot}" ${eq ? '' : 'disabled'}>🎲 무작위 리포지 ${cost != null ? `(${fmtGold(cost)})` : ''}</button>
-        <button class="btn btn--sm btn--ghost" data-act="econ_reforge_premium" data-slot="${slot}" ${eq && hasItem('reforge_stone_rare') ? '' : 'disabled'}>💎 스톤 확정 [${D().REFORGES.premium[reforgePoolType(slot)].name}] (스톤 1 + ${cost != null ? fmtGold(cost * 2) : '-'})</button>
-        <button class="btn btn--sm btn--ghost" data-act="econ_reforge_apex" data-slot="${slot}" ${eq && hasItem('reforge_stone_apex') ? '' : 'disabled'}>🐉 전설 확정 [${D().REFORGES.premiumApex[reforgePoolType(slot)].name}] (신룡의 룬석 1 + ${cost != null ? fmtGold(cost * 3) : '-'})</button>
+        <button class="btn btn--sm" data-act="econ_reforge_slot" data-slot="${slot}" ${eq ? '' : 'disabled'}>무작위 리포지 ${cost != null ? `(${fmtGold(cost)})` : ''}</button>
+        <button class="btn btn--sm btn--ghost" data-act="econ_reforge_premium" data-slot="${slot}" ${eq && hasItem('reforge_stone_rare') ? '' : 'disabled'}>스톤 확정 [${D().REFORGES.premium[reforgePoolType(slot)].name}] (스톤 1 + ${cost != null ? fmtGold(cost * 2) : '-'})</button>
+        <button class="btn btn--sm btn--ghost" data-act="econ_reforge_apex" data-slot="${slot}" ${eq && hasItem('reforge_stone_apex') ? '' : 'disabled'}>전설 확정 [${D().REFORGES.premiumApex[reforgePoolType(slot)].name}] (신룡의 룬석 1 + ${cost != null ? fmtGold(cost * 3) : '-'})</button>
       </div>`;
     };
     const HB = D().HPB;
@@ -3618,7 +3618,7 @@
       let status, action;
       if (L.settled && L.sold) {
         status = `<span style="color:#4ade80">✅ 낙찰 ${fmtGold(L.finalPrice)}</span> <span class="muted">→ ${L.buyer}</span>`;
-        action = `<button class="btn btn--sm" data-act="econ_ah_claim" data-id="${L.id}">💰 수령</button>`;
+        action = `<button class="btn btn--sm" data-act="econ_ah_claim" data-id="${L.id}">수령</button>`;
       } else if (L.settled && !L.sold) {
         status = `<span class="muted">↩ 유찰(구매자 없음)</span>`;
         action = `<button class="btn btn--sm btn--ghost" data-act="econ_ah_claim" data-id="${L.id}">회수</button>`;
