@@ -9845,24 +9845,37 @@
     viewCam = new THREE.PerspectiveCamera(70, w / h, 0.01, 10);
     // 오른팔(클래식 4px) 스킨 UV — 앞44-48/뒤52-56/바깥48-52/안40-44/위44-48 v16-20/아래(손)48-52 v16-20
     const skin = { pz: [44, 20, 48, 32], nz: [52, 20, 56, 32], px: [48, 20, 52, 32], nx: [40, 20, 44, 32], py: [44, 16, 48, 20], ny: [48, 16, 52, 20] };
-    fpArm = new THREE.Mesh(skinArmGeo(0.34, 1.05, 0.34, skin), new THREE.MeshBasicMaterial({ map: skinTexture() }));
-    fpArm.position.set(0, 0.52, 0); fpArm.rotation.x = Math.PI;   // 피벗(어깨)=우하단, 손끝은 위(중앙)로 — 소매가 코너쪽
+    fpArm = new THREE.Mesh(skinArmGeo(0.3, 0.92, 0.3, skin), new THREE.MeshBasicMaterial({ map: skinTexture() }));
+    fpArm.position.set(0, 0.46, 0); fpArm.rotation.x = Math.PI;   // 피벗(어깨)=우하단, 손끝은 위(중앙)로 — 소매가 코너쪽
     fpPivot = new THREE.Group(); fpPivot.add(fpArm);
-    fpPivot.position.set(0.92, -0.95, -1.5);   // 화면 우하단(멀리=작게)
+    fpPivot.position.set(1.02, -1.12, -1.7);   // 화면 우하단(멀리=작게, 실제 MC처럼 코너에 살짝)
     fpPivot.rotation.set(0.2, -0.1, 0.62);   // 팔이 우하단→중앙 위로 비스듬(실제 MC 1인칭)
     viewScene.add(fpPivot);
   }
-  function clearFpItem() { if (fpItem) { fpPivot.remove(fpItem); if (fpItem.geometry) fpItem.geometry.dispose(); if (fpItem.material) { if (fpItem.material.map) fpItem.material.map.dispose(); fpItem.material.dispose(); } fpItem = null; } }
+  function clearFpItem() { if (fpItem) { fpPivot.remove(fpItem); fpItem.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } }); fpItem = null; } }
   function buildFpItem(key) {
     clearFpItem();
     if (!key) return;
+    const api = econApi();
+    const isBlock = (typeof window.__econ3dPlaceable === 'function') ? window.__econ3dPlaceable(key) : false;
+    // 블럭: 실제 resourcepack 텍스처로 3D 큐브(실제 MC처럼 윗면+옆면 보이게)
+    if (isBlock) {
+      const tex = new THREE.TextureLoader().load('resourcepack/' + key + '.png', () => {}, undefined, () => { buildFpItemSprite(key); });
+      tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestFilter;
+      const cube = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.42, 0.42), new THREE.MeshBasicMaterial({ map: tex }));
+      cube.position.set(-0.1, 0.92, 0.16); cube.rotation.set(-0.35, 0.7, 0);   // 윗면+두 옆면 보이는 각도
+      fpItem = cube; fpPivot.add(fpItem); return;
+    }
+    buildFpItemSprite(key);
+  }
+  function buildFpItemSprite(key) {
     const png = (typeof window.econItemPng === 'function') ? window.econItemPng(key) : null;
     const url = png || ((typeof window.econIcon === 'function') ? window.econIcon(key) : null);
     if (!url) return;
     const tex = new THREE.TextureLoader().load(url); tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestFilter;
-    fpItem = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.5), new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide }));
-    fpItem.position.set(-0.12, 0.98, 0.22);   // 손끝(위=중앙쪽)
-    fpItem.rotation.set(0.1, -0.3, -0.55);
+    fpItem = new THREE.Mesh(new THREE.PlaneGeometry(0.46, 0.46), new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide }));
+    fpItem.position.set(-0.08, 0.9, 0.2);   // 손끝(위=중앙쪽) — 도구/무기는 평면 스프라이트(실제 MC 동일)
+    fpItem.rotation.set(0.1, -0.3, -0.5);
     fpPivot.add(fpItem);
   }
   function triggerFpSwing() { _swingT = 0; _swingActive = true; }
@@ -9875,7 +9888,7 @@
     const moving = (Math.abs(P.vx) + Math.abs(P.vz)) > 0.6 && P.onGround;
     _vmBobT += dt * (moving ? 9 : 3);
     const bob = moving ? 0.04 : 0.008;
-    if (fpPivot) { fpPivot.rotation.set(sx, -0.1 + Math.sin(_vmBobT) * (moving ? 0.03 : 0.004), sz); fpPivot.position.set(0.92 + Math.cos(_vmBobT) * bob, -0.95 + Math.abs(Math.sin(_vmBobT)) * bob, -1.5); }
+    if (fpPivot) { fpPivot.rotation.set(sx, -0.1 + Math.sin(_vmBobT) * (moving ? 0.03 : 0.004), sz); fpPivot.position.set(1.02 + Math.cos(_vmBobT) * bob, -1.12 + Math.abs(Math.sin(_vmBobT)) * bob, -1.7); }
   }
 
   /* ---------------- 루프 ---------------- */
