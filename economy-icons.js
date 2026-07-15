@@ -533,4 +533,10 @@
   }
 
   window.econIcon = econIcon;
+  // V134: 실제 MC 아이템 텍스처(item/<name>.png) 직접 경로 — 인벤토리/메뉴에서 선명한 진짜 아이콘 사용.
+  //   item/_list.json 로드 완료(_itemList) 후에만 반환(존재 확인). 블럭/커스텀은 null → econIcon 폴백.
+  window.econItemPng = function (key) {
+    if (!_itemList) return null;
+    try { const nm = mcItemName(key); return nm ? ('item/' + nm + '.png') : null; } catch (e) { return null; }
+  };
 })();
