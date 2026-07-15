@@ -1742,3 +1742,13 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 #econ3dPanelGold{ display:none !important; }
 .econ3d-panelbar{ justify-content:flex-end !important; padding:6px 10px !important; }
 .econ3d-panelbar .btn{ border-radius:0 !important; background:#8b8b8b !important; border:2px solid !important; border-color:#f4f4f4 #4a4a4a #4a4a4a #f4f4f4 !important; color:#161616 !important; text-shadow:none !important; }
+
+/* ============ V139: 모든 슬롯을 실제 MC slot.png 스프라이트로 — 상자/메뉴/상점 등 전 패널 픽셀 일치 ============ */
+.mc-slot, .mc-slot.mc-empty2, .mc-slot.mc-armor, .mc-slot.mc-menuslot{
+  background:url('gui/sprites/container/slot.png') no-repeat center !important; background-size:100% 100% !important;
+  image-rendering:pixelated; border:0 !important; border-radius:0 !important; }
+.mc-slot:hover:not(.mc-empty){ background-image:url('gui/sprites/container/slot_highlight_front.png'), url('gui/sprites/container/slot.png') !important; background-size:100% 100%, 100% 100% !important; }
+/* 인벤토리 프레임 내부 슬롯은 실제 inventory.png 텍스처가 슬롯 제공 → 배경 없음 유지 */
+.mc-invframe .mc-slot{ background:transparent !important; }
+/* 상자 컨테이너 패널: 실제 MC 밝은 회색 판(#c6c6c6)로 통일(텍스처 슬롯과 톤 일치) */
+.econ3d-body .mc-chest{ background:#c6c6c6 !important; }
