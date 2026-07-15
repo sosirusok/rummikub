@@ -9123,10 +9123,29 @@
   let _hpHudT = 0;
   // V19-C: 터치 가상 조이스틱 시각 표시 — 손가락 드래그를 따라 노브 이동, 손 떼면 중앙 복귀. 힌트는 8초 후 페이드.
   let _joyHintT = 0;
+  // V141: 실제 MC 보스 체력바(상단 중앙, boss_bar 스프라이트) — 보스/드래곤/정예/초고체력 몹 활성 시
+  function updateBossBar() {
+    const el = document.getElementById('econ3dBossBar'); if (!el) return;
+    let boss = null, bd = 1e9;
+    for (const m of mobs) {
+      if (m.dead) continue;
+      const isB = m.isBoss || (m.def && m.def.kind === 'dragon') || m.elite || m.maxHp >= 100000;
+      if (!isB) continue;
+      const d = Math.hypot(P.x - m.mesh.position.x, P.z - m.mesh.position.z);
+      if (d < 70 && d < bd) { bd = d; boss = m; }
+    }
+    if (!boss) { if (el.style.display !== 'none') el.style.display = 'none'; return; }
+    el.style.display = 'block';
+    const ab = n => { n = Math.max(0, Math.ceil(n)); if (n >= 1e9) return (n / 1e9).toFixed(1).replace(/\.0$/, '') + 'B'; if (n >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M'; if (n >= 1e4) return Math.round(n / 1e3) + 'k'; return n.toLocaleString('en-US'); };
+    const nm = document.getElementById('econ3dBossName'), fill = document.getElementById('econ3dBossFill');
+    if (nm) nm.textContent = `${boss.def.name}  ${ab(boss.hp)}/${ab(boss.maxHp)}`;
+    if (fill) fill.style.width = Math.max(0, Math.min(100, boss.hp / boss.maxHp * 100)) + '%';
+  }
   function updateHpHud() {
     const bar = document.getElementById('econ3dHpFill'), txt = document.getElementById('econ3dHpTxt');
     if (bar && php) bar.style.width = Math.max(0, php.hp / php.max * 100) + '%';
     if (txt && php) txt.textContent = `❤ ${Math.max(0, Math.ceil(php.hp))}/${php.max}`;
+    updateBossBar();
     // 핫바 위 스탯(실제 스카이블럭 액션바): 체력/방어/마나/속도 — 나머지는 메뉴에서
     const row = document.getElementById('econ3dStats');
     const api = econApi();
@@ -9771,6 +9790,7 @@
       <div class="econ3d-cross" id="econ3dCross">+</div>
       <div class="econ3d-prompt" id="econ3dPrompt" style="display:none"></div>
       <div class="econ3d-banner" id="econ3dBanner"></div>
+      <div class="econ3d-bossbar" id="econ3dBossBar" style="display:none"><span class="bb-name" id="econ3dBossName"></span><div class="bb-track"><i id="econ3dBossFill"></i></div></div>
       <div class="econ3d-top">
         <div class="econ3d-gold" id="econ3dGold">💰 0G</div>
         <button class="btn btn--ghost" data-act="econ3d_fs" title="전체화면 (Ctrl 달리기 가능)">⛶</button>
