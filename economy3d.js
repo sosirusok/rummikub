@@ -9669,15 +9669,15 @@
     const el = document.getElementById('econ3dScoreboard'); if (!el) return;
     const P0 = econApi().getP(); if (!P0) return;
     const loc = SB_LOC[worldMode] || 'SkyBlock';
+    // V145: 실제 하이픽셀 스블 스코어보드 순서 — 날짜 → 시간 → 위치 → (공백) → 지갑/은행
     el.innerHTML = `<div class="sb-title">SKYBLOCK</div>`
       + `<div class="sb-gap"></div>`
       + `<div class="sb-line">${sbDateStr()}</div>`
       + `<div class="sb-line">${sbTimeStr()}</div>`
+      + `<div class="sb-line sb-loc">⏣ ${loc}</div>`
       + `<div class="sb-gap"></div>`
       + `<div class="sb-line">Purse: <span class="sb-purse">${P0.gold.toLocaleString('en-US')}</span></div>`
-      + `<div class="sb-line">Bank: <span class="sb-purse">${(P0.bank || 0).toLocaleString('en-US')}</span></div>`
-      + `<div class="sb-gap"></div>`
-      + `<div class="sb-line sb-loc">⏣ ${loc}</div>`;
+      + `<div class="sb-line">Bank: <span class="sb-purse">${(P0.bank || 0).toLocaleString('en-US')}</span></div>`;
   }
   function updateHud() {
     const P0 = econApi().getP(); if (!P0) return;
@@ -9686,8 +9686,9 @@
     const eff = document.getElementById('econ3dEffects');
     if (eff) { const api0 = econApi(); const buffs = api0.activeBuffs ? api0.activeBuffs() : [];
       eff.innerHTML = buffs.slice(0, 7).map(bf => { const t = Math.max(0, bf.left); const mm = Math.floor(t / 60), ss = t % 60; const tex = EFFECT_TEX[bf.key]; const ic = tex ? `<img class="ef-ic" src="mob_effect/${tex}.png" alt="">` : `<span class="ef-ic ef-noic"></span>`; return `<div class="econ3d-eff"><span class="ef-frame">${ic}</span><span class="ef-nm">${(bf.name || '').slice(0, 8)}${bf.lv > 1 ? ' ' + roman(bf.lv) : ''}</span><span class="ef-t">${mm}:${String(ss).padStart(2, '0')}</span></div>`; }).join(''); }
-    const g = document.getElementById('econ3dGold'); if (g) g.textContent = '💰 ' + P0.gold.toLocaleString('ko-KR') + 'G';
-    const pg = document.getElementById('econ3dPanelGold'); if (pg) pg.textContent = '💰 ' + P0.gold.toLocaleString('ko-KR') + 'G · 🏦 ' + (P0.bank || 0).toLocaleString('ko-KR') + 'G';
+    // V145: 골드/뱅크 표시 = 💰🏦 이모지 → 실제 MC 금괴/금 조각 아이콘(하이픽셀 코인 표현)
+    const g = document.getElementById('econ3dGold'); if (g) g.innerHTML = `<img class="econ3d-coin" src="item/gold_nugget.png" alt=""> ${P0.gold.toLocaleString('en-US')}`;
+    const pg = document.getElementById('econ3dPanelGold'); if (pg) pg.innerHTML = `<img class="econ3d-coin" src="item/gold_nugget.png" alt=""> ${P0.gold.toLocaleString('en-US')} · <img class="econ3d-coin" src="item/gold_ingot.png" alt=""> ${(P0.bank || 0).toLocaleString('en-US')}`;
     // V24-E(감사 #14): XP 바 — 최근 획득 스킬의 레벨 내 진행도(실제 MC 경험치 바 위치)
     const api2 = econApi();
     if (api2.skillBar) {
