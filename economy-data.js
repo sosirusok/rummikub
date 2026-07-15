@@ -860,7 +860,11 @@
     wolf: [{ lv: 50, name: '무리의 힘', stat: { str: 25 } }],
     blue_whale: [{ lv: 50, name: '거대한 심장', stat: { hp: 100 } }, { lv: 100, name: '심해의 생명력', stat: { hp: 200 } }],
   };
-  const PET_XP_BASE = 60, PET_XP_EXP = 1.7, PET_MAX_LEVEL = 100;   // xpToLevel(n) = base * n^exp
+  const PET_XP_BASE = 60, PET_XP_EXP = 1.7, PET_MAX_LEVEL = 100;   // xpToLevel(n) = base * n^exp (커먼 곡선 = 실제 스블 커먼 총량 5.62M와 일치)
+  // V150: 펫 등급별 XP 배수 — 실제 하이픽셀 스블 등급별 만렙(Lv100) 총 XP 비율(커먼 대비).
+  //   실측 총량 common 5.62M / uncommon 8.64M / rare 12.63M / epic 17.22M / legendary·mythic·divine 25.35M
+  //   → 높은 등급일수록 만렙까지 더 많은 XP(등급 오프셋 효과). 커먼 곡선에 등급 배수를 곱해 각 등급 총량 정합.
+  const PET_RARITY_XPMUL = { common: 1, uncommon: 1.537, rare: 2.245, epic: 3.062, legendary: 4.507, mythic: 4.507, divine: 4.507 };
 
   /* ---------------- 인챈트 12종(위키 실측 상한) + 혼돈의 마법부여(상한 돌파) ---------------- */
   // 전역 슬롯 방식: 무기 인챈트는 현재 장착 무기에, 방어구 인챈트는 방어구에 적용(장비 교체 시 유지).
@@ -1794,7 +1798,7 @@
     MINION_FUEL, MINION_FUEL2, SLAYERS, DUNGEON, DUNGEON_ROOM_SCORE, ESSENCE_SHOP, SHOP, BAZAAR, AUCTION_HOUSE, HEART_OF_MOUNTAIN, DAILY_SELL_LIMIT_PER_STACK,
     EQUIPMENT, STARFORCE, REFORGES, ITEM_ROLL,
     TRAITS, EQUIP_SETS, FIELD_DIFF, ARENA, ACHIEVEMENTS, DAILY_QUESTS, FETCHUR, FETCHUR_REWARD, COMMISSIONS, COMMISSION_REWARD, SALVAGE, WEEKLY, HPB, QUESTS, QUEST_NPCS, BUILDER_SHOP, DYES,
-    TALISMANS, MAGICAL_POWER, PETS, PET_ITEMS, PET_ABILITIES, PET_XP_BASE, PET_XP_EXP, PET_MAX_LEVEL,
+    TALISMANS, MAGICAL_POWER, PETS, PET_ITEMS, PET_ABILITIES, PET_XP_BASE, PET_XP_EXP, PET_MAX_LEVEL, PET_RARITY_XPMUL,
     ENCHANTS, CHAOS_ENCHANT, RECIPES, MASTER_MODE,
     BANK, DAILY_DEALS, DUNGEON_CLASSES, ZONES, EASTER_EGGS,
     SKILL_XP_TABLE, SKILL_MAX_LEVEL, SKILL_MAX_BY, BASE_STATS, BASE_STATS2, GEM_TYPES, GEM_QUALITY, GEM_BASE, GEM_STAT_VALUES, GEM_SLOTS_BY_TIER, RECOMB, ENCHANTED_RES, ENCHANTED_BLOCK_RES, SLAYER_XP_LEVELS, SLAYER_QUEST, VANILLA_NAMES,

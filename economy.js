@@ -251,9 +251,12 @@
 
   /* ---------------- 펫 ---------------- */
   function petDef(key) { return D().PETS.find(p => p.key === key); }
+  // V150: 등급 배수 반영 — 실제 스블처럼 높은 등급 펫은 만렙까지 더 많은 XP 필요(등급별 총량 정합)
+  function petXpMul(key) { const d = petDef(key); const rm = D().PET_RARITY_XPMUL || {}; return (d && rm[d.tierKey]) || 1; }
+  function petReqFor(lvl, mul) { return D().PET_XP_BASE * Math.pow(lvl + 1, D().PET_XP_EXP) * mul; }
   function petLevel(key) {
-    let xp = P.petXp[key] || 0, lvl = 0;
-    while (lvl < D().PET_MAX_LEVEL) { const req = D().PET_XP_BASE * Math.pow(lvl + 1, D().PET_XP_EXP); if (xp < req) break; xp -= req; lvl++; }
+    let xp = P.petXp[key] || 0, lvl = 0; const mul = petXpMul(key);
+    while (lvl < D().PET_MAX_LEVEL) { const req = petReqFor(lvl, mul); if (xp < req) break; xp -= req; lvl++; }
     return lvl;
   }
   function hatchPet(petKey) {
@@ -4255,6 +4258,7 @@
     window.__econ = {
       open, stop, act, getP: () => P, setP: v => { P = v; }, renderZone, itemName, itemLore, shopDef,
       feroHitsFor, playerAttackPower,   // V147: 광포 이산 추가타 검증용
+      petReqFor, petLevel,              // V150: 펫 등급별 XP 검증용
       gather, buyItem, sellItem, addItem, hasItem, removeItem, addGold,
       skillLevel, addSkillXp, addCollection, collectionTierIdx,
       acceptQuest, questProgress, tryCompleteQuest, questAvailable, questDef,
