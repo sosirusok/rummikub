@@ -9708,7 +9708,7 @@
     if (!data) { hud.style.display = 'none'; return; }
     let html = '';
     if (data.active && data.active.length) {
-      html += '<div class="econ3d-qh-head">📜 진행 중인 퀘스트</div>';
+      html += '<div class="econ3d-qh-head">진행 중인 퀘스트</div>';
       data.active.slice(0, 4).forEach(a => {
         const pct = Math.max(0, Math.min(100, Math.round(a.cur / a.goal * 100)));
         html += `<div class="econ3d-qh-item"><div class="econ3d-qh-name">${a.name}</div>`
@@ -9717,12 +9717,12 @@
       });
     }
     if (data.offer) {
-      html += `<div class="econ3d-qh-offer"><div class="econ3d-qh-name">❗ ${data.offer.npcName}</div>`
+      html += `<div class="econ3d-qh-offer"><div class="econ3d-qh-name"><span class="qh-mark">!</span> ${data.offer.npcName}</div>`
         + `<div class="econ3d-qh-story">${data.offer.story}</div>`
-        + `<div class="econ3d-qh-accept">💬 다가가 <b>E</b> (또는 클릭)로 [${data.offer.name}] 수락</div></div>`;
+        + `<div class="econ3d-qh-accept">다가가 <b>E</b> (또는 클릭)로 [${data.offer.name}] 수락</div></div>`;
     }
     if (!data.offer && !(data.active && data.active.length) && data.guide) {
-      html += `<div class="econ3d-qh-offer"><div class="econ3d-qh-name">❗ 새 퀘스트</div>`
+      html += `<div class="econ3d-qh-offer"><div class="econ3d-qh-name"><span class="qh-mark">!</span> 새 퀘스트</div>`
         + `<div class="econ3d-qh-accept"><b>${data.guide.npcName}</b>(${data.guide.dist}m)에게 가서 대화하세요</div></div>`;
     }
     if (!html) { hud.style.display = 'none'; return; }
