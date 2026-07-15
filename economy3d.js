@@ -7569,7 +7569,7 @@
       if (!lookS.locked) return;   // V21-A: 첫 클릭은 시점 잠금만(잠금 전 오조작 방지, MC 표준)
       // ── V21-A 입력 재정리(MC 표준): 우클릭=상호작용/설치, 좌클릭=공격/파괴만 ──
       if (e.button === 2) {
-        useHeld = true; useRepeatT = 0;
+        useHeld = true; useRepeatT = 0.28;   // V134: 클릭 1회=1개만(연타 초기 지연). 홀드 시 0.28s 후 연속 설치(실제 MC 쿨다운)
         performUseAction(false);
         return;
       }
@@ -7627,7 +7627,7 @@
     if (panelOpen()) return;
     e.preventDefault();
     const dir = e.deltaY > 0 ? 1 : -1;
-    selectHotbarSlot(((selectedHotbar + dir) % 8 + 8) % 8);   // 0~7 순환(8번=메뉴 별 제외)
+    selectHotbarSlot(((selectedHotbar + dir) % 9 + 9) % 9);   // V134: 0~8 전 9칸 순환(9번=메뉴 별도 선택 가능, 실제 MC 동일)
   }
   function bindInput() {
     document.addEventListener('keydown', onKey); document.addEventListener('keyup', onKeyUp);
@@ -9821,7 +9821,7 @@
         if (useHeld && worldMode === 'home' && selectedPlaceKey) {
           useRepeatT -= dt;
           if (useRepeatT <= 0) {
-            useRepeatT = 0.18;
+            useRepeatT = 0.22;   // V134: 홀드 연속 설치 ~4.5/초(실제 MC 우클릭 유지 배치 케이던스)
             homePlaceBlock(true);
           }
         }
@@ -9992,7 +9992,7 @@
     const api = econApi(); const P0 = api.getP ? api.getP() : null; if (!P0) return;
     P0._heldIdx = selectedHotbar;   // V28-A
     ensureHotbar();
-    const icon = k => (typeof window.econIcon === 'function' ? `<img src="${window.econIcon(k)}" alt="">` : '');
+    const icon = k => { if (typeof window.econItemPng === 'function') { const p = window.econItemPng(k); if (p) return `<img src="${p}" alt="">`; } return (typeof window.econIcon === 'function' ? `<img src="${window.econIcon(k)}" alt="">` : ''); };   // V134: 실제 MC 텍스처 우선
     const eco = window.__econ || {};
     // V22-H2: 9번 칸 = 네더의 별(스카이블럭 메뉴) 고정 — 실제 하이픽셀과 동일
     const star = document.getElementById('econ3dSlot8');
