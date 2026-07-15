@@ -9817,7 +9817,6 @@
       <div class="econ3d-questbanner" id="econ3dQuestBanner" style="display:none"></div>
       ${isTouch ? '<div class="econ3d-jump" data-act="econ3d_jump">⤒</div>' : ''}
       <div class="econ3d-panelwrap" id="econ3dPanelWrap" style="display:none">
-        <div class="econ3d-panelbar"><span id="econ3dPanelGold"></span><button class="btn btn--ghost btn--sm" data-act="econ3d_panel_close">✕ 닫기</button></div>
         <div id="econBody" class="econ-body econ3d-body"></div>
       </div>
     </section>`;
