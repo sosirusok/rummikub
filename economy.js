@@ -2625,7 +2625,8 @@
     if (activeCombat) { body.innerHTML = combatHTML(); return; }
     if (dungeonRun) { body.innerHTML = dungeonRoomHTML(); return; }
     if (isInv) { body.innerHTML = `<div class="mc-invwindow">${invHTML()}</div>`; return; }
-    body.innerHTML = selfMenuHTML() + zoneBodyHTML(zone);
+    // V151: 실제 스블처럼 상단 탭 없이 순수 상자 GUI만 — 메뉴 상자에서 아이템 클릭으로 하위 상자 이동(selfMenuHTML 탭바 폐지)
+    body.innerHTML = zoneBodyHTML(zone);
   }
 
   // 스카이블럭 메뉴(셀프 서비스): 스탯/컬렉션/인벤토리/펫/장신구/멀티 — 나머지는 해당 NPC를 직접 찾아가야 함
@@ -2797,9 +2798,13 @@
   });
   document.addEventListener('mousemove', e => { if (_ttEl && _ttEl.style.display === 'block') richTTMove(e.clientX, e.clientY); });
   function hubHTML() {
+    // V151: 상단 탭 폐지 → 자체 뒤로가기 행이 없는 하위 상자엔 뒤로/닫기 행 자동 추가(순수 상자 GUI 네비)
+    const NO_NAV = ['stats', 'multi', 'ach', 'difficulty', 'equiplog'];
+    const extraNav = (hubTab && hubTab !== 'menu' && NO_NAV.indexOf(hubTab) >= 0) ? chestNavRow('menu') : '';
     return `<div class="econ-panel">
       ${hubTabBodyHTML()}
       ${bankSecretHTML()}
+      ${extraNav}
     </div>`;
   }
   function hubTabBodyHTML() {
