@@ -2637,7 +2637,11 @@
     ['craft', '⚒️ 제작'], ['bazaar', '🏪 바자회'], ['auction', '🏛️ 경매장'], ['deals', '🎪 특가'], ['collections', '📚 컬렉션'], ['halloffame', '🏆 명예의 전당'], ['stats', '📊 스탯'],
     ['multi', '🌐 멀티'],
   ];
-  function iconImg(key) { return (typeof window.econIcon === 'function') ? `<img class="econ-icon" src="${window.econIcon(key)}" alt="">` : ''; }
+  function iconImg(key) {
+    // V134: 바닐라 아이템은 실제 MC 텍스처(item/*.png) 직접 참조 → 선명한 진짜 아이콘. 블럭/커스텀만 절차 폴백.
+    if (typeof window.econItemPng === 'function') { const p = window.econItemPng(key); if (p) return `<img class="econ-icon" src="${p}" alt="">`; }
+    return (typeof window.econIcon === 'function') ? `<img class="econ-icon" src="${window.econIcon(key)}" alt="">` : '';
+  }
   // 실제 스카이블럭식 아이템 로어(호버 툴팁): 이름 → 스탯 → 설명 → 등급 라인
   function itemLore(sdef) {
     if (!sdef) return '';
@@ -2877,24 +2881,25 @@
       ${chestNavRow('menu')}</div>`;
   }
   function menuHTML() {
+    // V134: 실제 MC 아이템 아이콘(이모지 폐기) — [키, 아이콘아이템, 이름, 설명]
     const tiles = [
-      ['stats', '📊', '내 프로필', '스탯 시트'], ['skills', '🧠', '스킬', '8종 스킬 진행도'],
-      ['collections', '📚', '컬렉션', '자원 39종 티어'], ['inv', '🎒', '인벤토리', '보유 아이템'],
-      ['slayer', '💀', '슬레이어', '의뢰·보스·레벨'], ['minions', '⚙️', '미니언', '조합·컬렉션·수거'],
-      ['ach', '🏅', '업적', `${Object.keys(P.ach || {}).length}/${D().ACHIEVEMENTS.length} 달성`], ['daily', '📜', '페처·커미션', '아이템 전달 + 광부 할당량(실제식)'],
-      ['difficulty', '🎚️', '난이도', `현재: ${fieldDiffDef().name}`], ['equiplog', '📔', '장비 도감', `${fmtNum(equipLogCount())}/${fmtNum(equipTotalCount())}종`],
-      ['pets', '🐾', '펫', '펫 관리'], ['talismans', '📿', '장신구 가방', '부적/마력'],
-      ['potions', '🧪', '물약(연금술)', '양조대 — 실제 20종'], ['attributes', '🧬', '속성', '파편 사이펀 — 사냥 스킬'], ['craft', '⚒️', '레시피 북', '제작(장인 NPC와 동일)'], ['bestiary', '📕', '도감', '처치 기록·마일스톤 보너스'], ['multi', '🌐', '멀티', '거래·파티·섬 방문'],
-      ['halloffame', '🏆', '명예의 전당', '전 시스템 기록·마일스톤'],
+      ['stats', 'nether_star', '내 프로필', '스탯 시트'], ['skills', 'diamond_sword', '스킬', '스킬 진행도'],
+      ['collections', 'book', '컬렉션', '자원 티어'], ['inv', 'chest', '인벤토리', '보유 아이템'],
+      ['slayer', 'iron_sword', '슬레이어', '의뢰·보스·레벨'], ['minions', 'crafting_table', '미니언', '조합·컬렉션·수거'],
+      ['ach', 'gold_ingot', '업적', `${Object.keys(P.ach || {}).length}/${D().ACHIEVEMENTS.length} 달성`], ['daily', 'paper', '페처·커미션', '아이템 전달 + 광부 할당량(실제식)'],
+      ['difficulty', 'blaze_powder', '난이도', `현재: ${fieldDiffDef().name}`], ['equiplog', 'iron_chestplate', '장비 도감', `${fmtNum(equipLogCount())}/${fmtNum(equipTotalCount())}종`],
+      ['pets', 'bone', '펫', '펫 관리'], ['talismans', 'ender_pearl', '장신구 가방', '부적/마력'],
+      ['potions', 'potion', '물약(연금술)', '양조대 — 실제 20종'], ['attributes', 'nether_wart', '속성', '파편 사이펀 — 사냥 스킬'], ['craft', 'knowledge_book', '레시피 북', '제작(장인 NPC와 동일)'], ['bestiary', 'writable_book', '도감', '처치 기록·마일스톤 보너스'], ['multi', 'ender_eye', '멀티', '거래·파티·섬 방문'],
+      ['halloffame', 'emerald', '명예의 전당', '전 시스템 기록·마일스톤'],
     ];
     const worlds = (typeof window.economy3dWorlds === 'function') ? window.economy3dWorlds() : [];
-    // V27-C: 실제 스카이블럭 메뉴 = 상자(체스트) UI — 슬롯 그리드에 아이콘, 설명은 호버 툴팁
-    const slot = (t) => `<div class="mc-slot mc-menuslot" data-act="econ_menu" data-key="${t[0]}" data-ttn="${escHtml(t[2])}" data-ttd="${escHtml(t[3])}"><span>${t[1]}</span></div>`;
+    // V27-C: 실제 스카이블럭 메뉴 = 상자(체스트) UI — 슬롯 그리드에 실제 아이템 아이콘
+    const slot = (t) => `<div class="mc-slot mc-menuslot" data-act="econ_menu" data-key="${t[0]}" data-ttn="${escHtml(t[2])}" data-ttd="${escHtml(t[3])}">${iconImg(t[1])}</div>`;
     const pad = (arr) => { const out = arr.slice(); while (out.length % 9) out.push('<div class="mc-slot mc-empty2"></div>'); return out; };
     const warpSlots = worlds.map(w => {
       const locked = w.req && skillLevel(w.req.sk) < w.req.lv;
       const desc = w.req ? `${w.req.name} Lv${w.req.lv} 필요${locked ? ` (현재 ${skillLevel(w.req.sk)})` : ' ✓'}` : '바로 이동';
-      return `<div class="mc-slot mc-menuslot ${locked ? 'mc-locked' : ''}" data-act="econ_warp" data-key="${w.key}" data-ttn="${escHtml(w.name)}" data-ttd="${escHtml(desc)}"><span>${locked ? '🔒' : '🌀'}</span></div>`;
+      return `<div class="mc-slot mc-menuslot ${locked ? 'mc-locked' : ''}" data-act="econ_warp" data-key="${w.key}" data-ttn="${escHtml(w.name)}" data-ttd="${escHtml(desc)}">${iconImg('slime_ball')}</div>`;   // V134: 워프=슬라임 발사대
     });
     return `<div class="mc-chest">
         <div class="mc-chesttitle">✦ 스카이블럭 메뉴</div>
