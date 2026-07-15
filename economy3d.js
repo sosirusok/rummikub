@@ -9010,7 +9010,9 @@
     m._hitFx = 0.15;   // V24-B: 피격 반응(스케일 펀치)
     if (m.def && m.def.passive) { m.state = 'flee'; m._fleeT = 4; }   // V24-D: 동물은 도망
     if (php && r.heal) { php.hp = Math.min(php.max, php.hp + r.heal); }
-    spawnDmgText(m.mesh.position, r.dmg, r.crit);
+    // V147: 광포 이산 추가타 — 실제 스블처럼 타격 수만큼 개별 데미지 스플래시(각 타=원타 복제)
+    if (r.hits > 1 && r.hitDmg != null) { for (let h = 0; h < Math.min(r.hits, 6); h++) spawnDmgText(m.mesh.position, r.hitDmg, r.crit); }
+    else spawnDmgText(m.mesh.position, r.dmg, r.crit);
     if (r.crit) spawnCritParticles(m.mesh.position);   // V27-E: MC 크리티컬 별(particle/critical_hit.png)
     // V24: 넉백 — 순간이동식(0.7블럭 즉시) 대신 실제 MC처럼 밀려나는 관성(감쇠 속도)
     const dx = m.mesh.position.x - P.x, dz = m.mesh.position.z - P.z; const l = Math.hypot(dx, dz) || 1;
