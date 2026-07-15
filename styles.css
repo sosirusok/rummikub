@@ -1451,7 +1451,7 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 /* V27-B: 실제 MC 핫바 스킨 — gui/sprites/hud/hotbar.png(182×22)를 2배로. 슬롯 9칸 = 40px 간격 */
 .econ3d-hotbar{position:absolute; left:50%; transform:translateX(-50%); bottom:34px; display:flex; gap:0; z-index:5;
   width:364px; height:44px; padding:2px; box-sizing:border-box;
-  background:rgba(10,14,24,.35) url('gui/sprites/hud/hotbar.png') no-repeat center/364px 44px; image-rendering:pixelated; border-radius:2px;}
+  background:url('gui/sprites/hud/hotbar.png') no-repeat center/364px 44px; image-rendering:pixelated; border-radius:0;}   /* V140: 이중 틴트 제거 → 순수 실제 hotbar.png */
 .econ3d-slot{width:40px; height:40px; border-radius:0; border:none; background:transparent; padding:5px; cursor:pointer;}
 .econ3d-slot.is-active{filter:brightness(1.18);}
 .econ3d-slot.is-active::after{content:''; position:absolute; left:-2px; top:-3px; width:48px; height:46px;
