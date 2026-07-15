@@ -9815,7 +9815,7 @@
       <div class="econ3d-chat" id="econ3dChat"></div>
       <div class="econ3d-questhud" id="econ3dQuestHud" style="display:none"></div>
       <div class="econ3d-questbanner" id="econ3dQuestBanner" style="display:none"></div>
-      ${isTouch ? '<div class="econ3d-jump" data-act="econ3d_jump">⤒</div>' : '<div class="econ3d-controlhint">WASD 이동 · Space 점프 · W 더블탭 달리기 · 좌클릭 공격/꾹 눌러 채집 · 우클릭 설치/상호작용/낚시 · E 인벤토리 · M 지도</div>'}
+      ${isTouch ? '<div class="econ3d-jump" data-act="econ3d_jump">⤒</div>' : ''}
       <div class="econ3d-panelwrap" id="econ3dPanelWrap" style="display:none">
         <div class="econ3d-panelbar"><span id="econ3dPanelGold"></span><button class="btn btn--ghost btn--sm" data-act="econ3d_panel_close">✕ 닫기</button></div>
         <div id="econBody" class="econ-body econ3d-body"></div>
@@ -10024,7 +10024,7 @@
     const eco = window.__econ || {};
     // V22-H2: 9번 칸 = 네더의 별(스카이블럭 메뉴) 고정 — 실제 하이픽셀과 동일
     const star = document.getElementById('econ3dSlot8');
-    if (star) { star.innerHTML = '<img src="item/nether_star.png" alt="" style="width:82%;height:82%;image-rendering:pixelated;image-rendering:crisp-edges">'; star.title = '스카이블럭 메뉴 (9)'; star.classList.remove('is-active'); }
+    if (star) { star.innerHTML = '<img src="item/nether_star.png" alt="" style="width:82%;height:82%;image-rendering:pixelated;image-rendering:crisp-edges">'; star.title = '스카이블럭 메뉴 (9)'; star.classList.toggle('is-active', selectedHotbar === 8); }   // V151: 9번(메뉴)도 휠/선택 시 하이라이트
     for (let i = 0; i < 8; i++) {
       const el = document.getElementById('econ3dSlot' + i); if (!el) continue;
       const k = P0.hotbar[i];
