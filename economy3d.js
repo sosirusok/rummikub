@@ -6822,7 +6822,90 @@
     specs.forEach((s, i) => { const m = mkBox(s.w, s.h, s.d, s.col, s.x, s.y, s.z); g.add(m); if (i === legLi) legL = m; else if (i === legRi) legR = m; });
     return { group: g, legL, legR };
   }
-  // V122: 실제 마인크래프트 주민(Villager) 모델 — 큰 코/눈썹 능선/긴 갈색 로브/배 앞에 모은 팔/직업 배지
+  // V155: 실제 MC 주민 텍스처(entity/villager/*.png) — 타입(평원) 베이스 + 직업 오버레이 + 레벨 배지 캔버스 합성
+  const _villTexCache = {};
+  function villagerTexture(prof) {
+    const key = prof || '_plain';
+    if (_villTexCache[key]) return _villTexCache[key];
+    const cv = document.createElement('canvas'); cv.width = 64; cv.height = 64;
+    const c = cv.getContext('2d'); c.imageSmoothingEnabled = false;
+    const tex = new THREE.CanvasTexture(cv);
+    tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestFilter;
+    const load = (src) => new Promise(res => { const im = new Image(); im.onload = () => { try { c.drawImage(im, 0, 0, 64, 64); } catch (e) {} res(); }; im.onerror = () => res(); im.src = src; });
+    (async () => {
+      // 베이스=바닐라 주민(머리/얼굴/코/로브 포함). 타입(plains 등)은 이 리소스팩에선 머리가 비어 있어 베이스로 부적합.
+      await load('entity/villager/villager.png');
+      if (prof && prof !== 'villager') {
+        await load('entity/villager/profession/' + prof + '.png');   // 직업 복장 오버레이
+        await load('entity/villager/profession_level/stone.png');    // 직업 배지(견습 등급)
+      }
+      tex.needsUpdate = true;
+    })();
+    _villTexCache[key] = tex;
+    return tex;
+  }
+  const _villMatCache = {};
+  function villagerMat(prof) { const k = prof || '_plain'; if (!_villMatCache[k]) _villMatCache[k] = new THREE.MeshBasicMaterial({ map: villagerTexture(prof), side: THREE.DoubleSide, alphaTest: 0.5, transparent: true }); return _villMatCache[k]; }
+  // 바닐라 주민 모델을 텍셀 좌표 그대로 박스 UV 언랩 → 단일 병합 지오메트리(1 드로우콜)
+  function mcVillagerGeo() {
+    const S = 0.9375 / 16, BASE = 24, TW = 64, TH = 64;
+    const pos = [], uv = [], idx = []; let vi = 0;
+    function addBox(cx, cy, cz, W, H, D, u, v, inf, rot) {
+      inf = inf || 0;
+      const hx = W / 2 + inf, hy = H / 2 + inf, hz = D / 2 + inf;
+      let C = [
+        [cx - hx, cy - hy, cz - hz], [cx + hx, cy - hy, cz - hz], [cx + hx, cy + hy, cz - hz], [cx - hx, cy + hy, cz - hz],
+        [cx - hx, cy - hy, cz + hz], [cx + hx, cy - hy, cz + hz], [cx + hx, cy + hy, cz + hz], [cx - hx, cy + hy, cz + hz]
+      ];
+      if (rot) { const a = rot.angle, ca = Math.cos(a), sa = Math.sin(a), py = rot.py, pz = rot.pz; C = C.map(p => { const y = p[1] - py, z = p[2] - pz; return [p[0], py + y * ca - z * sa, pz + y * sa + z * ca]; }); }
+      const W3 = C.map(p => [S * p[0], S * (BASE - p[1]), S * p[2]]);
+      const R = {
+        up: [u + D, v, u + D + W, v + D], dn: [u + D + W, v, u + D + 2 * W, v + D],
+        nz: [u + D, v + D, u + D + W, v + D + H], pz: [u + 2 * D + W, v + D, u + 2 * D + 2 * W, v + D + H],
+        px: [u, v + D, u + D, v + D + H], nx: [u + D + W, v + D, u + 2 * D + W, v + D + H]
+      };
+      // 면: 코너 [TL,TR,BR,BL] (텍스처 상=모델 위=모델 -y)
+      const faces = [
+        { c: [0, 1, 5, 4], r: R.up },   // 모델 -y (윗면=머리카락/모자)
+        { c: [7, 6, 2, 3], r: R.dn },   // 모델 +y (밑면)
+        { c: [0, 1, 2, 3], r: R.nz },   // 모델 -z (정면=얼굴)
+        { c: [5, 4, 7, 6], r: R.pz },   // 모델 +z (뒷면)
+        { c: [1, 5, 6, 2], r: R.px },   // 모델 +x
+        { c: [4, 0, 3, 7], r: R.nx }    // 모델 -x
+      ];
+      for (const f of faces) {
+        const [x0, y0, x1, y1] = f.r;
+        const U0 = x0 / TW, U1 = x1 / TW, V0 = 1 - y0 / TH, V1 = 1 - y1 / TH;
+        const uvv = [[U0, V0], [U1, V0], [U1, V1], [U0, V1]];
+        for (let k = 0; k < 4; k++) { const p = W3[f.c[k]]; pos.push(p[0], p[1], p[2]); uv.push(uvv[k][0], uvv[k][1]); }
+        idx.push(vi, vi + 1, vi + 2, vi, vi + 2, vi + 3); vi += 4;
+      }
+    }
+    addBox(0, -5, 0, 8, 10, 8, 0, 0);          // 머리
+    addBox(0, -3, -5, 2, 4, 2, 24, 0);         // 코
+    addBox(0, 6, 0, 8, 12, 6, 16, 20);         // 몸통
+    addBox(0, 9, 0, 8, 18, 6, 0, 38, 0.25);    // 로브
+    const arm = { angle: -0.75, py: 3, pz: -1 };
+    addBox(-6, 2, 0, 4, 8, 4, 44, 22, 0, arm); // 오른팔
+    addBox(6, 2, 0, 4, 8, 4, 44, 22, 0, arm);  // 왼팔
+    addBox(0, 4, 0, 8, 4, 4, 40, 38, 0, arm);  // 팔 연결(손 모음)
+    addBox(-2, 18, 0, 4, 12, 4, 0, 22);        // 오른다리
+    addBox(2, 18, 0, 4, 12, 4, 0, 22);         // 왼다리
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    g.setIndex(idx);
+    return g;
+  }
+  let _villGeo = null;
+  function villagerGeo() { if (!_villGeo) _villGeo = mcVillagerGeo(); return _villGeo; }
+  function buildVillagerReal(prof) {
+    const g = new THREE.Group();
+    const m = new THREE.Mesh(villagerGeo(), villagerMat(prof));
+    g.add(m);
+    return { group: g, legL: null, legR: null };
+  }
+  // V122: (레거시) 절차적 컬러 박스 주민 — 텍스처판(buildVillagerReal)으로 대체됨
   //   NPC는 스티브형이 아니라 바닐라 주민 형태(직업색 배지 세로줄로 상점/은행/농부 등 구분)
   function buildVillager(look, opts) {
     const L = toLook(look);
@@ -7025,7 +7108,7 @@
     // 서비스 NPC(상점/은행/…) — 현재 월드 소속만
     NPCS.forEach(n => {
       if ((n.world || 'hub') !== worldMode) return;
-      const h = buildVillager(npcLook(n.key, n.color), { merged: true });   // V122: 실제 주민 모델
+      const h = buildVillagerReal(NPC_SKIN[n.key] || 'villager');   // V155: 실제 MC 주민 텍스처
       n._y = npcGroundY(n.x, n.z);
       h.group.position.set(n.x + 0.5, n._y, n.z + 0.5);
       h.group.rotation.y = hash3(n.x, 5, n.z) * Math.PI * 2;
@@ -7035,7 +7118,7 @@
     // V13-B: 위치기반 퀘스트 NPC(느낌표 표식) — 현재 월드 소속만
     questNpcList().forEach(n => {
       if ((n.world || 'hub') !== worldMode) return;
-      const h = buildVillager(npcLook(n.key, n.color), { merged: true });   // V122: 실제 주민 모델
+      const h = buildVillagerReal(NPC_SKIN[n.key] || 'villager');   // V155: 실제 MC 주민 텍스처
       n._y = npcGroundY(n.x, n.z);
       h.group.position.set(n.x + 0.5, n._y, n.z + 0.5);
       h.group.rotation.y = hash3(n.x, 9, n.z) * Math.PI * 2;
@@ -9899,7 +9982,7 @@
     try {
       if (!lastT) lastT = ts; let dt = (ts - lastT) / 1000; lastT = ts; if (dt > 0.1) dt = 0.1;
       worldTime += dt;
-      if (!panelOpen()) { collide(dt); if (gathering && gatherZoneKey) gatherAt(gatherZoneKey); }
+      if (!panelOpen() && !window.__ECON3D_FREEZE) { collide(dt); if (gathering && gatherZoneKey) gatherAt(gatherZoneKey); }
       // V13-A: 홈 터치 파괴는 아래 progressBreaking(금가는 과정)로 통합 — 즉시 파괴 제거
       // 인월드 게임플레이 틱: 채집 홀드/재생성/낚시/몬스터/피해 텍스트/체력
       if (!panelOpen()) {
@@ -10161,6 +10244,7 @@
       interactables: () => interactables,
       buildStaticInteractables: () => { NPCS.forEach(n => { n._y = surfaceTop(n.x, n.z); }); NODES.forEach(n => { n._y = surfaceTop(n.x, n.z); }); FAIRY_SPOTS.forEach(fs => { fs._y = fs.y != null ? fs.y : surfaceTop(fs.x, fs.z); }); buildStaticInteractables(); },
       scene: () => scene, camera: () => camera,
+      _buildVillagerReal: (p) => buildVillagerReal(p),
       world: () => world, W, H, D: Dp, SEA,
       setGathering: (v, zk) => { gathering = v; gatherZoneKey = zk; },
       collide, moveAxis, dayFactor, ambientMobs: () => ambientMobs, keys,   // V27-A: 입력 시뮬 검증용
