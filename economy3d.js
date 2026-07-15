@@ -7838,6 +7838,7 @@
     world[widx(nx, ny, nz)] = id;
     if (api.setHomeEdit) api.setHomeEdit(nx, ny, nz, id);
     markBlockDirty(nx, nz); _mapDirty = true;
+    flushWorldEdits();   // V137: 설치 즉시 같은 프레임 메시화(1프레임 공백=투명해 보임 방지)
     updateBuildHud();
     return true;
   }
