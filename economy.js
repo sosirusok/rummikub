@@ -2862,7 +2862,7 @@
     });
     const now = Date.now();
     const act = Object.keys(P.buffs || {}).map(k => { const lv = buffLv(k); if (!lv) return ''; const b = brewDef(k); const e = P.buffs[k]; const until = typeof e === 'object' ? e.until : e; return `<span class="pill">🧪 ${b ? b.name : k} ${romanNum(lv)} — ${Math.max(0, Math.ceil((until - now) / 60000))}분</span>`; }).filter(Boolean).join(' ') || '<span class="muted">활성 버프 없음</span>';
-    return `<div class="mc-chest"><div class="mc-chesttitle">⚗️ 양조대 — 연금술 ${skillLevel('alchemy')}레벨 (6레벨마다 양조 티어 +1)</div>
+    return `<div class="mc-chest"><div class="mc-chesttitle">양조대 — 연금술 ${skillLevel('alchemy')}레벨 (6레벨마다 양조 티어 +1)</div>
       <div class="mc-grid">${pad9(slots)}</div>
       <div style="margin:6px 2px">${act}</div>
       <p class="muted">클릭=양조 · Shift+클릭=마시기. 일부 물약은 컬렉션 보상으로 해금(위키 동일).</p>
@@ -2885,7 +2885,7 @@
         data-ttn="${escHtml(`${a.name} ${lv ? romanNum(lv) : '—'} [${RN[a.rarity]}]`)}"
         data-ttd="${escHtml(`${a.desc} · 사이펀 ${syph}/${maxed ? syph : cum} (X레벨 누적 ${steps.reduce((x, y) => x + y, 0)}개) · 파편 보유 ${have} · 획득: ${a.mobs.join('/')} 계열 처치 4%${okHunt ? '' : ` · 🔒 사냥 ${req}레벨 필요`}${maxed ? ' · MAX' : ' · 클릭=파편 1개 사이펀'}`)}">${iconImg(ik)}${lv > 0 ? `<span class="mc-cnt">${lv}</span>` : ''}</div>`;
     });
-    return `<div class="mc-chest"><div class="mc-chesttitle">🧬 속성 메뉴 — 사냥 ${skillLevel('hunting')}레벨 (파편을 사이펀해 I~X 성장, 위키 요구량)</div>
+    return `<div class="mc-chest"><div class="mc-chesttitle">속성 메뉴 — 사냥 ${skillLevel('hunting')}레벨 (파편을 사이펀해 I~X 성장, 위키 요구량)</div>
       <div class="mc-grid">${pad9(slots)}</div>
       <p class="muted">몹 계열별 파편 드롭(4%) → 클릭=사이펀. 희귀도별 X레벨 누적 파편 96/64/48/32/24 · 사냥 레벨 게이트 0/5/10/15/20 (실제 위키).</p>
       ${chestNavRow('menu')}</div>`;
@@ -2912,7 +2912,7 @@
       return `<div class="mc-slot mc-menuslot ${locked ? 'mc-locked' : ''}" data-act="econ_warp" data-key="${w.key}" data-ttn="${escHtml(w.name)}" data-ttd="${escHtml(desc)}">${iconImg('slime_ball')}</div>`;   // V134: 워프=슬라임 발사대
     });
     return `<div class="mc-chest">
-        <div class="mc-chesttitle">✦ 스카이블럭 메뉴</div>
+        <div class="mc-chesttitle">스카이블럭 메뉴</div>
         <div class="mc-grid">${pad(tiles.map(slot)).join('')}</div>
         <div class="mc-chesttitle" style="margin-top:10px">빠른 이동 (워프)</div>
         <div class="mc-grid">${warpSlots.length ? pad(warpSlots).join('') : ''}</div>
@@ -2941,7 +2941,7 @@
       <button class="btn btn--sm" data-act="econ_bestiary_page" data-key="prev" ${pg <= 0 ? 'disabled' : ''}>◀ 이전</button>
       <span class="muted">${pg + 1} / ${pages} 쪽 (총 ${fmtNum(entries.length)}종)</span>
       <button class="btn btn--sm" data-act="econ_bestiary_page" data-key="next" ${pg >= pages - 1 ? 'disabled' : ''}>다음 ▶</button></div>` : '';
-    return `<div class="mc-chest"><div class="mc-chesttitle">📕 도감 — 종별 100마리당 전투 피해 +0.5% (현재 +${bestiaryBonusPct()}%)</div>
+    return `<div class="mc-chest"><div class="mc-chesttitle">도감 — 종별 100마리당 전투 피해 +0.5% (현재 +${bestiaryBonusPct()}%)</div>
       ${entries.length ? `<div class="mc-grid">${pad9(slots)}</div>${pageNav}` : '<p class="muted">아직 처치 기록이 없어요. 사냥을 시작해보세요!</p>'}
       ${chestNavRow('menu')}</div>`;
   }
@@ -2954,7 +2954,7 @@
       return `<div class="mc-slot mc-menuslot" data-ttn="${escHtml(sk.name)} Lv.${lv}" data-ttd="${escHtml(desc)}"><span>${IC[sk.key] || '📗'}</span><span class="mc-cnt">${lv}</span></div>`;
     });
     while (slots.length % 9) slots.push('<div class="mc-slot mc-empty2"></div>');
-    return `<div class="mc-chest"><div class="mc-chesttitle">🧠 스킬 (실제 스카이블럭 XP 테이블 · 상한 스킬별 상이)</div>
+    return `<div class="mc-chest"><div class="mc-chesttitle">스킬 (실제 스카이블럭 XP 테이블 · 상한 스킬별 상이)</div>
       <div class="mc-grid">${slots.join('')}</div>${chestNavRow('menu')}</div>`;
   }
   function invCatOf(k, sdef) {
@@ -3110,7 +3110,7 @@
   function multiHTML() {
     const n = net();
     if (!n || !n.isActive()) {
-      return `<h4>🌐 멀티플레이</h4>
+      return `<h4>멀티플레이</h4>
         <p class="econ-note">지금은 오프라인이에요. 로그인 + 클라우드 연결 상태에서 다른 플레이어와<br>
         <b>아이템·골드 거래</b>, <b>파티 던전</b>, <b>섬 방문</b>이 가능해요.<br>
         허브 군도는 서버의 모두와 공유되는 공용 월드예요. (프라이빗 섬만 나만의 공간!)</p>`;
@@ -3123,7 +3123,7 @@
     const byWorld = {};
     list.forEach(p => { byWorld[p.world] = (byWorld[p.world] || 0) + 1; });
     const worldRow = Object.keys(byWorld).map(w => { const wn = worldNames.find(x => x.key === w); return `${wn ? wn.name : w} <b>${byWorld[w]}</b>`; }).join(' · ');
-    return `<h4>🌐 멀티플레이 — 접속 중인 플레이어 ${list.length}명</h4>
+    return `<h4>멀티플레이 — 접속 중인 플레이어 ${list.length}명</h4>
       ${worldRow ? `<p class="muted">🗺️ 월드별: ${worldRow} — 프라이빗 섬 외 모든 월드가 공유돼요(장비까지 보여요!)</p>` : ''}
       ${list.length === 0 ? '<p class="econ-note">지금 허브에 다른 플레이어가 없어요. 친구를 초대해보세요!</p>' : ''}
       <div class="econ-shopgrid">${list.map(p => `
@@ -3133,7 +3133,7 @@
           <button class="btn btn--sm" data-act="econ_mp_party" data-id="${p.id}">⚔️ 파티 던전</button>
           <button class="btn btn--sm btn--ghost" data-act="econ_mp_visit" data-name="${escHtml(p.name)}">🏝️ 섬 방문</button>
         </div>`).join('')}</div>
-      <h4 style="margin-top:12px">🏝️ 이름으로 섬 방문</h4>
+      <h4 style="margin-top:12px">이름으로 섬 방문</h4>
       <div class="econ-tierbtns">
         <input id="econVisitName" class="econ-input" placeholder="플레이어 이름" maxlength="16">
         <button class="btn btn--sm" data-act="econ_mp_visit_input">방문하기</button>
@@ -3145,13 +3145,13 @@
     return `${items || '<span class="muted">아이템 없음</span>'} ${offer.gold > 0 ? `<b style="color:#facc15">+ ${fmtGold(offer.gold)}</b>` : ''}`;
   }
   function tradeHTML(t) {
-    if (t.stage === 'request_sent') return `<h4>🤝 거래</h4><p>${escHtml(t.peerName)}님의 수락을 기다리는 중...</p><button class="btn btn--sm btn--ghost" data-act="econ_mp_trade_cancel">취소</button>`;
-    if (t.stage === 'incoming') return `<h4>🤝 거래 요청</h4><p><b>${escHtml(t.peerName)}</b>님이 거래를 요청했어요!</p>
+    if (t.stage === 'request_sent') return `<h4>거래</h4><p>${escHtml(t.peerName)}님의 수락을 기다리는 중...</p><button class="btn btn--sm btn--ghost" data-act="econ_mp_trade_cancel">취소</button>`;
+    if (t.stage === 'incoming') return `<h4>거래 요청</h4><p><b>${escHtml(t.peerName)}</b>님이 거래를 요청했어요!</p>
       <button class="btn btn--sm" data-act="econ_mp_trade_acc">수락</button>
       <button class="btn btn--sm btn--ghost" data-act="econ_mp_trade_dec">거절</button>`;
     // stage 'open' — 오퍼 편집 + 잠금 + 확정
     const invKeys = Object.keys(P.inv).filter(k => (P.inv[k] || 0) > 0).slice(0, 40);
-    return `<h4>🤝 ${escHtml(t.peerName)}님과 거래 중</h4>
+    return `<h4>${escHtml(t.peerName)}님과 거래 중</h4>
       <div class="econ-shopgrid">
         <div class="econ-shopitem"><span><b>내 오퍼</b> ${t.myLock ? '🔒' : ''}${t.myConfirm ? ' ✅' : ''}</span><span>${offerListHTML(t.my, !t.myLock)}</span>
           ${t.myLock ? '' : `<div class="econ-tierbtns">${[100, 1000, 10000].map(g => `<button class="btn btn--sm btn--ghost" data-act="econ_mp_gold" data-amt="${g}">골드 +${fmtGold(g)}</button>`).join('')}<button class="btn btn--sm btn--ghost" data-act="econ_mp_gold" data-amt="0">골드 초기화</button></div>`}
@@ -3169,16 +3169,16 @@
       <p class="muted">양쪽 모두 잠금 → 확정하면 교환돼요. 오퍼가 바뀌면 잠금이 풀려요(안전장치).</p>`;
   }
   function partyHTML(pt) {
-    if (pt.stage === 'invited') return `<h4>⚔️ 파티 던전</h4><p>${escHtml(pt.peerName)}님의 수락을 기다리는 중... (던전 ${pt.floor}층)</p><button class="btn btn--sm btn--ghost" data-act="econ_mp_pt_leave">취소</button>`;
-    if (pt.stage === 'incoming') return `<h4>⚔️ 파티 던전 초대</h4><p><b>${escHtml(pt.peerName)}</b>님이 던전 <b>${pt.floor}층</b> 파티에 초대했어요!</p>
+    if (pt.stage === 'invited') return `<h4>파티 던전</h4><p>${escHtml(pt.peerName)}님의 수락을 기다리는 중... (던전 ${pt.floor}층)</p><button class="btn btn--sm btn--ghost" data-act="econ_mp_pt_leave">취소</button>`;
+    if (pt.stage === 'incoming') return `<h4>파티 던전 초대</h4><p><b>${escHtml(pt.peerName)}</b>님이 던전 <b>${pt.floor}층</b> 파티에 초대했어요!</p>
       <button class="btn btn--sm" data-act="econ_mp_pt_acc">수락</button>
       <button class="btn btn--sm btn--ghost" data-act="econ_mp_pt_dec">거절</button>`;
-    if (pt.stage === 'waiting') return `<h4>⚔️ 파티 던전</h4><p>호스트(${escHtml(pt.peerName)})가 던전을 시작하길 기다리는 중...</p><button class="btn btn--sm btn--ghost" data-act="econ_mp_pt_leave">파티 떠나기</button>`;
-    if (pt.role === 'host') return `<h4>⚔️ 파티 던전 진행 중 (호스트)</h4><p class="econ-note">던전 화면에서 전투를 진행하세요 — 파티원 ${escHtml(pt.peerName)}의 공격이 실시간 반영돼요.</p><button class="btn btn--sm btn--ghost" data-act="econ_mp_pt_leave">파티 해산</button>`;
+    if (pt.stage === 'waiting') return `<h4>파티 던전</h4><p>호스트(${escHtml(pt.peerName)})가 던전을 시작하길 기다리는 중...</p><button class="btn btn--sm btn--ghost" data-act="econ_mp_pt_leave">파티 떠나기</button>`;
+    if (pt.role === 'host') return `<h4>파티 던전 진행 중 (호스트)</h4><p class="econ-note">던전 화면에서 전투를 진행하세요 — 파티원 ${escHtml(pt.peerName)}의 공격이 실시간 반영돼요.</p><button class="btn btn--sm btn--ghost" data-act="econ_mp_pt_leave">파티 해산</button>`;
     // 게스트: 호스트 스냅샷으로 전투 화면 렌더 + 공격 버튼
     const run = pt.run;
-    if (!run) return `<h4>⚔️ 파티 던전</h4><p>호스트의 던전 상태를 기다리는 중...</p><button class="btn btn--sm btn--ghost" data-act="econ_mp_pt_leave">파티 떠나기</button>`;
-    return `<h4>⚔️ 파티 던전 ${run.floor}층 — ${run.roomIdx + 1}/${run.rooms.length}번 방 (${escHtml(pt.peerName)} 호스트)</h4>
+    if (!run) return `<h4>파티 던전</h4><p>호스트의 던전 상태를 기다리는 중...</p><button class="btn btn--sm btn--ghost" data-act="econ_mp_pt_leave">파티 떠나기</button>`;
+    return `<h4>파티 던전 ${run.floor}층 — ${run.roomIdx + 1}/${run.rooms.length}번 방 (${escHtml(pt.peerName)} 호스트)</h4>
       <p>호스트 HP: <b style="color:#4ade80">${Math.round(run.playerHp)}</b> / ${run.maxPlayerHp} · 점수 ${run.score}</p>
       <div class="econ-moblist">${(run.mobs || []).map(m => `
         <div class="econ-mobrow ${m.hp <= 0 ? 'is-dead' : ''}"><span>${m.isBoss ? '👹' : '🧟'} ${escHtml(m.name)}</span>
@@ -3202,14 +3202,14 @@
       const slots = items.map(sd => `<div class="mc-slot mc-menuslot"${ttAttr(sd)} data-act="econ_sell" data-key="${sd.key}">${iconImg(sd.key)}<span class="mc-cnt">${(P.inv[sd.key] || 0) > 9999 ? fmtNum(P.inv[sd.key]) : P.inv[sd.key]}</span></div>`);
       return `<div class="mc-chesttitle" style="margin-top:8px">${cat}</div><div class="mc-grid">${pad9(slots)}</div>`;
     }).join('');
-    return `<div class="mc-chest"><div class="mc-chesttitle">🛒 상점 주인 — 매입 전문</div>
+    return `<div class="mc-chest"><div class="mc-chesttitle">상점 주인 — 매입 전문</div>
       <p class="econ-note">슬롯 클릭 = <b>1개 판매</b> · Shift+클릭 = <b>전부 판매</b>. 골드는 강화·인챈트 합성·리포지에 사용(아이템은 채집·드롭·조합으로).</p>
       ${ownedCats || '<p class="muted">팔 수 있는 아이템이 없어요. 채집하고 사냥해서 가져오세요!</p>'}
       ${chestNavRow('menu')}</div>`;
   }
   // V14: 건축가 빌더 — 건축 블럭 대량(스택) 구매(코인 → 블럭, 서바이벌 설치용 재고)
   function buildShopHTML() {
-    return `<div class="mc-chest"><div class="mc-chesttitle">🧱 건축가 빌더 — 건축 자재상</div>
+    return `<div class="mc-chest"><div class="mc-chesttitle">건축가 빌더 — 건축 자재상</div>
       <p class="econ-note">코인으로 건축 블럭을 대량 구매. 산 블럭은 프라이빗 섬에서 서바이벌 설치. 소지금: ${fmtGold(P.gold)}</p>
       <div class="econ-shopgrid">${D().BUILDER_SHOP.map(b => {
         const ok = P.gold >= b.price;
@@ -3257,7 +3257,7 @@
     const dep = (amt, icon, label) => `<div class="mc-slot mc-menuslot" data-act="econ_bank_deposit" data-amt="${amt}" data-ttn="예치 ${label}" data-ttd="클릭: 소지금에서 ${label} 예치">${iconImg(icon)}</div>`;
     const wd = (amt, icon, label) => `<div class="mc-slot mc-menuslot" data-act="econ_bank_withdraw" data-amt="${amt}" data-ttn="출금 ${label}" data-ttd="클릭: 예치금에서 ${label} 출금">${iconImg(icon)}</div>`;
     const up = bi.next ? `<div class="mc-slot mc-menuslot" data-act="econ_bank_upgrade" data-ttn="🏦 금고 업그레이드 → ${bi.next.name}" data-ttd="상한 ${fmtGold(bi.next.cap)} · 골드 ${fmtGold(bi.next.cost)}${bi.next.egb ? ` · 인챈티드 골드블럭 ${bi.next.egb}` : ''}${bi.next.goldColl ? ` · 골드 컬렉션 ${fmtNum(bi.next.goldColl)}` : ''} — 클릭: 업그레이드">${iconImg('emerald')}</div>` : `<div class="mc-slot mc-menuslot mc-colmax" data-ttn="🏆 최고 등급 금고 (${bi.name})" data-ttd="상한 ${fmtGold(bi.cap)}">${iconImg('emerald')}</div>`;
-    return `<div class="mc-chest"><div class="mc-chesttitle">🏦 은행 [${bi.name}] — 예치 ${fmtGold(P.bank)} · 소지 ${fmtGold(P.gold)} (시즌 이자 최대 ${fmtGold(bi.maxInterest)} · 상한 ${fmtGold(bi.cap)})</div>
+    return `<div class="mc-chest"><div class="mc-chesttitle">은행 [${bi.name}] — 예치 ${fmtGold(P.bank)} · 소지 ${fmtGold(P.gold)} (시즌 이자 최대 ${fmtGold(bi.maxInterest)} · 상한 ${fmtGold(bi.cap)})</div>
       <div class="mc-chesttitle" style="margin-top:8px">예치 (금괴 클릭)</div>
       <div class="mc-grid">${pad9([dep(1000, 'gold', '1,000G'), dep(10000, 'gold', '10,000G'), dep('all', 'gold_block', '전부'), up])}</div>
       <div class="mc-chesttitle" style="margin-top:8px">출금</div>
@@ -3271,7 +3271,7 @@
     const uniq = Object.keys(P.minionCrafts || {}).length;
     const nextSlotAt = [5, 15, 50, 100, 200, 350, 650].find(t => t > uniq) || 650;   // 다음 슬롯이 열리는 고유 조합 수(실제 계단식)
     const storedTotal = P.minions.reduce((n, m) => n + m.storage, 0);
-    return `<h4>⚙️ 미니언 (슬롯 ${P.minions.length}/${P.maxMinionSlots})</h4>
+    return `<h4>미니언 (슬롯 ${P.minions.length}/${P.maxMinionSlots})</h4>
       <div class="econ-tierbtns">
         <button class="btn btn--sm" data-act="econ_minion_fuel" data-key="${F1.key}" ${hasItem(F1.key) ? '' : 'disabled'}>🔥 ${F1.name} (보유 ${P.inv[F1.key] || 0})</button>
         <button class="btn btn--sm" data-act="econ_minion_fuel" data-key="${F2.key}" ${hasItem(F2.key) ? '' : 'disabled'}>🌋 ${F2.name} (보유 ${P.inv[F2.key] || 0})</button>
@@ -3309,7 +3309,7 @@
       return `<div class="mc-slot mc-menuslot ${act ? 'mc-colmax' : ''}" data-act="econ_pet_activate" data-key="${p.key}" data-ttn="${escHtml(p.name)} [${tierNameByKey(p.tierKey)}] Lv.${lvl}${act ? ' ✔활성' : ''}" data-ttd="${escHtml(p.perkText)} — 클릭: 활성화">${iconImg('pet_egg_' + p.key)}<span class="mc-cnt">${lvl}</span></div>`;
     });
     const missSlots = (D().PETS || []).filter(p => !P.pets[p.key]).map(p => `<div class="mc-slot mc-menuslot mc-locked" data-ttn="${escHtml(p.name)}" data-ttd="${p.eggPrice > 0 ? '상점 알 구매로 획득' : '보스 드롭 전용'}">${iconImg('pet_egg_' + p.key)}</div>`);
-    return `<div class="mc-chest"><div class="mc-chesttitle">🐾 펫 (활성 1마리 보너스 적용)</div>
+    return `<div class="mc-chest"><div class="mc-chesttitle">펫 (활성 1마리 보너스 적용)</div>
       ${eggSlots.length ? `<div class="mc-chesttitle" style="margin-top:8px">보유한 알</div><div class="mc-grid">${pad9(eggSlots)}</div>` : ''}
       <div class="mc-chesttitle" style="margin-top:8px">보유한 펫</div>
       ${petSlots.length ? `<div class="mc-grid">${pad9(petSlots)}</div>` : '<p class="muted">보유한 펫이 없어요 — 알을 부화시키세요.</p>'}
@@ -3326,7 +3326,7 @@
     const owned = D().TALISMANS.filter(t => hasItem(t.key));
     const missing = D().TALISMANS.filter(t => !hasItem(t.key));
     const slot = (t, ownedFlag) => `<div class="mc-slot mc-menuslot ${ownedFlag ? '' : 'mc-locked'}" ${!ownedFlag && t.buyPrice > 0 ? `data-act="econ_buy" data-key="${t.key}"` : ''} data-ttn="${escHtml(t.name)}${ownedFlag ? ' ✔' : ''}" data-ttd="${escHtml(t.desc)}${!ownedFlag ? (t.buyPrice > 0 ? ` — 클릭: 구매 ${fmtGold(t.buyPrice)}` : ' — 보스/퀘스트 보상') : ''}">${iconImg(t.key)}</div>`;
-    return `<div class="mc-chest"><div class="mc-chesttitle">📿 장신구 가방 — 마력 ${magicalPower()} (선택한 파워스톤 스탯 ×${mpScale().toFixed(1)} 증폭 — 실제 스블)</div>
+    return `<div class="mc-chest"><div class="mc-chesttitle">장신구 가방 — 마력 ${magicalPower()} (선택한 파워스톤 스탯 ×${mpScale().toFixed(1)} 증폭 — 실제 스블)</div>
       <p class="muted">✨ 전능의 힘: <b>${curPw.name}</b> (스케일 ${Math.round(mpScale())} → ${pwLine})</p>
       <div class="econ-tierbtns" style="margin-bottom:8px">${powerBtns}</div>
       <div class="mc-chesttitle">보유 장신구</div>
@@ -3350,7 +3350,7 @@
         (!isOver ? `클릭: 부여 ${fee > 0 ? fmtGold(fee) : '무료'}` : (canChaos ? `클릭: 🌀 혼돈 돌파 ${Math.round(chaosRate(e, cur) * 100)}% (${fmtGold(chaosCost(e, cur))})` : 'MAX'));
       return `<div class="mc-slot mc-menuslot ${!hasItem(book) ? 'mc-locked' : ''}" ${hasItem(book) ? act : ''} data-ttn="${escHtml(e.name)} ${cur}/${e.maxLvl}${cur > e.maxLvl ? ` (+${cur - e.maxLvl} 혼돈)` : ''}" data-ttd="${escHtml(desc)}">${iconImg(book)}${cur > 0 ? `<span class="mc-cnt">${cur}</span>` : ''}</div>`;
     });
-    return `<div class="mc-chest"><div class="mc-chesttitle">✨ 인챈트 탑 — 북으로 상한까지, 그 위는 혼돈의 마법부여</div>
+    return `<div class="mc-chest"><div class="mc-chesttitle">인챈트 탑 — 북으로 상한까지, 그 위는 혼돈의 마법부여</div>
       <div class="mc-grid">${pad9(slots)}</div>
       <p class="muted">잠긴 슬롯 = 해당 인챈트북 미보유(몹 드롭으로 획득). 상한 도달 후 클릭 = 혼돈 돌파(운빨).</p>
       ${chestNavRow('menu')}</div>`;
@@ -3397,7 +3397,7 @@
         <span class="muted">${t >= 5 ? '👑 완전 정복!' : `다음 ${hofBadge(t + 1)} @ ${r.fmt(nextTh)}`}</span>
       </div>`;
     }).join('');
-    return `<div class="mc-chest"><div class="mc-chesttitle">🏆 명예의 전당 — 나의 기록 (명예 점수 ${totalTier}/${maxTier})</div>
+    return `<div class="mc-chest"><div class="mc-chesttitle">명예의 전당 — 나의 기록 (명예 점수 ${totalTier}/${maxTier})</div>
       <div class="econ-colgrid">${rows}</div>
       ${chestNavRow('menu')}</div>`;
   }
@@ -3423,7 +3423,7 @@
         <p class="muted">2연속 하락 시 다음 강화는 찬스 타임(100% 성공) — 메이플 방식</p>`}
       </div>`;
     }).join('');
-    return `<div class="mc-chest"><div class="mc-chesttitle">⭐ 스타포스 강화 — 6슬롯 개별 강화</div>${rows}${chestNavRow('menu')}</div>`;
+    return `<div class="mc-chest"><div class="mc-chesttitle">스타포스 강화 — 6슬롯 개별 강화</div>${rows}${chestNavRow('menu')}</div>`;
   }
   function reforgeHTML() {
     const row = (slot, label, eq) => {
@@ -3448,10 +3448,10 @@
         <button class="btn btn--sm" data-act="econ_hpb" data-key="${eq.key}" ${cur >= HB.fumingMax ? 'disabled' : ''}>${cur >= HB.maxBooks ? `퓨밍 먹이기(보유 ${P.inv.fuming_potato_book || 0})` : `핫포북 먹이기(보유 ${P.inv.hot_potato_book || 0})`}</button>
       </div>`;
     }).join('');
-    return `<h4>🔨 재련소 — 무작위 리포지로 대박을 노리거나, 리포지 스톤으로 확정 최상급을! (V11: 6슬롯)</h4>
+    return `<h4>재련소 — 무작위 리포지로 대박을 노리거나, 리포지 스톤으로 확정 최상급을! (V11: 6슬롯)</h4>
       ${EQUIP_SLOTS.map(sl => row(sl, `${SLOT_EMOJI[sl]} ${SLOT_NAMES[sl]}`, equippedPiece(sl))).join('')}
       <p class="muted">보유 리포지 스톤(희귀): ${P.inv.reforge_stone_rare || 0}</p>
-      <h4>🥔 핫 포테이토 북 — 장비당 최대 15권(10권부터 퓨밍 필요)</h4>
+      <h4>핫 포테이토 북 — 장비당 최대 15권(10권부터 퓨밍 필요)</h4>
       <div class="econ-shopgrid">${hpbRows || '<p class="muted">장착 중인 장비가 없어요</p>'}</div>
       ${chestNavRow('menu')}`;
   }
@@ -3530,7 +3530,7 @@
   function dealsHTML() {
     // V7: 경매인 = 수집상. 매일 원하는 아이템 3종을 시세의 2.5배로 매입(무화폐 구매 경제의 골드 수급처)
     const deals = dealsForToday();
-    return `<div class="mc-chest"><div class="mc-chesttitle">🎪 수집상 — 오늘의 웃돈 매입(시세 ×2.5)</div>
+    return `<div class="mc-chest"><div class="mc-chesttitle">수집상 — 오늘의 웃돈 매입(시세 ×2.5)</div>
       <p class="econ-note">수집상이 매일 다른 아이템을 비싸게 사들여요. 보유분을 팔아 강화 자금을 벌어보세요!</p>
       <div class="econ-shopgrid">${deals.map((d, i) => {
         const sd = shopDef(d.key); if (!sd) return '';
@@ -3563,7 +3563,7 @@
         </span>
       </div>`;
     }).join('');
-    return `<div class="mc-chest"><div class="mc-chesttitle">🏪 바자회 — 대량 자원 시장</div>
+    return `<div class="mc-chest"><div class="mc-chesttitle">바자회 — 대량 자원 시장</div>
       <p class="econ-note">시세는 1시간마다 ±${bz.fluxPct}% 변동. 즉시구매가는 즉시판매가보다 ${bz.spreadPct}% 높음(스프레드). 원자재/인챈티드 자원 전용.</p>
       <div class="econ-zonenav">${catNav}</div>
       <div class="econ-tierbtns" style="margin:6px 0">거래 수량: ${qtyNav}</div>
@@ -3593,7 +3593,7 @@
       }).join('');
       tierBlocks.push(`<h4 style="margin-top:10px">${unlocked ? '🔓' : '🔒'} 티어 ${t}${!unlocked ? ' <span class="muted" style="font-weight:400">(잠김)</span>' : ''}</h4><div class="econ-shopgrid">${rows}</div>`);
     }
-    return `<h4>⛰️ 산의 심장 (Heart of the Mountain)</h4>
+    return `<h4>산의 심장 (Heart of the Mountain)</h4>
       <p class="econ-note">광산에서 채광하면 <b>🔹미스릴 가루</b>(가끔 <b>💎젬스톤 가루</b>)를 모아요. 노드를 강화해 채광 포춘·속도를 올리세요. 현재 티어 <b>${st.tier}/${H.maxTier}</b>.</p>
       <div class="econ-colgrid">
         <div class="econ-colrow"><span>🔹 미스릴 가루</span><span><b>${fmtNum(st.mithril)}</b></span><span class="muted">채광 포춘 +${hotmMiningFortune()} · 속도 +${hotmMiningSpeed()}</span></div>
@@ -3654,11 +3654,11 @@
         </span>
       </div>`;
     }).join('') : '<p class="muted">등록할 수 있는 아이템이 없어요(채집·드롭·조합으로 획득한 잉여분을 올릴 수 있어요).</p>';
-    return `<div class="mc-chest"><div class="mc-chesttitle">🏛️ 경매장 — 잉여 아이템 판매(경매/즉시구매)</div>
+    return `<div class="mc-chest"><div class="mc-chesttitle">경매장 — 잉여 아이템 판매(경매/즉시구매)</div>
       <p class="econ-note">경매(시간 경과로 입찰 상승) 또는 즉시구매(BIN)로 등록. 슬롯 ${arr.length}/${A.maxListings} · 수수료 ${A.feePct}%.</p>
-      <div class="mc-chesttitle" style="margin-top:8px">📜 내 매물</div>
+      <div class="mc-chesttitle" style="margin-top:8px">내 매물</div>
       <div class="econ-shopgrid">${listRows}</div>
-      <div class="mc-chesttitle" style="margin-top:12px">➕ 등록 &nbsp;<span class="muted" style="font-weight:400">경매 기간: ${durNav}</span></div>
+      <div class="mc-chesttitle" style="margin-top:12px">등록 &nbsp;<span class="muted" style="font-weight:400">경매 기간: ${durNav}</span></div>
       <div class="econ-shopgrid">${listForms}</div>
       ${chestNavRow('menu')}</div>`;
   }
@@ -3690,7 +3690,7 @@
   function collectionsHTML() {
     // V34: 실제 스블 컬렉션 메뉴 = 상자 GUI — 카테고리별 슬롯 그리드, 슬롯 클릭 = 티어 상세(다음 화면 개념)
     const pad9 = (arr) => { const out = arr.slice(); while (out.length % 9) out.push('<div class="mc-slot mc-empty2"></div>'); return out.join(''); };
-    return `<div class="mc-chest"><div class="mc-chesttitle">📚 컬렉션</div>` +
+    return `<div class="mc-chest"><div class="mc-chesttitle">컬렉션</div>` +
       D().COLLECTIONS.map(cat => {
         const slots = cat.resources.map(r => {
           const tier = collectionTierIdx(r.key), maxT = r.tierThresholds.length;
@@ -3708,7 +3708,7 @@
     const w = equippedWeapon(), a = equippedArmor();
     const st = playerStats();
     const g = k => (STAT_DISPLAY[k] || {}).sym || '◆';   // V95: 스탯 시트도 STAT_DISPLAY 글리프 재사용(하드코딩 이모지 폐기)
-    return `<h4>📊 내 스탯 (실제 스카이블럭 공식)</h4>
+    return `<h4>내 스탯 (실제 스카이블럭 공식)</h4>
       <div class="econ-colgrid">
         <div class="econ-colrow"><span>✦ 스카이블럭 XP</span><span>${(P.sbXp || 0).toLocaleString()}</span><span class="muted">컬렉션 티어마다 +4 (실제 위키 구조)</span></div>
         <div class="econ-colrow"><span>${g('hp')} 체력</span><span>${st.hp}</span><span class="muted">기본 100 + 농사/낚시/인챈트/부적/펫</span></div>
@@ -3729,12 +3729,12 @@
       </div>
       <h4>스킬</h4>
       <div class="econ-colgrid">${D().SKILLS.map(s => `<div class="econ-colrow"><span>${s.name}</span><span>Lv.${skillLevel(s.key)}</span><span class="muted">${s.bonusText}</span></div>`).join('')}</div>
-      <h4>🗡 전투력(장비 점수): ${fmtNum(gearScore())}</h4>
+      <h4>전투력(장비 점수): ${fmtNum(gearScore())}</h4>
       <div class="econ-colgrid">
         ${EQUIP_SLOTS.map(sl => { const p = equippedPiece(sl); return `<div class="econ-colrow"><span>${SLOT_EMOJI[sl]} ${SLOT_NAMES[sl]}</span><span>${p ? `<span style="color:${tierColorByKey(p.tierKey)}">${p.name}</span>` : '<span class="muted">없음</span>'}</span><span class="muted">${p ? `★${P.starForce[sl] || 0} 🥔${hpbOf(p.key)}${p.set && D().EQUIP_SETS[p.set] ? ` · ${D().EQUIP_SETS[p.set].name}` : ''}` : ''}</span></div>`; }).join('')}
         ${activeSetBonuses().map(sb => `<div class="econ-colrow"><span>✦ 세트 발동</span><span><b>${sb.def.name}</b></span><span class="muted">${sb.def.desc}</span></div>`).join('')}
       </div>
-      <h4>📊 전투 통계</h4>
+      <h4>전투 통계</h4>
       <div class="econ-colgrid">
         <div class="econ-colrow"><span>처치</span><span>${fmtNum(statValue('kills'))}</span><span class="muted">보스급 ${fmtNum(statValue('bossKills'))}</span></div>
         <div class="econ-colrow"><span>최대 한 방</span><span>${fmtNum(statValue('maxHit'))}</span><span class="muted">사망 ${fmtNum(statValue('deaths'))}회</span></div>
@@ -3747,7 +3747,7 @@
   function achievementsHTML() {
     checkAchievements(true);
     const done = Object.keys(P.ach || {}).length;
-    return `<h4>🏅 업적 (${done}/${D().ACHIEVEMENTS.length})</h4>
+    return `<h4>업적 (${done}/${D().ACHIEVEMENTS.length})</h4>
       <div class="econ-colgrid">${D().ACHIEVEMENTS.map(a => {
         const got = !!(P.ach || {})[a.key];
         const cur = statValue(a.stat);
@@ -3772,7 +3772,7 @@
         data-ttn="⛏️ ${escHtml(c.name)} ${e.claimed ? '✅' : ''}"
         data-ttd="${escHtml(`${fmtNum(pr)}/${fmtNum(c.goal)} · 보상 산의 심장 가루 +${D().COMMISSION_REWARD.powder} + 채광 XP ${D().COMMISSION_REWARD.miningXp}${e.claimed ? ' · 수령 완료' : done ? ' · 클릭=수령' : ''}`)}">${iconImg(icon)}<span class="mc-cnt">${fmtNum(pr)}</span></div>`;
     });
-    return `<div class="mc-chest"><div class="mc-chesttitle">📜 페처 & 광부 커미션 — 자정 리셋 (실제 스카이블럭식)</div>
+    return `<div class="mc-chest"><div class="mc-chesttitle">페처 & 광부 커미션 — 자정 리셋 (실제 스카이블럭식)</div>
       <div class="mc-grid">${pad9([fSlot].concat(cSlots))}</div>
       <p class="muted">📦 페처: 매일 다른 아이템 1종을 가져다주면 보상(수수께끼 힌트). ⛏️ 커미션: 4개 할당량 — 보상은 산의 심장(HotM) 가루. 누적 완료 ${fmtNum(statValue('questsDone'))}회</p>
       ${chestNavRow('menu')}</div>`;
@@ -3780,7 +3780,7 @@
   function difficultyHTML() {
     const cur = P.fieldDiff || 'normal';
     const wk = weeklyFamily(); const wkDef = slayerDef(wk);
-    return `<h4>🎚️ 필드 난이도 — 쉬움부터 극악(지옥)까지</h4>
+    return `<h4>필드 난이도 — 쉬움부터 극악(지옥)까지</h4>
       <p class="econ-note">던전·프라이빗 섬을 제외한 <b>모든 필드 몬스터</b>에 적용돼요. 어려울수록 몹 레벨·체력이 오르고 보상 배율과 전용 드롭이 붙어요.</p>
       <div class="econ-shopgrid">${Object.keys(D().FIELD_DIFF).map(k => {
         const fd = D().FIELD_DIFF[k]; const ok = skillLevel('combat') >= fd.req;
@@ -3794,7 +3794,7 @@
       <p class="muted">⭐ 이번 주 주간 보스 계열: <b>${wkDef ? wkDef.name : wk}</b> — 해당 계열 몹 HP·보상 ×${D().WEEKLY.hpMul} (매주 순환)</p>`;
   }
   function arenaZoneHTML() {
-    return `<div class="econ-panel"><h4>🏟️ 콜로세움 — 웨이브 아레나(10웨이브 생존전)</h4>
+    return `<div class="econ-panel"><h4>콜로세움 — 웨이브 아레나(10웨이브 생존전)</h4>
       <p class="econ-note">검투사 마스터: "몰려오는 적을 전부 쓰러뜨리면 다음 웨이브다. 물러설 곳은 없다!"</p>
       <div class="econ-shopgrid">${D().ARENA.difficulties.map(ad => {
         const ok = skillLevel('combat') >= ad.req; const best = (P.arenaBest || {})[ad.key] || 0;
@@ -3816,7 +3816,7 @@
       if ((P.equipLog || {})[it.key]) bySlot[sl].got++;
     }
     const tot = equipTotalCount(), got = equipLogCount();
-    return `<h4>📔 장비 도감 — ${fmtNum(got)}/${fmtNum(tot)}종 (${(got / tot * 100).toFixed(1)}%)</h4>
+    return `<h4>장비 도감 — ${fmtNum(got)}/${fmtNum(tot)}종 (${(got / tot * 100).toFixed(1)}%)</h4>
       <div class="econ-colgrid">${EQUIP_SLOTS.map(sl => {
         const b = bySlot[sl] || { total: 0, got: 0 };
         const pct = b.total ? b.got / b.total * 100 : 0;
@@ -3875,7 +3875,7 @@
       });
       return `<div class="mc-chesttitle" style="margin-top:8px">${sd.name} <span style="color:#f6c945">Lv.${lv}</span> <span class="muted">${next ? `${xp}/${next} XP` : 'MAX'} · 최고 T${P.slayerBest[sd.key] || 0}</span></div><div class="mc-grid">${pad9(slots)}</div>`;
     }).join('');
-    return `<div class="mc-chest"><div class="mc-chesttitle">💀 슬레이어 의뢰</div>
+    return `<div class="mc-chest"><div class="mc-chesttitle">슬레이어 의뢰</div>
       ${q ? `<div class="econ-note">진행 중: <b>${slayerDef(q.key).name} T${q.tier}</b> — 게이지 <b>${q.kills}/${q.needed}</b> (해당 계열 몹 처치로 충전, 완충 시 보스 소환)</div>` : '<p class="muted">티어 슬롯 클릭 = 의뢰 시작. 내 공격력 ⚔' + playerAttackPower().toFixed(0) + '</p>'}
       ${fams}
       ${chestNavRow('menu')}</div>`;
@@ -3894,11 +3894,11 @@
       const desc = `${fd.bossName} · 보스 HP ${fmtNum(fd.bossHp)}${master ? ` ×${MM.hpMul}` : ''} · 정수 +${fd.essenceReward}${master ? ` ×${MM.rewardMul}` : ''} · 최고 등급 ${best || '-'} — ${ok ? '클릭: 입장' : (fd.hell ? 'M7 클리어 필요' : master ? 'F7 클리어 필요' : '이전 층 클리어 필요')}`;
       return `<div class="mc-slot mc-menuslot ${ok ? '' : 'mc-locked'}" ${ok ? `data-act="econ_dungeon_start" data-floor="${fd.floor}"${master ? ' data-master="1"' : ''}` : ''} data-ttn="${escHtml(label)}" data-ttd="${escHtml(desc)}"><span>${fd.hell ? '☠' : master ? '💀' : '🗝️'}</span><span class="mc-cnt">${fd.floor}</span></div>`;
     };
-    return `<div class="mc-chest"><div class="mc-chesttitle">🗝️ 카타콤 — 층 슬롯 클릭 = 입장 (총 18개 난이도)</div>
+    return `<div class="mc-chest"><div class="mc-chesttitle">카타콤 — 층 슬롯 클릭 = 입장 (총 18개 난이도)</div>
       <p class="muted">클래스: ${D().DUNGEON_CLASSES.map(c => `<button class="btn btn--sm ${P.dungeonClass === c.key ? '' : 'btn--ghost'}" data-act="econ_dungeon_class" data-key="${c.key}">${c.emoji} ${c.name}</button>`).join(' ')}</p>
       <div class="mc-chesttitle" style="margin-top:8px">일반 층</div><div class="mc-grid">${pad9(norm.map(fd => slot(fd, false)))}</div>
-      <div class="mc-chesttitle" style="margin-top:8px">☠ 마스터 모드 (F7 클리어 해금 · 몹 ×${MM.hpMul} · 보상 ×${MM.rewardMul})</div><div class="mc-grid">${pad9(norm.filter(fd => fd.floor >= 1).map(fd => slot(fd, true)))}</div>
-      ${hells.length ? `<div class="mc-chesttitle" style="margin-top:8px">☠☠ 지옥</div><div class="mc-grid">${pad9(hells.map(fd => slot(fd, false)))}</div>` : ''}
+      <div class="mc-chesttitle" style="margin-top:8px">마스터 모드 (F7 클리어 해금 · 몹 ×${MM.hpMul} · 보상 ×${MM.rewardMul})</div><div class="mc-grid">${pad9(norm.filter(fd => fd.floor >= 1).map(fd => slot(fd, true)))}</div>
+      ${hells.length ? `<div class="mc-chesttitle" style="margin-top:8px">지옥</div><div class="mc-grid">${pad9(hells.map(fd => slot(fd, false)))}</div>` : ''}
       ${chestNavRow('menu')}</div>`;
   }
   function combatHTML() {
