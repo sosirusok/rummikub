@@ -7570,6 +7570,7 @@
       // ── V21-A 입력 재정리(MC 표준): 우클릭=상호작용/설치, 좌클릭=공격/파괴만 ──
       if (e.button === 2) {
         useHeld = true; useRepeatT = 0.28;   // V134: 클릭 1회=1개만(연타 초기 지연). 홀드 시 0.28s 후 연속 설치(실제 MC 쿨다운)
+        triggerFpSwing();   // V153
         performUseAction(false);
         return;
       }
@@ -8993,6 +8994,7 @@
     return best;
   }
   function attackMobHit(m) {
+    triggerFpSwing();   // V153: 1인칭 팔 스윙
     const api = econApi(); if (!api.attackMob) return;
     if (m.ghost) {   // 게스트: 피해 계산 후 호스트로 전송(호스트 권위)
       const rg = api.attackMob({ hitIdx: m.hitIdx || 0, hp: m.hp, maxHp: m.maxHp, isBoss: !!m.isBoss });
@@ -9825,7 +9827,56 @@
     return `<section class="screen"><header class="room__top"><button class="btn btn--ghost" data-act="backHome">← 홈</button><b style="margin-left:6px">💰 경제</b></header>
       <div class="grow center" style="justify-content:center;text-align:center;padding:20px"><p>${msg}</p></div></section>`;
   }
-  function resize() { if (!renderer) return; const w = canvas.clientWidth || window.innerWidth, h = canvas.clientHeight || window.innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+  function resize() { if (!renderer) return; const w = canvas.clientWidth || window.innerWidth, h = canvas.clientHeight || window.innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); if (viewCam) { viewCam.aspect = w / h; viewCam.updateProjectionMatrix(); } }
+
+  /* ---------------- V153: 1인칭 팔/든 아이템 뷰모델 — 실제 MC처럼 우하단 스티브 팔, 별도 오버레이 패스 ---------------- */
+  let viewScene = null, viewCam = null, fpArm = null, fpPivot = null, fpItem = null, _fpKey = undefined, _swingT = 0, _swingActive = false, _vmBobT = 0, _skinTex = null;
+  function skinTexture() { if (_skinTex) return _skinTex; _skinTex = new THREE.TextureLoader().load('entity/player/wide/steve.png'); _skinTex.magFilter = THREE.NearestFilter; _skinTex.minFilter = THREE.NearestFilter; return _skinTex; }
+  // 스티브 스킨(64×64) 오른팔 UV를 각 면에 매핑
+  function skinArmGeo(w, h, d, F) {
+    const g = new THREE.BoxGeometry(w, h, d); const uv = g.attributes.uv; const TW = 64, TH = 64;
+    ['px', 'nx', 'py', 'ny', 'pz', 'nz'].forEach((k, i) => { const r = F[k]; if (!r) return; const [x0, y0, x1, y1] = r; const u0 = x0 / TW, u1 = x1 / TW, V0 = 1 - y0 / TH, V1 = 1 - y1 / TH; const b = i * 4; uv.setXY(b + 0, u0, V0); uv.setXY(b + 1, u1, V0); uv.setXY(b + 2, u0, V1); uv.setXY(b + 3, u1, V1); });
+    uv.needsUpdate = true; return g;
+  }
+  function initViewmodel() {
+    if (viewScene) return;
+    viewScene = new THREE.Scene();
+    const w = canvas.clientWidth || 1280, h = canvas.clientHeight || 720;
+    viewCam = new THREE.PerspectiveCamera(70, w / h, 0.01, 10);
+    // 오른팔(클래식 4px) 스킨 UV — 앞44-48/뒤52-56/바깥48-52/안40-44/위44-48 v16-20/아래(손)48-52 v16-20
+    const skin = { pz: [44, 20, 48, 32], nz: [52, 20, 56, 32], px: [48, 20, 52, 32], nx: [40, 20, 44, 32], py: [44, 16, 48, 20], ny: [48, 16, 52, 20] };
+    fpArm = new THREE.Mesh(skinArmGeo(0.34, 1.05, 0.34, skin), new THREE.MeshBasicMaterial({ map: skinTexture() }));
+    fpArm.position.set(0, 0.52, 0); fpArm.rotation.x = Math.PI;   // 피벗(어깨)=우하단, 손끝은 위(중앙)로 — 소매가 코너쪽
+    fpPivot = new THREE.Group(); fpPivot.add(fpArm);
+    fpPivot.position.set(0.92, -0.95, -1.5);   // 화면 우하단(멀리=작게)
+    fpPivot.rotation.set(0.2, -0.1, 0.62);   // 팔이 우하단→중앙 위로 비스듬(실제 MC 1인칭)
+    viewScene.add(fpPivot);
+  }
+  function clearFpItem() { if (fpItem) { fpPivot.remove(fpItem); if (fpItem.geometry) fpItem.geometry.dispose(); if (fpItem.material) { if (fpItem.material.map) fpItem.material.map.dispose(); fpItem.material.dispose(); } fpItem = null; } }
+  function buildFpItem(key) {
+    clearFpItem();
+    if (!key) return;
+    const png = (typeof window.econItemPng === 'function') ? window.econItemPng(key) : null;
+    const url = png || ((typeof window.econIcon === 'function') ? window.econIcon(key) : null);
+    if (!url) return;
+    const tex = new THREE.TextureLoader().load(url); tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestFilter;
+    fpItem = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.5), new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide }));
+    fpItem.position.set(-0.12, 0.98, 0.22);   // 손끝(위=중앙쪽)
+    fpItem.rotation.set(0.1, -0.3, -0.55);
+    fpPivot.add(fpItem);
+  }
+  function triggerFpSwing() { _swingT = 0; _swingActive = true; }
+  function updateViewmodel(dt) {
+    if (!viewScene) return;
+    const key = activeHotbarKey();
+    if (key !== _fpKey) { _fpKey = key; buildFpItem(key); }
+    let sx = 0.2, sz = 0.62;
+    if (_swingActive) { _swingT += dt; const t = Math.min(1, _swingT / 0.28); const s = Math.sin(t * Math.PI); sx = 0.2 + s * 1.0; sz = 0.62 - s * 0.4; if (_swingT >= 0.28) _swingActive = false; }
+    const moving = (Math.abs(P.vx) + Math.abs(P.vz)) > 0.6 && P.onGround;
+    _vmBobT += dt * (moving ? 9 : 3);
+    const bob = moving ? 0.04 : 0.008;
+    if (fpPivot) { fpPivot.rotation.set(sx, -0.1 + Math.sin(_vmBobT) * (moving ? 0.03 : 0.004), sz); fpPivot.position.set(0.92 + Math.cos(_vmBobT) * bob, -0.95 + Math.abs(Math.sin(_vmBobT)) * bob, -1.5); }
+  }
 
   /* ---------------- 루프 ---------------- */
   let _hudT = 0, _fairyBobT = 0;
@@ -9843,7 +9894,7 @@
         if (mouseHeld) {   // V21-A: 포인터 잠금 여부와 무관하게 홀드 중 계속 진행(화면 회전해도 유지, 대상 바뀌면 진행률 리셋)
           const mb2 = pickMob();
           if (mb2 && P._atkCd <= 0) { P._atkCd = 0.45; attackMobHit(mb2); }
-          else if (!mb2) progressBreaking(dt);
+          else if (!mb2) { progressBreaking(dt); if (!_swingActive) triggerFpSwing(); }   // V153: 채굴 중 팔 반복 스윙
         }
         if (useHeld && worldMode === 'home' && selectedPlaceKey) {
           useRepeatT -= dt;
@@ -9896,6 +9947,11 @@
       // 퀘스트 NPC 느낌표 마커 바운스
       if (npcGroup) npcGroup.children.forEach(ch => { ch.children && ch.children.forEach(c => { if (c.userData && c.userData.qbob) c.position.y = 2.85 + Math.sin(_fairyBobT * 3) * 0.12; }); });
       renderer.render(scene, camera);
+      // V153: 1인칭 팔/든 아이템 오버레이 — 패널 열림 시만 숨김(모든 1인칭 월드에서 표시)
+      if (viewScene && viewCam && !panelOpen()) {
+        updateViewmodel(dt);
+        renderer.autoClear = false; renderer.clearDepth(); renderer.render(viewScene, viewCam); renderer.autoClear = true;
+      }
     } catch (e) { console.error('econ3d loop', e); }
   }
 
@@ -9931,6 +9987,7 @@
     buildAtlas();
     buildClouds();
     setupOutline();
+    initViewmodel();   // V153: 1인칭 팔
     resize(); window.addEventListener('resize', resize);
     bindInput(); requestLookLock(false); running = true; lastT = 0; contextLost = false;
     loadHubMap();   // 실제 허브 맵 선로딩(홈에서 노는 동안 준비) — 포탈 진입 시 즉시 반영
