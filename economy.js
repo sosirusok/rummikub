@@ -3055,13 +3055,13 @@
     };
     const grid = []; for (let i = 9; i < 36; i++) grid.push(slotCell(i));
     const hotRow = []; for (let i = 0; i < 9; i++) hotRow.push(slotCell(i));
-    // V120: 실제 MC 인벤토리 — 무기칸 제거(무기는 핫바/손). 방어구 4칸 + 플레이어 미리보기만.
-    return `<div class="mc-invtop">
+    // V138: 실제 MC inventory.png 텍스처 프레임 + 실제 픽셀좌표 슬롯 배치(방어구4·미리보기·3×9·핫바)
+    return `<div class="mc-invframe">
         <div class="mc-armorcol">${armorSlot('helmet', '🪖')}${armorSlot('chest', '🛡')}${armorSlot('leggings', '👖')}${armorSlot('boots', '🥾')}</div>
         <div class="mc-preview">${mcPlayerPreview()}</div>
+        <div class="mc-grid mc-maingrid">${grid.join('')}</div>
+        <div class="mc-hotbar">${hotRow.join('')}</div>
       </div>
-      <div class="mc-grid">${grid.join('')}</div>
-      <div class="mc-hotbar">${hotRow.join('')}</div>
       ${invCursor ? `<p class="mc-carry">커서에 들고 있음: ${iconImg(invCursor)} <b>${itemName(invCursor)}</b> — 빈 칸을 클릭해 놓으세요</p>` : ''}
       ${overflow.length ? `<details class="econ-ownedonly"><summary>보관함 초과분 ${overflow.length}종</summary><div class="mc-grid">${overflow.map(k => { const sd = shopDef(k) || { key: k, name: itemName(k) }; return `<div class="mc-slot"${ttAttr(sd)} data-act="econ_invcell" data-key="${k}">${iconImg(k)}${(P.inv[k] || 0) > 1 ? `<span class="mc-cnt">${fmtNum(P.inv[k])}</span>` : ''}</div>`; }).join('')}</div></details>` : ''}
       ${invDetailKey ? invCellActions(invDetailKey) : ''}`;
