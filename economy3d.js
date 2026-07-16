@@ -9945,8 +9945,8 @@
     if (isBlock) {
       const tex = new THREE.TextureLoader().load('resourcepack/' + key + '.png', () => {}, undefined, () => { buildFpItemSprite(key); });
       tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestFilter;
-      const cube = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.42, 0.42), new THREE.MeshBasicMaterial({ map: tex }));
-      cube.position.set(-0.1, 0.92, 0.16); cube.rotation.set(-0.35, 0.7, 0);   // 윗면+두 옆면 보이는 각도
+      const cube = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), new THREE.MeshBasicMaterial({ map: tex }));
+      cube.position.set(0.02, 0.86, 0.2); cube.rotation.set(-0.62, 0.72, 0.18);   // 실제 MC 1인칭: 윗면 크게 + 두 옆면(아이소메트릭), 손 위에 얹힌 각
       fpItem = cube; fpPivot.add(fpItem); return;
     }
     buildFpItemSprite(key);
