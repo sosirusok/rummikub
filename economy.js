@@ -3199,21 +3199,18 @@
   }
   function escHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
   function shopHTML() {
-    // V7: 무화폐 구매 경제 — 상점 주인은 "매입 전문"(시세표 + 판매). 아이템은 채집·드롭·조합으로만 얻는다.
+    // V157: 실제 MC 대형 상자(generic_54.png) GUI — 보유 판매가능 아이템을 상자 슬롯에 배치(카테고리순 평탄화).
+    //   슬롯 클릭 = 1개 판매, Shift+클릭 = 전부 판매(실제 스블 상점 조작).
     const cats = [];
     for (const sd of D().SHOP) if (cats.indexOf(sd.category) < 0) cats.push(sd.category);
-    // V35: 상자 GUI — 슬롯 클릭 = 1개 판매, Shift+클릭 = 전부 판매(실제 스블 상점 조작)
-    const pad9 = (arr) => { const out = arr.slice(); while (out.length % 9) out.push('<div class="mc-slot mc-empty2"></div>'); return out.join(''); };
-    const ownedCats = cats.map(cat => {
-      const items = D().SHOP.filter(sd => sd.category === cat && (P.inv[sd.key] || 0) > 0 && sd.sellPrice > 0);
-      if (!items.length) return '';
-      const slots = items.map(sd => `<div class="mc-slot mc-menuslot"${ttAttr(sd)} data-act="econ_sell" data-key="${sd.key}">${iconImg(sd.key)}<span class="mc-cnt">${(P.inv[sd.key] || 0) > 9999 ? fmtNum(P.inv[sd.key]) : P.inv[sd.key]}</span></div>`);
-      return `<div class="mc-chesttitle" style="margin-top:8px">${cat}</div><div class="mc-grid">${pad9(slots)}</div>`;
-    }).join('');
-    return `<div class="mc-chest"><div class="mc-chesttitle">상점 주인 — 매입 전문</div>
-      <p class="econ-note">슬롯 클릭 = <b>1개 판매</b> · Shift+클릭 = <b>전부 판매</b>. 골드는 강화·인챈트 합성·리포지에 사용(아이템은 채집·드롭·조합으로).</p>
-      ${ownedCats || '<p class="muted">팔 수 있는 아이템이 없어요. 채집하고 사냥해서 가져오세요!</p>'}
-      ${chestNavRow('menu')}</div>`;
+    const sellables = [];
+    for (const cat of cats) for (const sd of D().SHOP) if (sd.category === cat && (P.inv[sd.key] || 0) > 0 && sd.sellPrice > 0) sellables.push(sd);
+    const slots = sellables.slice(0, 54).map(sd => `<div class="mc-slot mc-menuslot"${ttAttr(sd)} data-act="econ_sell" data-key="${sd.key}">${iconImg(sd.key)}<span class="mc-cnt">${(P.inv[sd.key] || 0) > 9999 ? fmtNum(P.inv[sd.key]) : P.inv[sd.key]}</span></div>`);
+    while (slots.length < 54) slots.push('<div class="mc-slot mc-empty2"></div>');   // 6×9 상자칸 채우기
+    return `<div class="mc-chest54"><div class="mc-c54title">상점 주인 — 매입 전문</div>
+        <div class="mc-c54grid">${slots.join('')}</div></div>
+      <p class="econ-note" style="text-align:center">슬롯 클릭 = <b>1개 판매</b> · Shift+클릭 = <b>전부 판매</b>${sellables.length ? '' : ' — 팔 수 있는 아이템이 없어요. 채집·사냥해서 가져오세요!'}</p>
+      ${chestNavRow('menu')}`;
   }
   // V14: 건축가 빌더 — 건축 블럭 대량(스택) 구매(코인 → 블럭, 서바이벌 설치용 재고)
   function buildShopHTML() {
